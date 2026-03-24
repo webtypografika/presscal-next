@@ -1,11 +1,16 @@
-// Prisma client singleton for Next.js
+// Prisma client singleton for Next.js + Neon PostgreSQL
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../generated/prisma/client';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { PrismaClient } = require('../generated/prisma/client');
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+const g = globalThis as any;
 
-const globalForPrisma = globalThis as { prisma?: typeof PrismaClient };
+function makePrisma() {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const adapter = new PrismaPg(pool as any);
+  return new (PrismaClient as any)({ adapter }) as InstanceType<typeof PrismaClient>;
+}
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-call
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export const prisma: InstanceType<typeof PrismaClient> = g.prisma ?? makePrisma();
+if (process.env.NODE_ENV !== 'production') g.prisma = prisma;
