@@ -1,42 +1,58 @@
 'use client';
 
 import Link from 'next/link';
-import { Package, Printer, Scissors, Box } from 'lucide-react';
 
 const DOCK_ITEMS = [
-  { href: '/inventory', icon: Package, label: 'Αποθήκη', color: 'var(--teal)' },
-  { href: '/machines', icon: Printer, label: 'Μηχανές', color: 'var(--blue)' },
-  { href: '/postpress', icon: Scissors, label: 'Μεταεκτύπωση', color: 'var(--violet)' },
-  { href: '/products', icon: Box, label: 'Προϊόντα', color: 'var(--text-muted)' },
+  { href: '/inventory', icon: 'fa-boxes-stacked', label: 'Αποθήκη', color: 'var(--teal)' },
+  { href: '/machines', icon: 'fa-print', label: 'Μηχανές', color: 'var(--blue)' },
+  { href: '/postpress', icon: 'fa-scissors', label: 'Μεταεκτύπωση', color: 'var(--violet)' },
+  { href: '/products', icon: 'fa-cube', label: 'Προϊόντα', color: 'var(--text-muted)' },
 ];
 
 export function Dock() {
   return (
-    <nav
-      className="fixed bottom-3.5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1 rounded-[20px] border border-[rgba(255,255,255,0.08)] bg-[rgba(15,23,42,0.82)] px-3 py-2 shadow-[0_24px_64px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.04)_inset]"
-      style={{ backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)' }}
-    >
-      {DOCK_ITEMS.map((item) => {
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="group relative flex h-[42px] w-[42px] items-center justify-center rounded-full border-2 transition-all"
-            style={{
-              borderColor: `color-mix(in srgb, ${item.color} 25%, transparent)`,
-              background: `color-mix(in srgb, ${item.color} 8%, transparent)`,
-              color: item.color,
-            }}
-            title={item.label}
-          >
-            <Icon className="h-[15px] w-[15px]" />
-            <span className="pointer-events-none absolute -bottom-[14px] whitespace-nowrap text-[0.48rem] font-semibold text-[var(--text-dim)] opacity-0 transition-opacity group-hover:opacity-100">
-              {item.label}
-            </span>
-          </Link>
-        );
-      })}
+    <nav style={{
+      position: 'fixed', bottom: 14, left: '50%', transform: 'translateX(-50%)',
+      zIndex: 100, display: 'flex', alignItems: 'center', gap: 4,
+      background: 'rgba(15,23,42,0.82)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
+      border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20,
+      padding: '8px 12px', boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset',
+    }}>
+      {DOCK_ITEMS.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          title={item.label}
+          className="dock-orb"
+          style={{
+            width: 42, height: 42, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '0.85rem', position: 'relative',
+            border: `2px solid color-mix(in srgb, ${item.color} 25%, transparent)`,
+            background: `color-mix(in srgb, ${item.color} 8%, transparent)`,
+            color: item.color,
+            transition: 'all 350ms cubic-bezier(0.34,1.56,0.64,1)',
+            textDecoration: 'none',
+          }}
+        >
+          <i className={`fas ${item.icon}`} />
+          <span style={{
+            fontSize: '0.48rem', fontWeight: 600, opacity: 0,
+            transition: 'opacity 0.2s', letterSpacing: '0.02em',
+            position: 'absolute', bottom: -14, whiteSpace: 'nowrap',
+            color: 'var(--text-dim)', pointerEvents: 'none',
+          }}>{item.label}</span>
+        </Link>
+      ))}
+
+      <style>{`
+        .dock-orb:hover {
+          border-color: color-mix(in srgb, currentColor 55%, transparent) !important;
+          background: color-mix(in srgb, currentColor 15%, transparent) !important;
+          box-shadow: 0 0 16px color-mix(in srgb, currentColor 20%, transparent);
+        }
+        .dock-orb:hover span { opacity: 1 !important; }
+      `}</style>
     </nav>
   );
 }

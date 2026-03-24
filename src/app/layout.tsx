@@ -30,7 +30,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* Prevent FOUC: apply dark class before paint */}
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" />
         <script
           dangerouslySetInnerHTML={{
             __html: `try{if(JSON.parse(localStorage.getItem('ui-store')||'{}').state?.theme==='dark')document.documentElement.classList.add('dark')}catch(e){}`,
