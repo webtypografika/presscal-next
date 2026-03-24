@@ -41,7 +41,7 @@ export function Topbar() {
   }, []);
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 80, padding: '0 18px', marginBottom: 8 }}>
+    <div style={{ width: '100%', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 80, padding: '0 18px', marginBottom: 8 }}>
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <img src="/logo-presscal.png" alt="PressCal" style={{ height: 64 }} />
@@ -61,7 +61,7 @@ export function Topbar() {
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: 10, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: 'var(--text-dim)' }}>
             <span style={{ fontSize: '1.2rem' }}>{weather.icon}</span>
             <span style={{ fontWeight: 700 }}>{weather.temp}°C</span>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>💧 {weather.humidity}%</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}><i className="fas fa-droplet" style={{ fontSize: '0.6rem', color: 'var(--blue)' }} /> {weather.humidity}%</span>
           </div>
         )}
 
@@ -73,7 +73,7 @@ export function Topbar() {
                 <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' as const }}>{f.day}</span>
                 <span style={{ fontSize: '0.9rem' }}>{f.icon}</span>
                 <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-dim)' }}>{f.temp}°</span>
-                <span style={{ fontSize: '0.52rem', color: 'var(--text-muted)' }}>💧{f.hum}%</span>
+                <span style={{ fontSize: '0.52rem', color: 'var(--text-muted)' }}><i className="fas fa-droplet" style={{ fontSize: '0.45rem', color: 'var(--blue)' }} /> {f.hum}%</span>
               </div>
             ))}
           </div>
@@ -82,12 +82,12 @@ export function Topbar() {
 
       {/* Right: icons — exact D-hybrid styles */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <button style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>🌙</button>
-        <button style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', position: 'relative' as const }}>
-          🔔
+        <button className="h-btn" style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'color 0.2s' }}><i className="fas fa-moon" /></button>
+        <button className="h-btn" style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', position: 'relative' as const, transition: 'color 0.2s' }}>
+          <i className="fas fa-bell" />
           <span style={{ position: 'absolute' as const, top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)' }} />
         </button>
-        <button style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>👤</button>
+        <button className="h-btn" style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'color 0.2s' }}><i className="fas fa-user" /></button>
       </div>
     </div>
   );

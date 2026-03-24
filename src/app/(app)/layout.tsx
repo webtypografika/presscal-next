@@ -9,7 +9,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="relative z-[1] flex min-h-screen flex-col">
       <Topbar />
       <NavTabs />
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-5 pb-24 pt-4">
+      <main style={{ width: '100%', position: 'relative', zIndex: 1, padding: '0 40px 120px', maxWidth: 1280, margin: '0 auto', animation: 'fadeIn 0.5s ease both' }}>
         {children}
       </main>
       <Dock />

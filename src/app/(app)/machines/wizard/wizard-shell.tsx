@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import type { WizardStep } from './digital-steps';
 
@@ -44,11 +45,11 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
     setStepIdx(Math.max(prevIdx, 0));
   }
 
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center backdrop-blur-sm">
       <div
-        className="flex w-[800px] max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] bg-[var(--bg-elevated)] shadow-[0_32px_80px_rgba(0,0,0,0.5)]"
-        onClick={(e) => e.stopPropagation()}
+        className="flex w-[800px] max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] shadow-[0_32px_80px_rgba(0,0,0,0.5)]"
+        style={{ background: 'rgb(20, 30, 55)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
@@ -114,6 +115,7 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -18,7 +18,7 @@ export function NavTabs() {
   const pathname = usePathname();
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 46, background: 'rgba(10,18,36,0.85)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)', borderRadius: 14, padding: '0 12px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', marginBottom: 16 }}>
+    <div style={{ width: '100%', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 46, background: 'rgba(10,18,36,0.85)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)', borderRadius: 14, padding: '0 12px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', marginBottom: 16 }}>
       <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 3 }}>
         {TABS.map((tab) => {
           const isActive = tab.href === '/' ? pathname === '/' : pathname.startsWith(tab.href);
@@ -53,7 +53,7 @@ export function NavTabs() {
                 }
               }}
             >
-              <i className={`fas ${tab.icon}`} style={{ fontSize: '0.85rem' }} />
+              <i className={`fas ${tab.icon}`} style={{ fontSize: '0.7rem' }} />
               {tab.label}
             </Link>
           );

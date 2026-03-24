@@ -75,3 +75,70 @@ body::before {
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 2px; }
+
+/* Hide number input spinners/arrows */
+.no-spinners::-webkit-outer-spin-button,
+.no-spinners::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.no-spinners { -moz-appearance: textfield; }
+
+/* Header button hover */
+.h-btn:hover { color: var(--accent) !important; }
+
+/* Panel glassmorphism */
+.panel {
+  background: var(--bg-surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.panel::before {
+  content: '';
+  position: absolute; inset: 0; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(255,255,255,0.02), transparent);
+  pointer-events: none;
+}
+
+/* Card base (D-hybrid) */
+.card {
+  background: var(--bg-surface);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.3s ease, border-color 0.25s ease, background 0.25s ease;
+}
+
+/* Job pulse animation */
+@keyframes jobPulse { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+
+/* Fade in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Calendar today dot */
+.cal-today {
+  background: var(--accent) !important;
+  color: #fff;
+  font-weight: 800;
+  border-radius: 50%;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin: 0 auto; padding: 0 !important;
+}
+.cal-ev { position: relative; }
+.cal-ev::after {
+  content: '';
+  position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--accent);
+}

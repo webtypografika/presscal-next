@@ -1,82 +1,87 @@
 'use client';
 
 import { useState } from 'react';
-import { Printer, Factory, PenTool, Plus, Trash2, Edit3, ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import type { Machine } from '@/generated/prisma/client';
 import { deleteMachine } from './actions';
 import { DigitalWizard } from './wizard/digital-wizard';
 
-const CAT_CONFIG = {
-  digital: { label: 'Ψηφιακό', icon: Printer, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
-  offset: { label: 'Offset', icon: Factory, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/30' },
-  plotter: { label: 'Plotter', icon: PenTool, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },
-} as const;
+const CAT_META: Record<string, { label: string; icon: string; color: string }> = {
+  digital: { label: 'Ψηφιακό', icon: 'fa-print', color: 'var(--blue)' },
+  offset:  { label: 'Offset',  icon: 'fa-industry', color: 'var(--violet)' },
+  plotter: { label: 'Plotter', icon: 'fa-pen-ruler', color: 'var(--teal)' },
+};
 
-type CatKey = keyof typeof CAT_CONFIG;
-
-const CATS = [
-  { value: 'digital', label: 'Ψηφιακό', icon: Printer, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
-  { value: 'offset', label: 'Offset', icon: Factory, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/30' },
-  { value: 'plotter', label: 'Plotter', icon: PenTool, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },
-];
-
-interface Props {
-  machines: Machine[];
-}
+interface Props { machines: Machine[] }
 
 export function MachinesList({ machines }: Props) {
   const [showWizard, setShowWizard] = useState<'digital' | 'offset' | 'plotter' | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [showCatPicker, setShowCatPicker] = useState(false);
-  const [filter, setFilter] = useState<CatKey | 'all'>('all');
+  const [filter, setFilter] = useState<string>('all');
 
-  const filtered = filter === 'all' ? machines : machines.filter((m) => m.cat === filter);
-  const counts = {
+  const filtered = filter === 'all' ? machines : machines.filter(m => m.cat === filter);
+  const counts: Record<string, number> = {
     all: machines.length,
-    digital: machines.filter((m) => m.cat === 'digital').length,
-    offset: machines.filter((m) => m.cat === 'offset').length,
-    plotter: machines.filter((m) => m.cat === 'plotter').length,
+    digital: machines.filter(m => m.cat === 'digital').length,
+    offset: machines.filter(m => m.cat === 'offset').length,
+    plotter: machines.filter(m => m.cat === 'plotter').length,
   };
 
-  const editMachine = editId ? machines.find((m) => m.id === editId) : null;
+  const editMachine = editId ? machines.find(m => m.id === editId) : null;
 
   return (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-blue-500/30 bg-blue-500/10">
-            <Printer className="h-5 w-5 text-blue-400" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 46, height: 46, borderRadius: '50%',
+            border: '2px solid color-mix(in srgb, var(--blue) 35%, transparent)',
+            background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.1rem', color: 'var(--blue)',
+          }}>
+            <i className="fas fa-print" />
           </div>
           <div>
-            <h1 className="text-xl font-bold">Μηχανήματα</h1>
-            <p className="text-sm text-muted">{machines.length} μηχανές</p>
+            <h1 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Μηχανήματα</h1>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{machines.length} μηχανές</p>
           </div>
         </div>
         <button
           onClick={() => { setEditId(null); setShowCatPicker(true); }}
-          className="flex items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-bold text-white shadow-[0_4px_16px_rgba(245,130,32,0.3)] transition-all hover:shadow-[0_6px_24px_rgba(245,130,32,0.4)]"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'var(--accent)', color: '#fff',
+            padding: '10px 20px', borderRadius: 10, border: 'none',
+            fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(245,130,32,0.3)',
+            transition: 'box-shadow 0.2s',
+          }}
         >
-          <Plus className="h-4 w-4" /> Νέο Μηχάνημα
+          <i className="fas fa-plus" /> Νέο Μηχάνημα
         </button>
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2">
-        {(['all', 'digital', 'offset', 'plotter'] as const).map((cat) => {
+      <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 3, marginBottom: 20, width: 'fit-content' }}>
+        {(['all', 'digital', 'offset', 'plotter'] as const).map(cat => {
           const isActive = filter === cat;
-          const label = cat === 'all' ? 'Όλα' : CAT_CONFIG[cat].label;
+          const label = cat === 'all' ? 'Όλα' : CAT_META[cat].label;
           return (
             <button
               key={cat}
               onClick={() => setFilter(cat)}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                isActive
-                  ? 'bg-[rgba(245,130,32,0.12)] text-[var(--accent)]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[rgba(245,130,32,0.06)]'
-              }`}
+              style={{
+                padding: '7px 16px', borderRadius: 8, border: 'none',
+                fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+                color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+                background: isActive ? 'rgba(245,130,32,0.12)' : 'transparent',
+                transition: 'all 0.2s ease',
+              }}
             >
-              {label} <span className="ml-1 text-xs opacity-60">{counts[cat]}</span>
+              {label} <span style={{ marginLeft: 4, fontSize: '0.7rem', opacity: 0.6 }}>{counts[cat]}</span>
             </button>
           );
         })}
@@ -84,61 +89,64 @@ export function MachinesList({ machines }: Props) {
 
       {/* Machine cards */}
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-[var(--glass-border)] bg-[var(--bg-surface)] p-12 text-center">
-          <Printer className="mx-auto h-12 w-12 text-[var(--text-muted)] opacity-30" />
-          <p className="mt-4 text-[var(--text-muted)]">Δεν υπάρχουν μηχανές</p>
+        <div style={{ padding: 48, textAlign: 'center' }}>
+          <i className="fas fa-print" style={{ fontSize: '2.5rem', color: 'var(--text-muted)', opacity: 0.2 }} />
+          <p style={{ marginTop: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Δεν υπάρχουν μηχανές</p>
           <button
             onClick={() => { setEditId(null); setShowCatPicker(true); }}
-            className="mt-4 text-sm font-semibold text-[var(--accent)]"
+            style={{ marginTop: 16, fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}
           >
             + Προσθέστε την πρώτη σας μηχανή
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((machine) => {
-            const conf = CAT_CONFIG[(machine.cat as CatKey)] ?? CAT_CONFIG.digital;
-            const Icon = conf.icon;
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          {filtered.map(machine => {
+            const meta = CAT_META[machine.cat] ?? CAT_META.digital;
             const specs = (machine.specs ?? {}) as Record<string, string | number | boolean | null>;
 
             return (
               <div
                 key={machine.id}
-                className="group relative cursor-pointer rounded-2xl border border-[var(--glass-border)] bg-[var(--bg-surface)] p-5 transition-all hover:border-[var(--border-hover)] hover:bg-[var(--bg-elevated)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.3)]"
+                className="card"
+                style={{
+                  '--card-accent': meta.color,
+                  cursor: 'pointer',
+                } as React.CSSProperties}
                 onClick={() => { setEditId(machine.id); setShowWizard(machine.cat as 'digital' | 'offset' | 'plotter'); }}
               >
-                {/* Shine sweep */}
-                <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-                  <div className="h-full w-full translate-x-[-100%] bg-gradient-to-r from-transparent via-white/[0.04] to-transparent transition-transform duration-600 group-hover:translate-x-[130%]" />
+                <div className="card-glow" />
+                {/* Orb icon */}
+                <div style={{
+                  width: 46, height: 46, borderRadius: '50%',
+                  border: `2px solid color-mix(in srgb, ${meta.color} 35%, transparent)`,
+                  background: `color-mix(in srgb, ${meta.color} 10%, transparent)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '1.1rem', color: meta.color, marginBottom: 16,
+                  transition: 'all 400ms var(--spring)',
+                }}>
+                  <i className={`fas ${meta.icon}`} />
                 </div>
 
-                <div className="flex items-start gap-4">
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 ${conf.border} ${conf.bg}`}>
-                    <Icon className={`h-5 w-5 ${conf.color}`} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-[0.95rem] font-bold">{machine.name}</h3>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {conf.label}
-                      {machine.maxSS && machine.maxLS ? ` · ${machine.maxSS}×${machine.maxLS}mm` : ''}
-                    </p>
-                    {specs.cost_mode && (
-                      <p className="mt-1 text-xs text-[var(--text-dim)]">
-                        {specs.cost_mode === 'simple_in' ? 'Simple (In)' : specs.cost_mode === 'simple_out' ? 'Simple (Out)' : 'Precision'}
-                        {specs.click_a4_color ? ` · A4 color €${specs.click_a4_color}` : ''}
-                      </p>
-                    )}
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-[var(--text-muted)] opacity-0 transition-opacity group-hover:opacity-100" />
-                </div>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: 4 }}>{machine.name}</h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {meta.label}
+                  {machine.maxSS && machine.maxLS ? ` · ${machine.maxSS}×${machine.maxLS}mm` : ''}
+                </p>
+                {specs.cost_mode && (
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: 4 }}>
+                    {specs.cost_mode === 'simple_in' ? 'Simple (In)' : specs.cost_mode === 'simple_out' ? 'Simple (Out)' : 'Precision'}
+                    {specs.click_a4_color ? ` · A4 color €${specs.click_a4_color}` : ''}
+                  </p>
+                )}
 
                 {/* Actions */}
-                <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="card-actions" style={{ position: 'absolute', right: 12, top: 12, display: 'flex', gap: 4, opacity: 0, transition: 'opacity 0.2s' }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditId(machine.id); setShowWizard(machine.cat as 'digital' | 'offset' | 'plotter'); }}
-                    className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--accent)]"
+                    style={{ padding: 6, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', transition: 'color 0.2s' }}
                   >
-                    <Edit3 className="h-3.5 w-3.5" />
+                    <i className="fas fa-pen" />
                   </button>
                   <button
                     onClick={async (e) => {
@@ -147,9 +155,9 @@ export function MachinesList({ machines }: Props) {
                         await deleteMachine(machine.id);
                       }
                     }}
-                    className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-red-500/10 hover:text-red-400"
+                    style={{ padding: 6, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', transition: 'color 0.2s' }}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <i className="fas fa-trash" />
                   </button>
                 </div>
               </div>
@@ -158,28 +166,46 @@ export function MachinesList({ machines }: Props) {
         </div>
       )}
 
-      {/* Category picker */}
-      {showCatPicker && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCatPicker(false)}>
-          <div className="grid w-[500px] grid-cols-2 gap-4 rounded-2xl border border-[var(--glass-border)] bg-[var(--bg-elevated)] p-8 shadow-[0_32px_80px_rgba(0,0,0,0.5)]" onClick={(e) => e.stopPropagation()}>
-            <h2 className="col-span-2 text-lg font-bold mb-2">Τύπος Μηχανής</h2>
-            {CATS.map((c) => {
-              const Icon = c.icon;
+      {/* Category picker modal */}
+      {showCatPicker && createPortal(
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+          onClick={() => setShowCatPicker(false)}
+        >
+          <div
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, width: 500, borderRadius: 'var(--radius)', border: '1px solid var(--glass-border)', background: 'rgb(20, 30, 55)', padding: 32, boxShadow: '0 32px 80px rgba(0,0,0,0.5)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 style={{ gridColumn: '1 / -1', fontSize: '1.1rem', fontWeight: 700, marginBottom: 8 }}>Τύπος Μηχανής</h2>
+            {(['digital', 'offset', 'plotter'] as const).map(cat => {
+              const m = CAT_META[cat];
               return (
                 <button
-                  key={c.value}
-                  onClick={() => { setShowCatPicker(false); setShowWizard(c.value as 'digital' | 'offset' | 'plotter'); }}
-                  className="flex flex-col items-center gap-3 rounded-xl border-2 border-[var(--glass-border)] p-6 transition-all hover:border-[var(--border-hover)] hover:bg-white/[0.03]"
+                  key={cat}
+                  onClick={() => { setShowCatPicker(false); setShowWizard(cat); }}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                    borderRadius: 'var(--radius-sm)', border: '2px solid var(--glass-border)',
+                    background: 'transparent', padding: 24, cursor: 'pointer',
+                    transition: 'border-color 0.2s, background 0.2s',
+                  }}
                 >
-                  <div className={`flex h-14 w-14 items-center justify-center rounded-full border-2 ${c.border} ${c.bg}`}>
-                    <Icon className={`h-6 w-6 ${c.color}`} />
+                  <div style={{
+                    width: 56, height: 56, borderRadius: '50%',
+                    border: `2px solid color-mix(in srgb, ${m.color} 35%, transparent)`,
+                    background: `color-mix(in srgb, ${m.color} 10%, transparent)`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.3rem', color: m.color,
+                  }}>
+                    <i className={`fas ${m.icon}`} />
                   </div>
-                  <span className="text-base font-bold">{c.label}</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text)' }}>{m.label}</span>
                 </button>
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Digital Wizard */}
@@ -192,21 +218,55 @@ export function MachinesList({ machines }: Props) {
 
       {/* Offset / Plotter — TODO */}
       {showWizard === 'offset' && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60">
-          <div className="rounded-2xl bg-[var(--bg-elevated)] p-8 text-center">
-            <p className="text-lg font-bold">Offset Wizard — Coming Soon</p>
-            <button onClick={() => setShowWizard(null)} className="mt-4 text-[var(--accent)]">Κλείσιμο</button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
+          <div className="panel" style={{ padding: 32, textAlign: 'center' }}>
+            <p style={{ fontSize: '1.1rem', fontWeight: 700 }}>Offset Wizard — Coming Soon</p>
+            <button onClick={() => setShowWizard(null)} style={{ marginTop: 16, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Κλείσιμο</button>
           </div>
         </div>
       )}
       {showWizard === 'plotter' && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60">
-          <div className="rounded-2xl bg-[var(--bg-elevated)] p-8 text-center">
-            <p className="text-lg font-bold">Plotter Setup — Coming Soon</p>
-            <button onClick={() => setShowWizard(null)} className="mt-4 text-[var(--accent)]">Κλείσιμο</button>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
+          <div className="panel" style={{ padding: 32, textAlign: 'center' }}>
+            <p style={{ fontSize: '1.1rem', fontWeight: 700 }}>Plotter Setup — Coming Soon</p>
+            <button onClick={() => setShowWizard(null)} style={{ marginTop: 16, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Κλείσιμο</button>
           </div>
         </div>
       )}
+
+      <style>{`
+        .card { position: relative; overflow: hidden; }
+        .card::before {
+          content: '';
+          position: absolute; inset: 0;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+          transform: translateX(-100%);
+          transition: transform 0.6s ease;
+          pointer-events: none;
+        }
+        .card:hover::before { transform: translateX(130%); }
+        .card::after {
+          content: '';
+          position: absolute; top: 0; left: 24px; right: 24px; height: 2px;
+          background: var(--card-accent, var(--accent));
+          opacity: 0; transition: opacity 0.3s ease;
+          pointer-events: none;
+        }
+        .card:hover::after { opacity: 1; }
+        .card:hover {
+          box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+          border-color: var(--border-hover);
+          background: var(--bg-elevated);
+        }
+        .card-glow {
+          position: absolute; inset: -1px; border-radius: var(--radius);
+          background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--card-accent, var(--accent)) 12%, transparent), transparent 70%);
+          opacity: 0; transition: opacity 0.4s ease; pointer-events: none;
+        }
+        .card:hover .card-glow { opacity: 1; }
+        .card:hover .card-actions { opacity: 1 !important; }
+        .card-actions button:hover { color: var(--accent) !important; background: rgba(255,255,255,0.05) !important; }
+      `}</style>
     </>
   );
 }

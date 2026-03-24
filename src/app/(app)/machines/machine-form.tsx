@@ -155,25 +155,10 @@ export function MachineForm({ machine, onClose }: Props) {
         <div className="mb-4">
           <label className={labelCls}>Μέγεθος φύλλου (mm)</label>
           <div className="flex items-center gap-2 mb-2">
-            <input className={inputCls + " !w-24 text-center"} type="number" value={maxSS ?? ''} onChange={(e) => setMaxSS(+e.target.value || null)} placeholder="SS" />
+            <input className={inputCls + " !w-24 text-center"} type="number" value={maxSS ?? ''} onChange={(e) => setMaxSS(+e.target.value || null)} placeholder="Short Side" />
             <span className="text-[var(--text-muted)] font-semibold">×</span>
-            <input className={inputCls + " !w-24 text-center"} type="number" value={maxLS ?? ''} onChange={(e) => setMaxLS(+e.target.value || null)} placeholder="LS" />
+            <input className={inputCls + " !w-24 text-center"} type="number" value={maxLS ?? ''} onChange={(e) => setMaxLS(+e.target.value || null)} placeholder="Long Side" />
             <span className="text-xs text-[var(--text-muted)]">mm</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {SHEET_PRESETS.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => { setMaxSS(p.ss); setMaxLS(p.ls); }}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
-                  maxSS === p.ss && maxLS === p.ls
-                    ? 'border-[var(--accent)] bg-[rgba(245,130,32,0.12)] text-[var(--accent)]'
-                    : 'border-[var(--glass-border)] text-[var(--text-dim)] hover:border-[var(--border-hover)]'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
           </div>
         </div>
 

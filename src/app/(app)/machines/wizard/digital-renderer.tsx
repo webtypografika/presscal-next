@@ -8,7 +8,7 @@ type OnChange = (field: string, value: unknown) => void;
 type Data = Record<string, unknown>;
 
 // Shared UI helpers
-const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15";
+const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 no-spinners";
 const labelCls = "text-[0.65rem] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1 block";
 
 function NumInput({ value, onChange, placeholder, step }: { value: unknown; onChange: (v: number | null) => void; placeholder?: string; step?: string }) {
@@ -242,15 +242,8 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
       <div>
         <label className={labelCls}>Μέγιστο Φύλλο (mm)</label>
         <div className="grid grid-cols-2 gap-3 mb-2">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">SS</span><NumInput value={data.max_sheet_ss} onChange={(v) => onChange('max_sheet_ss', v)} placeholder="330" /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">LS</span><NumInput value={data.max_sheet_ls} onChange={(v) => onChange('max_sheet_ls', v)} placeholder="487" /></div>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PRESETS.map((p) => (
-            <button key={p.l} onClick={() => { onChange('max_sheet_ss', p.ss); onChange('max_sheet_ls', p.ls); }}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-all ${data.max_sheet_ss === p.ss && data.max_sheet_ls === p.ls ? 'border-[var(--accent)] bg-[rgba(245,130,32,0.12)] text-[var(--accent)]' : 'border-[var(--glass-border)] text-[var(--text-dim)]'}`}
-            >{p.l}</button>
-          ))}
+          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Short Side</span><NumInput value={data.max_sheet_ss} onChange={(v) => onChange('max_sheet_ss', v)} placeholder="330" /></div>
+          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Long Side</span><NumInput value={data.max_sheet_ls} onChange={(v) => onChange('max_sheet_ls', v)} placeholder="487" /></div>
         </div>
       </div>
 
@@ -258,8 +251,8 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
       <div>
         <label className={labelCls}>Ελάχιστο Φύλλο (mm)</label>
         <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">SS</span><NumInput value={data.min_sheet_ss} onChange={(v) => onChange('min_sheet_ss', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">LS</span><NumInput value={data.min_sheet_ls} onChange={(v) => onChange('min_sheet_ls', v)} /></div>
+          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Short Side</span><NumInput value={data.min_sheet_ss} onChange={(v) => onChange('min_sheet_ss', v)} /></div>
+          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Long Side</span><NumInput value={data.min_sheet_ls} onChange={(v) => onChange('min_sheet_ls', v)} /></div>
         </div>
       </div>
 
@@ -267,8 +260,8 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
       <div>
         <label className={labelCls}>Banner (mm)</label>
         <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">SS</span><NumInput value={data.banner_ss} onChange={(v) => onChange('banner_ss', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">LS</span><NumInput value={data.banner_ls} onChange={(v) => onChange('banner_ls', v)} /></div>
+          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Short Side</span><NumInput value={data.banner_ss} onChange={(v) => onChange('banner_ss', v)} /></div>
+          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Long Side</span><NumInput value={data.banner_ls} onChange={(v) => onChange('banner_ls', v)} /></div>
         </div>
       </div>
 
@@ -321,12 +314,22 @@ function StepExtraColors({ data, onChange }: { data: Data; onChange: OnChange })
   const count = ((data.color_stations as number) ?? 4) - 4;
   if (count <= 0) return <p className="text-[var(--text-muted)]">Η μηχανή σας δεν χρησιμοποιεί extra χρώματα.</p>;
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-[var(--text-dim)]">Ορίστε τα ονόματα των επιπλέον σταθμών (π.χ. White, Gold, Clear, Silver, Fluorescent)</p>
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--text-dim)]">Ορίστε τα ονόματα, yield και κόστος των επιπλέον σταθμών (π.χ. White, Gold, Clear, Silver, Fluorescent)</p>
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i}>
-          <label className={labelCls}>Χρώμα {i + 1}</label>
+        <div key={i} className="rounded-lg bg-white/[0.02] p-4 space-y-3">
+          <label className={labelCls}>Extra Χρώμα {i + 1}</label>
           <input className={inputCls} value={(data[`extra_color_${i + 1}_name`] as string) ?? ''} onChange={(e) => onChange(`extra_color_${i + 1}_name`, e.target.value)} placeholder={`π.χ. ${i === 0 ? 'White' : 'Clear'}`} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <span className="text-[0.55rem] text-[var(--text-muted)]">Yield (σελίδες)</span>
+              <NumInput value={data[`extra_color_${i + 1}_yield`]} onChange={(v) => onChange(`extra_color_${i + 1}_yield`, v)} placeholder="8000" />
+            </div>
+            <div>
+              <span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος € (κασέτα/δοχείο)</span>
+              <NumInput value={data[`extra_color_${i + 1}_cost`]} onChange={(v) => onChange(`extra_color_${i + 1}_cost`, v)} placeholder="85.00" step="0.01" />
+            </div>
+          </div>
         </div>
       ))}
     </div>
@@ -362,10 +365,13 @@ function StepCostModel({ data, onChange }: { data: Data; onChange: OnChange }) {
 
 function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
   const mode = data.cost_mode as string;
+  const inkType = data.ink_type as string;
   const stations = (data.color_stations as number) ?? 4;
+  const extraCount = Math.max(0, stations - 4);
+
   return (
     <div className="space-y-5">
-      {/* CPC */}
+      {/* CPC — Click costs */}
       <div>
         <label className={labelCls}>Click Costs — CPC (€/όψη)</label>
         <div className="grid grid-cols-3 gap-3">
@@ -374,34 +380,30 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
             {stations >= 2 && <span className="text-center text-[0.6rem] font-semibold text-[var(--text-muted)]">COLOR</span>}
             <span className="text-center text-[0.6rem] font-semibold text-[var(--text-muted)]">B&W</span>
           </div>
-          {/* A4 */}
           <span className="flex items-center text-sm font-semibold">A4</span>
           {stations >= 2 && <NumInput value={data.click_a4_color} onChange={(v) => onChange('click_a4_color', v)} placeholder="0.035" step="0.001" />}
           <NumInput value={data.click_a4_bw} onChange={(v) => onChange('click_a4_bw', v)} placeholder="0.007" step="0.001" />
-          {/* A3 */}
           <span className="flex items-center text-sm font-semibold">A3/SRA3</span>
           {stations >= 2 && <NumInput value={data.click_a3_color} onChange={(v) => onChange('click_a3_color', v)} placeholder="0.070" step="0.001" />}
           <NumInput value={data.click_a3_bw} onChange={(v) => onChange('click_a3_bw', v)} placeholder="0.014" step="0.001" />
-          {/* Banner */}
           <span className="flex items-center text-sm font-semibold">Banner</span>
           {stations >= 2 && <NumInput value={data.click_banner_color} onChange={(v) => onChange('click_banner_color', v)} step="0.001" />}
           <NumInput value={data.click_banner_bw} onChange={(v) => onChange('click_banner_bw', v)} step="0.001" />
         </div>
       </div>
 
-      {/* Toner CMYK — for simple_out and precision */}
-      {(mode === 'simple_out' || mode === 'precision') && (
+      {/* Extra color click costs */}
+      {extraCount > 0 && (
         <div>
-          <label className={labelCls}>Toner / Ink — Yield & Cost</label>
+          <label className={labelCls}>Extra Color Click Costs (€/όψη)</label>
           <div className="space-y-2">
-            {['C', 'M', 'Y', 'K'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
-              const key = c.toLowerCase();
-              const colors: Record<string, string> = { C: 'bg-cyan-500/10 text-cyan-400', M: 'bg-pink-500/10 text-pink-400', Y: 'bg-yellow-500/10 text-yellow-400', K: 'bg-gray-500/10 text-gray-300' };
+            {Array.from({ length: extraCount }).map((_, i) => {
+              const name = (data[`extra_color_${i + 1}_name`] as string) || `Extra ${i + 1}`;
               return (
-                <div key={c} className={`flex items-center gap-3 rounded-lg ${colors[c]} p-3`}>
-                  <span className="w-8 text-center text-sm font-black">{c}</span>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Yield (σελ.)</span><NumInput value={data[`toner_${key}_yield`]} onChange={(v) => onChange(`toner_${key}_yield`, v)} /></div>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Cost €</span><NumInput value={data[`toner_${key}_cost`]} onChange={(v) => onChange(`toner_${key}_cost`, v)} step="0.01" /></div>
+                <div key={i} className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
+                  <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">{name}</span>
+                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Click A4 €</span><NumInput value={data[`click_extra_${i + 1}_a4`]} onChange={(v) => onChange(`click_extra_${i + 1}_a4`, v)} step="0.001" /></div>
+                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Click A3 €</span><NumInput value={data[`click_extra_${i + 1}_a3`]} onChange={(v) => onChange(`click_extra_${i + 1}_a3`, v)} step="0.001" /></div>
                 </div>
               );
             })}
@@ -409,10 +411,117 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
         </div>
       )}
 
-      {/* Precision mode — drums, fuser, belt, waste */}
+      {/* Duplex click multiplier */}
+      <div>
+        <label className={labelCls}>Duplex Click Multiplier</label>
+        <p className="text-[0.65rem] text-[var(--text-dim)] mb-1">Πόσα clicks χρεώνει η 2η όψη (2 = διπλάσιο, 1 = ίδιο)</p>
+        <NumInput value={data.duplex_click_multiplier} onChange={(v) => onChange('duplex_click_multiplier', v)} placeholder="2" />
+      </div>
+
+      {/* Toner CMYK — for simple_out and precision (toner machines) */}
+      {(mode === 'simple_out' || mode === 'precision') && inkType === 'toner' && (
+        <div className="border-t border-[var(--border)] pt-4">
+          <label className={labelCls}>Toner — Yield & Cost (CMYK)</label>
+          <div className="space-y-2">
+            {['C', 'M', 'Y', 'K'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
+              const key = c.toLowerCase();
+              const colors: Record<string, string> = { C: 'bg-cyan-500/10 text-cyan-400', M: 'bg-pink-500/10 text-pink-400', Y: 'bg-yellow-500/10 text-yellow-400', K: 'bg-gray-500/10 text-gray-300' };
+              return (
+                <div key={c} className={`flex items-center gap-3 rounded-lg ${colors[c]} p-3`}>
+                  <span className="w-8 text-center text-sm font-black">{c}</span>
+                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Yield (σελίδες)</span><NumInput value={data[`toner_${key}_yield`]} onChange={(v) => onChange(`toner_${key}_yield`, v)} /></div>
+                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[`toner_${key}_cost`]} onChange={(v) => onChange(`toner_${key}_cost`, v)} step="0.01" /></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Toner extra colors — for simple_out and precision */}
+      {(mode === 'simple_out' || mode === 'precision') && inkType === 'toner' && extraCount > 0 && (
+        <div>
+          <label className={labelCls}>Toner — Extra Colors Yield & Cost</label>
+          <div className="space-y-2">
+            {Array.from({ length: extraCount }).map((_, i) => {
+              const name = (data[`extra_color_${i + 1}_name`] as string) || `Extra ${i + 1}`;
+              return (
+                <div key={i} className="flex items-center gap-3 rounded-lg bg-purple-500/10 text-purple-300 p-3">
+                  <span className="w-16 text-center text-sm font-black">{name}</span>
+                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Yield (σελίδες)</span><NumInput value={data[`extra_color_${i + 1}_yield`]} onChange={(v) => onChange(`extra_color_${i + 1}_yield`, v)} /></div>
+                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[`extra_color_${i + 1}_cost`]} onChange={(v) => onChange(`extra_color_${i + 1}_cost`, v)} step="0.01" /></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Drums CMYK — precision mode only */}
+      {mode === 'precision' && inkType === 'toner' && (
+        <div className="border-t border-[var(--border)] pt-4">
+          <label className={labelCls}>Drums — Life & Cost (CMYK)</label>
+          <div className="space-y-2">
+            {['C', 'M', 'Y', 'K'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
+              const key = c.toLowerCase();
+              const colors: Record<string, string> = { C: 'bg-cyan-500/10 text-cyan-400', M: 'bg-pink-500/10 text-pink-400', Y: 'bg-yellow-500/10 text-yellow-400', K: 'bg-gray-500/10 text-gray-300' };
+              return (
+                <div key={c} className={`flex items-center gap-3 rounded-lg ${colors[c]} p-3`}>
+                  <span className="w-8 text-center text-sm font-black">{c}</span>
+                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data[`drum_${key}_life`]} onChange={(v) => onChange(`drum_${key}_life`, v)} /></div>
+                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[`drum_${key}_cost`]} onChange={(v) => onChange(`drum_${key}_cost`, v)} step="0.01" /></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Developer — precision mode */}
+      {mode === 'precision' && inkType === 'toner' && (
+        <div className="border-t border-[var(--border)] pt-4">
+          <label className={labelCls}>Developer</label>
+          <PillToggle value={data.developer_type} options={[{ v: 'integrated', l: 'Ενσωματωμένο στο Drum' }, { v: 'separate', l: 'Ξεχωριστό' }]} onChange={(v) => onChange('developer_type', v)} />
+          {data.developer_type === 'separate' && (
+            <div className="space-y-2 mt-3">
+              {['C', 'M', 'Y', 'K'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
+                const key = c.toLowerCase();
+                return (
+                  <div key={c} className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
+                    <span className="w-8 text-center text-sm font-black text-[var(--text-dim)]">{c}</span>
+                    <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data[`dev_${key}_life`]} onChange={(v) => onChange(`dev_${key}_life`, v)} /></div>
+                    <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[`dev_${key}_cost`]} onChange={(v) => onChange(`dev_${key}_cost`, v)} step="0.01" /></div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Coronas — precision mode */}
+      {mode === 'precision' && inkType === 'toner' && (
+        <div className="border-t border-[var(--border)] pt-4">
+          <label className={labelCls}>Charge Coronas</label>
+          <div className="flex items-center gap-3 mb-3">
+            <button onClick={() => onChange('has_charge_coronas', !data.has_charge_coronas)}
+              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${data.has_charge_coronas ? 'border-[var(--accent)] bg-[rgba(245,130,32,0.12)] text-[var(--accent)]' : 'border-[var(--glass-border)] text-[var(--text-muted)]'}`}>
+              {data.has_charge_coronas ? 'Ναι — Έχει' : 'Όχι'}
+            </button>
+          </div>
+          {!!data.has_charge_coronas && (
+            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data.corona_life} onChange={(v) => onChange('corona_life', v)} /></div>
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data.corona_cost} onChange={(v) => onChange('corona_cost', v)} step="0.01" /></div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Service Parts — precision mode (fuser, belt, waste) */}
       {mode === 'precision' && (
         <div className="border-t border-[var(--border)] pt-4">
-          <label className={labelCls}>Service Parts (Precision)</label>
+          <label className={labelCls}>Service Parts</label>
           <div className="space-y-2">
             {[
               { label: 'Fuser', life: 'fuser_life', cost: 'fuser_cost' },
@@ -421,10 +530,42 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
             ].map((p) => (
               <div key={p.label} className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
                 <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">{p.label}</span>
-                <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life</span><NumInput value={data[p.life]} onChange={(v) => onChange(p.life, v)} /></div>
-                <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Cost €</span><NumInput value={data[p.cost]} onChange={(v) => onChange(p.cost, v)} step="0.01" /></div>
+                <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data[p.life]} onChange={(v) => onChange(p.life, v)} /></div>
+                <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[p.cost]} onChange={(v) => onChange(p.cost, v)} step="0.01" /></div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Liquid Ink — for HP Indigo / inkjet */}
+      {(mode === 'simple_out' || mode === 'precision') && inkType === 'liquid' && (
+        <div className="border-t border-[var(--border)] pt-4">
+          <label className={labelCls}>Liquid Ink</label>
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
+              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">Ink Can</span>
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Yield (σελίδες)</span><NumInput value={data.ink_can_yield} onChange={(v) => onChange('ink_can_yield', v)} /></div>
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data.ink_can_cost} onChange={(v) => onChange('ink_can_cost', v)} step="0.01" /></div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
+              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">Impression</span>
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Charge €/impression</span><NumInput value={data.impression_charge} onChange={(v) => onChange('impression_charge', v)} step="0.001" /></div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
+              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">Blanket</span>
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data.blanket_life} onChange={(v) => onChange('blanket_life', v)} /></div>
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data.blanket_cost} onChange={(v) => onChange('blanket_cost', v)} step="0.01" /></div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
+              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">PIP</span>
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data.pip_life} onChange={(v) => onChange('pip_life', v)} /></div>
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data.pip_cost} onChange={(v) => onChange('pip_cost', v)} step="0.01" /></div>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
+              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">Mixing Fee</span>
+              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">€/εργασία</span><NumInput value={data.mixing_fee} onChange={(v) => onChange('mixing_fee', v)} step="0.01" /></div>
+            </div>
           </div>
         </div>
       )}
