@@ -1,25 +1,18 @@
 'use client';
 
-import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
-import { useUIStore } from '@/stores/ui-store';
-import { cn } from '@/lib/utils';
+import { NavTabs } from '@/components/layout/nav-tabs';
+import { Dock } from '@/components/layout/dock';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const collapsed = useUIStore((s) => s.sidebarCollapsed);
-
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div
-        className={cn(
-          'sidebar-transition flex flex-1 flex-col overflow-hidden',
-          collapsed ? 'lg:ml-16' : 'lg:ml-60'
-        )}
-      >
-        <Topbar />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
-      </div>
+    <div className="relative z-[1] flex min-h-screen flex-col">
+      <Topbar />
+      <NavTabs />
+      <main className="mx-auto w-full max-w-[1400px] flex-1 px-5 pb-24 pt-4">
+        {children}
+      </main>
+      <Dock />
     </div>
   );
 }
