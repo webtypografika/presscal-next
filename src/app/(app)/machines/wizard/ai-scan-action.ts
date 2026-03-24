@@ -53,7 +53,7 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
         tools: [{ google_search: {} }],
       }),
     });
@@ -65,7 +65,7 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
 
     const json = await res.json();
 
-    // Extract text from Gemini response
+    // Extract text from all parts
     let text = '';
     for (const candidate of json.candidates ?? []) {
       for (const part of candidate.content?.parts ?? []) {
@@ -73,11 +73,24 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
       }
     }
 
-    // Strip markdown code fences if present
-    text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    // Strip markdown code fences
+    text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
 
-    // Parse JSON
-    const specs = JSON.parse(text) as Record<string, unknown>;
+    // Try to extract JSON object from text
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return { success: false, specs: {}, fieldsFound: 0, error: 'Δεν βρέθηκε JSON στην απάντηση' };
+    }
+
+    // Clean common JSON issues
+    let jsonStr = jsonMatch[0]
+      .replace(/,\s*}/g, '}')           // trailing commas
+      .replace(/,\s*]/g, ']')           // trailing commas in arrays
+      .replace(/:\s*undefined/g, ': null') // undefined → null
+      .replace(/\/\/[^\n]*/g, '')        // line comments
+      .replace(/[\x00-\x1F\x7F]/g, (c) => c === '\n' || c === '\r' || c === '\t' ? c : ''); // control chars
+
+    const specs = JSON.parse(jsonStr) as Record<string, unknown>;
 
     // Validate & clean
     const numFields = ['speed_ppm_color', 'speed_ppm_bw', 'min_gsm', 'max_gsm',
@@ -154,7 +167,7 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
         tools: [{ google_search: {} }],
       }),
     });
@@ -170,8 +183,11 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
         if (part.text) text += part.text;
       }
     }
-    text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    const specs = JSON.parse(text) as Record<string, unknown>;
+    text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { success: false, specs: {}, fieldsFound: 0, error: 'Δεν βρέθηκε JSON' };
+    const jsonStr = jsonMatch[0].replace(/,\s*}/g, '}').replace(/,\s*]/g, ']').replace(/:\s*undefined/g, ': null').replace(/\/\/[^\n]*/g, '');
+    const specs = JSON.parse(jsonStr) as Record<string, unknown>;
 
     const fieldsFound = Object.values(specs).filter((v) => v !== null && v !== undefined).length;
     return { success: true, specs, fieldsFound };
