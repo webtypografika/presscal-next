@@ -1,0 +1,78 @@
+{
+  "common": {
+    "save": "Αποθήκευση",
+    "cancel": "Ακύρωση",
+    "delete": "Διαγραφή",
+    "edit": "Επεξεργασία",
+    "add": "Προσθήκη",
+    "search": "Αναζήτηση...",
+    "loading": "Φόρτωση...",
+    "noResults": "Δεν βρέθηκαν αποτελέσματα",
+    "confirm": "Επιβεβαίωση",
+    "back": "Πίσω",
+    "next": "Επόμενο",
+    "close": "Κλείσιμο",
+    "yes": "Ναι",
+    "no": "Όχι"
+  },
+  "nav": {
+    "dashboard": "Πίνακας Ελέγχου",
+    "calculator": "Κοστολόγηση",
+    "quotes": "Προσφορές",
+    "email": "Email",
+    "machines": "Μηχανήματα",
+    "inventory": "Αποθήκη",
+    "customers": "Πελάτες",
+    "products": "Προϊόντα",
+    "postpress": "Μεταφορές",
+    "settings": "Ρυθμίσεις"
+  },
+  "dashboard": {
+    "title": "Πίνακας Ελέγχου",
+    "recentQuotes": "Πρόσφατες Προσφορές",
+    "quickActions": "Γρήγορες Ενέργειες"
+  },
+  "calculator": {
+    "title": "Κοστολόγηση Φύλλου",
+    "machine": "Μηχάνημα",
+    "paper": "Χαρτί",
+    "jobSize": "Διάσταση Εργασίας",
+    "quantity": "Ποσότητα",
+    "sides": "Όψεις",
+    "color": "Χρώμα",
+    "bw": "Ασπρόμαυρο",
+    "cost": "Κόστος",
+    "price": "Τιμή",
+    "profit": "Κέρδος",
+    "perPiece": "ανά τεμ."
+  },
+  "quotes": {
+    "title": "Προσφορές",
+    "newQuote": "Νέα Προσφορά",
+    "status": {
+      "new": "Νέα",
+      "draft": "Πρόχειρο",
+      "sent": "Εστάλη",
+      "approved": "Εγκρίθηκε",
+      "completed": "Ολοκληρώθηκε",
+      "rejected": "Απορρίφθηκε"
+    },
+    "kanban": "Πίνακας Εργασιών",
+    "sendQuote": "Αποστολή Προσφοράς"
+  },
+  "machines": {
+    "title": "Μηχανήματα",
+    "digital": "Ψηφιακά",
+    "offset": "Offset",
+    "plotter": "Plotter",
+    "addMachine": "Νέο Μηχάνημα"
+  },
+  "inventory": {
+    "title": "Αποθήκη Υλικών",
+    "sheets": "Φύλλα",
+    "rolls": "Ρολά",
+    "films": "Φιλμ",
+    "consumables": "Αναλώσιμα",
+    "services": "Υπηρεσίες"
+  }
+}

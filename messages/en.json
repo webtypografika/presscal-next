@@ -1,0 +1,30 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search...",
+    "loading": "Loading...",
+    "noResults": "No results found",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "calculator": "Calculator",
+    "quotes": "Quotes",
+    "email": "Email",
+    "machines": "Machines",
+    "inventory": "Inventory",
+    "customers": "Customers",
+    "products": "Products",
+    "postpress": "Postpress",
+    "settings": "Settings"
+  }
+}
