@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PressCal Pro — Draft B: Command Center</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  :root {
+    --bg: #09090b;
+    --bg-surface: #18181b;
+    --bg-elevated: #27272a;
+    --text: #fafafa;
+    --text-dim: #a1a1aa;
+    --text-muted: #71717a;
+    --border: rgba(255,255,255,0.06);
+    --accent: #f58220;
+    --blue: #3b82f6;
+    --violet: #8b5cf6;
+    --teal: #14b8a6;
+    --success: #22c55e;
+    --danger: #ef4444;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ─── SPOTLIGHT SEARCH BAR ─── */
+  .spotlight-trigger {
+    position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 90;
+    width: 480px; height: 44px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 16px;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    backdrop-filter: blur(20px);
+  }
+  .spotlight-trigger:hover {
+    border-color: rgba(255,255,255,0.12);
+    background: var(--bg-elevated);
+  }
+  .spotlight-trigger kbd {
+    margin-left: auto;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.68rem; font-family: inherit;
+    color: var(--text-muted);
+  }
+
+  /* ─── MINIMAL TOPBAR ─── */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 80;
+    height: 72px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px;
+  }
+  .brand {
+    font-size: 1rem; font-weight: 800; letter-spacing: -0.04em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .brand-mark {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #ff6b00);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 900; color: #fff;
+  }
+  .brand span { color: var(--accent); }
+
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .topbar-btn {
+    width: 36px; height: 36px; border-radius: 10px; border: none;
+    background: transparent; color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; transition: all 0.2s;
+  }
+  .topbar-btn:hover { background: var(--bg-surface); color: var(--text); }
+  .avatar-sm {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--violet), var(--blue));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-weight: 700; color: #fff;
+  }
+
+  /* ─── MAIN CONTENT ─── */
+  .main {
+    padding: 88px 48px 120px;
+    max-width: 1200px;
+    margin: 0 auto;
+    animation: fadeIn 0.6s ease both;
+  }
+
+  /* ─── PAGE HEADER ─── */
+  .page-header {
+    margin-bottom: 40px;
+  }
+  .page-header h1 {
+    font-size: 2.5rem;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+  }
+  .page-header p {
+    color: var(--text-dim);
+    margin-top: 8px;
+    font-size: 1rem;
+  }
+
+  /* ─── STATS ROW ─── */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+  .stat {
+    background: var(--bg-surface);
+    padding: 24px 28px;
+    position: relative;
+  }
+  .stat::after {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--stat-color, transparent);
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .stat:hover::after { opacity: 1; }
+  .stat-label { font-size: 0.72rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+  .stat-value { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; margin-top: 6px; }
+  .stat-change { font-size: 0.72rem; margin-top: 4px; }
+  .stat-change.up { color: var(--success); }
+  .stat-change.down { color: var(--danger); }
+
+  /* ─── CONTENT GRID ─── */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 20px;
+  }
+
+  /* ─── SECTION CARD ─── */
+  .section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .section-header h2 { font-size: 0.82rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+  .section-action {
+    font-size: 0.72rem; font-weight: 600; color: var(--accent);
+    cursor: pointer; transition: opacity 0.2s;
+    background: none; border: none;
+  }
+  .section-action:hover { opacity: 0.8; }
+
+  /* ─── TABLE ─── */
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table th {
+    text-align: left; padding: 8px 12px; font-size: 0.68rem;
+    font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); border-bottom: 1px solid var(--border);
+  }
+  .data-table td {
+    padding: 14px 12px; font-size: 0.85rem; border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .data-table tr { transition: background 0.15s; }
+  .data-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+  .data-table .customer { color: var(--text-dim); font-size: 0.78rem; }
+  .data-table .amount { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .pill {
+    display: inline-flex; padding: 3px 10px; border-radius: 20px;
+    font-size: 0.65rem; font-weight: 600; letter-spacing: 0.02em;
+  }
+  .pill-blue { background: rgba(59,130,246,0.12); color: var(--blue); }
+  .pill-green { background: rgba(34,197,94,0.12); color: var(--success); }
+  .pill-orange { background: rgba(245,130,32,0.12); color: var(--accent); }
+  .pill-violet { background: rgba(139,92,246,0.12); color: var(--violet); }
+
+  /* ─── ACTIVITY LIST ─── */
+  .activity-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    margin-top: 6px; flex-shrink: 0;
+  }
+  .activity-text { font-size: 0.82rem; line-height: 1.5; }
+  .activity-text strong { font-weight: 600; }
+  .activity-time { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; }
+
+  /* ─── BOTTOM DOCK ─── */
+  .dock {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 100;
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(24, 24, 27, 0.85);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    padding: 8px 12px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset;
+  }
+  .dock-item {
+    width: 48px; height: 48px; border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; cursor: pointer;
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    position: relative;
+    transition: all 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    border: none; background: transparent;
+  }
+  .dock-item span {
+    font-size: 0.5rem; font-weight: 600; letter-spacing: 0.02em;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .dock-item:hover {
+    transform: translateY(-8px) scale(1.15);
+    color: var(--text);
+  }
+  .dock-item:hover span { opacity: 1; }
+  .dock-item.active {
+    color: var(--accent);
+  }
+  .dock-item.active::after {
+    content: '';
+    position: absolute; bottom: 2px;
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .dock-sep {
+    width: 1px; height: 28px; background: rgba(255,255,255,0.08);
+    margin: 0 4px;
+  }
+  .dock-item.cta-dock {
+    background: linear-gradient(135deg, var(--accent), #ff6b00);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(245,130,32,0.3);
+  }
+  .dock-item.cta-dock:hover { box-shadow: 0 8px 30px rgba(245,130,32,0.5); color: #fff; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR (minimal) -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">P</div>
+    Press<span>Cal</span>
+  </div>
+  <div class="topbar-right">
+    <button class="topbar-btn">🌙</button>
+    <button class="topbar-btn" style="position:relative">🔔<span style="position:absolute;top:6px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--danger)"></span></button>
+    <div class="avatar-sm">ΤΓ</div>
+  </div>
+</div>
+
+<!-- SPOTLIGHT -->
+<div class="spotlight-trigger">
+  🔍 Αναζήτηση πελάτη, προσφοράς, μηχανήματος...
+  <kbd>⌘K</kbd>
+</div>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="page-header">
+    <h1>Καλησπέρα, Τάσο</h1>
+    <p>Δευτέρα 24 Μαρτίου · 3 εκκρεμείς, 2 emails, 1 παράδοση σήμερα</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat" style="--stat-color: var(--accent);">
+      <div class="stat-label">Ανοιχτές Προσφορές</div>
+      <div class="stat-value">12</div>
+      <div class="stat-change up">↑ 3 αυτή τη βδομάδα</div>
+    </div>
+    <div class="stat" style="--stat-color: var(--blue);">
+      <div class="stat-label">Κοστολογήσεις</div>
+      <div class="stat-value">7</div>
+      <div class="stat-change">σήμερα</div>
+    </div>
+    <div class="stat" style="--stat-color: var(--success);">
+      <div class="stat-label">Έσοδα Μαρτίου</div>
+      <div class="stat-value">€4.280</div>
+      <div class="stat-change up">↑ 18%</div>
+    </div>
+    <div class="stat" style="--stat-color: var(--violet);">
+      <div class="stat-label">Πελάτες</div>
+      <div class="stat-value">148</div>
+      <div class="stat-change up">+5 νέοι</div>
+    </div>
+  </div>
+
+  <!-- Two columns -->
+  <div class="grid-2">
+    <!-- Quotes table -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Πρόσφατες Προσφορές</h2>
+        <button class="section-action">Δες Όλες →</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Προσφορά</th>
+            <th>Πελάτης</th>
+            <th>Ποσό</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>QT-0152</td>
+            <td class="customer">Δημητρίου Α.Ε.</td>
+            <td class="amount">€1.245</td>
+            <td><span class="pill pill-blue">Εστάλη</span></td>
+          </tr>
+          <tr>
+            <td>QT-0151</td>
+            <td class="customer">Κωνσταντίνου Κ.</td>
+            <td class="amount">€380</td>
+            <td><span class="pill pill-green">Εγκρίθηκε</span></td>
+          </tr>
+          <tr>
+            <td>QT-0150</td>
+            <td class="customer">Παπαδόπουλος Γ.</td>
+            <td class="amount">€95</td>
+            <td><span class="pill pill-orange">Νέα</span></td>
+          </tr>
+          <tr>
+            <td>QT-0149</td>
+            <td class="customer">Λογιστικό Αθ.</td>
+            <td class="amount">€520</td>
+            <td><span class="pill pill-blue">Εστάλη</span></td>
+          </tr>
+          <tr>
+            <td>QT-0148</td>
+            <td class="customer">Μαρίνα Design</td>
+            <td class="amount">€890</td>
+            <td><span class="pill pill-violet">Μερική</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Activity feed -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Δραστηριότητα</h2>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot" style="background: var(--success);"></div>
+        <div>
+          <div class="activity-text"><strong>Εγκρίθηκε</strong> η QT-0151 από Κωνσταντίνου</div>
+          <div class="activity-time">πριν 23 λεπτά</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot" style="background: var(--blue);"></div>
+        <div>
+          <div class="activity-text">Νέο email από <strong>Δημητρίου Α.Ε.</strong></div>
+          <div class="activity-time">πριν 1 ώρα</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot" style="background: var(--accent);"></div>
+        <div>
+          <div class="activity-text">Κοστολόγηση <strong>Φυλλάδια A4</strong> — €245</div>
+          <div class="activity-time">πριν 2 ώρες</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot" style="background: var(--violet);"></div>
+        <div>
+          <div class="activity-text"><strong>Αυτοκόλλητα 500τεμ</strong> ολοκληρώθηκε</div>
+          <div class="activity-time">πριν 3 ώρες</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-dot" style="background: var(--danger);"></div>
+        <div>
+          <div class="activity-text">Χαμηλό stock: <strong>Velvet 300gr 33×48</strong></div>
+          <div class="activity-time">πριν 5 ώρες</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- DOCK -->
+<nav class="dock">
+  <button class="dock-item active">📊<span>Home</span></button>
+  <button class="dock-item">🖩<span>Calc</span></button>
+  <button class="dock-item">📄<span>Quotes</span></button>
+  <button class="dock-item">✉️<span>Email</span></button>
+  <div class="dock-sep"></div>
+  <button class="dock-item">🖨️<span>Μηχ/τα</span></button>
+  <button class="dock-item">📦<span>Αποθήκη</span></button>
+  <button class="dock-item">👥<span>Πελάτες</span></button>
+  <div class="dock-sep"></div>
+  <button class="dock-item cta-dock">＋<span>Νέο</span></button>
+</nav>
+
+</body>
+</html>

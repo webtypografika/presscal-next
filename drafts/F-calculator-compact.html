@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PressCal Pro — Calculator F: Compact App</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg: #0f172a;
+    --bg-surface: rgba(15,23,42,0.75);
+    --bg-elevated: rgba(20,30,55,0.8);
+    --bg-input: rgba(255,255,255,0.04);
+    --text: #f1f5f9;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.14);
+    --accent: #f58220;
+    --blue: #3b82f6;
+    --violet: #7c3aed;
+    --teal: #0d9488;
+    --success: #10b981;
+    --danger: #f06548;
+    --glass-border: rgba(255,255,255,0.08);
+    --blur: 24px;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --radius-xs: 7px;
+  }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 14px; color: var(--text);
+    height: 100vh; overflow: hidden;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 80%, rgba(29,47,110,0.4), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 20%, rgba(59,130,246,0.15), transparent);
+    display: flex; flex-direction: column;
+  }
+
+  /* ═══ TOP: Machine tabs ═══ */
+  .machine-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 20px; flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    max-width: 1400px; margin: 0 auto; width: 100%;
+  }
+  .machine-bar-label { font-size: 0.65rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-right: 8px; }
+  .m-tab {
+    padding: 6px 16px; border-radius: 8px;
+    font-size: 0.82rem; font-weight: 600;
+    border: 1px solid var(--glass-border);
+    background: transparent; color: var(--text-dim);
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .m-tab i { font-size: 0.75rem; }
+  .m-tab:hover { border-color: var(--border-hover); color: var(--text); }
+  .m-tab.active { border-color: color-mix(in srgb, var(--blue) 50%, transparent); background: color-mix(in srgb, var(--blue) 8%, transparent); color: var(--blue); }
+  .m-tab .m-size { font-size: 0.62rem; color: var(--text-muted); font-weight: 400; }
+  .m-tab.active .m-size { color: color-mix(in srgb, var(--blue) 70%, var(--text)); }
+
+  .machine-bar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .mb-stat { font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+  .mb-stat strong { color: var(--text-dim); font-weight: 700; }
+  .mb-stat i { font-size: 0.6rem; }
+
+  /* ═══ INPUT STRIP: All key inputs in one row ═══ */
+  .input-strip {
+    display: flex; align-items: center; gap: 2px;
+    padding: 8px 20px; flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,0,0,0.15);
+    max-width: 1400px; margin: 0 auto; width: 100%;
+  }
+  .is-group {
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 12px;
+    border-right: 1px solid var(--border);
+    height: 40px;
+  }
+  .is-group:last-child { border-right: none; }
+  .is-label { font-size: 0.58rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+  .is-icon { color: var(--text-muted); font-size: 0.72rem; width: 18px; text-align: center; }
+
+  .is-value {
+    font-size: 0.92rem; font-weight: 700; color: var(--text);
+    background: transparent; border: none; outline: none;
+    font-family: inherit;
+    width: 60px; text-align: center;
+    padding: 4px 0;
+    border-bottom: 2px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .is-value:focus { border-bottom-color: var(--accent); }
+  .is-value:hover { border-bottom-color: var(--border-hover); }
+  .is-x { color: var(--text-muted); font-size: 0.72rem; font-weight: 600; }
+
+  /* Paper clickable */
+  .is-paper {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    padding: 4px 10px; border-radius: 6px;
+    transition: background 0.2s;
+  }
+  .is-paper:hover { background: rgba(255,255,255,0.04); }
+  .is-paper-name { font-size: 0.85rem; font-weight: 700; }
+  .is-paper-detail { font-size: 0.62rem; color: var(--text-muted); }
+  .is-paper-price { font-size: 0.78rem; font-weight: 700; color: var(--teal); }
+  .is-paper-arrow { color: var(--text-muted); font-size: 0.6rem; }
+
+  /* Toggle buttons inline */
+  .is-toggle {
+    display: flex; border: 1px solid var(--glass-border); border-radius: 6px; overflow: hidden;
+  }
+  .is-tog {
+    padding: 5px 12px; font-size: 0.75rem; font-weight: 600;
+    background: transparent; border: none; color: var(--text-muted);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .is-tog.active { background: rgba(245,130,32,0.12); color: var(--accent); }
+  .is-tog:not(:last-child) { border-right: 1px solid var(--glass-border); }
+  .arch-toggle { border-radius: 8px; }
+  .arch-toggle .is-tog { padding: 5px 10px; font-size: 0.7rem; }
+
+  /* ═══ MAIN AREA: Imposition + Results ═══ */
+  .calc-main {
+    flex: 1; display: flex; overflow: hidden;
+    max-width: 1400px; margin: 0 auto; width: 100%;
+  }
+
+  /* Center: Imposition canvas */
+  .impo-area {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: relative; padding: 24px;
+  }
+  .impo-canvas {
+    width: 100%; max-width: 700px; aspect-ratio: 330/487;
+    background: rgba(0,0,0,0.3);
+    border: 2px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    position: relative; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .impo-grid {
+    display: grid; gap: 4px; width: 100%; height: 100%;
+  }
+  .impo-cell {
+    background: rgba(245,130,32,0.1);
+    border: 1.5px solid rgba(245,130,32,0.3);
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-weight: 600; color: rgba(245,130,32,0.5);
+  }
+
+  /* Overlaid stats on canvas */
+  .impo-overlay-tl {
+    position: absolute; top: 12px; left: 16px;
+    font-size: 0.65rem; color: var(--text-muted);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .impo-overlay-tl span { display: flex; align-items: center; gap: 4px; }
+  .impo-overlay-br {
+    position: absolute; bottom: 12px; right: 16px;
+    display: flex; gap: 8px;
+  }
+  .impo-stat-chip {
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+    padding: 4px 10px; border-radius: 6px;
+    font-size: 0.68rem; font-weight: 600; color: var(--text-dim);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .impo-stat-chip strong { color: var(--text); font-weight: 800; }
+
+  /* Mode bar under canvas */
+  .impo-modes {
+    display: flex; gap: 4px; margin-top: 12px;
+  }
+  .im-btn {
+    padding: 5px 14px; border-radius: 6px;
+    font-size: 0.72rem; font-weight: 600;
+    border: 1px solid var(--glass-border);
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .im-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(245,130,32,0.08); }
+  .im-btn:hover { color: var(--accent); }
+
+  /* ═══ RIGHT SIDEBAR: Results ═══ */
+  .results-sidebar {
+    width: 320px; flex-shrink: 0;
+    background: rgba(0,0,0,0.2);
+    border-left: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+
+  /* Price hero */
+  .price-hero {
+    text-align: center; padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .price-hero-label { font-size: 0.65rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .price-hero-val { font-size: 2.8rem; font-weight: 900; color: var(--accent); letter-spacing: -0.03em; line-height: 1; margin: 6px 0; }
+  .price-hero-unit { font-size: 0.82rem; color: var(--text-dim); }
+  .price-hero-unit strong { font-weight: 700; }
+
+  /* Stat pills */
+  .stat-pills {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .sp {
+    flex: 1 1 calc(50% - 3px);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    padding: 8px 10px;
+  }
+  .sp-label { font-size: 0.58rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .sp-val { font-size: 1.05rem; font-weight: 800; margin-top: 2px; }
+
+  /* Cost list */
+  .cost-group { margin-bottom: 8px; }
+  .cg-title {
+    font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted);
+    padding-bottom: 4px; border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+  }
+  .cost-line {
+    display: flex; justify-content: space-between; padding: 3px 0;
+    font-size: 0.78rem;
+  }
+  .cost-line .cl-label { color: var(--text-dim); }
+  .cost-line .cl-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* Finishing chips */
+  .finishing-bar {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    padding: 8px 0; border-top: 1px solid var(--border);
+  }
+  .fin-chip {
+    padding: 5px 12px; border-radius: 20px;
+    font-size: 0.68rem; font-weight: 600;
+    border: 1px solid var(--glass-border);
+    background: transparent; color: var(--text-dim); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .fin-chip:hover { border-color: var(--border-hover); color: var(--text); }
+  .fin-chip.active { border-color: color-mix(in srgb, var(--violet) 50%, transparent); background: color-mix(in srgb, var(--violet) 8%, transparent); color: var(--violet); }
+  .fin-chip.active i { margin-right: 4px; }
+
+  /* Cart button */
+  .btn-cart {
+    width: 100%; padding: 12px 0; border-radius: var(--radius-xs);
+    background: var(--accent); color: #fff; border: none;
+    font-size: 0.92rem; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 4px 16px rgba(245,130,32,0.3);
+    transition: all 0.25s; margin-top: auto;
+  }
+  .btn-cart:hover { background: #e0741a; box-shadow: 0 6px 24px rgba(245,130,32,0.4); }
+
+  /* ═══ PAPER MODAL (hidden by default, click paper to show) ═══ */
+  .paper-modal-bg {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+    align-items: center; justify-content: center;
+  }
+  .paper-modal-bg.show { display: flex; }
+  .paper-modal {
+    width: 680px; max-height: 80vh;
+    background: var(--bg-elevated); backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 24px; overflow-y: auto;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+  }
+  .pm-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .pm-header h2 { font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+  .pm-header h2 i { color: var(--teal); }
+  .pm-close { background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; }
+  .pm-close:hover { color: var(--text); }
+
+  .pm-search {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 14px; height: 40px;
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    background: rgba(255,255,255,0.04); margin-bottom: 14px;
+  }
+  .pm-search i { color: var(--text-muted); font-size: 0.78rem; }
+  .pm-search input {
+    border: none; background: transparent; color: var(--text);
+    font-size: 0.88rem; font-family: inherit; outline: none; flex: 1;
+  }
+  .pm-search input::placeholder { color: var(--text-muted); }
+
+  .pm-body { display: flex; gap: 16px; }
+  .pm-filters { width: 240px; flex-shrink: 0; }
+  .pm-filter-title { font-size: 0.72rem; font-weight: 700; color: var(--teal); margin-bottom: 6px; }
+  .pm-filter-sub { font-size: 0.58rem; color: var(--text-muted); margin-bottom: 4px; }
+  .pm-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; }
+  .pm-pill {
+    padding: 4px 12px; border-radius: 16px;
+    font-size: 0.72rem; font-weight: 600;
+    border: 1px solid var(--glass-border);
+    background: transparent; color: var(--text-dim); cursor: pointer;
+    transition: all 0.15s;
+  }
+  .pm-pill:hover { border-color: var(--border-hover); }
+  .pm-pill.active { border-color: var(--teal); background: color-mix(in srgb, var(--teal) 10%, transparent); color: var(--teal); }
+  .pm-pill-sel { background: var(--success) !important; color: #fff !important; border-color: var(--success) !important; }
+
+  .pm-list { flex: 1; }
+  .pm-list-head { font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 6px; }
+  .pm-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-radius: 8px;
+    cursor: pointer; transition: background 0.15s;
+    border: 1px solid transparent;
+    font-size: 0.85rem; color: var(--text-dim);
+  }
+  .pm-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+  .pm-item.active {
+    border-color: color-mix(in srgb, var(--teal) 40%, transparent);
+    background: color-mix(in srgb, var(--teal) 6%, transparent);
+  }
+  .pm-item .pm-check { color: var(--teal); font-size: 0.72rem; width: 16px; }
+  .pm-item-price { margin-left: auto; font-weight: 700; color: var(--teal); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+
+<!-- MACHINE BAR -->
+<div class="machine-bar">
+  <span class="machine-bar-label"><i class="fas fa-print"></i></span>
+  <button class="m-tab active"><i class="fas fa-print"></i> Xerox C70 <span class="m-size">330×487</span></button>
+  <button class="m-tab"><i class="fas fa-print"></i> Konica C1100 <span class="m-size">330×487</span></button>
+  <button class="m-tab"><i class="fas fa-industry"></i> Heidelberg SM52 <span class="m-size">520×360</span></button>
+
+  <div class="machine-bar-right">
+    <span class="mb-stat"><i class="fas fa-arrows-alt-h"></i> SS <strong>330</strong></span>
+    <span class="mb-stat"><i class="fas fa-arrows-alt-v"></i> LS <strong>487</strong></span>
+    <span class="mb-stat"><i class="fas fa-recycle"></i> Φύρα <strong>0</strong></span>
+    <span class="mb-stat"><i class="fas fa-tachometer-alt"></i> <strong>61</strong> σελ/λ</span>
+  </div>
+</div>
+
+<!-- INPUT STRIP -->
+<div class="input-strip">
+  <!-- Paper (click to open modal) -->
+  <div class="is-group" onclick="document.getElementById('paperModal').classList.add('show')">
+    <span class="is-icon" style="color:var(--teal);"><i class="fas fa-scroll"></i></span>
+    <div class="is-paper">
+      <div>
+        <span class="is-paper-name">Velvet 170gr</span>
+        <span class="is-paper-detail">Graphcom · 33×48</span>
+      </div>
+      <span class="is-paper-price">€0,085</span>
+      <i class="fas fa-chevron-down is-paper-arrow"></i>
+    </div>
+  </div>
+
+  <!-- Archetype -->
+  <div class="is-group">
+    <span class="is-icon" style="color:var(--accent);"><i class="fas fa-cube"></i></span>
+    <div class="is-toggle arch-toggle">
+      <button class="is-tog active">Φυλλάδιο</button>
+      <button class="is-tog">Κάρτα</button>
+      <button class="is-tog">Αφίσα</button>
+      <button class="is-tog">Φάκελος</button>
+      <button class="is-tog">Custom</button>
+    </div>
+  </div>
+
+  <!-- Dimensions -->
+  <div class="is-group">
+    <span class="is-icon" style="color:var(--accent);"><i class="fas fa-ruler-combined"></i></span>
+    <span class="is-label">W</span>
+    <input class="is-value" value="210">
+    <span class="is-x">×</span>
+    <span class="is-label">H</span>
+    <input class="is-value" value="297">
+    <span style="font-size:0.65rem; color:var(--text-muted);">mm</span>
+  </div>
+
+  <!-- Quantity -->
+  <div class="is-group">
+    <span class="is-icon"><i class="fas fa-layer-group"></i></span>
+    <span class="is-label">Ποσ.</span>
+    <input class="is-value" value="500" style="width:70px;">
+  </div>
+
+  <!-- Bleed -->
+  <div class="is-group">
+    <span class="is-label">Bleed</span>
+    <input class="is-value" value="3" style="width:40px;">
+    <span style="font-size:0.65rem; color:var(--text-muted);">mm</span>
+  </div>
+
+  <!-- Sides -->
+  <div class="is-group">
+    <div class="is-toggle">
+      <button class="is-tog">1 όψη</button>
+      <button class="is-tog active">2 όψεις</button>
+    </div>
+  </div>
+
+  <!-- Color -->
+  <div class="is-group" style="border-right:none;">
+    <div class="is-toggle">
+      <button class="is-tog active">CMYK</button>
+      <button class="is-tog">B/W</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN AREA -->
+<div class="calc-main">
+
+  <!-- CENTER: Imposition -->
+  <div class="impo-area">
+    <div class="impo-canvas">
+      <div class="impo-overlay-tl">
+        <span><i class="fas fa-expand"></i> 330 × 487 mm</span>
+        <span><i class="fas fa-crop-alt"></i> 216 × 303 mm (+3 bleed)</span>
+      </div>
+      <div class="impo-grid" style="grid-template-columns: repeat(4,1fr); grid-template-rows: repeat(2,1fr);">
+        <div class="impo-cell">1</div><div class="impo-cell">2</div><div class="impo-cell">3</div><div class="impo-cell">4</div>
+        <div class="impo-cell">5</div><div class="impo-cell">6</div><div class="impo-cell">7</div><div class="impo-cell">8</div>
+      </div>
+      <div class="impo-overlay-br">
+        <div class="impo-stat-chip"><strong>8</strong>-up</div>
+        <div class="impo-stat-chip"><strong>63</strong> φύλλα</div>
+        <div class="impo-stat-chip"><i class="fas fa-clock"></i> <strong>~4'</strong></div>
+      </div>
+    </div>
+
+    <div class="impo-modes">
+      <button class="im-btn active">N-Up</button>
+      <button class="im-btn">Booklet</button>
+      <button class="im-btn">Perfect Bound</button>
+      <button class="im-btn">Cut & Stack</button>
+      <button class="im-btn">Work & Turn</button>
+      <button class="im-btn">Gang Run</button>
+      <button class="im-btn">Step Multi</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Results -->
+  <div class="results-sidebar">
+    <!-- Price hero -->
+    <div class="price-hero">
+      <div class="price-hero-label">Τελική Τιμή</div>
+      <div class="price-hero-val">€65,85</div>
+      <div class="price-hero-unit"><strong>€0,132</strong> / τεμάχιο</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-pills">
+      <div class="sp"><div class="sp-label">Ups</div><div class="sp-val">8</div></div>
+      <div class="sp"><div class="sp-label">Φύλλα</div><div class="sp-val">63</div></div>
+      <div class="sp"><div class="sp-label">Stock</div><div class="sp-val">63</div></div>
+      <div class="sp"><div class="sp-label">Χρόνος</div><div class="sp-val">~4'</div></div>
+    </div>
+
+    <!-- Costs -->
+    <div class="cost-group">
+      <div class="cg-title">Κόστη</div>
+      <div class="cost-line"><span class="cl-label">Χαρτί</span><span class="cl-val">€5,36</span></div>
+      <div class="cost-line"><span class="cl-label">Εκτύπωση</span><span class="cl-val">€18,90</span></div>
+      <div class="cost-line"><span class="cl-label">Γκιλοτίνα</span><span class="cl-val">€0,63</span></div>
+      <div class="cost-line"><span class="cl-label">Πλαστικοποίηση</span><span class="cl-val">€4,20</span></div>
+    </div>
+
+    <div class="cost-group">
+      <div class="cg-title">Έσοδα</div>
+      <div class="cost-line"><span class="cl-label">Κέρδος εκτύπωσης</span><span class="cl-val">€22,68</span></div>
+      <div class="cost-line"><span class="cl-label">Markup χαρτιού</span><span class="cl-val">€2,68</span></div>
+      <div class="cost-line"><span class="cl-label">Γκιλοτίνα</span><span class="cl-val">€3,00</span></div>
+      <div class="cost-line"><span class="cl-label">Πλαστικοποίηση</span><span class="cl-val">€8,40</span></div>
+    </div>
+
+    <!-- Finishing -->
+    <div class="finishing-bar">
+      <button class="fin-chip active"><i class="fas fa-check"></i>Γκιλοτίνα</button>
+      <button class="fin-chip active"><i class="fas fa-check"></i>Πλαστ/ση Matt</button>
+      <button class="fin-chip">Βιβλιοδεσία</button>
+      <button class="fin-chip">Σπιράλ</button>
+    </div>
+
+    <button class="btn-cart"><i class="fas fa-cart-plus"></i> Προσθήκη στο Καλάθι</button>
+  </div>
+</div>
+
+<!-- PAPER MODAL -->
+<div class="paper-modal-bg" id="paperModal" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="paper-modal">
+    <div class="pm-header">
+      <h2><i class="fas fa-scroll"></i> Επιλογή Χαρτιού</h2>
+      <button class="pm-close" onclick="document.getElementById('paperModal').classList.remove('show')">&times;</button>
+    </div>
+    <div class="pm-search">
+      <i class="fas fa-search"></i>
+      <input placeholder="Αναζήτηση χαρτιού...">
+    </div>
+    <div class="pm-body">
+      <div class="pm-filters">
+        <div class="pm-filter-title">Προμηθευτής</div>
+        <div class="pm-pills">
+          <button class="pm-pill">Alef eni</button>
+          <button class="pm-pill active">Graphcom</button>
+          <button class="pm-pill">Περράκης</button>
+          <button class="pm-pill">Τσώλης</button>
+        </div>
+        <div class="pm-filter-title">Κατηγορία</div>
+        <div class="pm-pills">
+          <button class="pm-pill">NCR</button>
+          <button class="pm-pill">Munken</button>
+          <button class="pm-pill">Curious</button>
+          <button class="pm-pill">Blancbeige</button>
+          <button class="pm-pill">Colorplan</button>
+          <button class="pm-pill">Arctic</button>
+          <button class="pm-pill">Acquerello</button>
+          <button class="pm-pill">Action</button>
+          <button class="pm-pill">Eureka</button>
+          <button class="pm-pill">Manilla</button>
+          <button class="pm-pill">Περγαμηνή</button>
+          <button class="pm-pill">Rives</button>
+          <button class="pm-pill">Sirio</button>
+          <button class="pm-pill">Film</button>
+        </div>
+        <div class="pm-pill pm-pill-sel" style="margin-top:6px;">Γραφής</div>
+      </div>
+      <div class="pm-list">
+        <div class="pm-list-head">— Επιλογή —</div>
+        <div class="pm-item active"><span class="pm-check"><i class="fas fa-check"></i></span>Γραφής (70g, 860×610mm)<span class="pm-item-price">€0,085</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (70g, 1000×700mm)<span class="pm-item-price">€0,092</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (80g, 860×610mm)<span class="pm-item-price">€0,095</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (80g, 1000×700mm)<span class="pm-item-price">€0,105</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (100g, 1000×700mm)<span class="pm-item-price">€0,125</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (100g, 860×610mm)<span class="pm-item-price">€0,118</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (120g, 860×610mm)<span class="pm-item-price">€0,140</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (120g, 1000×700mm)<span class="pm-item-price">€0,155</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

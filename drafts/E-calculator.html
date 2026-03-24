@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PressCal Pro — Calculator Draft</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  :root {
+    --bg: #0f172a;
+    --bg-surface: rgba(15, 23, 42, 0.75);
+    --bg-elevated: rgba(20, 30, 55, 0.8);
+    --text: #f1f5f9;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --accent: #f58220;
+    --accent-hover: #e0741a;
+    --blue: #3b82f6;
+    --violet: #7c3aed;
+    --teal: #0d9488;
+    --success: #10b981;
+    --danger: #f06548;
+    --glass-border: rgba(255,255,255,0.08);
+    --blur: 24px;
+    --radius: 20px;
+    --radius-sm: 12px;
+    --radius-xs: 8px;
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 80%, rgba(29,47,110,0.4), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 20%, rgba(59,130,246,0.15), transparent),
+      radial-gradient(ellipse 50% 50% at 50% 50%, rgba(245,130,32,0.05), transparent);
+    background-attachment: fixed;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      radial-gradient(circle at 30% 70%, rgba(29,47,110,0.25) 0%, transparent 50%),
+      radial-gradient(circle at 70% 30%, rgba(59,130,246,0.1) 0%, transparent 50%);
+    animation: meshMove 20s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  @keyframes meshMove {
+    0% { transform: translate(0,0) scale(1); }
+    100% { transform: translate(-30px,20px) scale(1.05); }
+  }
+
+  /* ─── TOPBAR ─── */
+  .topbar {
+    max-width: 1280px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 80px; padding: 0 18px; margin-bottom: 8px;
+  }
+  .brand { display: flex; align-items: center; }
+  .brand-logo { height: 64px; }
+  .topbar-right { display: flex; align-items: center; gap: 6px; }
+  .h-btn {
+    width: 36px; height: 36px; border-radius: 8px; border: none;
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; transition: color 0.2s;
+  }
+  .h-btn:hover { color: var(--accent); }
+  .notif-dot {
+    position: absolute; top: 4px; right: 4px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--danger);
+  }
+
+  /* ─── TABS BAR ─── */
+  .tabs-bar {
+    max-width: 1280px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    height: 46px;
+    background: rgba(10, 18, 36, 0.85);
+    backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 0 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    margin-bottom: 16px;
+  }
+  .header-tabs { display: flex; gap: 2px; background: rgba(255,255,255,0.03); border-radius: 10px; padding: 3px; }
+  .header-tab {
+    padding: 7px 16px; border-radius: 8px;
+    font-size: 1rem; font-weight: 600;
+    color: var(--text-muted); cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex; align-items: center; gap: 6px;
+    border: none; background: transparent; white-space: nowrap;
+  }
+  .header-tab i { font-size: 0.85rem; }
+  .header-tab:hover { color: var(--accent); background: rgba(245,130,32,0.08); }
+  .header-tab.active { color: var(--accent); background: rgba(245,130,32,0.12); }
+
+  /* ─── MAIN ─── */
+  .main {
+    position: relative; z-index: 1;
+    max-width: 1280px; margin: 0 auto;
+    padding: 0 18px 100px;
+    animation: fadeIn 0.5s ease both;
+  }
+
+  /* ─── CALCULATOR LAYOUT ─── */
+  .calc-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* ─── GLASS PANEL ─── */
+  .panel {
+    background: var(--bg-surface);
+    backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 20px;
+    position: relative; overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute; inset: 0; border-radius: var(--radius);
+    background: linear-gradient(135deg, rgba(255,255,255,0.02), transparent);
+    pointer-events: none;
+  }
+  .panel-title {
+    font-size: 0.88rem; font-weight: 700; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-title i { font-size: 0.82rem; }
+
+  /* ─── INPUT SECTIONS ─── */
+  .input-sections {
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  /* Section header with colored orb */
+  .sec-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  }
+  .sec-orb {
+    --oc: var(--sec-color, var(--text-dim));
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--oc) 35%, transparent);
+    background: color-mix(in srgb, var(--oc) 10%, transparent);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--oc); font-size: 0.82rem;
+    transition: all 350ms var(--spring);
+  }
+  .panel:hover .sec-orb {
+    border-color: color-mix(in srgb, var(--oc) 55%, transparent);
+    background: color-mix(in srgb, var(--oc) 15%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--oc) 15%, transparent);
+  }
+  .sec-header h3 { font-size: 0.88rem; font-weight: 700; }
+  .sec-header .sec-sub { font-size: 0.68rem; color: var(--text-muted); }
+
+  /* Machine tabs */
+  .machine-tabs {
+    display: flex; gap: 6px;
+  }
+  .machine-tab {
+    flex: 1; display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: var(--radius-xs);
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.02);
+    color: var(--text-dim); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .machine-tab i { font-size: 1rem; color: var(--text-muted); }
+  .machine-tab:hover {
+    border-color: var(--border-hover);
+    background: rgba(255,255,255,0.04);
+  }
+  .machine-tab.active {
+    border-color: color-mix(in srgb, var(--blue) 50%, transparent);
+    background: color-mix(in srgb, var(--blue) 8%, transparent);
+  }
+  .machine-tab.active i { color: var(--blue); }
+  .mt-name { font-size: 0.82rem; font-weight: 700; display: block; }
+  .mt-info { font-size: 0.62rem; color: var(--text-muted); display: block; }
+
+  /* Form rows */
+  .form-row {
+    display: flex; gap: 10px; margin-bottom: 10px;
+    align-items: center;
+  }
+  .form-group {
+    display: flex; flex-direction: column; gap: 3px; flex: 1;
+  }
+  .form-group.narrow { flex: 0 0 100px; }
+  .form-label {
+    font-size: 0.65rem; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .form-input {
+    height: 36px; border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.04);
+    color: var(--text); padding: 0 10px;
+    font-size: 0.85rem; font-family: inherit;
+    transition: border-color 0.2s;
+    width: 100%;
+  }
+  .form-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(245,130,32,0.15);
+  }
+  .form-input::placeholder { color: var(--text-muted); }
+  select.form-input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+
+  /* Pills */
+  .pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill-btn {
+    padding: 5px 14px; border-radius: 20px;
+    font-size: 0.72rem; font-weight: 600;
+    border: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.03);
+    color: var(--text-dim); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .pill-btn:hover { border-color: var(--border-hover); color: var(--text); }
+  .pill-btn.active {
+    border-color: var(--accent);
+    background: rgba(245,130,32,0.12);
+    color: var(--accent);
+  }
+
+  /* Paper panel layout */
+  .paper-body {
+    display: flex; gap: 16px;
+  }
+  .paper-filters { flex: 1; }
+  .paper-picker {
+    width: 280px; flex-shrink: 0;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+  }
+
+  .paper-section-label {
+    font-size: 0.82rem; font-weight: 700; color: var(--teal);
+    text-transform: uppercase;
+  }
+  .paper-section-sub {
+    font-size: 0.62rem; color: var(--text-muted); margin-bottom: 6px;
+  }
+  .paper-cat-pills { }
+  .pill-selected {
+    background: var(--success) !important;
+    color: #fff !important;
+    border-color: var(--success) !important;
+  }
+
+  .paper-search {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 10px; height: 34px;
+    border: 1px solid var(--glass-border); border-radius: 8px;
+    background: rgba(255,255,255,0.04); margin-bottom: 8px;
+  }
+  .paper-search i { color: var(--text-muted); font-size: 0.72rem; }
+  .paper-search input {
+    border: none; background: transparent; color: var(--text);
+    font-size: 0.82rem; font-family: inherit; outline: none; flex: 1;
+  }
+  .paper-search input::placeholder { color: var(--text-muted); }
+
+  .paper-pick-header {
+    font-size: 0.72rem; font-weight: 600; color: var(--text-muted);
+    text-align: center; margin-bottom: 6px;
+  }
+
+  .paper-list {
+    max-height: 240px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .paper-list::-webkit-scrollbar { width: 3px; }
+  .paper-list::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 2px; }
+
+  .paper-list-item {
+    padding: 8px 10px; border-radius: 6px;
+    font-size: 0.82rem; color: var(--text-dim);
+    cursor: pointer; transition: background 0.15s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .paper-list-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .paper-check { color: var(--teal); font-size: 0.72rem; }
+
+  /* Sides toggle */
+  .toggle-row {
+    display: flex; gap: 0;
+    border: 1px solid var(--glass-border); border-radius: 8px; overflow: hidden;
+  }
+  .toggle-btn {
+    flex: 1; padding: 7px 0; text-align: center;
+    font-size: 0.78rem; font-weight: 600;
+    background: transparent; border: none;
+    color: var(--text-muted); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .toggle-btn.active {
+    background: rgba(245,130,32,0.12);
+    color: var(--accent);
+  }
+  .toggle-btn:not(:last-child) { border-right: 1px solid var(--glass-border); }
+
+  /* Dimensions inline */
+  .dim-row {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dim-row .dim-x { color: var(--text-muted); font-size: 0.78rem; font-weight: 600; }
+  .dim-row .form-input { width: 90px; text-align: center; flex: none; }
+
+  /* ─── RIGHT PANEL: RESULTS ─── */
+  .results-stack {
+    display: flex; flex-direction: column; gap: 14px;
+    position: sticky; top: 16px;
+  }
+
+  /* Imposition preview */
+  .impo-preview {
+    aspect-ratio: 4/3;
+    background: rgba(0,0,0,0.25);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .impo-grid {
+    display: grid; gap: 3px; padding: 16px;
+  }
+  .impo-cell {
+    background: rgba(245,130,32,0.15);
+    border: 1px solid rgba(245,130,32,0.3);
+    border-radius: 3px;
+    aspect-ratio: 210/297;
+    min-width: 28px;
+  }
+  .impo-label {
+    position: absolute; bottom: 8px; right: 10px;
+    font-size: 0.62rem; font-weight: 600; color: var(--text-muted);
+    background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px;
+  }
+  .impo-mode-bar {
+    display: flex; gap: 4px; margin-top: 10px;
+  }
+  .impo-mode {
+    padding: 4px 10px; border-radius: 6px;
+    font-size: 0.62rem; font-weight: 600;
+    border: 1px solid var(--glass-border);
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    transition: all 0.2s;
+  }
+  .impo-mode.active { border-color: var(--accent); color: var(--accent); background: rgba(245,130,32,0.08); }
+  .impo-mode:hover { color: var(--accent); }
+
+  /* Stats grid */
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .stat-box {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    padding: 10px 12px;
+  }
+  .stat-label { font-size: 0.6rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat-val { font-size: 1.1rem; font-weight: 800; margin-top: 2px; }
+
+  /* Cost breakdown */
+  .cost-section { margin-bottom: 12px; }
+  .cost-section-title {
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted);
+    margin-bottom: 8px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cost-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 0; font-size: 0.82rem;
+  }
+  .cost-row .cost-label { color: var(--text-dim); }
+  .cost-row .cost-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .cost-total {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; margin-top: 4px;
+    border-top: 2px solid var(--glass-border);
+  }
+  .cost-total .cost-label { font-weight: 700; font-size: 0.88rem; }
+  .cost-total .cost-val { font-size: 1.3rem; font-weight: 900; color: var(--accent); }
+  .cost-unit { text-align: right; font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+
+  /* Add to cart button */
+  .btn-cart {
+    width: 100%; padding: 12px 0; border-radius: var(--radius-xs);
+    background: var(--accent); color: #fff; border: none;
+    font-size: 0.92rem; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 4px 16px rgba(245,130,32,0.3);
+    transition: all 0.25s;
+    margin-top: 8px;
+  }
+  .btn-cart:hover { background: var(--accent-hover); box-shadow: 0 6px 24px rgba(245,130,32,0.4); }
+
+  /* ─── DOCK ─── */
+  .dock {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 100;
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(15, 23, 42, 0.82);
+    backdrop-filter: blur(28px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px; padding: 8px 12px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset;
+  }
+  .dock-item {
+    --dc: var(--dock-color, var(--text-dim));
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 0.85rem;
+    position: relative; border: 2px solid color-mix(in srgb, var(--dc) 25%, transparent);
+    background: color-mix(in srgb, var(--dc) 8%, transparent);
+    color: var(--dc); transition: all 350ms var(--spring);
+  }
+  .dock-item span {
+    font-size: 0.48rem; font-weight: 600; opacity: 0;
+    transition: opacity 0.2s; position: absolute; bottom: -14px;
+    white-space: nowrap; color: var(--text-dim);
+  }
+  .dock-item:hover {
+    border-color: color-mix(in srgb, var(--dc) 55%, transparent);
+    background: color-mix(in srgb, var(--dc) 15%, transparent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--dc) 20%, transparent);
+  }
+  .dock-item:hover span { opacity: 1; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="brand"><img src="logo-presscal.png" alt="PressCal" class="brand-logo"></div>
+  <div class="topbar-right">
+    <button class="h-btn"><i class="fas fa-moon"></i></button>
+    <button class="h-btn" style="position:relative"><i class="fas fa-bell"></i><span class="notif-dot"></span></button>
+    <button class="h-btn"><i class="fas fa-user"></i></button>
+  </div>
+</div>
+
+<!-- TABS -->
+<nav class="tabs-bar">
+  <div class="header-tabs">
+    <button class="header-tab"><i class="fas fa-th-large"></i>Dashboard</button>
+    <button class="header-tab active"><i class="fas fa-calculator"></i>Κοστολόγηση</button>
+    <button class="header-tab"><i class="fas fa-users"></i>Πελάτες</button>
+    <button class="header-tab"><i class="fas fa-file-invoice"></i>Προσφορές</button>
+    <button class="header-tab"><i class="fas fa-envelope"></i>Emails</button>
+    <button class="header-tab"><i class="fas fa-tasks"></i>Εργασίες</button>
+    <button class="header-tab"><i class="fas fa-calendar-alt"></i>Ημερολόγιο</button>
+    <button class="header-tab"><i class="fas fa-folder-open"></i>Folders</button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="calc-layout">
+
+    <!-- ═══ LEFT: INPUTS ═══ -->
+    <div class="input-sections">
+
+      <!-- ΜΗΧΑΝΗΜΑ -->
+      <div class="panel" style="--sec-color: var(--blue);">
+        <div class="sec-header">
+          <div class="sec-orb" style="--sec-color: var(--blue);"><i class="fas fa-print"></i></div>
+          <div>
+            <h3>Μηχάνημα</h3>
+          </div>
+        </div>
+        <div class="machine-tabs">
+          <button class="machine-tab active">
+            <i class="fas fa-print"></i>
+            <span class="mt-name">Xerox C70</span>
+            <span class="mt-info">Ψηφιακό · 330×487</span>
+          </button>
+          <button class="machine-tab">
+            <i class="fas fa-print"></i>
+            <span class="mt-name">Konica C1100</span>
+            <span class="mt-info">Ψηφιακό · 330×487</span>
+          </button>
+          <button class="machine-tab">
+            <i class="fas fa-industry"></i>
+            <span class="mt-name">Heidelberg SM52</span>
+            <span class="mt-info">Offset · 520×360</span>
+          </button>
+        </div>
+        <div class="form-row" style="margin-top: 12px;">
+          <div class="form-group narrow">
+            <label class="form-label">SS (mm)</label>
+            <input class="form-input" type="number" value="330" placeholder="SS">
+          </div>
+          <div class="form-group narrow">
+            <label class="form-label">LS (mm)</label>
+            <input class="form-input" type="number" value="487" placeholder="LS">
+          </div>
+          <div class="form-group narrow">
+            <label class="form-label">Φύρα</label>
+            <input class="form-input" type="number" value="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Προεπιλογές</label>
+            <div class="pill-row">
+              <button class="pill-btn">A4</button>
+              <button class="pill-btn">A3</button>
+              <button class="pill-btn active">SRA3</button>
+              <button class="pill-btn">33×48</button>
+              <button class="pill-btn">35×50</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ΧΑΡΤΙ -->
+      <div class="panel paper-panel" style="--sec-color: var(--teal);">
+        <div class="sec-header">
+          <div class="sec-orb" style="--sec-color: var(--teal);"><i class="fas fa-scroll"></i></div>
+          <div>
+            <h3>Χαρτί</h3>
+            <span class="sec-sub">Υλικό εκτύπωσης</span>
+          </div>
+        </div>
+
+        <div class="paper-body">
+          <!-- Left: Filters -->
+          <div class="paper-filters">
+            <!-- Προμηθευτής -->
+            <div class="paper-section-label">Προμηθευτής</div>
+            <div class="paper-section-sub">Supplier</div>
+            <div class="pill-row" style="margin-bottom: 14px;">
+              <button class="pill-btn">Alef eni</button>
+              <button class="pill-btn active">Graphcom</button>
+              <button class="pill-btn">Περράκης</button>
+              <button class="pill-btn">Τσώλης</button>
+            </div>
+
+            <!-- Κατηγορία -->
+            <div class="paper-section-label">Κατηγορία</div>
+            <div class="paper-section-sub">Τύπος</div>
+            <div class="pill-row paper-cat-pills">
+              <button class="pill-btn">NCR</button>
+              <button class="pill-btn">Munken</button>
+              <button class="pill-btn">Curious</button>
+              <button class="pill-btn">Blancbeige</button>
+              <button class="pill-btn">Colorplan</button>
+              <button class="pill-btn">Colorpaln</button>
+              <button class="pill-btn">Arctic</button>
+              <button class="pill-btn">Acquerello</button>
+              <button class="pill-btn">Action</button>
+              <button class="pill-btn">Eureka</button>
+              <button class="pill-btn">Manilla</button>
+              <button class="pill-btn">Περγαμηνή</button>
+              <button class="pill-btn">Rives</button>
+              <button class="pill-btn">Sirio</button>
+              <button class="pill-btn">Sub</button>
+              <button class="pill-btn">Pachica</button>
+              <button class="pill-btn">Film</button>
+              <button class="pill-btn">Tela</button>
+              <button class="pill-btn">Tan</button>
+            </div>
+
+            <!-- Selected category pill (green) -->
+            <div style="margin-top: 10px;">
+              <button class="pill-btn pill-selected">Γραφής</button>
+            </div>
+          </div>
+
+          <!-- Right: Search + paper list popup -->
+          <div class="paper-picker">
+            <div class="paper-search">
+              <i class="fas fa-search"></i>
+              <input type="text" placeholder="Αναζήτηση...">
+            </div>
+
+            <div class="paper-pick-header">— Επιλογή —</div>
+
+            <div class="paper-list">
+              <div class="paper-list-item"><i class="fas fa-check paper-check"></i>Γραφής (70g, 860×610mm)</div>
+              <div class="paper-list-item">Γραφής (70g, 1000×700mm)</div>
+              <div class="paper-list-item">Γραφής (80g, 860×610mm)</div>
+              <div class="paper-list-item">Γραφής (80g, 1000×700mm)</div>
+              <div class="paper-list-item">Γραφής (100g, 1000×700mm)</div>
+              <div class="paper-list-item">Γραφής (100g, 860×610mm)</div>
+              <div class="paper-list-item">Γραφής (120g, 860×610mm)</div>
+              <div class="paper-list-item">Γραφής (120g, 1000×700mm)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ΕΡΓΑΣΙΑ -->
+      <div class="panel" style="--sec-color: var(--accent);">
+        <div class="sec-header">
+          <div class="sec-orb" style="--sec-color: var(--accent);"><i class="fas fa-ruler-combined"></i></div>
+          <div>
+            <h3>Εργασία</h3>
+            <span class="sec-sub">Φυλλάδιο A4 · 210×297 · 500 τεμ. · 2 όψεις</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Προϊόν / Archetype</label>
+            <div class="pill-row">
+              <button class="pill-btn active">Φυλλάδιο</button>
+              <button class="pill-btn">Κάρτα</button>
+              <button class="pill-btn">Αφίσα</button>
+              <button class="pill-btn">Φάκελος</button>
+              <button class="pill-btn">Επιστολόχαρτο</button>
+              <button class="pill-btn">Custom</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Διαστάσεις (mm)</label>
+            <div class="dim-row">
+              <input class="form-input" type="number" value="210" placeholder="W">
+              <span class="dim-x">×</span>
+              <input class="form-input" type="number" value="297" placeholder="H">
+            </div>
+          </div>
+          <div class="form-group narrow">
+            <label class="form-label">Ποσότητα</label>
+            <input class="form-input" type="number" value="500">
+          </div>
+          <div class="form-group narrow">
+            <label class="form-label">Bleed (mm)</label>
+            <input class="form-input" type="number" value="3">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Όψεις</label>
+            <div class="toggle-row">
+              <button class="toggle-btn">Μονή</button>
+              <button class="toggle-btn active">Διπλή</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Χρώμα</label>
+            <div class="toggle-row">
+              <button class="toggle-btn active">4χρ CMYK</button>
+              <button class="toggle-btn">Ασπρόμαυρο</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ΦΙΝΙΡΙΣΜΑ -->
+      <div class="panel" style="--sec-color: var(--violet);">
+        <div class="sec-header">
+          <div class="sec-orb" style="--sec-color: var(--violet);"><i class="fas fa-scissors"></i></div>
+          <div>
+            <h3>Φινίρισμα</h3>
+            <span class="sec-sub">Γκιλοτίνα + Πλαστικοποίηση matt 1 όψη</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Γκιλοτίνα</label>
+            <select class="form-input">
+              <option>Polar 78 — €0,005/κοπή</option>
+              <option>Χωρίς</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Πλαστικοποίηση</label>
+            <select class="form-input">
+              <option>Matt — 1 όψη</option>
+              <option>Gloss — 1 όψη</option>
+              <option>Matt — 2 όψεις</option>
+              <option>Χωρίς</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Βιβλιοδεσία</label>
+            <div class="toggle-row">
+              <button class="toggle-btn active">Καμία</button>
+              <button class="toggle-btn">Συρραφή</button>
+              <button class="toggle-btn">Κόλλα</button>
+              <button class="toggle-btn">Σπιράλ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══ RIGHT: RESULTS ═══ -->
+    <div class="results-stack">
+
+      <!-- Imposition Preview -->
+      <div class="panel">
+        <div class="panel-title"><i class="fas fa-th" style="color:var(--accent);"></i> Μοντάζ</div>
+        <div class="impo-preview">
+          <div class="impo-grid" style="grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr);">
+            <div class="impo-cell"></div><div class="impo-cell"></div><div class="impo-cell"></div><div class="impo-cell"></div>
+            <div class="impo-cell"></div><div class="impo-cell"></div><div class="impo-cell"></div><div class="impo-cell"></div>
+          </div>
+          <span class="impo-label">4×2 = 8-up · N-Up</span>
+        </div>
+        <div class="impo-mode-bar">
+          <button class="impo-mode active">N-Up</button>
+          <button class="impo-mode">Booklet</button>
+          <button class="impo-mode">PB</button>
+          <button class="impo-mode">Cut&Stack</button>
+          <button class="impo-mode">Gang</button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="panel">
+        <div class="panel-title"><i class="fas fa-chart-bar" style="color:var(--blue);"></i> Στατιστικά</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-label">Φύλλα μηχανής</div>
+            <div class="stat-val">63</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Φύλλα stock</div>
+            <div class="stat-val">63</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Ups</div>
+            <div class="stat-val">8</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Χρόνος</div>
+            <div class="stat-val">~4'</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cost Breakdown -->
+      <div class="panel">
+        <div class="panel-title"><i class="fas fa-coins" style="color:var(--success);"></i> Κοστολόγηση</div>
+
+        <div class="cost-section">
+          <div class="cost-section-title">Κόστη</div>
+          <div class="cost-row"><span class="cost-label">Χαρτί</span><span class="cost-val">€5,36</span></div>
+          <div class="cost-row"><span class="cost-label">Εκτύπωση</span><span class="cost-val">€18,90</span></div>
+          <div class="cost-row"><span class="cost-label">Γκιλοτίνα</span><span class="cost-val">€0,63</span></div>
+          <div class="cost-row"><span class="cost-label">Πλαστικοποίηση</span><span class="cost-val">€4,20</span></div>
+        </div>
+
+        <div class="cost-section">
+          <div class="cost-section-title">Έσοδα</div>
+          <div class="cost-row"><span class="cost-label">Κέρδος εκτύπωσης</span><span class="cost-val">€22,68</span></div>
+          <div class="cost-row"><span class="cost-label">Markup χαρτιού</span><span class="cost-val">€2,68</span></div>
+          <div class="cost-row"><span class="cost-label">Χρέωση γκιλοτίνας</span><span class="cost-val">€3,00</span></div>
+          <div class="cost-row"><span class="cost-label">Χρέωση πλαστ/σης</span><span class="cost-val">€8,40</span></div>
+        </div>
+
+        <div class="cost-total">
+          <span class="cost-label">Τελική Τιμή</span>
+          <span class="cost-val">€65,85</span>
+        </div>
+        <div class="cost-unit">€0,132 / τεμάχιο</div>
+
+        <button class="btn-cart"><i class="fas fa-cart-plus"></i> Προσθήκη στο Καλάθι</button>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- DOCK -->
+<nav class="dock">
+  <button class="dock-item" style="--dock-color: var(--teal);"><i class="fas fa-boxes-stacked"></i><span>Αποθήκη</span></button>
+  <button class="dock-item" style="--dock-color: var(--blue);"><i class="fas fa-print"></i><span>Μηχανές</span></button>
+  <button class="dock-item" style="--dock-color: var(--violet);"><i class="fas fa-scissors"></i><span>Μεταεκτύπωση</span></button>
+  <button class="dock-item"><i class="fas fa-cube"></i><span>Προϊόντα</span></button>
+</nav>
+
+</body>
+</html>

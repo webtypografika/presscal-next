@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PressCal Pro — Draft D: Hybrid</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  :root {
+    --bg: #0f172a;
+    --bg-surface: rgba(15, 23, 42, 0.75);
+    --bg-elevated: rgba(20, 30, 55, 0.8);
+    --text: #f1f5f9;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.12);
+    --accent: #f58220;
+    --accent-hover: #e0741a;
+    --blue: #3b82f6;
+    --violet: #7c3aed;
+    --teal: #0d9488;
+    --success: #10b981;
+    --danger: #f06548;
+    --glass-border: rgba(255,255,255,0.08);
+    --blur: 24px;
+    --radius: 20px;
+    --radius-sm: 12px;
+    --radius-xs: 8px;
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 80%, rgba(29,47,110,0.4), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 20%, rgba(59,130,246,0.15), transparent),
+      radial-gradient(ellipse 50% 50% at 50% 50%, rgba(245,130,32,0.05), transparent);
+    background-attachment: fixed;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      radial-gradient(circle at 30% 70%, rgba(29,47,110,0.25) 0%, transparent 50%),
+      radial-gradient(circle at 70% 30%, rgba(59,130,246,0.1) 0%, transparent 50%);
+    animation: meshMove 20s ease-in-out infinite alternate;
+    pointer-events: none;
+  }
+  @keyframes meshMove {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-30px, 20px) scale(1.05); }
+  }
+
+  /* ─── TOP BAR (logo + tools) ─── */
+  .topbar {
+    max-width: 1280px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 52px;
+    padding: 0 18px;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 6px; }
+
+  /* ─── TABS BAR ─── */
+  .tabs-bar {
+    max-width: 1280px; margin: 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    height: 46px;
+    background: rgba(10, 18, 36, 0.85);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 0 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    margin-bottom: 16px;
+  }
+
+  .brand { display: flex; align-items: center; }
+  .brand-logo { height: 64px; }
+  .topbar { height: 80px; padding: 0 18px; margin-bottom: 8px; }
+  /* Info strip in topbar */
+  .topbar-info {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tb-box {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px; padding: 6px 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .tb-date {
+    font-size: 0.88rem; color: var(--text-dim);
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .tb-date .tb-day { font-size: 1.3rem; font-weight: 800; color: var(--accent); }
+  .tb-date .tb-weekday { font-weight: 600; font-size: 0.78rem; color: var(--text-muted); }
+
+  .tb-weather {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.85rem; color: var(--text-dim);
+  }
+  .tb-weather .tb-wicon { font-size: 1.2rem; }
+  .tb-weather .tb-wtemp { font-weight: 700; }
+  .tb-weather .tb-whum { font-size: 0.72rem; color: var(--text-muted); }
+  .tb-weather .tb-whum i { font-size: 0.6rem; color: var(--blue); }
+
+  .tb-forecast {
+    display: flex; gap: 8px;
+  }
+  .tb-fc {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+  }
+  .tb-fc-day { font-size: 0.58rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+  .tb-fc-icon { font-size: 0.9rem; }
+  .tb-fc-temp { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); }
+  .tb-fc-hum { font-size: 0.52rem; color: var(--text-muted); }
+  .tb-fc-hum i { font-size: 0.45rem; color: var(--blue); }
+
+  .tb-mini-cal {
+    font-size: 0.6rem; color: var(--text-dim);
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 0; text-align: center; line-height: 1.5;
+  }
+  .tb-mini-cal .mc-head { font-weight: 700; color: var(--text-muted); font-size: 0.5rem; }
+  .tb-mini-cal .mc-d { padding: 0 1px; }
+  .tb-mini-cal .mc-today { color: var(--accent); font-weight: 800; }
+  .tb-mini-cal .mc-empty { opacity: 0; }
+
+  /* Header tabs */
+  .header-tabs {
+    display: flex; gap: 2px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 10px; padding: 3px;
+  }
+  .header-tab {
+    padding: 7px 16px; border-radius: 8px;
+    font-size: 1rem; font-weight: 600;
+    color: var(--text-muted); cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex; align-items: center; gap: 6px;
+    border: none; background: transparent;
+    white-space: nowrap;
+  }
+  .header-tab i { font-size: 0.7rem; }
+  .header-tab:hover { color: var(--accent); background: rgba(245,130,32,0.08); }
+  .header-tab.active { color: var(--accent); background: rgba(245,130,32,0.12); }
+
+  /* Spotlight */
+  .spotlight {
+    width: 280px; height: 36px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 14px;
+    color: var(--text-muted); font-size: 0.78rem;
+    cursor: pointer; transition: border-color 0.2s;
+  }
+  .spotlight:hover { border-color: var(--border-hover); }
+  .spotlight kbd {
+    margin-left: auto; padding: 1px 7px; border-radius: 5px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.62rem; font-family: inherit; color: var(--text-muted);
+  }
+
+  .header-right { display: flex; align-items: center; gap: 6px; }
+  .h-btn {
+    width: 36px; height: 36px; border-radius: 8px; border: none;
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; transition: color 0.2s;
+  }
+  .h-btn:hover { color: var(--accent); }
+  .notif-dot {
+    position: absolute; top: 4px; right: 4px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--danger);
+  }
+
+  /* ─── MAIN CONTENT ─── */
+  .main {
+    position: relative; z-index: 1;
+    padding: 0 40px 120px;
+    max-width: 1280px;
+    margin: 0 auto;
+    animation: fadeIn 0.5s ease both;
+  }
+
+  /* ─── INFO ROW ─── */
+  .info-row {
+    display: flex; align-items: stretch; gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  /* Date box (tall, matches calendar height) */
+  .date-box {
+    background: var(--bg-surface); backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+    padding: 20px 32px; text-align: center; flex-shrink: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .date-box .date-weekday {
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-muted);
+  }
+  .date-box .date-day {
+    font-size: 3.5rem; font-weight: 900; color: var(--accent);
+    line-height: 1; margin: 4px 0;
+  }
+  .date-box .date-month {
+    font-size: 0.85rem; font-weight: 600; color: var(--text-dim);
+  }
+  .date-box .date-year {
+    font-size: 0.7rem; font-weight: 500; color: var(--text-muted); margin-top: 2px;
+  }
+
+  /* Mini calendar */
+  .mini-cal {
+    background: var(--bg-surface); backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+    padding: 14px 18px; flex-shrink: 0; width: 240px;
+  }
+  .mc-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .mc-title { font-size: 0.72rem; font-weight: 700; }
+  .mc-nav {
+    background: none; border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 0.6rem; padding: 4px;
+    transition: color 0.2s;
+  }
+  .mc-nav:hover { color: var(--text); }
+  .mc-days-head, .mc-days {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+  }
+  .mc-days-head span {
+    font-size: 0.55rem; font-weight: 600; color: var(--text-muted);
+    padding: 2px 0; text-transform: uppercase;
+  }
+  .mc-days span {
+    font-size: 0.65rem; padding: 3px 0; border-radius: 4px;
+    cursor: default; transition: background 0.15s;
+  }
+  .mc-days span:hover { background: rgba(255,255,255,0.04); }
+  .mc-other { opacity: 0; }
+  .mc-today {
+    background: var(--accent) !important; color: #fff; font-weight: 700;
+    border-radius: 50% !important; width: 24px; height: 24px;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin: 0 auto;
+  }
+
+  /* ─── WEATHER STRIP ─── */
+  .weather-strip {
+    display: flex; flex-direction: column; justify-content: center; gap: 12px;
+    background: var(--bg-surface); backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border); border-radius: var(--radius-sm);
+    padding: 14px 20px; flex: 1;
+  }
+  .weather-today {
+    display: flex; align-items: center; gap: 14px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--glass-border);
+  }
+  .wt-icon { font-size: 1.5rem; }
+  .wt-temp { font-size: 1.1rem; font-weight: 800; display: block; }
+  .wt-desc { font-size: 0.68rem; color: var(--text-dim); }
+  .wt-details {
+    display: flex; flex-direction: column; gap: 2px;
+    font-size: 0.68rem; color: var(--text-muted);
+  }
+  .wt-details i { width: 14px; text-align: center; margin-right: 4px; font-size: 0.6rem; }
+
+  .weather-days {
+    display: flex; gap: 0; flex: 1; justify-content: space-around;
+  }
+  .wd {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 6px 12px; border-radius: var(--radius-xs);
+    cursor: default; transition: background 0.2s;
+  }
+  .wd:hover { background: rgba(255,255,255,0.03); }
+  .wd-name { font-size: 0.65rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .wd-icon { font-size: 1rem; }
+  .wd-temp { font-size: 0.75rem; font-weight: 700; }
+  .wd-hum { font-size: 0.58rem; color: var(--text-muted); }
+  .wd-hum i { font-size: 0.5rem; color: var(--blue); }
+
+  /* ─── GRID ─── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* ─── PANEL ─── */
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .panel-head h2 {
+    font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: 8px;
+  }
+  .panel-head h2 i { color: var(--accent); font-size: 0.95rem; }
+  .badge-count {
+    background: var(--danger); color: #fff; font-size: 0.58rem; font-weight: 700;
+    padding: 1px 7px; border-radius: 10px;
+  }
+  .panel-action {
+    font-size: 0.68rem; font-weight: 600; color: var(--accent);
+    background: none; border: none; cursor: pointer;
+  }
+  .panel-action:hover { opacity: 0.8; }
+  .panel-nav {
+    background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border);
+    border-radius: 6px; color: var(--text-muted); cursor: pointer;
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; transition: color 0.2s;
+  }
+  .panel-nav:hover { color: var(--accent); }
+
+  /* ─── INBOX ─── */
+  .inbox-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 12px; border-radius: var(--radius-xs);
+    border: 1px solid var(--border); margin-bottom: 6px;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .inbox-item:hover { background: rgba(255,255,255,0.02); }
+  .inbox-item.unread { border-left: 3px solid var(--accent); }
+  .inbox-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; }
+  .inbox-avatar {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    background: color-mix(in srgb, var(--blue) 15%, transparent);
+    color: var(--blue); display: flex; align-items: center; justify-content: center;
+    font-size: 0.58rem; font-weight: 700;
+  }
+  .inbox-body { flex: 1; min-width: 0; }
+  .inbox-top { display: flex; justify-content: space-between; }
+  .inbox-sender { font-size: 0.88rem; font-weight: 600; }
+  .inbox-time { font-size: 0.72rem; color: var(--text-muted); }
+  .inbox-subject { font-size: 0.82rem; font-weight: 500; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inbox-preview { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .pill { display: inline-flex; padding: 3px 10px; border-radius: 20px; font-size: 0.68rem; font-weight: 600; align-self: center; flex-shrink: 0; }
+  .pill-blue { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .pill-green { background: rgba(16,185,129,0.15); color: #34d399; }
+  .pill-orange { background: rgba(245,130,32,0.15); color: #fb923c; }
+  .pill-violet { background: rgba(124,58,237,0.15); color: #a78bfa; }
+
+  /* ─── QUOTES ─── */
+  .quote-item {
+    padding: 10px 12px; border-radius: var(--radius-xs);
+    border: 1px solid var(--border); margin-bottom: 6px;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .quote-item:hover { background: rgba(255,255,255,0.02); }
+  .quote-top { display: flex; align-items: center; gap: 8px; }
+  .quote-num { font-size: 0.82rem; font-weight: 700; color: var(--accent); }
+  .quote-customer { font-size: 0.88rem; font-weight: 600; flex: 1; }
+  .quote-amount { font-size: 0.92rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .quote-desc { font-size: 0.75rem; color: var(--text-muted); margin-top: 3px; }
+  .quote-meta { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .quote-age { font-size: 0.7rem; color: var(--text-muted); }
+  .quote-age i { margin-right: 3px; font-size: 0.55rem; }
+
+  /* ─── JOBS ─── */
+  .job-item {
+    padding: 10px 12px; border-radius: var(--radius-xs);
+    border: 1px solid var(--border); margin-bottom: 6px;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .job-item:hover { background: rgba(255,255,255,0.02); }
+  .job-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .job-customer { font-size: 0.88rem; font-weight: 600; }
+  .job-desc { font-size: 0.78rem; color: var(--text-dim); flex: 1; }
+  .job-deadline { margin-left: auto; font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+  .job-deadline.urgent { color: var(--danger); font-weight: 700; }
+  .job-stages { display: flex; gap: 4px; margin-top: 8px; }
+  .stg { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .stg-bar { width: 100%; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.06); }
+  .stg.done .stg-bar { background: var(--success); }
+  .stg.active .stg-bar { background: var(--accent); animation: jobPulse 2s ease infinite; }
+  .stg-label { font-size: 0.52rem; color: var(--text-muted); font-weight: 500; }
+  .stg.done .stg-label { color: var(--success); }
+  .stg.active .stg-label { color: var(--accent); font-weight: 700; }
+  @keyframes jobPulse { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+
+  /* ─── CALENDAR ─── */
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    text-align: center; gap: 2px;
+  }
+  .cal-head { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); padding: 4px 0; }
+  .cal-d {
+    font-size: 0.82rem; padding: 8px 0; border-radius: 6px;
+    cursor: default; transition: background 0.15s;
+  }
+  .cal-d:hover { background: rgba(255,255,255,0.04); }
+  .cal-e { opacity: 0; }
+  .cal-today {
+    background: var(--accent) !important; color: #fff; font-weight: 800;
+    border-radius: 50%;
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin: 0 auto; padding: 0 !important;
+  }
+  .cal-ev { position: relative; }
+  .cal-ev::after {
+    content: ''; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%);
+    width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
+  }
+  .cal-events { margin-top: 12px; border-top: 1px solid var(--glass-border); padding-top: 10px; }
+  .cal-event {
+    font-size: 0.78rem; color: var(--text-dim); padding: 5px 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .cal-event-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .cal-event-date { font-weight: 700; color: var(--text-muted); font-size: 0.72rem; min-width: 42px; }
+
+  /* ─── CARDS (orb icons, no scale hover) ─── */
+  .card {
+    background: var(--bg-surface);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 24px;
+    position: relative; overflow: hidden;
+    cursor: pointer;
+    transition: box-shadow 0.3s ease, border-color 0.25s ease, background 0.25s ease;
+  }
+  /* Shine sweep */
+  .card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+    pointer-events: none;
+  }
+  .card:hover::before { transform: translateX(130%); }
+  /* Top accent line */
+  .card::after {
+    content: '';
+    position: absolute; top: 0; left: 24px; right: 24px; height: 2px;
+    background: var(--card-accent, var(--accent));
+    opacity: 0; transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  .card:hover::after { opacity: 1; }
+  .card:hover {
+    box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+    border-color: var(--border-hover);
+    background: var(--bg-elevated);
+  }
+  /* Glow */
+  .card-glow {
+    position: absolute; inset: -1px; border-radius: var(--radius);
+    background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--card-accent, var(--accent)) 12%, transparent), transparent 70%);
+    opacity: 0; transition: opacity 0.4s ease; pointer-events: none;
+  }
+  .card:hover .card-glow { opacity: 1; }
+
+  /* Orb icon */
+  .card-orb {
+    --orb-color: var(--card-accent, var(--accent));
+    width: 46px; height: 46px; border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--orb-color) 35%, transparent);
+    background: color-mix(in srgb, var(--orb-color) 10%, transparent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; margin-bottom: 16px;
+    transition: all 400ms var(--spring);
+  }
+  .card:hover .card-orb {
+    border-color: color-mix(in srgb, var(--orb-color) 60%, transparent);
+    background: color-mix(in srgb, var(--orb-color) 18%, transparent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--orb-color) 20%, transparent);
+  }
+
+  /* ─── GLASS PANEL ─── */
+  .panel {
+    background: var(--bg-surface);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 24px;
+    position: relative; overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute; inset: 0; border-radius: var(--radius);
+    background: linear-gradient(135deg, rgba(255,255,255,0.02), transparent);
+    pointer-events: none;
+  }
+
+  /* ─── BOTTOM DOCK ─── */
+  .dock {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 100;
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(15, 23, 42, 0.82);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 8px 12px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset;
+  }
+  .dock-item {
+    --dc: var(--dock-color, var(--text-dim));
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    position: relative; border: 2px solid color-mix(in srgb, var(--dc) 25%, transparent);
+    background: color-mix(in srgb, var(--dc) 8%, transparent);
+    color: var(--dc);
+    transition: all 350ms var(--spring);
+  }
+  .dock-item span {
+    font-size: 0.48rem; font-weight: 600;
+    opacity: 0; transition: opacity 0.2s; letter-spacing: 0.02em;
+    position: absolute; bottom: -14px;
+    white-space: nowrap; color: var(--text-dim);
+  }
+  .dock-item:hover {
+    border-color: color-mix(in srgb, var(--dc) 55%, transparent);
+    background: color-mix(in srgb, var(--dc) 15%, transparent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--dc) 20%, transparent);
+    color: var(--dc);
+  }
+  .dock-item:hover span { opacity: 1; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR (logo + greeting + tools) -->
+<div class="topbar">
+  <div class="brand">
+    <img src="logo-presscal.png" alt="PressCal" class="brand-logo">
+  </div>
+  <div class="topbar-info">
+    <div class="tb-box tb-date">
+      <span class="tb-weekday">Δευ</span>
+      <span class="tb-day">24</span>
+      <span>Μαρ 2026</span>
+    </div>
+    <div class="tb-box tb-weather">
+      <span class="tb-wicon">⛅</span>
+      <span class="tb-wtemp">18°C</span>
+      <span class="tb-whum"><i class="fas fa-droplet"></i> 52%</span>
+    </div>
+    <div class="tb-box tb-forecast">
+      <div class="tb-fc"><span class="tb-fc-day">Τρί</span><span class="tb-fc-icon">🌧️</span><span class="tb-fc-temp">15°</span><span class="tb-fc-hum"><i class="fas fa-droplet"></i> 78%</span></div>
+      <div class="tb-fc"><span class="tb-fc-day">Τετ</span><span class="tb-fc-icon">🌧️</span><span class="tb-fc-temp">13°</span><span class="tb-fc-hum"><i class="fas fa-droplet"></i> 85%</span></div>
+      <div class="tb-fc"><span class="tb-fc-day">Πέμ</span><span class="tb-fc-icon">⛅</span><span class="tb-fc-temp">16°</span><span class="tb-fc-hum"><i class="fas fa-droplet"></i> 60%</span></div>
+      <div class="tb-fc"><span class="tb-fc-day">Παρ</span><span class="tb-fc-icon">☀️</span><span class="tb-fc-temp">19°</span><span class="tb-fc-hum"><i class="fas fa-droplet"></i> 45%</span></div>
+      <div class="tb-fc"><span class="tb-fc-day">Σάβ</span><span class="tb-fc-icon">☀️</span><span class="tb-fc-temp">21°</span><span class="tb-fc-hum"><i class="fas fa-droplet"></i> 38%</span></div>
+      <div class="tb-fc"><span class="tb-fc-day">Κυρ</span><span class="tb-fc-icon">⛅</span><span class="tb-fc-temp">18°</span><span class="tb-fc-hum"><i class="fas fa-droplet"></i> 55%</span></div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="h-btn"><i class="fas fa-moon"></i></button>
+    <button class="h-btn" style="position:relative"><i class="fas fa-bell"></i><span class="notif-dot"></span></button>
+    <button class="h-btn"><i class="fas fa-user"></i></button>
+  </div>
+</div>
+
+<!-- TABS BAR (below topbar) -->
+<nav class="tabs-bar">
+  <div class="header-tabs">
+    <button class="header-tab active"><i class="fas fa-th-large"></i>Dashboard</button>
+    <button class="header-tab"><i class="fas fa-calculator"></i>Κοστολόγηση</button>
+    <button class="header-tab"><i class="fas fa-users"></i>Πελάτες</button>
+    <button class="header-tab"><i class="fas fa-file-invoice"></i>Προσφορές</button>
+    <button class="header-tab"><i class="fas fa-envelope"></i>Emails</button>
+    <button class="header-tab"><i class="fas fa-tasks"></i>Εργασίες</button>
+    <button class="header-tab"><i class="fas fa-calendar-alt"></i>Ημερολόγιο</button>
+    <button class="header-tab"><i class="fas fa-folder-open"></i>Folders</button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- ROW 1: Emails | Προσφορές -->
+  <div class="grid-2">
+    <!-- ΕΙΣΕΡΧΟΜΕΝΑ -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2><i class="fas fa-envelope"></i> Αδιάβαστα <span class="badge-count">4</span></h2>
+        <button class="panel-action">Όλα →</button>
+      </div>
+      <div class="inbox-item unread">
+        <div class="inbox-dot"></div>
+        <div class="inbox-avatar">ΔΑ</div>
+        <div class="inbox-body">
+          <div class="inbox-top"><span class="inbox-sender">Δημητρίου Α.Ε.</span><span class="inbox-time">10:24</span></div>
+          <div class="inbox-subject">Re: Προσφορά φυλλαδίων A4</div>
+          <div class="inbox-preview">Καλημέρα, θα ήθελα να αλλάξουμε την ποσότητα σε 10.000 τεμ...</div>
+        </div>
+        <span class="pill pill-orange">→ #0152</span>
+      </div>
+      <div class="inbox-item unread">
+        <div class="inbox-dot"></div>
+        <div class="inbox-avatar">ΚΚ</div>
+        <div class="inbox-body">
+          <div class="inbox-top"><span class="inbox-sender">Κωνσταντίνου Κ.</span><span class="inbox-time">09:15</span></div>
+          <div class="inbox-subject">Αυτοκόλλητα — ερώτηση για χαρτί</div>
+          <div class="inbox-preview">Μπορούμε να τα κάνουμε σε διαφανές αντί για λευκό βινύλιο;</div>
+        </div>
+        <span class="pill pill-blue">Νέο</span>
+      </div>
+      <div class="inbox-item unread">
+        <div class="inbox-dot"></div>
+        <div class="inbox-avatar">ΜΔ</div>
+        <div class="inbox-body">
+          <div class="inbox-top"><span class="inbox-sender">Μαρίνα Design</span><span class="inbox-time">Χθες</span></div>
+          <div class="inbox-subject">Αφίσες Α2 — στείλτε proof</div>
+          <div class="inbox-preview">Θέλω να δω ένα proof πριν προχωρήσετε στην εκτύπωση...</div>
+        </div>
+      </div>
+      <div class="inbox-item unread">
+        <div class="inbox-dot"></div>
+        <div class="inbox-avatar">ΛΑ</div>
+        <div class="inbox-body">
+          <div class="inbox-top"><span class="inbox-sender">Λογιστικό Αθανασίου</span><span class="inbox-time">Χθες</span></div>
+          <div class="inbox-subject">Επιστολόχαρτα — νέο λογότυπο</div>
+          <div class="inbox-preview">Σας στέλνω το νέο λογότυπο σε AI, παρακαλώ αντικαταστήστε...</div>
+        </div>
+        <span class="pill pill-orange">→ #0149</span>
+      </div>
+    </div>
+
+    <!-- ΕΚΚΡΕΜΕΙΣ ΠΡΟΣΦΟΡΕΣ -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2><i class="fas fa-file-invoice"></i> Εκκρεμείς Προσφορές <span class="badge-count">5</span></h2>
+        <button class="panel-action">Όλες →</button>
+      </div>
+      <div class="quote-item">
+        <div class="quote-top"><span class="quote-num">#0152</span><span class="quote-customer">Δημητρίου Α.Ε.</span><span class="quote-amount">€1.245</span></div>
+        <div class="quote-desc">Φυλλάδια A4 4χρ. · 5.000 τεμ.</div>
+        <div class="quote-meta"><span class="pill pill-blue">Εστάλη</span><span class="quote-age"><i class="fas fa-clock"></i> 5 μέρες</span></div>
+      </div>
+      <div class="quote-item">
+        <div class="quote-top"><span class="quote-num">#0150</span><span class="quote-customer">Παπαδόπουλος Γ.</span><span class="quote-amount">€95</span></div>
+        <div class="quote-desc">Κάρτες 9×5 2όψ. · 2.000 τεμ.</div>
+        <div class="quote-meta"><span class="pill pill-orange">Νέα</span><span class="quote-age"><i class="fas fa-clock"></i> 2 μέρες</span></div>
+      </div>
+      <div class="quote-item">
+        <div class="quote-top"><span class="quote-num">#0149</span><span class="quote-customer">Λογιστικό Αθανασίου</span><span class="quote-amount">€520</span></div>
+        <div class="quote-desc">Επιστολόχαρτα A4 · 1.000 τεμ.</div>
+        <div class="quote-meta"><span class="pill pill-blue">Εστάλη</span><span class="quote-age"><i class="fas fa-clock"></i> 3 μέρες</span></div>
+      </div>
+      <div class="quote-item">
+        <div class="quote-top"><span class="quote-num">#0148</span><span class="quote-customer">Μαρίνα Design</span><span class="quote-amount">€890</span></div>
+        <div class="quote-desc">Αφίσες Α2 · 50 τεμ.</div>
+        <div class="quote-meta"><span class="pill pill-violet">Μερική</span><span class="quote-age"><i class="fas fa-clock"></i> 7 μέρες</span></div>
+      </div>
+      <div class="quote-item">
+        <div class="quote-top"><span class="quote-num">#0147</span><span class="quote-customer">Σύλλογος Μαρ.</span><span class="quote-amount">€180</span></div>
+        <div class="quote-desc">Αφίσες A3 · 200 τεμ.</div>
+        <div class="quote-meta"><span class="pill pill-blue">Εστάλη</span><span class="quote-age"><i class="fas fa-clock"></i> 1 μέρα</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 2: Εργασίες | Ημερολόγιο -->
+  <div class="grid-2" style="margin-top: 16px;">
+    <!-- ΕΝΕΡΓΕΣ ΕΡΓΑΣΙΕΣ -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2><i class="fas fa-tasks"></i> Ενεργές Εργασίες <span class="badge-count">4</span></h2>
+        <button class="panel-action">Πίνακας →</button>
+      </div>
+      <div class="job-item">
+        <div class="job-top"><span class="job-customer">Σύλλογος Μαρ.</span><span class="job-desc">Αφίσες A3 — 200 τεμ.</span><span class="job-deadline urgent"><i class="fas fa-clock"></i> Σήμερα</span></div>
+        <div class="job-stages">
+          <div class="stg done"><div class="stg-bar"></div><span class="stg-label">Αρχεία</span></div>
+          <div class="stg done"><div class="stg-bar"></div><span class="stg-label">Εκτύπωση</span></div>
+          <div class="stg done"><div class="stg-bar"></div><span class="stg-label">Κοπή</span></div>
+          <div class="stg done"><div class="stg-bar"></div><span class="stg-label">Φινίρισμα</span></div>
+          <div class="stg active"><div class="stg-bar"></div><span class="stg-label">Παράδοση</span></div>
+        </div>
+      </div>
+      <div class="job-item">
+        <div class="job-top"><span class="job-customer">Δημητρίου Α.Ε.</span><span class="job-desc">Φυλλάδια A4 — 5.000</span><span class="job-deadline"><i class="fas fa-clock"></i> 27/03</span></div>
+        <div class="job-stages">
+          <div class="stg done"><div class="stg-bar"></div><span class="stg-label">Αρχεία</span></div>
+          <div class="stg done"><div class="stg-bar"></div><span class="stg-label">Εκτύπωση</span></div>
+          <div class="stg active"><div class="stg-bar"></div><span class="stg-label">Κοπή</span></div>
+          <div class="stg"><div class="stg-bar"></div><span class="stg-label">Φινίρισμα</span></div>
+          <div class="stg"><div class="stg-bar"></div><span class="stg-label">Παράδοση</span></div>
+        </div>
+      </div>
+      <div class="job-item">
+        <div class="job-top"><span class="job-customer">Παπαδόπουλος Γ.</span><span class="job-desc">Κάρτες 9×5 — 2.000</span><span class="job-deadline"><i class="fas fa-clock"></i> 28/03</span></div>
+        <div class="job-stages">
+          <div class="stg done"><div class="stg-bar"></div><span class="stg-label">Αρχεία</span></div>
+          <div class="stg active"><div class="stg-bar"></div><span class="stg-label">Εκτύπωση</span></div>
+          <div class="stg"><div class="stg-bar"></div><span class="stg-label">Κοπή</span></div>
+          <div class="stg"><div class="stg-bar"></div><span class="stg-label">Φινίρισμα</span></div>
+          <div class="stg"><div class="stg-bar"></div><span class="stg-label">Παράδοση</span></div>
+        </div>
+      </div>
+      <div class="job-item">
+        <div class="job-top"><span class="job-customer">Μαρίνα Design</span><span class="job-desc">Αφίσες Α2 — 50 τεμ.</span><span class="job-deadline"><i class="fas fa-clock"></i> 31/03</span></div>
+        <div class="job-stages">
+          <div class="stg active"><div class="stg-bar"></div><span class="stg-label">Αρχεία</span></div>
+          <div class="stg"><div class="stg-bar"></div><span class="stg-label">Εκτύπωση</span></div>
+          <div class="stg"><div class="stg-bar"></div><span class="stg-label">Κοπή</span></div>
+          <div class="stg"><div class="stg-bar"></div><span class="stg-label">Φινίρισμα</span></div>
+          <div class="stg"><div class="stg-bar"></div><span class="stg-label">Παράδοση</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ΗΜΕΡΟΛΟΓΙΟ -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2><i class="fas fa-calendar-alt"></i> Μάρτιος 2026</h2>
+        <div style="display:flex; gap:6px;">
+          <button class="panel-nav"><i class="fas fa-chevron-left"></i></button>
+          <button class="panel-nav"><i class="fas fa-chevron-right"></i></button>
+        </div>
+      </div>
+      <div class="cal-grid">
+        <span class="cal-head">Δευ</span><span class="cal-head">Τρί</span><span class="cal-head">Τετ</span><span class="cal-head">Πέμ</span><span class="cal-head">Παρ</span><span class="cal-head">Σάβ</span><span class="cal-head">Κυρ</span>
+        <span class="cal-e"></span><span class="cal-e"></span><span class="cal-e"></span><span class="cal-e"></span><span class="cal-e"></span><span class="cal-e"></span><span class="cal-d">1</span>
+        <span class="cal-d">2</span><span class="cal-d">3</span><span class="cal-d">4</span><span class="cal-d">5</span><span class="cal-d">6</span><span class="cal-d">7</span><span class="cal-d">8</span>
+        <span class="cal-d">9</span><span class="cal-d">10</span><span class="cal-d">11</span><span class="cal-d">12</span><span class="cal-d">13</span><span class="cal-d">14</span><span class="cal-d">15</span>
+        <span class="cal-d">16</span><span class="cal-d">17</span><span class="cal-d">18</span><span class="cal-d">19</span><span class="cal-d">20</span><span class="cal-d">21</span><span class="cal-d">22</span>
+        <span class="cal-d">23</span><span class="cal-d cal-today">24</span><span class="cal-d cal-ev">25</span><span class="cal-d">26</span><span class="cal-d cal-ev">27</span><span class="cal-d cal-ev">28</span><span class="cal-d">29</span>
+        <span class="cal-d">30</span><span class="cal-d cal-ev">31</span>
+      </div>
+      <div class="cal-events">
+        <div class="cal-event"><span class="cal-event-dot" style="background:var(--danger)"></span><span class="cal-event-date">25/03</span> Παράδοση: Αφίσες A3 — Σύλλογος</div>
+        <div class="cal-event"><span class="cal-event-dot" style="background:var(--accent)"></span><span class="cal-event-date">27/03</span> Παράδοση: Φυλλάδια — Δημητρίου</div>
+        <div class="cal-event"><span class="cal-event-dot" style="background:var(--accent)"></span><span class="cal-event-date">28/03</span> Παράδοση: Κάρτες — Παπαδόπουλος</div>
+        <div class="cal-event"><span class="cal-event-dot" style="background:var(--blue)"></span><span class="cal-event-date">31/03</span> Παράδοση: Αφίσες Α2 — Μαρίνα</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- BOTTOM DOCK (only management orbs) -->
+<nav class="dock">
+  <button class="dock-item" style="--dock-color: var(--teal);"><i class="fas fa-boxes-stacked"></i><span>Αποθήκη</span></button>
+  <button class="dock-item" style="--dock-color: var(--blue);"><i class="fas fa-print"></i><span>Μηχανές</span></button>
+  <button class="dock-item" style="--dock-color: var(--violet);"><i class="fas fa-scissors"></i><span>Μεταεκτύπωση</span></button>
+  <button class="dock-item"><i class="fas fa-cube"></i><span>Προϊόντα</span></button>
+</nav>
+
+</body>
+</html>

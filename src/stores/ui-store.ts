@@ -1,6 +1,7 @@
-// UI state store — sidebar, modals, theme
+// UI state store — sidebar, modals, theme (persisted)
 
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 interface UIState {
   sidebarCollapsed: boolean;
@@ -13,13 +14,21 @@ interface UIState {
   closeModal: () => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
-  sidebarCollapsed: false,
-  theme: 'light',
-  activeModal: null,
+export const useUIStore = create<UIState>()(
+  persist(
+    (set) => ({
+      sidebarCollapsed: false,
+      theme: 'dark',
+      activeModal: null,
 
-  toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-  setTheme: (theme) => set({ theme }),
-  openModal: (id) => set({ activeModal: id }),
-  closeModal: () => set({ activeModal: null }),
-}));
+      toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setTheme: (theme) => set({ theme }),
+      openModal: (id) => set({ activeModal: id }),
+      closeModal: () => set({ activeModal: null }),
+    }),
+    {
+      name: 'ui-store',
+      partialize: (state) => ({ theme: state.theme, sidebarCollapsed: state.sidebarCollapsed }),
+    }
+  )
+);

@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PressCal Pro — Calculator G: Orb Popups</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<style>
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0f172a;--bg-surface:rgba(15,23,42,0.75);--bg-elevated:rgba(20,30,55,0.85);
+    --text:#f1f5f9;--text-dim:#94a3b8;--text-muted:#64748b;
+    --border:rgba(255,255,255,0.06);--border-hover:rgba(255,255,255,0.14);
+    --accent:#f58220;--blue:#3b82f6;--violet:#7c3aed;--teal:#0d9488;
+    --success:#10b981;--danger:#f06548;
+    --glass-border:rgba(255,255,255,0.08);--blur:24px;
+    --radius:16px;--radius-sm:10px;--radius-xs:7px;
+    --spring:cubic-bezier(0.34,1.56,0.64,1);
+  }
+  body{
+    font-family:'Inter',-apple-system,sans-serif;font-size:14px;color:var(--text);
+    height:100vh;overflow:hidden;background:var(--bg);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 80%,rgba(29,47,110,0.4),transparent),
+      radial-gradient(ellipse 60% 40% at 80% 20%,rgba(59,130,246,0.15),transparent);
+    display:flex;flex-direction:column;
+  }
+
+  /* ═══ MACHINE BAR ═══ */
+  .machine-bar{
+    display:flex;align-items:center;gap:6px;
+    padding:8px 20px;flex-shrink:0;border-bottom:1px solid var(--border);
+    max-width:1400px;margin:0 auto;width:100%;
+  }
+  .m-tab{
+    padding:6px 16px;border-radius:8px;font-size:0.82rem;font-weight:600;
+    border:1px solid var(--glass-border);background:transparent;color:var(--text-dim);
+    cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:8px;
+  }
+  .m-tab i{font-size:0.75rem}
+  .m-tab:hover{border-color:var(--border-hover);color:var(--text)}
+  .m-tab.active{border-color:color-mix(in srgb,var(--blue) 50%,transparent);background:color-mix(in srgb,var(--blue) 8%,transparent);color:var(--blue)}
+  .m-tab .m-size{font-size:0.62rem;color:var(--text-muted);font-weight:400}
+  .m-tab.active .m-size{color:color-mix(in srgb,var(--blue) 70%,var(--text))}
+
+  /* ═══ ORBS BAR + SUMMARY ═══ */
+  .orbs-bar{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 20px;flex-shrink:0;
+    border-bottom:1px solid var(--border);
+    max-width:1400px;margin:0 auto;width:100%;
+  }
+
+  /* Orb button */
+  .orb{
+    --oc:var(--orb-color,var(--text-muted));
+    width:44px;height:44px;border-radius:50%;flex-shrink:0;
+    border:2px solid color-mix(in srgb,var(--oc) 30%,transparent);
+    background:color-mix(in srgb,var(--oc) 8%,transparent);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--oc);font-size:0.88rem;cursor:pointer;
+    transition:all 350ms var(--spring);position:relative;
+  }
+  .orb:hover{
+    border-color:color-mix(in srgb,var(--oc) 55%,transparent);
+    background:color-mix(in srgb,var(--oc) 15%,transparent);
+    box-shadow:0 0 16px color-mix(in srgb,var(--oc) 20%,transparent);
+  }
+  .orb-label{
+    position:absolute;bottom:-16px;font-size:0.5rem;font-weight:600;
+    color:var(--text-muted);white-space:nowrap;opacity:0;transition:opacity 0.2s;
+  }
+  .orb:hover .orb-label{opacity:1}
+
+  /* Summary strip (footprint) */
+  .summary-strip{
+    flex:1;display:flex;align-items:center;gap:4px;
+    margin-left:8px;overflow-x:auto;
+  }
+  .stag{
+    display:flex;align-items:center;gap:6px;
+    padding:5px 12px;border-radius:8px;
+    background:rgba(255,255,255,0.03);border:1px solid var(--border);
+    font-size:0.78rem;cursor:pointer;transition:all 0.2s;
+    white-space:nowrap;flex-shrink:0;
+  }
+  .stag:hover{border-color:var(--border-hover);background:rgba(255,255,255,0.05)}
+  .stag i{font-size:0.65rem}
+  .stag-val{font-weight:700}
+  .stag-dim{color:var(--text-dim)}
+  .stag .stag-color{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .stag-sep{width:1px;height:20px;background:var(--border);flex-shrink:0;margin:0 2px}
+
+  /* ═══ MAIN AREA ═══ */
+  .calc-main{
+    flex:1;display:flex;overflow:hidden;
+    max-width:1400px;margin:0 auto;width:100%;
+  }
+
+  /* Imposition area */
+  .impo-area{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    position:relative;padding:20px;
+  }
+  .impo-canvas{
+    width:100%;max-width:600px;aspect-ratio:330/487;
+    background:rgba(0,0,0,0.3);border:2px solid var(--glass-border);
+    border-radius:var(--radius-sm);position:relative;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;padding:20px;
+  }
+  .impo-grid{display:grid;gap:4px;width:100%;height:100%}
+  .impo-cell{
+    background:rgba(245,130,32,0.1);border:1.5px solid rgba(245,130,32,0.3);
+    border-radius:3px;display:flex;align-items:center;justify-content:center;
+    font-size:0.65rem;font-weight:600;color:rgba(245,130,32,0.5);
+  }
+  .impo-overlay-tl{
+    position:absolute;top:10px;left:14px;font-size:0.62rem;color:var(--text-muted);
+    display:flex;flex-direction:column;gap:2px;
+  }
+  .impo-overlay-tl span{display:flex;align-items:center;gap:4px}
+  .impo-overlay-br{position:absolute;bottom:10px;right:14px;display:flex;gap:6px}
+  .impo-chip{
+    background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);
+    padding:3px 8px;border-radius:5px;font-size:0.65rem;font-weight:600;color:var(--text-dim);
+    display:flex;align-items:center;gap:4px;
+  }
+  .impo-chip strong{color:var(--text);font-weight:800}
+
+  .impo-modes{display:flex;gap:4px;margin-top:10px}
+  .im-btn{
+    padding:4px 12px;border-radius:6px;font-size:0.7rem;font-weight:600;
+    border:1px solid var(--glass-border);background:transparent;color:var(--text-muted);
+    cursor:pointer;transition:all 0.2s;
+  }
+  .im-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(245,130,32,0.08)}
+  .im-btn:hover{color:var(--accent)}
+
+  /* ═══ RESULTS SIDEBAR ═══ */
+  .results-sidebar{
+    width:300px;flex-shrink:0;background:rgba(0,0,0,0.2);
+    border-left:1px solid var(--border);padding:16px;
+    overflow-y:auto;display:flex;flex-direction:column;gap:10px;
+  }
+  .price-hero{text-align:center;padding:16px 0;border-bottom:1px solid var(--border)}
+  .price-hero-label{font-size:0.62rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em}
+  .price-hero-val{font-size:2.6rem;font-weight:900;color:var(--accent);letter-spacing:-0.03em;line-height:1;margin:4px 0}
+  .price-hero-unit{font-size:0.78rem;color:var(--text-dim)}
+  .price-hero-unit strong{font-weight:700}
+
+  .stat-pills{display:flex;flex-wrap:wrap;gap:5px}
+  .sp{flex:1 1 calc(50% - 3px);background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius-xs);padding:7px 10px}
+  .sp-label{font-size:0.55rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em}
+  .sp-val{font-size:1rem;font-weight:800;margin-top:1px}
+
+  .cost-group{margin-bottom:6px}
+  .cg-title{font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);padding-bottom:3px;border-bottom:1px solid var(--border);margin-bottom:4px}
+  .cost-line{display:flex;justify-content:space-between;padding:2px 0;font-size:0.75rem}
+  .cost-line .cl-label{color:var(--text-dim)}
+  .cost-line .cl-val{font-weight:700;font-variant-numeric:tabular-nums}
+
+  .cost-total{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:2px solid var(--glass-border)}
+  .cost-total .cl-label{font-weight:700;font-size:0.82rem}
+  .cost-total .cl-val{font-size:1.1rem;font-weight:900;color:var(--accent)}
+
+  .btn-cart{
+    width:100%;padding:11px 0;border-radius:var(--radius-xs);
+    background:var(--accent);color:#fff;border:none;
+    font-size:0.88rem;font-weight:700;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    box-shadow:0 4px 16px rgba(245,130,32,0.3);transition:all 0.25s;margin-top:auto;
+  }
+  .btn-cart:hover{background:#e0741a;box-shadow:0 6px 24px rgba(245,130,32,0.4)}
+
+  /* ═══ MODAL (shared) ═══ */
+  .modal-bg{
+    display:none;position:fixed;inset:0;z-index:200;
+    background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);
+    align-items:center;justify-content:center;
+  }
+  .modal-bg.show{display:flex}
+  .modal{
+    width:640px;max-height:80vh;
+    background:var(--bg-elevated);backdrop-filter:blur(var(--blur));
+    border:1px solid var(--glass-border);border-radius:var(--radius);
+    padding:24px;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,0.5);
+  }
+  .modal-sm{width:440px}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .modal-head h2{font-size:1rem;font-weight:800;display:flex;align-items:center;gap:8px}
+  .modal-close{background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer}
+  .modal-close:hover{color:var(--text)}
+
+  /* Modal form styles */
+  .mf-label{font-size:0.68rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;display:block}
+  .mf-row{display:flex;gap:10px;margin-bottom:12px;align-items:center}
+  .mf-input{
+    height:36px;border-radius:8px;border:1px solid var(--glass-border);
+    background:rgba(255,255,255,0.04);color:var(--text);padding:0 10px;
+    font-size:0.85rem;font-family:inherit;width:100%;transition:border-color 0.2s;
+  }
+  .mf-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(245,130,32,0.15)}
+  .mf-pills{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+  .mf-pill{
+    padding:5px 14px;border-radius:16px;font-size:0.75rem;font-weight:600;
+    border:1px solid var(--glass-border);background:transparent;color:var(--text-dim);
+    cursor:pointer;transition:all 0.15s;
+  }
+  .mf-pill:hover{border-color:var(--border-hover)}
+  .mf-pill.active{border-color:var(--accent);background:rgba(245,130,32,0.1);color:var(--accent)}
+  .mf-pill.teal.active{border-color:var(--teal);background:color-mix(in srgb,var(--teal) 10%,transparent);color:var(--teal)}
+  .mf-pill.green{background:var(--success)!important;color:#fff!important;border-color:var(--success)!important}
+  .mf-pill.violet.active{border-color:var(--violet);background:color-mix(in srgb,var(--violet) 10%,transparent);color:var(--violet)}
+  .mf-toggle{display:flex;border:1px solid var(--glass-border);border-radius:8px;overflow:hidden}
+  .mf-tog{
+    flex:1;padding:8px 0;text-align:center;font-size:0.82rem;font-weight:600;
+    background:transparent;border:none;color:var(--text-muted);cursor:pointer;transition:all 0.2s;
+  }
+  .mf-tog.active{background:rgba(245,130,32,0.12);color:var(--accent)}
+  .mf-tog:not(:last-child){border-right:1px solid var(--glass-border)}
+
+  /* Paper modal specific */
+  .pm-body{display:flex;gap:16px}
+  .pm-filters{width:220px;flex-shrink:0}
+  .pm-ft{font-size:0.75rem;font-weight:700;color:var(--teal);margin-bottom:4px}
+  .pm-list{flex:1}
+  .pm-list-head{font-size:0.72rem;color:var(--text-muted);text-align:center;margin-bottom:6px}
+  .pm-search{
+    display:flex;align-items:center;gap:8px;padding:0 12px;height:38px;
+    border:1px solid var(--glass-border);border-radius:8px;
+    background:rgba(255,255,255,0.04);margin-bottom:12px;
+  }
+  .pm-search i{color:var(--text-muted);font-size:0.75rem}
+  .pm-search input{border:none;background:transparent;color:var(--text);font-size:0.85rem;font-family:inherit;outline:none;flex:1}
+  .pm-search input::placeholder{color:var(--text-muted)}
+  .pm-item{
+    display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:7px;
+    cursor:pointer;transition:background 0.15s;font-size:0.82rem;color:var(--text-dim);
+    border:1px solid transparent;
+  }
+  .pm-item:hover{background:rgba(255,255,255,0.04);color:var(--text)}
+  .pm-item.active{border-color:color-mix(in srgb,var(--teal) 40%,transparent);background:color-mix(in srgb,var(--teal) 6%,transparent)}
+  .pm-check{color:var(--teal);font-size:0.7rem;width:16px}
+  .pm-item-price{margin-left:auto;font-weight:700;color:var(--teal);font-size:0.78rem}
+
+  /* Dim input */
+  .dim-inline{display:flex;align-items:center;gap:6px}
+  .dim-inline input{width:80px;text-align:center}
+  .dim-x{color:var(--text-muted);font-weight:600}
+</style>
+</head>
+<body>
+
+<!-- MACHINE BAR -->
+<div class="machine-bar">
+  <button class="m-tab active"><i class="fas fa-print"></i> Xerox C70 <span class="m-size">330×487</span></button>
+  <button class="m-tab"><i class="fas fa-print"></i> Konica C1100 <span class="m-size">330×487</span></button>
+  <button class="m-tab"><i class="fas fa-industry"></i> Heidelberg SM52 <span class="m-size">520×360</span></button>
+</div>
+
+<!-- ORBS + SUMMARY STRIP -->
+<div class="orbs-bar">
+  <!-- Orbs: click to open modal -->
+  <div class="orb" style="--orb-color:var(--teal)" onclick="openModal('paperModal')">
+    <i class="fas fa-scroll"></i>
+    <span class="orb-label">Χαρτί</span>
+  </div>
+  <div class="orb" style="--orb-color:var(--accent)" onclick="openModal('jobModal')">
+    <i class="fas fa-ruler-combined"></i>
+    <span class="orb-label">Εργασία</span>
+  </div>
+  <div class="orb" style="--orb-color:var(--blue)" onclick="openModal('colorModal')">
+    <i class="fas fa-palette"></i>
+    <span class="orb-label">Χρώμα</span>
+  </div>
+  <div class="orb" style="--orb-color:var(--violet)" onclick="openModal('finishModal')">
+    <i class="fas fa-scissors"></i>
+    <span class="orb-label">Φινίρισμα</span>
+  </div>
+
+  <div class="stag-sep"></div>
+
+  <!-- Summary / footprint -->
+  <div class="summary-strip">
+    <div class="stag" onclick="openModal('paperModal')">
+      <i class="fas fa-scroll" style="color:var(--teal)"></i>
+      <span class="stag-val">Velvet 170gr</span>
+      <span class="stag-dim">33×48 · €0,085</span>
+    </div>
+    <div class="stag" onclick="openModal('jobModal')">
+      <i class="fas fa-cube" style="color:var(--accent)"></i>
+      <span class="stag-val">Φυλλάδιο</span>
+      <span class="stag-dim">210×297 · 500τεμ</span>
+    </div>
+    <div class="stag" onclick="openModal('jobModal')">
+      <i class="fas fa-expand-arrows-alt" style="color:var(--accent)"></i>
+      <span class="stag-dim">bleed 3mm</span>
+    </div>
+    <div class="stag" onclick="openModal('colorModal')">
+      <div class="stag-color" style="background:var(--blue)"></div>
+      <span class="stag-val">CMYK</span>
+      <span class="stag-dim">2 όψεις</span>
+    </div>
+    <div class="stag" onclick="openModal('finishModal')">
+      <i class="fas fa-cut" style="color:var(--violet)"></i>
+      <span class="stag-dim">Γκιλοτίνα + Matt 1όψ</span>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="calc-main">
+  <!-- Imposition -->
+  <div class="impo-area">
+    <div class="impo-canvas">
+      <div class="impo-overlay-tl">
+        <span><i class="fas fa-expand"></i> 330 × 487 mm</span>
+        <span><i class="fas fa-crop-alt"></i> 216 × 303 mm</span>
+      </div>
+      <div class="impo-grid" style="grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr);">
+        <div class="impo-cell">1</div><div class="impo-cell">2</div><div class="impo-cell">3</div><div class="impo-cell">4</div>
+        <div class="impo-cell">5</div><div class="impo-cell">6</div><div class="impo-cell">7</div><div class="impo-cell">8</div>
+      </div>
+      <div class="impo-overlay-br">
+        <div class="impo-chip"><strong>8</strong>-up</div>
+        <div class="impo-chip"><strong>63</strong> φύλλα</div>
+        <div class="impo-chip"><i class="fas fa-clock"></i><strong>~4'</strong></div>
+      </div>
+    </div>
+    <div class="impo-modes">
+      <button class="im-btn active">N-Up</button>
+      <button class="im-btn">Booklet</button>
+      <button class="im-btn">Perfect Bound</button>
+      <button class="im-btn">Cut&Stack</button>
+      <button class="im-btn">Work&Turn</button>
+      <button class="im-btn">Gang Run</button>
+      <button class="im-btn">Step Multi</button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results-sidebar">
+    <div class="price-hero">
+      <div class="price-hero-label">Τελική Τιμή</div>
+      <div class="price-hero-val">€65,85</div>
+      <div class="price-hero-unit"><strong>€0,132</strong> / τεμάχιο</div>
+    </div>
+    <div class="stat-pills">
+      <div class="sp"><div class="sp-label">Ups</div><div class="sp-val">8</div></div>
+      <div class="sp"><div class="sp-label">Φύλλα</div><div class="sp-val">63</div></div>
+      <div class="sp"><div class="sp-label">Stock</div><div class="sp-val">63</div></div>
+      <div class="sp"><div class="sp-label">Χρόνος</div><div class="sp-val">~4'</div></div>
+    </div>
+    <div class="cost-group">
+      <div class="cg-title">Κόστη</div>
+      <div class="cost-line"><span class="cl-label">Χαρτί</span><span class="cl-val">€5,36</span></div>
+      <div class="cost-line"><span class="cl-label">Εκτύπωση</span><span class="cl-val">€18,90</span></div>
+      <div class="cost-line"><span class="cl-label">Γκιλοτίνα</span><span class="cl-val">€0,63</span></div>
+      <div class="cost-line"><span class="cl-label">Πλαστικοποίηση</span><span class="cl-val">€4,20</span></div>
+    </div>
+    <div class="cost-group">
+      <div class="cg-title">Έσοδα</div>
+      <div class="cost-line"><span class="cl-label">Κέρδος εκτ.</span><span class="cl-val">€22,68</span></div>
+      <div class="cost-line"><span class="cl-label">Markup χαρτ.</span><span class="cl-val">€2,68</span></div>
+      <div class="cost-line"><span class="cl-label">Γκιλοτίνα</span><span class="cl-val">€3,00</span></div>
+      <div class="cost-line"><span class="cl-label">Πλαστ/ση</span><span class="cl-val">€8,40</span></div>
+    </div>
+    <div class="cost-total"><span class="cl-label">Σύνολο</span><span class="cl-val">€65,85</span></div>
+    <button class="btn-cart"><i class="fas fa-cart-plus"></i> Προσθήκη στο Καλάθι</button>
+  </div>
+</div>
+
+<!-- ═══ MODALS ═══ -->
+
+<!-- PAPER -->
+<div class="modal-bg" id="paperModal" onclick="if(event.target===this)closeModals()">
+  <div class="modal">
+    <div class="modal-head">
+      <h2><i class="fas fa-scroll" style="color:var(--teal)"></i> Χαρτί</h2>
+      <button class="modal-close" onclick="closeModals()">&times;</button>
+    </div>
+    <div class="pm-search"><i class="fas fa-search"></i><input placeholder="Αναζήτηση χαρτιού..."></div>
+    <div class="pm-body">
+      <div class="pm-filters">
+        <div class="pm-ft">Προμηθευτής</div>
+        <div class="mf-pills">
+          <button class="mf-pill teal">Alef eni</button>
+          <button class="mf-pill teal active">Graphcom</button>
+          <button class="mf-pill teal">Περράκης</button>
+          <button class="mf-pill teal">Τσώλης</button>
+        </div>
+        <div class="pm-ft">Κατηγορία</div>
+        <div class="mf-pills">
+          <button class="mf-pill teal">NCR</button><button class="mf-pill teal">Munken</button>
+          <button class="mf-pill teal">Curious</button><button class="mf-pill teal">Colorplan</button>
+          <button class="mf-pill teal">Arctic</button><button class="mf-pill teal">Acquerello</button>
+          <button class="mf-pill teal">Action</button><button class="mf-pill teal">Eureka</button>
+          <button class="mf-pill teal">Manilla</button><button class="mf-pill teal">Rives</button>
+          <button class="mf-pill teal">Sirio</button><button class="mf-pill teal">Film</button>
+        </div>
+        <button class="mf-pill green" style="margin-top:6px">Γραφής</button>
+      </div>
+      <div class="pm-list">
+        <div class="pm-list-head">— Επιλογή —</div>
+        <div class="pm-item active"><span class="pm-check"><i class="fas fa-check"></i></span>Γραφής (70g, 860×610mm)<span class="pm-item-price">€0,085</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (70g, 1000×700mm)<span class="pm-item-price">€0,092</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (80g, 860×610mm)<span class="pm-item-price">€0,095</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (80g, 1000×700mm)<span class="pm-item-price">€0,105</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (100g, 860×610mm)<span class="pm-item-price">€0,118</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (120g, 860×610mm)<span class="pm-item-price">€0,140</span></div>
+        <div class="pm-item"><span class="pm-check"></span>Γραφής (120g, 1000×700mm)<span class="pm-item-price">€0,155</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JOB / ARCHETYPE -->
+<div class="modal-bg" id="jobModal" onclick="if(event.target===this)closeModals()">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h2><i class="fas fa-ruler-combined" style="color:var(--accent)"></i> Εργασία</h2>
+      <button class="modal-close" onclick="closeModals()">&times;</button>
+    </div>
+    <label class="mf-label">Προϊόν / Archetype</label>
+    <div class="mf-pills" style="margin-bottom:14px">
+      <button class="mf-pill active">Φυλλάδιο</button>
+      <button class="mf-pill">Κάρτα</button>
+      <button class="mf-pill">Αφίσα</button>
+      <button class="mf-pill">Φάκελος</button>
+      <button class="mf-pill">Επιστολόχαρτο</button>
+      <button class="mf-pill">Custom</button>
+    </div>
+    <label class="mf-label">Διαστάσεις (mm)</label>
+    <div class="mf-row">
+      <div class="dim-inline">
+        <input class="mf-input" style="width:90px;text-align:center" value="210">
+        <span class="dim-x">×</span>
+        <input class="mf-input" style="width:90px;text-align:center" value="297">
+      </div>
+      <div style="margin-left:auto">
+        <label class="mf-label">Bleed</label>
+        <input class="mf-input" style="width:60px;text-align:center" value="3">
+      </div>
+    </div>
+    <label class="mf-label">Ποσότητα</label>
+    <input class="mf-input" style="width:140px;font-size:1.1rem;font-weight:800" value="500">
+    <div style="margin-top:14px">
+      <label class="mf-label">Όψεις</label>
+      <div class="mf-toggle">
+        <button class="mf-tog">Μονή</button>
+        <button class="mf-tog active">Διπλή</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- COLOR -->
+<div class="modal-bg" id="colorModal" onclick="if(event.target===this)closeModals()">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h2><i class="fas fa-palette" style="color:var(--blue)"></i> Χρώμα</h2>
+      <button class="modal-close" onclick="closeModals()">&times;</button>
+    </div>
+    <label class="mf-label">Χρωματικό μοντέλο</label>
+    <div class="mf-toggle" style="margin-bottom:14px">
+      <button class="mf-tog active">4χρ CMYK</button>
+      <button class="mf-tog">Ασπρόμαυρο</button>
+    </div>
+    <label class="mf-label">Ειδικά χρώματα (Offset)</label>
+    <div class="mf-row">
+      <div><label class="mf-label">PMS Front</label><input class="mf-input" style="width:60px;text-align:center" value="0"></div>
+      <div><label class="mf-label">PMS Back</label><input class="mf-input" style="width:60px;text-align:center" value="0"></div>
+      <div><label class="mf-label">Βερνίκι</label>
+        <div class="mf-toggle"><button class="mf-tog">Όχι</button><button class="mf-tog active">Λαδιού</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FINISHING -->
+<div class="modal-bg" id="finishModal" onclick="if(event.target===this)closeModals()">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <h2><i class="fas fa-scissors" style="color:var(--violet)"></i> Φινίρισμα</h2>
+      <button class="modal-close" onclick="closeModals()">&times;</button>
+    </div>
+    <label class="mf-label">Γκιλοτίνα</label>
+    <div class="mf-pills" style="margin-bottom:14px">
+      <button class="mf-pill violet active">Polar 78</button>
+      <button class="mf-pill violet">Χωρίς</button>
+    </div>
+    <label class="mf-label">Πλαστικοποίηση</label>
+    <div class="mf-pills" style="margin-bottom:14px">
+      <button class="mf-pill violet active">Matt 1 όψη</button>
+      <button class="mf-pill violet">Gloss 1 όψη</button>
+      <button class="mf-pill violet">Matt 2 όψεις</button>
+      <button class="mf-pill violet">Χωρίς</button>
+    </div>
+    <label class="mf-label">Βιβλιοδεσία</label>
+    <div class="mf-toggle">
+      <button class="mf-tog active">Καμία</button>
+      <button class="mf-tog">Συρραφή</button>
+      <button class="mf-tog">Κόλλα</button>
+      <button class="mf-tog">Σπιράλ</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openModal(id){document.getElementById(id).classList.add('show')}
+function closeModals(){document.querySelectorAll('.modal-bg').forEach(m=>m.classList.remove('show'))}
+</script>
+</body>
+</html>

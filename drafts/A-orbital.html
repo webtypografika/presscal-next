@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PressCal Pro — Draft A: Orbital</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+  :root {
+    --bg: #0f172a;
+    --bg-card: #1e293b;
+    --bg-elevated: #283548;
+    --text: #f1f5f9;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --border: rgba(255,255,255,0.06);
+    --border-light: rgba(255,255,255,0.1);
+    --accent: #f58220;
+    --primary: #1d2f6e;
+    --teal: #0d9488;
+    --violet: #7c3aed;
+    --blue: #3b82f6;
+    --success: #10b981;
+    --danger: #ef4444;
+    --glass-bg: rgba(15, 23, 42, 0.75);
+    --glass-blur: 20px;
+    --glass-border: rgba(255,255,255,0.08);
+    --radius: 20px;
+    --radius-sm: 12px;
+    --radius-xs: 8px;
+    --shadow: 0 20px 60px rgba(0,0,0,0.3);
+    --shadow-sm: 0 4px 12px rgba(0,0,0,0.2);
+    --shadow-lg: 0 32px 80px rgba(0,0,0,0.4);
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── HEADER (Glass) ─── */
+  .header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    height: 64px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border-bottom: 1px solid var(--glass-border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 1.25rem; font-weight: 800; letter-spacing: -0.03em;
+  }
+  .logo-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #e0741a);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 900; font-size: 1.1rem;
+    box-shadow: 0 4px 16px rgba(245,130,32,0.3);
+  }
+  .logo span { color: var(--accent); }
+
+  .header-tabs {
+    display: flex; gap: 4px; background: rgba(255,255,255,0.04);
+    border-radius: 10px; padding: 4px;
+  }
+  .header-tab {
+    padding: 8px 16px; border-radius: 8px; font-size: 0.78rem;
+    font-weight: 600; color: var(--text-dim); cursor: pointer;
+    transition: all 0.25s ease;
+  }
+  .header-tab:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+  .header-tab.active { color: #fff; background: rgba(245,130,32,0.15); color: var(--accent); }
+
+  .header-tools { display: flex; gap: 8px; align-items: center; }
+  .tool-btn {
+    width: 40px; height: 40px; border-radius: 50%; border: none;
+    background: transparent; color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; transition: all 0.3s ease;
+  }
+  .tool-btn:hover { color: var(--accent); background: rgba(245,130,32,0.12); }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue), var(--violet));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700; color: #fff;
+    border: 2px solid rgba(255,255,255,0.15);
+  }
+
+  /* ─── RAIL (Orbs) ─── */
+  .rail {
+    position: fixed; left: 0; top: 64px; bottom: 0; width: 82px;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 32px 0; gap: 8px; z-index: 50;
+  }
+  .orb {
+    --orb-color: var(--text-dim);
+    width: 46px; height: 46px; border-radius: 50%;
+    border: 2px solid color-mix(in srgb, var(--orb-color) 30%, transparent);
+    background: color-mix(in srgb, var(--orb-color) 8%, transparent);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 400ms var(--spring);
+    font-size: 1rem; color: var(--orb-color);
+    position: relative;
+  }
+  .orb:hover {
+    border-color: color-mix(in srgb, var(--orb-color) 60%, transparent);
+    background: color-mix(in srgb, var(--orb-color) 15%, transparent);
+    transform: scale(1.12);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--orb-color) 20%, transparent);
+  }
+  .orb.active {
+    border-color: color-mix(in srgb, var(--orb-color) 70%, transparent);
+    background: color-mix(in srgb, var(--orb-color) 18%, transparent);
+    box-shadow: 0 0 24px color-mix(in srgb, var(--orb-color) 25%, transparent);
+  }
+  .orb-label {
+    position: absolute; left: 58px; top: 50%; transform: translateY(-50%);
+    background: var(--bg-elevated); color: var(--text); padding: 6px 12px;
+    border-radius: 8px; font-size: 0.72rem; font-weight: 600;
+    white-space: nowrap; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s ease; box-shadow: var(--shadow-sm);
+  }
+  .orb:hover .orb-label { opacity: 1; }
+
+  .orb.c-accent { --orb-color: var(--accent); }
+  .orb.c-blue { --orb-color: var(--blue); }
+  .orb.c-teal { --orb-color: var(--teal); }
+  .orb.c-violet { --orb-color: var(--violet); }
+  .orb.c-success { --orb-color: var(--success); }
+  .orb.c-danger { --orb-color: var(--danger); }
+
+  /* ─── MAIN CONTENT ─── */
+  .main {
+    margin-left: 82px; margin-top: 64px;
+    padding: 32px 32px 40px;
+    max-width: 1600px;
+    animation: fadeInUp 0.5s ease both;
+  }
+
+  /* ─── HERO ROW ─── */
+  .hero {
+    display: grid; grid-template-columns: 1fr auto auto;
+    gap: 20px; margin-bottom: 28px; align-items: end;
+  }
+  .greeting h1 {
+    font-size: 2rem; font-weight: 800; letter-spacing: -0.03em;
+  }
+  .greeting p { color: var(--text-dim); margin-top: 4px; font-size: 0.9rem; }
+
+  .hero-cta {
+    padding: 12px 28px; border-radius: var(--radius-xs);
+    background: var(--accent); color: #fff; border: none;
+    font-size: 0.82rem; font-weight: 700; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(245,130,32,0.3);
+    transition: all 0.25s ease;
+  }
+  .hero-cta:hover { background: #e0741a; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(245,130,32,0.4); }
+
+  /* ─── BENTO GRID ─── */
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: minmax(160px, auto);
+    gap: 16px;
+  }
+  .bento .span-2 { grid-column: span 2; }
+  .bento .span-3 { grid-column: span 3; }
+  .bento .tall { grid-row: span 2; }
+
+  /* ─── CARD ─── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 400ms var(--spring), box-shadow 0.3s ease, border-color 0.25s ease, background 0.25s ease;
+  }
+  .card::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+  }
+  .card:hover::before { transform: translateX(130%); }
+  .card::after {
+    content: '';
+    position: absolute; top: 0; left: 24px; right: 24px; height: 2px;
+    background: var(--card-accent, var(--accent));
+    opacity: 0; transition: opacity 0.3s ease;
+  }
+  .card:hover::after { opacity: 1; }
+  .card:hover {
+    transform: translateY(-6px) scale(1.01);
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-elevated);
+  }
+  /* Glow */
+  .card-glow {
+    position: absolute; inset: -1px; border-radius: var(--radius);
+    background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--card-accent, var(--accent)) 12%, transparent), transparent 70%);
+    opacity: 0; transition: opacity 0.4s ease; pointer-events: none;
+  }
+  .card:hover .card-glow { opacity: 1; }
+
+  .card-icon {
+    width: 48px; height: 48px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem; margin-bottom: 16px;
+  }
+  .card-title { font-size: 0.78rem; color: var(--text-dim); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .card-value { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; margin-top: 4px; }
+  .card-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; }
+
+  .card-accent-orange { --card-accent: var(--accent); }
+  .card-accent-blue { --card-accent: var(--blue); }
+  .card-accent-teal { --card-accent: var(--teal); }
+  .card-accent-violet { --card-accent: var(--violet); }
+  .card-accent-success { --card-accent: var(--success); }
+
+  /* ─── LIST SECTION INSIDE CARD ─── */
+  .card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 16px; }
+  .list-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    margin-bottom: 8px; transition: background 0.2s ease;
+  }
+  .list-item:hover { background: rgba(255,255,255,0.05); }
+  .list-item .name { font-weight: 500; }
+  .list-item .meta { font-size: 0.78rem; color: var(--text-dim); }
+
+  .badge {
+    padding: 3px 10px; border-radius: 20px; font-size: 0.68rem; font-weight: 600;
+  }
+  .badge-sent { background: rgba(59,130,246,0.15); color: var(--blue); }
+  .badge-approved { background: rgba(16,185,129,0.15); color: var(--success); }
+  .badge-new { background: rgba(245,130,32,0.15); color: var(--accent); }
+
+  /* ─── PROGRESS BAR ─── */
+  .progress-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06); margin-top: 12px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+
+  /* ─── JOB STAGE ROW ─── */
+  .stage-row { display: flex; gap: 4px; margin-top: 12px; }
+  .stage {
+    flex: 1; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.06);
+    position: relative; overflow: hidden;
+  }
+  .stage.done { background: var(--success); }
+  .stage.active { background: var(--accent); animation: jobPulse 2s ease infinite; }
+
+  /* ─── MINI CALENDAR ─── */
+  .mini-cal {
+    background: var(--bg-card); border-radius: var(--radius-sm);
+    padding: 16px 20px; border: 1px solid var(--border);
+    text-align: center;
+  }
+  .mini-cal .day { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.04em; color: var(--accent); }
+  .mini-cal .month { font-size: 0.75rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; }
+
+  /* ─── FAB ─── */
+  .fab {
+    position: fixed; bottom: 24px; right: 24px; z-index: 80;
+    width: 52px; height: 52px; border-radius: 50%;
+    background: linear-gradient(135deg, #7DF9FF, #FF0090);
+    border: none; color: #fff; font-size: 1.4rem; cursor: pointer;
+    box-shadow: 0 0 12px rgba(125,249,255,0.4), 0 0 24px rgba(255,0,144,0.2);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.3s ease;
+  }
+  .fab:hover { transform: scale(1.1); box-shadow: 0 0 18px rgba(125,249,255,0.6), 0 0 36px rgba(255,0,144,0.35); }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes jobPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">P</div>
+    Press<span>Cal</span> Pro
+  </div>
+  <div class="header-tabs">
+    <div class="header-tab active">Dashboard</div>
+    <div class="header-tab">Κοστολόγηση</div>
+    <div class="header-tab">Προσφορές</div>
+    <div class="header-tab">Email</div>
+  </div>
+  <div class="header-tools">
+    <button class="tool-btn">🔍</button>
+    <button class="tool-btn">🌙</button>
+    <button class="tool-btn">🔔</button>
+    <div class="avatar">ΤΓ</div>
+  </div>
+</header>
+
+<!-- RAIL -->
+<nav class="rail">
+  <div class="orb active c-accent">📊<span class="orb-label">Dashboard</span></div>
+  <div class="orb c-blue">🖩<span class="orb-label">Κοστολόγηση</span></div>
+  <div class="orb c-teal">📄<span class="orb-label">Προσφορές</span></div>
+  <div class="orb c-violet">✉️<span class="orb-label">Email</span></div>
+  <div class="orb">🖨️<span class="orb-label">Μηχανήματα</span></div>
+  <div class="orb c-success">📦<span class="orb-label">Αποθήκη</span></div>
+  <div class="orb">👥<span class="orb-label">Πελάτες</span></div>
+  <div class="orb" style="margin-top:auto">⚙️<span class="orb-label">Ρυθμίσεις</span></div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+  <!-- Hero -->
+  <div class="hero">
+    <div class="greeting">
+      <h1>Καλησπέρα, Τάσο 👋</h1>
+      <p>Σήμερα έχεις 3 εκκρεμείς προσφορές & 2 emails</p>
+    </div>
+    <div class="mini-cal">
+      <div class="day">24</div>
+      <div class="month">Μάρτιος</div>
+    </div>
+    <button class="hero-cta">+ Νέα Κοστολόγηση</button>
+  </div>
+
+  <!-- Bento Grid -->
+  <div class="bento">
+    <!-- Stat 1 -->
+    <div class="card card-accent-orange" style="--card-accent: var(--accent);">
+      <div class="card-glow"></div>
+      <div class="card-icon" style="background: rgba(245,130,32,0.12); color: var(--accent);">📄</div>
+      <div class="card-title">Ανοιχτές Προσφορές</div>
+      <div class="card-value">12</div>
+      <div class="card-sub">+3 αυτή τη βδομάδα</div>
+    </div>
+
+    <!-- Stat 2 -->
+    <div class="card card-accent-blue" style="--card-accent: var(--blue);">
+      <div class="card-glow"></div>
+      <div class="card-icon" style="background: rgba(59,130,246,0.12); color: var(--blue);">🖩</div>
+      <div class="card-title">Κοστολογήσεις Σήμερα</div>
+      <div class="card-value">7</div>
+      <div class="card-sub">3 offset, 4 digital</div>
+    </div>
+
+    <!-- Stat 3 -->
+    <div class="card card-accent-success" style="--card-accent: var(--success);">
+      <div class="card-glow"></div>
+      <div class="card-icon" style="background: rgba(16,185,129,0.12); color: var(--success);">💰</div>
+      <div class="card-title">Έσοδα Μήνα</div>
+      <div class="card-value">€4.280</div>
+      <div class="card-sub">↑ 18% από Φεβ</div>
+    </div>
+
+    <!-- Stat 4 -->
+    <div class="card card-accent-violet" style="--card-accent: var(--violet);">
+      <div class="card-glow"></div>
+      <div class="card-icon" style="background: rgba(124,58,237,0.12); color: var(--violet);">👥</div>
+      <div class="card-title">Πελάτες</div>
+      <div class="card-value">148</div>
+      <div class="card-sub">5 νέοι αυτό τον μήνα</div>
+    </div>
+
+    <!-- Recent Quotes (span 2, tall) -->
+    <div class="card span-2 tall" style="--card-accent: var(--teal);">
+      <div class="card-glow"></div>
+      <h3>Πρόσφατες Προσφορές</h3>
+      <div class="list-item">
+        <div>
+          <div class="name">QT-2026-0152 · Φυλλάδια A4</div>
+          <div class="meta">Δημητρίου Α.Ε. · €1.245</div>
+        </div>
+        <span class="badge badge-sent">Εστάλη</span>
+      </div>
+      <div class="list-item">
+        <div>
+          <div class="name">QT-2026-0151 · Αυτοκόλλητα</div>
+          <div class="meta">Κωνσταντίνου · €380</div>
+        </div>
+        <span class="badge badge-approved">Εγκρίθηκε</span>
+      </div>
+      <div class="list-item">
+        <div>
+          <div class="name">QT-2026-0150 · Κάρτες 9×5</div>
+          <div class="meta">Παπαδόπουλος · €95</div>
+        </div>
+        <span class="badge badge-new">Νέα</span>
+      </div>
+      <div class="list-item">
+        <div>
+          <div class="name">QT-2026-0149 · Επιστολόχαρτα</div>
+          <div class="meta">Λογιστικό Γραφείο Αθ. · €520</div>
+        </div>
+        <span class="badge badge-sent">Εστάλη</span>
+      </div>
+    </div>
+
+    <!-- Job Board (span 2, tall) -->
+    <div class="card span-2 tall" style="--card-accent: var(--accent);">
+      <div class="card-glow"></div>
+      <h3>Πίνακας Εργασιών</h3>
+
+      <div class="list-item">
+        <div>
+          <div class="name">Φυλλάδια A4 4χρ. — 5.000 τεμ.</div>
+          <div class="meta">Δημητρίου · Παράδοση: 27/03</div>
+        </div>
+      </div>
+      <div class="stage-row">
+        <div class="stage done"></div>
+        <div class="stage done"></div>
+        <div class="stage active"></div>
+        <div class="stage"></div>
+        <div class="stage"></div>
+      </div>
+
+      <div class="list-item" style="margin-top: 12px;">
+        <div>
+          <div class="name">Κάρτες 9×5 2όψ. — 2.000 τεμ.</div>
+          <div class="meta">Παπαδόπουλος · Παράδοση: 28/03</div>
+        </div>
+      </div>
+      <div class="stage-row">
+        <div class="stage done"></div>
+        <div class="stage active"></div>
+        <div class="stage"></div>
+        <div class="stage"></div>
+        <div class="stage"></div>
+      </div>
+
+      <div class="list-item" style="margin-top: 12px;">
+        <div>
+          <div class="name">Αφίσες A3 — 200 τεμ.</div>
+          <div class="meta">Σύλλογος Μαρ. · Παράδοση: 25/03</div>
+        </div>
+      </div>
+      <div class="stage-row">
+        <div class="stage done"></div>
+        <div class="stage done"></div>
+        <div class="stage done"></div>
+        <div class="stage done"></div>
+        <div class="stage active"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- FAB -->
+<button class="fab">✨</button>
+
+</body>
+</html>
