@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Printer, Factory, PenTool, Plus, Trash2, Edit3, ChevronRight } from 'lucide-react';
 import type { Machine } from '@/generated/prisma/client';
 import { deleteMachine } from './actions';
-import { MachineForm } from './machine-form';
+import { DigitalWizard } from './wizard/digital-wizard';
 
 const CAT_CONFIG = {
   digital: { label: 'Ψηφιακό', icon: Printer, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
@@ -14,13 +14,20 @@ const CAT_CONFIG = {
 
 type CatKey = keyof typeof CAT_CONFIG;
 
+const CATS = [
+  { value: 'digital', label: 'Ψηφιακό', icon: Printer, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
+  { value: 'offset', label: 'Offset', icon: Factory, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/30' },
+  { value: 'plotter', label: 'Plotter', icon: PenTool, color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/30' },
+];
+
 interface Props {
   machines: Machine[];
 }
 
 export function MachinesList({ machines }: Props) {
-  const [showForm, setShowForm] = useState(false);
+  const [showWizard, setShowWizard] = useState<'digital' | 'offset' | 'plotter' | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [showCatPicker, setShowCatPicker] = useState(false);
   const [filter, setFilter] = useState<CatKey | 'all'>('all');
 
   const filtered = filter === 'all' ? machines : machines.filter((m) => m.cat === filter);
@@ -47,7 +54,7 @@ export function MachinesList({ machines }: Props) {
           </div>
         </div>
         <button
-          onClick={() => { setEditId(null); setShowForm(true); }}
+          onClick={() => { setEditId(null); setShowCatPicker(true); }}
           className="flex items-center gap-2 rounded-lg bg-[var(--accent)] px-4 py-2.5 text-sm font-bold text-white shadow-[0_4px_16px_rgba(245,130,32,0.3)] transition-all hover:shadow-[0_6px_24px_rgba(245,130,32,0.4)]"
         >
           <Plus className="h-4 w-4" /> Νέο Μηχάνημα
@@ -81,7 +88,7 @@ export function MachinesList({ machines }: Props) {
           <Printer className="mx-auto h-12 w-12 text-[var(--text-muted)] opacity-30" />
           <p className="mt-4 text-[var(--text-muted)]">Δεν υπάρχουν μηχανές</p>
           <button
-            onClick={() => { setEditId(null); setShowForm(true); }}
+            onClick={() => { setEditId(null); setShowCatPicker(true); }}
             className="mt-4 text-sm font-semibold text-[var(--accent)]"
           >
             + Προσθέστε την πρώτη σας μηχανή
@@ -98,7 +105,7 @@ export function MachinesList({ machines }: Props) {
               <div
                 key={machine.id}
                 className="group relative cursor-pointer rounded-2xl border border-[var(--glass-border)] bg-[var(--bg-surface)] p-5 transition-all hover:border-[var(--border-hover)] hover:bg-[var(--bg-elevated)] hover:shadow-[0_8px_40px_rgba(0,0,0,0.3)]"
-                onClick={() => { setEditId(machine.id); setShowForm(true); }}
+                onClick={() => { setEditId(machine.id); setShowWizard(machine.cat as 'digital' | 'offset' | 'plotter'); }}
               >
                 {/* Shine sweep */}
                 <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
@@ -128,7 +135,7 @@ export function MachinesList({ machines }: Props) {
                 {/* Actions */}
                 <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button
-                    onClick={(e) => { e.stopPropagation(); setEditId(machine.id); setShowForm(true); }}
+                    onClick={(e) => { e.stopPropagation(); setEditId(machine.id); setShowWizard(machine.cat as 'digital' | 'offset' | 'plotter'); }}
                     className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--accent)]"
                   >
                     <Edit3 className="h-3.5 w-3.5" />
@@ -151,12 +158,54 @@ export function MachinesList({ machines }: Props) {
         </div>
       )}
 
-      {/* Form modal */}
-      {showForm && (
-        <MachineForm
+      {/* Category picker */}
+      {showCatPicker && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowCatPicker(false)}>
+          <div className="grid w-[500px] grid-cols-2 gap-4 rounded-2xl border border-[var(--glass-border)] bg-[var(--bg-elevated)] p-8 shadow-[0_32px_80px_rgba(0,0,0,0.5)]" onClick={(e) => e.stopPropagation()}>
+            <h2 className="col-span-2 text-lg font-bold mb-2">Τύπος Μηχανής</h2>
+            {CATS.map((c) => {
+              const Icon = c.icon;
+              return (
+                <button
+                  key={c.value}
+                  onClick={() => { setShowCatPicker(false); setShowWizard(c.value as 'digital' | 'offset' | 'plotter'); }}
+                  className="flex flex-col items-center gap-3 rounded-xl border-2 border-[var(--glass-border)] p-6 transition-all hover:border-[var(--border-hover)] hover:bg-white/[0.03]"
+                >
+                  <div className={`flex h-14 w-14 items-center justify-center rounded-full border-2 ${c.border} ${c.bg}`}>
+                    <Icon className={`h-6 w-6 ${c.color}`} />
+                  </div>
+                  <span className="text-base font-bold">{c.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Digital Wizard */}
+      {showWizard === 'digital' && (
+        <DigitalWizard
           machine={editMachine ?? undefined}
-          onClose={() => { setShowForm(false); setEditId(null); }}
+          onClose={() => { setShowWizard(null); setEditId(null); }}
         />
+      )}
+
+      {/* Offset / Plotter — TODO */}
+      {showWizard === 'offset' && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60">
+          <div className="rounded-2xl bg-[var(--bg-elevated)] p-8 text-center">
+            <p className="text-lg font-bold">Offset Wizard — Coming Soon</p>
+            <button onClick={() => setShowWizard(null)} className="mt-4 text-[var(--accent)]">Κλείσιμο</button>
+          </div>
+        </div>
+      )}
+      {showWizard === 'plotter' && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60">
+          <div className="rounded-2xl bg-[var(--bg-elevated)] p-8 text-center">
+            <p className="text-lg font-bold">Plotter Setup — Coming Soon</p>
+            <button onClick={() => setShowWizard(null)} className="mt-4 text-[var(--accent)]">Κλείσιμο</button>
+          </div>
+        </div>
       )}
     </>
   );
