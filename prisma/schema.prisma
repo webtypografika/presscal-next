@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// PressCal Pro — Prisma Schema
+// Common fields in columns, type-specific data in JSON specs
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +8,256 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── ORGANIZATION (multi-tenant ready) ───
+model Org {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  machines         Machine[]
+  postpressMachines PostpressMachine[]
+  materials        Material[]
+  profiles         Profile[]
+  customers        Customer[]
+  quotes           Quote[]
+}
+
+// ─── MACHINES (Digital / Offset / Plotter) ───
+model Machine {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  name      String
+  cat       String   // 'digital' | 'offset' | 'plotter'
+  notes     String   @default("")
+
+  // Common dimensions (mm)
+  maxLS     Float?   // max long side
+  maxSS     Float?   // max short side
+  minLS     Float?   // min long side
+  minSS     Float?   // min short side
+
+  // Margins (mm)
+  marginTop    Float?
+  marginBottom Float?
+  marginLeft   Float?
+  marginRight  Float?
+
+  // All type-specific fields in JSON
+  // Digital: click costs, toner yields, drums, speed zones, consumables...
+  // Offset: towers, inks, chemicals, plates, rollers, depreciation...
+  // Plotter: speed modes, ink costs, lamp life...
+  specs     Json     @default("{}")
+
+  // Soft delete
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, cat])
+  @@index([orgId, deletedAt])
+}
+
+// ─── POSTPRESS MACHINES (Guillotine / Laminator / Binder / Folder / etc.) ───
+model PostpressMachine {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  name      String
+  cat       String   // 'sheet' | 'roll'
+  subtype   String   // 'guillotine' | 'lam_roll' | 'lam_sheet' | 'gathering' |
+                     // 'fold' | 'spiral' | 'glue_bind' | 'staple' | 'custom'
+  notes     String   @default("")
+
+  // Common cost fields
+  setupCost    Float?
+  speed        Float?
+  minCharge    Float?
+  hourlyRate   Float?
+
+  // All subtype-specific fields in JSON
+  // Guillotine: cut_width, lift_h, blade_life, secs_per_cut...
+  // Laminator: film_type, tech, max_w, seal_margin, linked_films...
+  // Binder: glue_type, clamps, max_spine, cover_cost...
+  // Folder: plates, max_speed, max_w...
+  // etc.
+  specs     Json     @default("{}")
+
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, subtype])
+  @@index([orgId, deletedAt])
+}
+
+// ─── MATERIALS (Papers / Films / Consumables / Services) ───
+model Material {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  name      String
+  cat       String   // 'sheet' | 'roll' | 'film' | 'consumable' | 'service'
+  subtype   String?  // paper type: 'velvet', 'gloss', 'uncoated', 'kraft'...
+                     // film type: 'roll', 'sheet'
+  supplier  String?  // 'Mondi', 'Antalis', 'Graphcom'...
+  notes     String   @default("")
+
+  // Dimensions
+  width     Float?   // mm (sheet W or roll width)
+  height    Float?   // mm (sheet H, null for rolls)
+  thickness Float?   // gsm for paper, microns for film
+
+  // Cost & stock
+  costPerUnit  Float?  // € per sheet/meter/piece
+  sellPerUnit  Float?  // € sell price
+  stock        Float?  // current stock (sheets/meters)
+  minStock     Float?  // reorder alert level
+  unit         String  @default("φύλλο") // 'φύλλο', 'μέτρο', 'τεμ', 'λίτρο'
+
+  // Film-specific, lamination-specific, etc.
+  specs     Json     @default("{}")
+
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, cat])
+  @@index([orgId, supplier])
+  @@index([orgId, deletedAt])
+}
+
+// ─── SALES PROFILES (Markups & Charges) ───
+model Profile {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  name      String
+  isDefault Boolean  @default(false)
+  notes     String   @default("")
+
+  // Markup percentages
+  paperMarkup      Float   @default(50)   // %
+  printMarkup      Float   @default(100)  // %
+  guillotineMarkup Float   @default(100)  // %
+  lamMarkup        Float   @default(100)  // %
+  bindingMarkup    Float   @default(100)  // %
+
+  // Min charges (€)
+  minChargePrint      Float?
+  minChargeGuillotine Float?
+  minChargeLam        Float?
+  minChargeBinding    Float?
+
+  // Extra charges
+  specs     Json     @default("{}")  // per-product overrides, custom charges
+
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+}
+
+// ─── CUSTOMERS ───
+model Customer {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  name      String
+  company   String?
+  email     String?
+  phone     String?
+  mobile    String?
+  afm       String?  // Greek Tax ID
+  doy       String?  // Tax Office
+  address   String?
+  city      String?
+  zip       String?
+  notes     String   @default("")
+
+  // CRM
+  contacts  Json     @default("[]")  // sub-contacts array
+  tags      String[] @default([])
+
+  quotes    Quote[]
+
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([orgId, deletedAt])
+}
+
+// ─── QUOTES ───
+model Quote {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  number    String   // QT-2026-0001
+  status    String   @default("draft") // draft, sent, approved, partial, rejected, completed, cancelled
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  title       String?
+  description String?
+  notes       String?
+
+  // Items stored as JSON array (QuoteLineItem[])
+  items       Json    @default("[]")
+
+  // Totals
+  subtotal    Float   @default(0)
+  vatRate     Float   @default(24)
+  vatAmount   Float   @default(0)
+  grandTotal  Float   @default(0)
+  totalCost   Float   @default(0)
+  totalProfit Float   @default(0)
+
+  // Job board
+  jobStageId        String?
+  jobStageUpdatedAt DateTime?
+
+  // Email
+  threadId     String?
+  linkedEmails String[] @default([])
+
+  // Approval
+  approvalToken    String?
+  approvedAt       DateTime?
+  approvedItems    String[] @default([])
+  rejectedItems    String[] @default([])
+  partialApproval  Boolean  @default(false)
+  customerNotes    String?
+
+  // Invoicing
+  elorusInvoiceId  String?
+  elorusContactId  String?
+
+  // Company profile snapshot (for approval page branding)
+  companyProfile   Json?
+
+  // Dates
+  date        DateTime @default(now())
+  sentAt      DateTime?
+  completedAt DateTime?
+
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orgId, status])
+  @@index([orgId, deletedAt])
+  @@unique([orgId, number])
 }
