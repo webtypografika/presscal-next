@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { Machine } from '@/generated/prisma/client';
 import { deleteMachine } from './actions';
 import { DigitalWizard } from './wizard/digital-wizard';
+import { OffsetWizard } from './wizard/offset-wizard';
 import { MachineServicePanel } from './wizard/service-panel';
 
 const CAT_META: Record<string, { label: string; icon: string; color: string }> = {
@@ -227,14 +228,12 @@ export function MachinesList({ machines }: Props) {
         />
       )}
 
-      {/* Offset / Plotter — TODO */}
+      {/* Offset Wizard */}
       {showWizard === 'offset' && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
-          <div className="panel" style={{ padding: 32, textAlign: 'center' }}>
-            <p style={{ fontSize: '1.1rem', fontWeight: 700 }}>Offset Wizard — Coming Soon</p>
-            <button onClick={() => setShowWizard(null)} style={{ marginTop: 16, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Κλείσιμο</button>
-          </div>
-        </div>
+        <OffsetWizard
+          machine={editMachine ?? undefined}
+          onClose={() => { setShowWizard(null); setEditId(null); }}
+        />
       )}
       {showWizard === 'plotter' && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }}>
