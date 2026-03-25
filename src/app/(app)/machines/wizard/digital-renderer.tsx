@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Printer, Droplet, Zap, CheckCircle, AlertTriangle } from 'lucide-react';
-// Note: BookOpen, Scissors, PinIcon, CircleDot, GripVertical removed — using Toggle instead
 import { aiScanDigital } from './ai-scan-action';
 import {
   inputCls, NumInput, Field, WizSection, Row, RowLabel, PillToggle, Toggle,
@@ -43,7 +42,6 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
     setResult(res);
 
     if (res.success) {
-      // Apply found specs to data
       for (const [key, val] of Object.entries(res.specs)) {
         if (val !== null && val !== undefined) {
           onChange(key, val);
@@ -54,63 +52,35 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Μοντέλο Μηχανής *</label>
-        <input
-          className={inputCls}
-          value={(data.name as string) ?? ''}
-          onChange={(e) => onChange('name', e.target.value)}
-          placeholder="π.χ. Konica Accurio C6100"
-          autoFocus
-        />
-      </div>
-
-      <button
-        onClick={handleScan}
-        disabled={scanning || !(data.name as string)?.trim()}
-        className="flex items-center gap-2 rounded-lg border border-[var(--blue)] bg-[var(--blue)]/10 px-5 py-2.5 text-sm font-bold text-[var(--blue)] transition-all hover:bg-[var(--blue)]/20 disabled:opacity-40"
-      >
-        <Zap className="h-4 w-4" />
-        {scanning ? 'Αναζήτηση...' : 'AI Scan'}
-      </button>
-
-      {scanning && (
-        <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-4 text-sm text-[var(--text-dim)]">
-          <div className="h-4 w-4 shrink-0 rounded-full border-2 border-[var(--blue)] border-t-transparent animate-spin" />
-          Αναζήτηση προδιαγραφών & αναλωσίμων για &quot;{data.name as string}&quot;...
-        </div>
-      )}
-
-      {result?.success && (
-        <div className="flex items-center gap-3 rounded-lg bg-[var(--success)]/10 p-4 text-sm text-[var(--success)]">
-          <CheckCircle className="h-5 w-5 shrink-0" />
-          <div>
-            <strong>Βρέθηκαν {result.fieldsFound} προδιαγραφές</strong>
-            <p className="text-[var(--text-dim)] text-xs mt-1">Το AI μπορεί να κάνει λάθη — ελέγξτε και διορθώστε τα αποτελέσματα στα επόμενα βήματα.</p>
+    <div className="space-y-6">
+      <WizSection title="Μοντέλο" sub="Όνομα μηχανής" accent="var(--blue)">
+        <input className={inputCls} value={(data.name as string) ?? ''} onChange={(e) => onChange('name', e.target.value)} placeholder="π.χ. Konica Accurio C6100" autoFocus />
+        <button onClick={handleScan} disabled={scanning || !(data.name as string)?.trim()}
+          className="flex items-center gap-2 rounded-lg border border-[var(--blue)] bg-[var(--blue)]/10 px-5 py-2.5 text-sm font-bold text-[var(--blue)] transition-all hover:bg-[var(--blue)]/20 disabled:opacity-40">
+          <Zap className="h-4 w-4" />{scanning ? 'Αναζήτηση...' : 'AI Scan'}
+        </button>
+        {scanning && (
+          <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-4 text-sm text-[var(--text-dim)]">
+            <div className="h-4 w-4 shrink-0 rounded-full border-2 border-[var(--blue)] border-t-transparent animate-spin" />Αναζήτηση προδιαγραφών & αναλωσίμων για &quot;{data.name as string}&quot;...
           </div>
-        </div>
-      )}
-
-      {result && !result.success && (
-        <div className="flex items-center gap-3 rounded-lg bg-[var(--danger)]/10 p-4 text-sm text-[var(--danger)]">
-          <AlertTriangle className="h-5 w-5 shrink-0" />
-          <div>
-            <strong>Δεν βρέθηκαν αποτελέσματα</strong>
-            <p className="text-[var(--text-dim)] text-xs mt-1">{result.error ?? 'Συμπληρώστε χειροκίνητα.'}</p>
+        )}
+        {result?.success && (
+          <div className="flex items-center gap-3 rounded-lg bg-[var(--success)]/10 p-4 text-sm text-[var(--success)]">
+            <CheckCircle className="h-5 w-5 shrink-0" /><div><strong>Βρέθηκαν {result.fieldsFound} προδιαγραφές</strong><p className="text-[var(--text-dim)] text-xs mt-1">Το AI μπορεί να κάνει λάθη — ελέγξτε και διορθώστε τα αποτελέσματα στα επόμενα βήματα.</p></div>
           </div>
-        </div>
-      )}
+        )}
+        {result && !result.success && (
+          <div className="flex items-center gap-3 rounded-lg bg-[var(--danger)]/10 p-4 text-sm text-[var(--danger)]">
+            <AlertTriangle className="h-5 w-5 shrink-0" /><div><strong>Δεν βρέθηκαν αποτελέσματα</strong><p className="text-xs mt-1">{result.error ?? 'Συμπληρώστε χειροκίνητα.'}</p></div>
+          </div>
+        )}
+      </WizSection>
 
-      <div className="border-t border-[var(--border)] pt-4">
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">URL Κατασκευαστή (προαιρετικό)</label>
-        <input
-          className={inputCls}
-          value={(data.spec_url as string) ?? ''}
-          onChange={(e) => onChange('spec_url', e.target.value)}
-          placeholder="https://..."
-        />
-      </div>
+      <WizSection title="URL" sub="Κατασκευαστή" accent="var(--blue)" border>
+        <Field label="URL Κατασκευαστή (προαιρετικό)">
+          <input className={inputCls} value={(data.spec_url as string) ?? ''} onChange={(e) => onChange('spec_url', e.target.value)} placeholder="https://..." />
+        </Field>
+      </WizSection>
     </div>
   );
 }
@@ -122,28 +92,30 @@ function StepInkType({ data, onChange }: { data: Data; onChange: OnChange }) {
     { v: 'liquid', l: 'Liquid Ink', desc: 'Υγρό ink — ElectroInk / Inkjet', Icon: Droplet, examples: 'HP Indigo, Riso ComColor' },
   ];
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        {options.map((t) => (
-          <button
-            key={t.v}
-            onClick={() => onChange('ink_type', t.v)}
-            className={`flex flex-col items-center gap-4 rounded-xl border-2 p-8 text-center transition-all ${ink === t.v ? 'border-[var(--blue)] bg-[var(--blue)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
-          >
-            <div className={`flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all ${ink === t.v ? 'border-[var(--blue)]/40 bg-[var(--blue)]/10 text-[var(--blue)]' : 'border-[var(--glass-border)] bg-white/[0.03] text-[var(--text-muted)]'}`}>
-              <t.Icon className="h-6 w-6" />
-            </div>
-            <span className="text-base font-bold">{t.l}</span>
-            <span className="text-[0.75rem] text-[var(--text-muted)]">{t.desc}</span>
-          </button>
-        ))}
-      </div>
-      {ink && (
-        <div className="rounded-lg bg-white/[0.03] px-4 py-3">
-          <span className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Παραδείγματα</span>
-          <p className="mt-1 text-sm text-[var(--text-dim)]">{options.find(o => o.v === ink)?.examples}</p>
+    <div className="space-y-6">
+      <WizSection title="Τύπος" sub="Ink / Toner" accent="var(--blue)">
+        <div className="grid grid-cols-2 gap-4">
+          {options.map((t) => (
+            <button
+              key={t.v}
+              onClick={() => onChange('ink_type', t.v)}
+              className={`flex flex-col items-center gap-4 rounded-xl border-2 p-8 text-center transition-all ${ink === t.v ? 'border-[var(--blue)] bg-[var(--blue)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
+            >
+              <div className={`flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all ${ink === t.v ? 'border-[var(--blue)]/40 bg-[var(--blue)]/10 text-[var(--blue)]' : 'border-[var(--glass-border)] bg-white/[0.03] text-[var(--text-muted)]'}`}>
+                <t.Icon className="h-6 w-6" />
+              </div>
+              <span className="text-base font-bold">{t.l}</span>
+              <span className="text-[0.75rem] text-[var(--text-muted)]">{t.desc}</span>
+            </button>
+          ))}
         </div>
-      )}
+        {ink && (
+          <div className="rounded-lg bg-white/[0.03] px-4 py-3">
+            <span className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Παραδείγματα</span>
+            <p className="mt-1 text-sm text-[var(--text-dim)]">{options.find(o => o.v === ink)?.examples}</p>
+          </div>
+        )}
+      </WizSection>
     </div>
   );
 }
@@ -151,45 +123,27 @@ function StepInkType({ data, onChange }: { data: Data; onChange: OnChange }) {
 function StepSpecs({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
     <div className="space-y-6">
-      {/* Speeds */}
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Ταχύτητες (PPM)</label>
+      <WizSection title="Ταχύτητα" sub="PPM" accent="var(--blue)">
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <span className="text-xs text-[var(--text-muted)]">Color *</span>
-            <NumInput value={data.speed_ppm_color} onChange={(v) => onChange('speed_ppm_color', v)} placeholder="61" />
-          </div>
-          <div>
-            <span className="text-xs text-[var(--text-muted)]">B&W</span>
-            <NumInput value={data.speed_ppm_bw} onChange={(v) => onChange('speed_ppm_bw', v)} placeholder="65" />
-          </div>
+          <Field label="Color *"><NumInput value={data.speed_ppm_color} onChange={(v) => onChange('speed_ppm_color', v)} placeholder="61" /></Field>
+          <Field label="B&W"><NumInput value={data.speed_ppm_bw} onChange={(v) => onChange('speed_ppm_bw', v)} placeholder="65" /></Field>
         </div>
-      </div>
+      </WizSection>
 
-      {/* GSM Range */}
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Εύρος Βάρους (GSM)</label>
+      <WizSection title="GSM" sub="Εύρος βάρους" accent="var(--blue)" border>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <span className="text-xs text-[var(--text-muted)]">Min</span>
-            <NumInput value={data.min_gsm} onChange={(v) => onChange('min_gsm', v)} placeholder="60" />
-          </div>
-          <div>
-            <span className="text-xs text-[var(--text-muted)]">Max</span>
-            <NumInput value={data.max_gsm} onChange={(v) => onChange('max_gsm', v)} placeholder="350" />
-          </div>
+          <Field label="Min"><NumInput value={data.min_gsm} onChange={(v) => onChange('min_gsm', v)} placeholder="60" /></Field>
+          <Field label="Max"><NumInput value={data.max_gsm} onChange={(v) => onChange('max_gsm', v)} placeholder="350" /></Field>
         </div>
-      </div>
+      </WizSection>
 
-      {/* Duplex speed */}
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Duplex Speed Factor (%)</label>
-        <NumInput value={data.duplex_speed_factor} onChange={(v) => onChange('duplex_speed_factor', v)} placeholder="100" />
-      </div>
+      <WizSection title="Duplex" sub="Factor" accent="var(--blue)" border>
+        <Field label="Duplex Speed Factor (%)">
+          <NumInput value={data.duplex_speed_factor} onChange={(v) => onChange('duplex_speed_factor', v)} placeholder="100" />
+        </Field>
+      </WizSection>
 
-      {/* Finishing */}
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Finishing (Output)</label>
+      <WizSection title="Finishing" sub="Output" accent="var(--blue)" border>
         <div className="flex flex-wrap gap-2">
           <Toggle value={data.has_booklet_maker} onChange={(v) => onChange('has_booklet_maker', v)} labelOn="Booklet" labelOff="Booklet" />
           <Toggle value={data.has_stapler} onChange={(v) => onChange('has_stapler', v)} labelOn="Stapler" labelOff="Stapler" />
@@ -197,62 +151,47 @@ function StepSpecs({ data, onChange }: { data: Data; onChange: OnChange }) {
           <Toggle value={data.has_trimmer} onChange={(v) => onChange('has_trimmer', v)} labelOn="Trimmer" labelOff="Trimmer" />
           <Toggle value={data.has_glue_binder} onChange={(v) => onChange('has_glue_binder', v)} labelOn="Glue Binder" labelOff="Glue Binder" />
         </div>
-      </div>
+      </WizSection>
     </div>
   );
 }
 
 function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
-  const PRESETS = [
-    { l: 'A4', ss: 210, ls: 297 }, { l: 'A3', ss: 297, ls: 420 },
-    { l: 'SRA3', ss: 320, ls: 450 }, { l: '33×48', ss: 330, ls: 487 },
-    { l: '35×50', ss: 350, ls: 500 },
-  ];
   return (
     <div className="space-y-6">
-      {/* Max sheet */}
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Μέγιστο Φύλλο (mm)</label>
-        <div className="grid grid-cols-2 gap-3 mb-2">
-          <div><span className="text-xs text-[var(--text-muted)]">Short Side</span><NumInput value={data.max_sheet_ss} onChange={(v) => onChange('max_sheet_ss', v)} placeholder="330" /></div>
-          <div><span className="text-xs text-[var(--text-muted)]">Long Side</span><NumInput value={data.max_sheet_ls} onChange={(v) => onChange('max_sheet_ls', v)} placeholder="487" /></div>
-        </div>
-      </div>
-
-      {/* Min sheet */}
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Ελάχιστο Φύλλο (mm)</label>
+      <WizSection title="Max Φύλλο" sub="Μέγιστο (mm)" accent="var(--blue)">
         <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-xs text-[var(--text-muted)]">Short Side</span><NumInput value={data.min_sheet_ss} onChange={(v) => onChange('min_sheet_ss', v)} /></div>
-          <div><span className="text-xs text-[var(--text-muted)]">Long Side</span><NumInput value={data.min_sheet_ls} onChange={(v) => onChange('min_sheet_ls', v)} /></div>
+          <Field label="Short Side"><NumInput value={data.max_sheet_ss} onChange={(v) => onChange('max_sheet_ss', v)} placeholder="330" /></Field>
+          <Field label="Long Side"><NumInput value={data.max_sheet_ls} onChange={(v) => onChange('max_sheet_ls', v)} placeholder="487" /></Field>
         </div>
-      </div>
+      </WizSection>
 
-      {/* Banner */}
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Banner (mm)</label>
+      <WizSection title="Min Φύλλο" sub="Ελάχιστο (mm)" accent="var(--blue)" border>
         <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-xs text-[var(--text-muted)]">Short Side</span><NumInput value={data.banner_ss} onChange={(v) => onChange('banner_ss', v)} /></div>
-          <div><span className="text-xs text-[var(--text-muted)]">Long Side</span><NumInput value={data.banner_ls} onChange={(v) => onChange('banner_ls', v)} /></div>
+          <Field label="Short Side"><NumInput value={data.min_sheet_ss} onChange={(v) => onChange('min_sheet_ss', v)} /></Field>
+          <Field label="Long Side"><NumInput value={data.min_sheet_ls} onChange={(v) => onChange('min_sheet_ls', v)} /></Field>
         </div>
-      </div>
+      </WizSection>
 
-      {/* Margins */}
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Περιθώρια Εκτύπωσης (mm)</label>
+      <WizSection title="Banner" sub="Μέγιστο (mm)" accent="var(--blue)" border>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Short Side"><NumInput value={data.banner_ss} onChange={(v) => onChange('banner_ss', v)} /></Field>
+          <Field label="Long Side"><NumInput value={data.banner_ls} onChange={(v) => onChange('banner_ls', v)} /></Field>
+        </div>
+      </WizSection>
+
+      <WizSection title="Περιθώρια" sub="Εκτύπωσης (mm)" accent="var(--blue)" border>
         <div className="grid grid-cols-4 gap-2">
-          <div><span className="text-xs text-[var(--text-muted)]">Top</span><NumInput value={data.margin_top} onChange={(v) => onChange('margin_top', v)} /></div>
-          <div><span className="text-xs text-[var(--text-muted)]">Bottom</span><NumInput value={data.margin_bottom} onChange={(v) => onChange('margin_bottom', v)} /></div>
-          <div><span className="text-xs text-[var(--text-muted)]">Left</span><NumInput value={data.margin_left} onChange={(v) => onChange('margin_left', v)} /></div>
-          <div><span className="text-xs text-[var(--text-muted)]">Right</span><NumInput value={data.margin_right} onChange={(v) => onChange('margin_right', v)} /></div>
+          <Field label="Top"><NumInput value={data.margin_top} onChange={(v) => onChange('margin_top', v)} /></Field>
+          <Field label="Bottom"><NumInput value={data.margin_bottom} onChange={(v) => onChange('margin_bottom', v)} /></Field>
+          <Field label="Left"><NumInput value={data.margin_left} onChange={(v) => onChange('margin_left', v)} /></Field>
+          <Field label="Right"><NumInput value={data.margin_right} onChange={(v) => onChange('margin_right', v)} /></Field>
         </div>
-      </div>
+      </WizSection>
 
-      {/* Feed direction */}
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Τροφοδοσία</label>
+      <WizSection title="Τροφοδοσία" sub="Feed direction" accent="var(--blue)" border>
         <PillToggle value={data.feed_direction} options={[{ v: 'sef', l: 'SEF' }, { v: 'lef', l: 'LEF' }, { v: 'both', l: 'Both' }]} onChange={(v) => onChange('feed_direction', v)} />
-      </div>
+      </WizSection>
     </div>
   );
 }
@@ -276,7 +215,6 @@ function StepColorStations({ data, onChange }: { data: Data; onChange: OnChange 
     if (v < 5) {
       onChange('has_special_colors', false);
       onChange('color_stations', v);
-      // Clear color fields not applicable to lower station count
       if (v < 2) {
         onChange('click_a4_color', null);
         onChange('click_a3_color', null);
@@ -289,28 +227,28 @@ function StepColorStations({ data, onChange }: { data: Data; onChange: OnChange 
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        {options.map((o) => (
-          <button
-            key={o.v}
-            onClick={() => handleSelect(o.v)}
-            className={`flex flex-col items-center gap-3 rounded-xl border-2 p-6 text-center transition-all ${displayVal === o.v ? 'border-[var(--blue)] bg-[var(--blue)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
-          >
-            <span className="text-lg tracking-widest" style={{ color: 'var(--blue)' }}>{o.icon}</span>
-            <span className="text-base font-bold">{o.l}</span>
-            <span className="text-[0.7rem] text-[var(--text-muted)]">{o.d}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Examples for selected category */}
-      {selected && (
-        <div className="rounded-lg bg-white/[0.03] px-4 py-3">
-          <span className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Παραδείγματα μοντέλων</span>
-          <p className="mt-1 text-sm text-[var(--text-dim)]">{selected.examples}</p>
+    <div className="space-y-6">
+      <WizSection title="Σταθμοί" sub="Χρώμα" accent="var(--violet)">
+        <div className="grid grid-cols-2 gap-3">
+          {options.map((o) => (
+            <button
+              key={o.v}
+              onClick={() => handleSelect(o.v)}
+              className={`flex flex-col items-center gap-3 rounded-xl border-2 p-6 text-center transition-all ${displayVal === o.v ? 'border-[var(--blue)] bg-[var(--blue)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
+            >
+              <span className="text-lg tracking-widest" style={{ color: 'var(--blue)' }}>{o.icon}</span>
+              <span className="text-base font-bold">{o.l}</span>
+              <span className="text-[0.7rem] text-[var(--text-muted)]">{o.d}</span>
+            </button>
+          ))}
         </div>
-      )}
+        {selected && (
+          <div className="rounded-lg bg-white/[0.03] px-4 py-3">
+            <span className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Παραδείγματα μοντέλων</span>
+            <p className="mt-1 text-sm text-[var(--text-dim)]">{selected.examples}</p>
+          </div>
+        )}
+      </WizSection>
     </div>
   );
 }
@@ -325,46 +263,38 @@ function StepExtraColors({ data, onChange }: { data: Data; onChange: OnChange })
 
   return (
     <div className="space-y-6">
-      {/* Section: Number of extra stations */}
-      <div className="flex gap-6">
-        <div className="w-28 shrink-0 pt-1">
-          <h4 className="text-sm font-black uppercase tracking-wide">Σταθμοί</h4>
-          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Φυσικοί extra</p>
+      <WizSection title="Σταθμοί" sub="Φυσικοί extra" accent="var(--violet)">
+        <p className="text-sm text-[var(--text-dim)] mb-3">Πόσους φυσικούς extra σταθμούς έχει η μηχανή;</p>
+        <div className="flex gap-3">
+          {[1, 2, 3].map((n) => (
+            <button
+              key={n}
+              onClick={() => setStationCount(n)}
+              className={`flex-1 rounded-xl border-2 py-5 text-center transition-all ${stationCount === n ? 'border-[var(--accent)] bg-[var(--accent)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
+            >
+              <span className="text-2xl font-black">{n}</span>
+              <p className="text-[0.7rem] text-[var(--text-muted)] mt-1">σταθμ{n === 1 ? 'ός' : 'οί'}</p>
+            </button>
+          ))}
         </div>
-        <div className="flex-1">
-          <p className="text-sm text-[var(--text-dim)] mb-3">Πόσους φυσικούς extra σταθμούς έχει η μηχανή;</p>
-          <div className="flex gap-3">
-            {[1, 2, 3].map((n) => (
-              <button
-                key={n}
-                onClick={() => setStationCount(n)}
-                className={`flex-1 rounded-xl border-2 py-5 text-center transition-all ${stationCount === n ? 'border-[var(--accent)] bg-[var(--accent)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
-              >
-                <span className="text-2xl font-black">{n}</span>
-                <p className="text-[0.7rem] text-[var(--text-muted)] mt-1">σταθμ{n === 1 ? 'ός' : 'οί'}</p>
-              </button>
-            ))}
+      </WizSection>
+
+      <WizSection title="Πληροφορίες" sub="Ειδικά χρώματα" accent="var(--violet)" border>
+        <div className="rounded-lg bg-white/[0.03] px-4 py-3">
+          <p className="text-sm text-[var(--text-dim)]">
+            Τα ειδικά χρώματα (White, Gold, Clear κλπ) και τα αναλώσιμά τους ορίζονται στο κοστολόγιο κάθε εργασίας.
+            Αν η δουλειά χρειάζεται περισσότερα χρώματα από τους σταθμούς, θα χρειαστεί επιπλέον πέρασμα.
+          </p>
+        </div>
+        <div className="rounded-lg bg-white/[0.03] px-4 py-3">
+          <span className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Παραδείγματα</span>
+          <div className="mt-2 space-y-1 text-sm text-[var(--text-dim)]">
+            <p><strong className="text-[var(--text)]">1 σταθμός:</strong> Ricoh C7500, Xerox iGen 5</p>
+            <p><strong className="text-[var(--text)]">2 σταθμοί:</strong> Xerox Iridesse, Fujifilm Revoria</p>
+            <p><strong className="text-[var(--text)]">3 σταθμοί:</strong> HP Indigo 7K (7 BIDs), Fujifilm Revoria PC1120</p>
           </div>
         </div>
-      </div>
-
-      {/* Info box */}
-      <div className="rounded-lg bg-white/[0.03] px-4 py-3">
-        <p className="text-sm text-[var(--text-dim)]">
-          Τα ειδικά χρώματα (White, Gold, Clear κλπ) και τα αναλώσιμά τους ορίζονται στο κοστολόγιο κάθε εργασίας.
-          Αν η δουλειά χρειάζεται περισσότερα χρώματα από τους σταθμούς, θα χρειαστεί επιπλέον πέρασμα.
-        </p>
-      </div>
-
-      {/* Examples */}
-      <div className="rounded-lg bg-white/[0.03] px-4 py-3">
-        <span className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Παραδείγματα</span>
-        <div className="mt-2 space-y-1 text-sm text-[var(--text-dim)]">
-          <p><strong className="text-[var(--text)]">1 σταθμός:</strong> Ricoh C7500, Xerox iGen 5</p>
-          <p><strong className="text-[var(--text)]">2 σταθμοί:</strong> Xerox Iridesse, Fujifilm Revoria</p>
-          <p><strong className="text-[var(--text)]">3 σταθμοί:</strong> HP Indigo 7K (7 BIDs), Fujifilm Revoria PC1120</p>
-        </div>
-      </div>
+      </WizSection>
     </div>
   );
 }
@@ -403,23 +333,27 @@ function StepCostModel({ data, onChange }: { data: Data; onChange: OnChange }) {
     },
   ];
   return (
-    <div className="space-y-3">
-      {models.map((m) => (
-        <button
-          key={m.v}
-          onClick={() => onChange('cost_mode', m.v)}
-          className={`w-full text-left rounded-xl border-2 p-5 transition-all ${data.cost_mode === m.v ? 'border-[var(--accent)] bg-[rgba(245,130,32,0.06)]' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
-        >
-          <span className="text-base font-bold">{m.l}</span>
-          <p className="mt-1 text-sm text-[var(--text-dim)]">{m.d}</p>
-          <div className="mt-2 flex items-center gap-2">
-            {m.tags.map((t) => (
-              <span key={t} className="rounded-full bg-[var(--blue)]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--blue)]">{t}</span>
-            ))}
-            <span className="ml-auto text-xs text-[var(--text-muted)]">{m.detail}</span>
-          </div>
-        </button>
-      ))}
+    <div className="space-y-6">
+      <WizSection title="Μοντέλο" sub="Κοστολόγηση" accent="var(--accent)">
+        <div className="space-y-3">
+          {models.map((m) => (
+            <button
+              key={m.v}
+              onClick={() => onChange('cost_mode', m.v)}
+              className={`w-full text-left rounded-xl border-2 p-5 transition-all ${data.cost_mode === m.v ? 'border-[var(--accent)] bg-[rgba(245,130,32,0.06)]' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
+            >
+              <span className="text-base font-bold">{m.l}</span>
+              <p className="mt-1 text-sm text-[var(--text-dim)]">{m.d}</p>
+              <div className="mt-2 flex items-center gap-2">
+                {m.tags.map((t) => (
+                  <span key={t} className="rounded-full bg-[var(--blue)]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--blue)]">{t}</span>
+                ))}
+                <span className="ml-auto text-xs text-[var(--text-muted)]">{m.detail}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </WizSection>
     </div>
   );
 }
@@ -567,29 +501,21 @@ function CostPreview({ data }: { data: Data }) {
   }
 
   return (
-    <div className="border-t border-[var(--border)] pt-5">
-      <div className="flex gap-6">
-        <div className="w-28 shrink-0 pt-1">
-          <h4 className="text-sm font-black uppercase tracking-wide">Άθροισμα</h4>
-          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Κόστος / όψη</p>
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-3 px-3 mb-2">
-            <span className="w-36" />
-            {stations >= 2 && <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)] text-center">Color</span>}
-            <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)] text-center">B&W</span>
-          </div>
-          {rows.map((r) => (
-            <div key={r.label} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3 mb-2">
-              <span className="w-36 text-sm font-semibold text-[var(--text-dim)]">{r.label}</span>
-              {stations >= 2 && <span className="flex-1 text-center text-sm font-black">{r.color}</span>}
-              <span className="flex-1 text-center text-sm font-black">{r.bw}</span>
-            </div>
-          ))}
-          <p className="text-xs text-[var(--text-muted)] mt-1">* 5% coverage · A3 = 2× A4</p>
-        </div>
+    <WizSection title="Άθροισμα" sub="Κόστος / όψη" accent="var(--success)" border>
+      <div className="flex items-center gap-3 px-3 mb-2">
+        <span className="w-36" />
+        {stations >= 2 && <span className="flex-1 text-xs font-semibold text-[var(--text-muted)] text-center">Color</span>}
+        <span className="flex-1 text-xs font-semibold text-[var(--text-muted)] text-center">B&W</span>
       </div>
-    </div>
+      {rows.map((r) => (
+        <div key={r.label} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3 mb-2">
+          <span className="w-36 text-sm font-semibold text-[var(--text-dim)]">{r.label}</span>
+          {stations >= 2 && <span className="flex-1 text-center text-sm font-black">{r.color}</span>}
+          <span className="flex-1 text-center text-sm font-black">{r.bw}</span>
+        </div>
+      ))}
+      <p className="text-xs text-[var(--text-muted)] mt-1">* 5% coverage · A3 = 2× A4</p>
+    </WizSection>
   );
 }
 
@@ -603,327 +529,216 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
     <div className="space-y-6">
       {/* CPC — Click costs — only for simple modes */}
       {(mode === 'simple_in' || mode === 'simple_out') && (
-        <div>
-          <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Click Costs — CPC (€/όψη)</label>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-3 grid grid-cols-3 gap-3">
-              <span></span>
-              {stations >= 2 && <span className="text-center text-[0.6rem] font-semibold text-[var(--text-muted)]">COLOR</span>}
-              <span className="text-center text-[0.6rem] font-semibold text-[var(--text-muted)]">B&W</span>
-            </div>
-            <span className="flex items-center text-sm font-semibold">A4</span>
-            {stations >= 2 && <NumInput value={data.click_a4_color} onChange={(v) => onChange('click_a4_color', v)} placeholder="0.035" step="0.001" />}
-            <NumInput value={data.click_a4_bw} onChange={(v) => onChange('click_a4_bw', v)} placeholder="0.007" step="0.001" />
-            <span className="flex items-center text-sm font-semibold">A3/SRA3</span>
-            {stations >= 2 && <NumInput value={data.click_a3_color} onChange={(v) => onChange('click_a3_color', v)} placeholder="0.070" step="0.001" />}
-            <NumInput value={data.click_a3_bw} onChange={(v) => onChange('click_a3_bw', v)} placeholder="0.014" step="0.001" />
-            <span className="flex items-center text-sm font-semibold">Banner</span>
-            {stations >= 2 && <NumInput value={data.click_banner_color} onChange={(v) => onChange('click_banner_color', v)} step="0.001" />}
-            <NumInput value={data.click_banner_bw} onChange={(v) => onChange('click_banner_bw', v)} step="0.001" />
-          </div>
-        </div>
+        <WizSection title="CPC" sub="Click Costs" accent="var(--accent)">
+          <ColHeaders labels={[{ w: 'w-20', text: '' }, ...(stations >= 2 ? [{ text: 'COLOR' }] : []), { text: 'B&W' }]} />
+          <Row>
+            <RowLabel>A4</RowLabel>
+            {stations >= 2 && <div className="flex-1"><NumInput value={data.click_a4_color} onChange={(v) => onChange('click_a4_color', v)} placeholder="0.035" step="0.001" /></div>}
+            <div className="flex-1"><NumInput value={data.click_a4_bw} onChange={(v) => onChange('click_a4_bw', v)} placeholder="0.007" step="0.001" /></div>
+          </Row>
+          <Row>
+            <RowLabel>A3/SRA3</RowLabel>
+            {stations >= 2 && <div className="flex-1"><NumInput value={data.click_a3_color} onChange={(v) => onChange('click_a3_color', v)} placeholder="0.070" step="0.001" /></div>}
+            <div className="flex-1"><NumInput value={data.click_a3_bw} onChange={(v) => onChange('click_a3_bw', v)} placeholder="0.014" step="0.001" /></div>
+          </Row>
+          <Row>
+            <RowLabel>Banner</RowLabel>
+            {stations >= 2 && <div className="flex-1"><NumInput value={data.click_banner_color} onChange={(v) => onChange('click_banner_color', v)} step="0.001" /></div>}
+            <div className="flex-1"><NumInput value={data.click_banner_bw} onChange={(v) => onChange('click_banner_bw', v)} step="0.001" /></div>
+          </Row>
+        </WizSection>
       )}
 
       {/* Extra color click costs — only for simple modes */}
       {(mode === 'simple_in' || mode === 'simple_out') && extraCount > 0 && (
-        <div>
-          <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Extra Color Click Costs (€/όψη)</label>
-          <div className="space-y-2">
-            {Array.from({ length: extraCount }).map((_, i) => {
-              const name = `Σταθμός ${i + 1}`;
-              return (
-                <div key={i} className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-                  <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">{name}</span>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Click A4 €</span><NumInput value={data[`click_extra_${i + 1}_a4`]} onChange={(v) => onChange(`click_extra_${i + 1}_a4`, v)} step="0.001" /></div>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Click A3 €</span><NumInput value={data[`click_extra_${i + 1}_a3`]} onChange={(v) => onChange(`click_extra_${i + 1}_a3`, v)} step="0.001" /></div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <WizSection title="Extra CPC" sub="Click ειδικών" accent="var(--accent)" border>
+          {Array.from({ length: extraCount }).map((_, i) => {
+            const name = `Σταθμός ${i + 1}`;
+            return (
+              <Row key={i}>
+                <RowLabel className="text-[var(--accent)]">{name}</RowLabel>
+                <div className="flex-1"><Field label="Click A4 €"><NumInput value={data[`click_extra_${i + 1}_a4`]} onChange={(v) => onChange(`click_extra_${i + 1}_a4`, v)} step="0.001" /></Field></div>
+                <div className="flex-1"><Field label="Click A3 €"><NumInput value={data[`click_extra_${i + 1}_a3`]} onChange={(v) => onChange(`click_extra_${i + 1}_a3`, v)} step="0.001" /></Field></div>
+              </Row>
+            );
+          })}
+        </WizSection>
       )}
 
       {/* Duplex click multiplier — only relevant for simple modes */}
       {(mode === 'simple_in' || mode === 'simple_out') && (
-        <div>
-          <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Duplex Click Multiplier</label>
+        <WizSection title="Duplex" sub="Click πολλαπ." accent="var(--accent)" border>
           <p className="text-[0.65rem] text-[var(--text-dim)] mb-1">Πόσα clicks χρεώνει η 2η όψη (2 = διπλάσιο, 1 = ίδιο)</p>
-          <NumInput value={data.duplex_click_multiplier} onChange={(v) => onChange('duplex_click_multiplier', v)} placeholder="2" />
-        </div>
+          <Field label="Duplex Click Multiplier">
+            <NumInput value={data.duplex_click_multiplier} onChange={(v) => onChange('duplex_click_multiplier', v)} placeholder="2" />
+          </Field>
+        </WizSection>
       )}
 
       {/* ─── TONER CONSUMABLES (simple_out / precision) ─── */}
       {(mode === 'simple_out' || mode === 'precision') && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-5">
-          {/* Section: ΧΡΩΜΑ */}
-          <div className="flex gap-6">
-            <div className="w-28 shrink-0 pt-2">
-              <h4 className="text-sm font-black uppercase tracking-wide">Χρώμα</h4>
-              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">@ 5% coverage</p>
-            </div>
-            <div className="flex-1 space-y-2">
-              {/* Header */}
-              <div className="flex items-center gap-3 px-3">
-                <span className="w-20" />
-                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Yield (σελίδες)</span>
-                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
-              </div>
-              {getColorStations(stations).map((c) => (
-                  <div key={c.key} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                    <span className={`w-20 text-sm font-bold ${c.cls}`}>{c.name}</span>
-                    <div className="flex-1"><NumInput value={data[`toner_${c.key}_yield`]} onChange={(v) => onChange(`toner_${c.key}_yield`, v)} /></div>
-                    <div className="flex-1"><NumInput value={data[`toner_${c.key}_cost`]} onChange={(v) => onChange(`toner_${c.key}_cost`, v)} step="0.01" /></div>
-                  </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Section: EXTRA */}
-          {extraCount > 0 && (
-            <div className="flex gap-6 mt-4">
-              <div className="w-28 shrink-0 pt-2">
-                <h4 className="text-sm font-black uppercase tracking-wide">Extra</h4>
-                <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">{extraCount} special χρώμ{extraCount === 1 ? 'α' : 'ατα'}</p>
-              </div>
-              <div className="flex-1 space-y-2">
-                {Array.from({ length: extraCount }).map((_, i) => {
-                  const name = `Σταθμός ${i + 1}`;
-                  return (
-                    <div key={i} className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--accent)]/30 bg-white/[0.02] p-3">
-                      <span className="w-20 text-sm font-bold text-[var(--accent)]">{name}</span>
-                      <div className="flex-1"><NumInput value={data[`extra_color_${i + 1}_yield`]} onChange={(v) => onChange(`extra_color_${i + 1}_yield`, v)} /></div>
-                      <div className="flex-1"><NumInput value={data[`extra_color_${i + 1}_cost`]} onChange={(v) => onChange(`extra_color_${i + 1}_cost`, v)} step="0.01" /></div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+        <WizSection title="Χρώμα" sub="@ 5% coverage" accent="var(--accent)" border>
+          <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Yield (σελίδες)' }, { text: 'Cost €' }]} />
+          {getColorStations(stations).map((c) => (
+            <Row key={c.key}>
+              <RowLabel className={c.cls}>{c.name}</RowLabel>
+              <div className="flex-1"><NumInput value={data[`toner_${c.key}_yield`]} onChange={(v) => onChange(`toner_${c.key}_yield`, v)} /></div>
+              <div className="flex-1"><NumInput value={data[`toner_${c.key}_cost`]} onChange={(v) => onChange(`toner_${c.key}_cost`, v)} step="0.01" /></div>
+            </Row>
+          ))}
+          {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => {
+            const name = `Σταθμός ${i + 1}`;
+            return (
+              <Row dashed key={i}>
+                <RowLabel className="text-[var(--accent)]">{name}</RowLabel>
+                <div className="flex-1"><NumInput value={data[`extra_color_${i + 1}_yield`]} onChange={(v) => onChange(`extra_color_${i + 1}_yield`, v)} /></div>
+                <div className="flex-1"><NumInput value={data[`extra_color_${i + 1}_cost`]} onChange={(v) => onChange(`extra_color_${i + 1}_cost`, v)} step="0.01" /></div>
+              </Row>
+            );
+          })}
+        </WizSection>
       )}
 
       {/* ─── DRUMS (precision only) ─── */}
       {mode === 'precision' && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-5">
-          <div className="flex gap-6">
-            <div className="w-28 shrink-0 pt-2">
-              <h4 className="text-sm font-black uppercase tracking-wide">Drums</h4>
-              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Life & Cost</p>
-            </div>
-            <div className="flex-1 space-y-2">
-              <div className="flex items-center gap-3 px-3">
-                <span className="w-20" />
-                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Life (σελίδες)</span>
-                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
-              </div>
-              {getColorStations(stations).map((c) => (
-                  <div key={c.key} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                    <span className={`w-20 text-sm font-bold ${c.cls}`}>{c.name}</span>
-                    <div className="flex-1"><NumInput value={data[`drum_${c.key}_life`]} onChange={(v) => onChange(`drum_${c.key}_life`, v)} /></div>
-                    <div className="flex-1"><NumInput value={data[`drum_${c.key}_cost`]} onChange={(v) => onChange(`drum_${c.key}_cost`, v)} step="0.01" /></div>
-                  </div>
-              ))}
-              {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => {
-                const name = `Σταθμός ${i + 1}`;
-                return (
-                  <div key={i} className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--accent)]/30 bg-white/[0.02] p-3">
-                    <span className="w-20 text-sm font-bold text-[var(--accent)]">{name}</span>
-                    <div className="flex-1"><NumInput value={data[`drum_extra_${i + 1}_life`]} onChange={(v) => onChange(`drum_extra_${i + 1}_life`, v)} /></div>
-                    <div className="flex-1"><NumInput value={data[`drum_extra_${i + 1}_cost`]} onChange={(v) => onChange(`drum_extra_${i + 1}_cost`, v)} step="0.01" /></div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <WizSection title="Drums" sub="Life & Cost" accent="var(--accent)" border>
+          <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Life (σελίδες)' }, { text: 'Cost €' }]} />
+          {getColorStations(stations).map((c) => (
+            <Row key={c.key}>
+              <RowLabel className={c.cls}>{c.name}</RowLabel>
+              <div className="flex-1"><NumInput value={data[`drum_${c.key}_life`]} onChange={(v) => onChange(`drum_${c.key}_life`, v)} /></div>
+              <div className="flex-1"><NumInput value={data[`drum_${c.key}_cost`]} onChange={(v) => onChange(`drum_${c.key}_cost`, v)} step="0.01" /></div>
+            </Row>
+          ))}
+          {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => {
+            const name = `Σταθμός ${i + 1}`;
+            return (
+              <Row dashed key={i}>
+                <RowLabel className="text-[var(--accent)]">{name}</RowLabel>
+                <div className="flex-1"><NumInput value={data[`drum_extra_${i + 1}_life`]} onChange={(v) => onChange(`drum_extra_${i + 1}_life`, v)} /></div>
+                <div className="flex-1"><NumInput value={data[`drum_extra_${i + 1}_cost`]} onChange={(v) => onChange(`drum_extra_${i + 1}_cost`, v)} step="0.01" /></div>
+              </Row>
+            );
+          })}
+        </WizSection>
       )}
 
       {/* ─── DEVELOPER (precision only) ─── */}
       {mode === 'precision' && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-5">
-          <div className="flex gap-6">
-            <div className="w-28 shrink-0 pt-2">
-              <h4 className="text-sm font-black uppercase tracking-wide">Developer</h4>
-              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Life & Cost</p>
-            </div>
-            <div className="flex-1 space-y-3">
-              <PillToggle value={data.developer_type} options={[{ v: 'integrated', l: 'Στο Drum' }, { v: 'separate', l: 'Ξεχωριστό' }]} onChange={(v) => onChange('developer_type', v)} />
-              {data.developer_type === 'separate' && (
-                <div className="space-y-2">
-                  {getColorStations(stations).map((c) => (
-                      <div key={c.key} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                        <span className={`w-20 text-sm font-bold ${c.cls}`}>{c.name}</span>
-                        <div className="flex-1"><NumInput value={data[`dev_${c.key}_life`]} onChange={(v) => onChange(`dev_${c.key}_life`, v)} /></div>
-                        <div className="flex-1"><NumInput value={data[`dev_${c.key}_cost`]} onChange={(v) => onChange(`dev_${c.key}_cost`, v)} step="0.01" /></div>
-                      </div>
-                  ))}
-                  {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => {
-                    const name = `Σταθμός ${i + 1}`;
-                    return (
-                      <div key={i} className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--accent)]/30 bg-white/[0.02] p-3">
-                        <span className="w-20 text-sm font-bold text-[var(--accent)]">{name}</span>
-                        <div className="flex-1"><NumInput value={data[`dev_extra_${i + 1}_life`]} onChange={(v) => onChange(`dev_extra_${i + 1}_life`, v)} /></div>
-                        <div className="flex-1"><NumInput value={data[`dev_extra_${i + 1}_cost`]} onChange={(v) => onChange(`dev_extra_${i + 1}_cost`, v)} step="0.01" /></div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <WizSection title="Developer" sub="Life & Cost" accent="var(--accent)" border>
+          <PillToggle value={data.developer_type} options={[{ v: 'integrated', l: 'Στο Drum' }, { v: 'separate', l: 'Ξεχωριστό' }]} onChange={(v) => onChange('developer_type', v)} />
+          {data.developer_type === 'separate' && (
+            <>
+              {getColorStations(stations).map((c) => (
+                <Row key={c.key}>
+                  <RowLabel className={c.cls}>{c.name}</RowLabel>
+                  <div className="flex-1"><NumInput value={data[`dev_${c.key}_life`]} onChange={(v) => onChange(`dev_${c.key}_life`, v)} /></div>
+                  <div className="flex-1"><NumInput value={data[`dev_${c.key}_cost`]} onChange={(v) => onChange(`dev_${c.key}_cost`, v)} step="0.01" /></div>
+                </Row>
+              ))}
+              {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => {
+                const name = `Σταθμός ${i + 1}`;
+                return (
+                  <Row dashed key={i}>
+                    <RowLabel className="text-[var(--accent)]">{name}</RowLabel>
+                    <div className="flex-1"><NumInput value={data[`dev_extra_${i + 1}_life`]} onChange={(v) => onChange(`dev_extra_${i + 1}_life`, v)} /></div>
+                    <div className="flex-1"><NumInput value={data[`dev_extra_${i + 1}_cost`]} onChange={(v) => onChange(`dev_extra_${i + 1}_cost`, v)} step="0.01" /></div>
+                  </Row>
+                );
+              })}
+            </>
+          )}
+        </WizSection>
       )}
 
       {/* ─── CORONAS (precision only) ─── */}
       {mode === 'precision' && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-5">
-          <div className="flex gap-6">
-            <div className="w-28 shrink-0 pt-2">
-              <h4 className="text-sm font-black uppercase tracking-wide">Coronas</h4>
-              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Charge wires · ×{stations >= 4 ? 4 : stations} σταθμοί</p>
-            </div>
-            <div className="flex-1 space-y-3">
-              <button onClick={() => onChange('has_charge_coronas', !data.has_charge_coronas)}
-                className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${data.has_charge_coronas ? 'border-[var(--accent)] bg-[rgba(245,130,32,0.12)] text-[var(--accent)]' : 'border-[var(--glass-border)] text-[var(--text-muted)]'}`}>
-                {data.has_charge_coronas ? 'Ναι — Έχει' : 'Όχι'}
-              </button>
-              {!!data.has_charge_coronas && (
-                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">Corona</span>
-                  <div className="flex-1"><NumInput value={data.corona_life} onChange={(v) => onChange('corona_life', v)} /></div>
-                  <div className="flex-1"><NumInput value={data.corona_cost} onChange={(v) => onChange('corona_cost', v)} step="0.01" /></div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <WizSection title="Coronas" sub={`Charge wires · ×${stations >= 4 ? 4 : stations} σταθμοί`} accent="var(--accent)" border>
+          <Toggle value={data.has_charge_coronas} onChange={(v) => onChange('has_charge_coronas', v)} labelOn="Ναι — Έχει" labelOff="Όχι" />
+          {!!data.has_charge_coronas && (
+            <Row>
+              <RowLabel>Corona</RowLabel>
+              <div className="flex-1"><NumInput value={data.corona_life} onChange={(v) => onChange('corona_life', v)} /></div>
+              <div className="flex-1"><NumInput value={data.corona_cost} onChange={(v) => onChange('corona_cost', v)} step="0.01" /></div>
+            </Row>
+          )}
+        </WizSection>
       )}
 
       {/* ─── SERVICE PARTS (precision, toner only) ─── */}
       {mode === 'precision' && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-5">
-          <div className="flex gap-6">
-            <div className="w-28 shrink-0 pt-2">
-              <h4 className="text-sm font-black uppercase tracking-wide">Service</h4>
-              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Parts & Waste</p>
-            </div>
-            <div className="flex-1 space-y-2">
-              <div className="flex items-center gap-3 px-3">
-                <span className="w-20" />
-                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Life (σελίδες)</span>
-                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
-              </div>
-              {[
-                { label: 'Fuser', life: 'fuser_life', cost: 'fuser_cost' },
-                { label: 'Belt', life: 'belt_life', cost: 'belt_cost' },
-                { label: 'Waste', life: 'waste_life', cost: 'waste_cost' },
-              ].map((p) => (
-                <div key={p.label} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">{p.label}</span>
-                  <div className="flex-1"><NumInput value={data[p.life]} onChange={(v) => onChange(p.life, v)} /></div>
-                  <div className="flex-1"><NumInput value={data[p.cost]} onChange={(v) => onChange(p.cost, v)} step="0.01" /></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <WizSection title="Service" sub="Parts & Waste" accent="var(--accent)" border>
+          <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Life (σελίδες)' }, { text: 'Cost €' }]} />
+          {[
+            { label: 'Fuser', life: 'fuser_life', cost: 'fuser_cost' },
+            { label: 'Belt', life: 'belt_life', cost: 'belt_cost' },
+            { label: 'Waste', life: 'waste_life', cost: 'waste_cost' },
+          ].map((p) => (
+            <Row key={p.label}>
+              <RowLabel>{p.label}</RowLabel>
+              <div className="flex-1"><NumInput value={data[p.life]} onChange={(v) => onChange(p.life, v)} /></div>
+              <div className="flex-1"><NumInput value={data[p.cost]} onChange={(v) => onChange(p.cost, v)} step="0.01" /></div>
+            </Row>
+          ))}
+        </WizSection>
       )}
 
       {/* Liquid Ink — simple_out: only ink can */}
       {mode === 'simple_out' && inkType === 'liquid' && (
-        <div className="border-t border-[var(--border)] pt-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="h-px flex-1 bg-[var(--border)]" />
-            <span className="text-[0.65rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Ink Cans</span>
-            <div className="h-px flex-1 bg-[var(--border)]" />
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">ElectroInk Can</span>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Yield (impressions)</span><NumInput value={data.ink_can_yield} onChange={(v) => onChange('ink_can_yield', v)} /></div>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data.ink_can_cost} onChange={(v) => onChange('ink_can_cost', v)} step="0.01" /></div>
-            </div>
-          </div>
-        </div>
+        <WizSection title="Ink Cans" sub="ElectroInk" accent="var(--accent)" border>
+          <Row>
+            <RowLabel className="!w-28">ElectroInk Can</RowLabel>
+            <div className="flex-1"><Field label="Yield (impressions)"><NumInput value={data.ink_can_yield} onChange={(v) => onChange('ink_can_yield', v)} /></Field></div>
+            <div className="flex-1"><Field label="Κόστος €"><NumInput value={data.ink_can_cost} onChange={(v) => onChange('ink_can_cost', v)} step="0.01" /></Field></div>
+          </Row>
+        </WizSection>
       )}
 
       {/* ─── LIQUID INK PRECISION (HP Indigo) ─── */}
       {mode === 'precision' && inkType === 'liquid' && (
         <>
-          <div className="border-t border-[var(--border)] pt-5">
-            <div className="flex gap-6">
-              <div className="w-28 shrink-0 pt-1">
-                <h4 className="text-sm font-black uppercase tracking-wide">Ink</h4>
-                <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">ElectroInk cans</p>
-              </div>
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-3 px-3">
-                  <span className="w-20" />
-                  <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Yield (impressions)</span>
-                  <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
-                </div>
-                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">CMYK Can</span>
-                  <div className="flex-1"><NumInput value={data.ink_can_yield} onChange={(v) => onChange('ink_can_yield', v)} /></div>
-                  <div className="flex-1"><NumInput value={data.ink_can_cost} onChange={(v) => onChange('ink_can_cost', v)} step="0.01" /></div>
-                </div>
-                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">Impression</span>
-                  <div className="flex-1"><NumInput value={data.impression_charge} onChange={(v) => onChange('impression_charge', v)} step="0.001" /></div>
-                  <div className="flex-1" />
-                </div>
-                {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--accent)]/30 bg-white/[0.02] p-3">
-                    <span className="w-20 text-sm font-bold text-[var(--accent)]">Extra {i + 1}</span>
-                    <div className="flex-1"><NumInput value={data[`ink_extra_${i + 1}_yield`]} onChange={(v) => onChange(`ink_extra_${i + 1}_yield`, v)} /></div>
-                    <div className="flex-1"><NumInput value={data[`ink_extra_${i + 1}_cost`]} onChange={(v) => onChange(`ink_extra_${i + 1}_cost`, v)} step="0.01" /></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <WizSection title="Ink" sub="ElectroInk cans" accent="var(--accent)" border>
+            <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Yield (impressions)' }, { text: 'Cost €' }]} />
+            <Row>
+              <RowLabel>CMYK Can</RowLabel>
+              <div className="flex-1"><NumInput value={data.ink_can_yield} onChange={(v) => onChange('ink_can_yield', v)} /></div>
+              <div className="flex-1"><NumInput value={data.ink_can_cost} onChange={(v) => onChange('ink_can_cost', v)} step="0.01" /></div>
+            </Row>
+            <Row>
+              <RowLabel>Impression</RowLabel>
+              <div className="flex-1"><NumInput value={data.impression_charge} onChange={(v) => onChange('impression_charge', v)} step="0.001" /></div>
+              <div className="flex-1" />
+            </Row>
+            {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => (
+              <Row dashed key={i}>
+                <RowLabel className="text-[var(--accent)]">Extra {i + 1}</RowLabel>
+                <div className="flex-1"><NumInput value={data[`ink_extra_${i + 1}_yield`]} onChange={(v) => onChange(`ink_extra_${i + 1}_yield`, v)} /></div>
+                <div className="flex-1"><NumInput value={data[`ink_extra_${i + 1}_cost`]} onChange={(v) => onChange(`ink_extra_${i + 1}_cost`, v)} step="0.01" /></div>
+              </Row>
+            ))}
+          </WizSection>
 
-          <div className="border-t border-[var(--border)] pt-5">
-            <div className="flex gap-6">
-              <div className="w-28 shrink-0 pt-1">
-                <h4 className="text-sm font-black uppercase tracking-wide">Parts</h4>
-                <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Blanket, PIP</p>
-              </div>
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-3 px-3">
-                  <span className="w-20" />
-                  <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Life (impressions)</span>
-                  <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
-                </div>
-                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">Blanket</span>
-                  <div className="flex-1"><NumInput value={data.blanket_life} onChange={(v) => onChange('blanket_life', v)} /></div>
-                  <div className="flex-1"><NumInput value={data.blanket_cost} onChange={(v) => onChange('blanket_cost', v)} step="0.01" /></div>
-                </div>
-                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">PIP</span>
-                  <div className="flex-1"><NumInput value={data.pip_life} onChange={(v) => onChange('pip_life', v)} /></div>
-                  <div className="flex-1"><NumInput value={data.pip_cost} onChange={(v) => onChange('pip_cost', v)} step="0.01" /></div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <WizSection title="Parts" sub="Blanket, PIP" accent="var(--accent)" border>
+            <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Life (impressions)' }, { text: 'Cost €' }]} />
+            <Row>
+              <RowLabel>Blanket</RowLabel>
+              <div className="flex-1"><NumInput value={data.blanket_life} onChange={(v) => onChange('blanket_life', v)} /></div>
+              <div className="flex-1"><NumInput value={data.blanket_cost} onChange={(v) => onChange('blanket_cost', v)} step="0.01" /></div>
+            </Row>
+            <Row>
+              <RowLabel>PIP</RowLabel>
+              <div className="flex-1"><NumInput value={data.pip_life} onChange={(v) => onChange('pip_life', v)} /></div>
+              <div className="flex-1"><NumInput value={data.pip_cost} onChange={(v) => onChange('pip_cost', v)} step="0.01" /></div>
+            </Row>
+          </WizSection>
 
-          <div className="border-t border-[var(--border)] pt-5">
-            <div className="flex gap-6">
-              <div className="w-28 shrink-0 pt-1">
-                <h4 className="text-sm font-black uppercase tracking-wide">Setup</h4>
-                <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Mixing / Prep</p>
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">Mixing Fee</span>
-                  <div className="flex-1"><NumInput value={data.mixing_fee} onChange={(v) => onChange('mixing_fee', v)} step="0.01" /></div>
-                  <div className="flex-1" />
-                </div>
-              </div>
-            </div>
-          </div>
+          <WizSection title="Setup" sub="Mixing / Prep" accent="var(--accent)" border>
+            <Row>
+              <RowLabel>Mixing Fee</RowLabel>
+              <div className="flex-1"><NumInput value={data.mixing_fee} onChange={(v) => onChange('mixing_fee', v)} step="0.01" /></div>
+              <div className="flex-1" />
+            </Row>
+          </WizSection>
         </>
       )}
 
@@ -949,39 +764,39 @@ function StepSpeedZones({ data, onChange }: { data: Data; onChange: OnChange }) 
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-[var(--text-dim)]">
-        Ορίστε ζώνες ταχύτητας ανά βάρος χαρτιού. Βαρύτερα χαρτιά = αργότερη ταχύτητα + markup.
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-[0.6rem] uppercase tracking-wider text-[var(--text-muted)]">
-              <th className="px-2 py-1 text-left">Ζώνη</th>
-              <th className="px-2 py-1 text-center">GSM Από</th>
-              <th className="px-2 py-1 text-center">GSM Έως</th>
-              <th className="px-2 py-1 text-center">PPM</th>
-              <th className="px-2 py-1 text-center">+%</th>
-              <th className="px-2 py-1"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {zones.map((z, i) => (
-              <tr key={i} className="border-t border-[var(--border)]">
-                <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs"} value={z.name} onChange={(e) => updateZone(i, 'name', e.target.value)} /></td>
-                <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs text-center"} type="number" value={z.gsm_from} onChange={(e) => updateZone(i, 'gsm_from', +e.target.value)} /></td>
-                <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs text-center"} type="number" value={z.gsm_to} onChange={(e) => updateZone(i, 'gsm_to', +e.target.value)} /></td>
-                <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs text-center"} type="number" value={z.ppm} onChange={(e) => updateZone(i, 'ppm', +e.target.value)} /></td>
-                <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs text-center"} type="number" value={z.markup} onChange={(e) => updateZone(i, 'markup', +e.target.value)} /></td>
-                <td className="px-1 py-1"><button onClick={() => delZone(i)} className="text-[var(--text-muted)] hover:text-[var(--danger)]">×</button></td>
+    <div className="space-y-6">
+      <WizSection title="Ζώνες" sub="Ταχύτητα / GSM" accent="var(--teal)">
+        <p className="text-sm text-[var(--text-dim)]">
+          Ορίστε ζώνες ταχύτητας ανά βάρος χαρτιού. Βαρύτερα χαρτιά = αργότερη ταχύτητα + markup.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wider text-[var(--text-muted)]">
+                <th className="px-2 py-1 text-left">Ζώνη</th>
+                <th className="px-2 py-1 text-center">GSM Από</th>
+                <th className="px-2 py-1 text-center">GSM Έως</th>
+                <th className="px-2 py-1 text-center">PPM</th>
+                <th className="px-2 py-1 text-center">+%</th>
+                <th className="px-2 py-1"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <button onClick={addZone} className="w-full rounded-lg border border-dashed border-[var(--glass-border)] py-2 text-sm font-semibold text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]">
-        + Προσθήκη Ζώνης
-      </button>
+            </thead>
+            <tbody>
+              {zones.map((z, i) => (
+                <tr key={i} className="border-t border-[var(--border)]">
+                  <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs"} value={z.name} onChange={(e) => updateZone(i, 'name', e.target.value)} /></td>
+                  <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs text-center"} type="number" value={z.gsm_from} onChange={(e) => updateZone(i, 'gsm_from', +e.target.value)} /></td>
+                  <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs text-center"} type="number" value={z.gsm_to} onChange={(e) => updateZone(i, 'gsm_to', +e.target.value)} /></td>
+                  <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs text-center"} type="number" value={z.ppm} onChange={(e) => updateZone(i, 'ppm', +e.target.value)} /></td>
+                  <td className="px-1 py-1"><input className={inputCls + " !h-8 text-xs text-center"} type="number" value={z.markup} onChange={(e) => updateZone(i, 'markup', +e.target.value)} /></td>
+                  <td className="px-1 py-1"><button onClick={() => delZone(i)} className="text-[var(--text-muted)] hover:text-[var(--danger)]">×</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <AddButton label="+ Προσθήκη Ζώνης" onClick={addZone} />
+      </WizSection>
     </div>
   );
 }
@@ -992,33 +807,24 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
     : null;
   return (
     <div className="space-y-6">
-      <div>
-        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Setup & Φύρα</label>
+      <WizSection title="Setup" sub="Φύρα & Χρόνοι" accent="var(--success)">
         <div className="grid grid-cols-3 gap-3">
-          <div><span className="text-xs text-[var(--text-muted)]">Φύρα Setup (φύλλα)</span><NumInput value={data.setup_sheets_waste} onChange={(v) => onChange('setup_sheets_waste', v)} /></div>
-          <div><span className="text-xs text-[var(--text-muted)]">Φύρα Εκτύπωσης (%)</span><NumInput value={data.registration_spoilage_pct} onChange={(v) => onChange('registration_spoilage_pct', v)} /></div>
-          <div><span className="text-xs text-[var(--text-muted)]">Warmup (λεπτά)</span><NumInput value={data.warmup_minutes} onChange={(v) => onChange('warmup_minutes', v)} /></div>
+          <Field label="Φύρα Setup (φύλλα)"><NumInput value={data.setup_sheets_waste} onChange={(v) => onChange('setup_sheets_waste', v)} /></Field>
+          <Field label="Φύρα Εκτύπωσης (%)"><NumInput value={data.registration_spoilage_pct} onChange={(v) => onChange('registration_spoilage_pct', v)} /></Field>
+          <Field label="Warmup (λεπτά)"><NumInput value={data.warmup_minutes} onChange={(v) => onChange('warmup_minutes', v)} /></Field>
         </div>
-      </div>
+      </WizSection>
 
-      <div className="border-t border-[var(--border)] pt-4">
-        <div className="flex items-center gap-3 mb-3">
-          <label className="text-sm font-semibold">Απόσβεση</label>
-          <button
-            onClick={() => onChange('include_depreciation', !data.include_depreciation)}
-            className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${data.include_depreciation ? 'bg-[var(--accent)] text-white' : 'bg-white/5 text-[var(--text-muted)]'}`}
-          >
-            {data.include_depreciation ? 'ON' : 'OFF'}
-          </button>
-        </div>
+      <WizSection title="Απόσβεση" sub="Depreciation" accent="var(--success)" border>
+        <Toggle value={data.include_depreciation} onChange={(v) => onChange('include_depreciation', v)} labelOn="ON" labelOff="OFF" />
         {!!data.include_depreciation && (
           <div className="grid grid-cols-2 gap-3">
-            <div><span className="text-xs text-[var(--text-muted)]">Κόστος Μηχανής (€)</span><NumInput value={data.machine_cost} onChange={(v) => onChange('machine_cost', v)} /></div>
-            <div><span className="text-xs text-[var(--text-muted)]">Όριο Ζωής (περάσματα)</span><NumInput value={data.machine_lifetime_passes} onChange={(v) => onChange('machine_lifetime_passes', v)} /></div>
-            {depCost && <p className="col-span-2 text-sm text-[var(--success)]">Απόσβεση / click: €{depCost}</p>}
+            <Field label="Κόστος Μηχανής (€)"><NumInput value={data.machine_cost} onChange={(v) => onChange('machine_cost', v)} /></Field>
+            <Field label="Όριο Ζωής (περάσματα)"><NumInput value={data.machine_lifetime_passes} onChange={(v) => onChange('machine_lifetime_passes', v)} /></Field>
           </div>
         )}
-      </div>
+        {depCost && <p className="text-sm text-[var(--success)] mt-2">Απόσβεση / click: €{depCost}</p>}
+      </WizSection>
     </div>
   );
 }
@@ -1037,60 +843,27 @@ function StepMaintenance({ data, onChange }: { data: Data; onChange: OnChange })
   }
 
   return (
-    <div className="space-y-0">
-      {/* ─── ΚΑΤΑΣΤΑΣΗ ΜΗΧΑΝΗΣ ─── */}
-      <div className="flex gap-6 pb-5">
-        <div className="w-28 shrink-0 pt-1">
-          <h4 className="text-sm font-black uppercase tracking-wide">Μηχανή</h4>
-          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Τρέχουσα κατάσταση</p>
+    <div className="space-y-6">
+      <WizSection title="Μηχανή" sub="Τρέχουσα κατάσταση" accent="var(--teal)">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Counter"><NumInput value={data.current_counter} onChange={(v) => onChange('current_counter', v)} placeholder="π.χ. 1250000" /></Field>
+          <Field label="Τελευταίο Service"><input className={inputCls} type="date" value={(data.last_service_date as string) ?? ''} onChange={(e) => onChange('last_service_date', e.target.value)} /></Field>
         </div>
-        <div className="flex-1 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Counter</span>
-              <NumInput value={data.current_counter} onChange={(v) => onChange('current_counter', v)} placeholder="π.χ. 1250000" />
-            </div>
-            <div>
-              <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Τελευταίο Service</span>
-              <input className={inputCls} type="date" value={(data.last_service_date as string) ?? ''} onChange={(e) => onChange('last_service_date', e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Σημειώσεις</span>
-            <textarea className={inputCls + " !h-14 py-2 resize-none"} value={(data.maint_notes as string) ?? ''} onChange={(e) => onChange('maint_notes', e.target.value)} placeholder="Γενικές σημειώσεις συντήρησης..." />
-          </div>
-        </div>
-      </div>
+        <Field label="Σημειώσεις"><textarea className={inputCls + " !h-14 py-2 resize-none"} value={(data.maint_notes as string) ?? ''} onChange={(e) => onChange('maint_notes', e.target.value)} placeholder="Γενικές σημειώσεις συντήρησης..." /></Field>
+      </WizSection>
 
-      {/* ─── ΗΜΕΡΟΛΟΓΙΟ ΣΥΝΤΗΡΗΣΗΣ ─── */}
-      <div className="flex gap-6 border-t border-[var(--border)] pt-5">
-        <div className="w-28 shrink-0 pt-1">
-          <h4 className="text-sm font-black uppercase tracking-wide">Ημερολόγιο</h4>
-          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Ιστορικό service</p>
-        </div>
-        <div className="flex-1 space-y-2">
-          {logs.length > 0 && (
-            <div className="flex items-center gap-2 px-1">
-              <span className="w-28 text-[0.6rem] font-semibold text-[var(--text-muted)]">Ημερομηνία</span>
-              <span className="w-24 text-[0.6rem] font-semibold text-[var(--text-muted)]">Counter</span>
-              <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Περιγραφή</span>
-              <span className="w-5" />
-            </div>
-          )}
-          {logs.map((l, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2">
-              <input className={inputCls + " !h-8 w-28"} type="date" value={l.date} onChange={(e) => updateLog(i, 'date', e.target.value)} />
-              <input className={inputCls + " !h-8 w-24 text-center"} type="number" value={l.counter ?? ''} onChange={(e) => updateLog(i, 'counter', e.target.value ? +e.target.value : null)} placeholder="Counter" />
-              <input className={inputCls + " !h-8 flex-1"} value={l.description} onChange={(e) => updateLog(i, 'description', e.target.value)} placeholder="π.χ. Αλλαγή fuser, PM kit..." />
-              <button onClick={() => delLog(i)} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
-            </div>
-          ))}
-          <button onClick={addLog} className="w-full rounded-lg border border-dashed border-[var(--glass-border)] py-2 text-sm font-semibold text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all">
-            + Προσθήκη Εγγραφής
-          </button>
-        </div>
-      </div>
-
+      <WizSection title="Ημερολόγιο" sub="Ιστορικό service" accent="var(--teal)" border>
+        {logs.length > 0 && <ColHeaders labels={[{ w: 'w-28', text: 'Ημερομηνία' }, { w: 'w-24', text: 'Counter' }, { text: 'Περιγραφή' }, { w: 'w-5', text: '' }]} />}
+        {logs.map((l, i) => (
+          <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2">
+            <input className={inputCls + " !h-8 w-28"} type="date" value={l.date} onChange={(e) => updateLog(i, 'date', e.target.value)} />
+            <input className={inputCls + " !h-8 w-24 text-center"} type="number" value={l.counter ?? ''} onChange={(e) => updateLog(i, 'counter', e.target.value ? +e.target.value : null)} placeholder="Counter" />
+            <input className={inputCls + " !h-8 flex-1"} value={l.description} onChange={(e) => updateLog(i, 'description', e.target.value)} placeholder="π.χ. Αλλαγή fuser, PM kit..." />
+            <button onClick={() => delLog(i)} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+          </div>
+        ))}
+        <AddButton label="+ Προσθήκη Εγγραφής" onClick={addLog} />
+      </WizSection>
     </div>
   );
 }
@@ -1109,53 +882,24 @@ function StepContacts({ data, onChange }: { data: Data; onChange: OnChange }) {
   }
 
   return (
-    <div className="space-y-0">
-      {/* ─── ΤΕΧΝΙΚΟΙ ─── */}
-      <div className="flex gap-6 pb-5">
-        <div className="w-28 shrink-0 pt-1">
-          <h4 className="text-sm font-black uppercase tracking-wide">Τεχνικοί</h4>
-          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Επαφές service</p>
-        </div>
-        <div className="flex-1 space-y-2">
-          {techs.length > 0 && (
-            <div className="flex items-center gap-2 px-1">
-              <span className="w-[30%] text-[0.6rem] font-semibold text-[var(--text-muted)]">Ειδικότητα</span>
-              <span className="w-[35%] text-[0.6rem] font-semibold text-[var(--text-muted)]">Όνομα</span>
-              <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Τηλέφωνο</span>
-              <span className="w-5" />
-            </div>
-          )}
-          {techs.map((t, i) => (
-            <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2">
-              <input className={inputCls + " !h-8 w-[30%]"} value={t.role} onChange={(e) => updateTech(i, 'role', e.target.value)} placeholder="π.χ. Service" />
-              <input className={inputCls + " !h-8 w-[35%]"} value={t.name} onChange={(e) => updateTech(i, 'name', e.target.value)} placeholder="Γιώργος Κ." />
-              <input className={inputCls + " !h-8 flex-1"} value={t.phone} onChange={(e) => updateTech(i, 'phone', e.target.value)} placeholder="210-..." />
-              <button onClick={() => delTech(i)} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
-            </div>
-          ))}
-          <button onClick={addTech} className="w-full rounded-lg border border-dashed border-[var(--glass-border)] py-2 text-sm font-semibold text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all">
-            + Προσθήκη Τεχνικού
-          </button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <WizSection title="Τεχνικοί" sub="Επαφές service" accent="var(--accent)">
+        {techs.length > 0 && <ColHeaders labels={[{ w: 'w-[30%]', text: 'Ειδικότητα' }, { w: 'w-[35%]', text: 'Όνομα' }, { text: 'Τηλέφωνο' }, { w: 'w-5', text: '' }]} />}
+        {techs.map((t, i) => (
+          <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2">
+            <input className={inputCls + " !h-8 w-[30%]"} value={t.role} onChange={(e) => updateTech(i, 'role', e.target.value)} placeholder="π.χ. Service" />
+            <input className={inputCls + " !h-8 w-[35%]"} value={t.name} onChange={(e) => updateTech(i, 'name', e.target.value)} placeholder="Γιώργος Κ." />
+            <input className={inputCls + " !h-8 flex-1"} value={t.phone} onChange={(e) => updateTech(i, 'phone', e.target.value)} placeholder="210-..." />
+            <button onClick={() => delTech(i)} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+          </div>
+        ))}
+        <AddButton label="+ Προσθήκη Τεχνικού" onClick={addTech} />
+      </WizSection>
 
-      {/* ─── ΕΓΧΕΙΡΙΔΙΑ ─── */}
-      <div className="flex gap-6 border-t border-[var(--border)] pt-5">
-        <div className="w-28 shrink-0 pt-1">
-          <h4 className="text-sm font-black uppercase tracking-wide">Links</h4>
-          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Εγχειρίδια & drivers</p>
-        </div>
-        <div className="flex-1 space-y-3">
-          <div>
-            <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Service Manual</span>
-            <input className={inputCls} value={(data.manual_url as string) ?? ''} onChange={(e) => onChange('manual_url', e.target.value)} placeholder="https://..." />
-          </div>
-          <div>
-            <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Driver / PPD</span>
-            <input className={inputCls} value={(data.driver_url as string) ?? ''} onChange={(e) => onChange('driver_url', e.target.value)} placeholder="https://..." />
-          </div>
-        </div>
-      </div>
+      <WizSection title="Links" sub="Εγχειρίδια & drivers" accent="var(--accent)" border>
+        <Field label="Service Manual"><input className={inputCls} value={(data.manual_url as string) ?? ''} onChange={(e) => onChange('manual_url', e.target.value)} placeholder="https://..." /></Field>
+        <Field label="Driver / PPD"><input className={inputCls} value={(data.driver_url as string) ?? ''} onChange={(e) => onChange('driver_url', e.target.value)} placeholder="https://..." /></Field>
+      </WizSection>
     </div>
   );
 }
