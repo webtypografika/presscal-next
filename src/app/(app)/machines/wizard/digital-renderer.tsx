@@ -56,7 +56,7 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Μοντέλο Μηχανής *</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Μοντέλο Μηχανής *</label>
         <input
           className={inputCls}
           value={(data.name as string) ?? ''}
@@ -103,7 +103,7 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
       )}
 
       <div className="border-t border-[var(--border)] pt-4">
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">URL Κατασκευαστή (προαιρετικό)</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">URL Κατασκευαστή (προαιρετικό)</label>
         <input
           className={inputCls}
           value={(data.spec_url as string) ?? ''}
@@ -153,14 +153,14 @@ function StepSpecs({ data, onChange }: { data: Data; onChange: OnChange }) {
     <div className="space-y-6">
       {/* Speeds */}
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Ταχύτητες (PPM)</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Ταχύτητες (PPM)</label>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <span className="text-[0.6rem] text-[var(--text-muted)]">Color *</span>
+            <span className="text-xs text-[var(--text-muted)]">Color *</span>
             <NumInput value={data.speed_ppm_color} onChange={(v) => onChange('speed_ppm_color', v)} placeholder="61" />
           </div>
           <div>
-            <span className="text-[0.6rem] text-[var(--text-muted)]">B&W</span>
+            <span className="text-xs text-[var(--text-muted)]">B&W</span>
             <NumInput value={data.speed_ppm_bw} onChange={(v) => onChange('speed_ppm_bw', v)} placeholder="65" />
           </div>
         </div>
@@ -168,14 +168,14 @@ function StepSpecs({ data, onChange }: { data: Data; onChange: OnChange }) {
 
       {/* GSM Range */}
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Εύρος Βάρους (GSM)</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Εύρος Βάρους (GSM)</label>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <span className="text-[0.6rem] text-[var(--text-muted)]">Min</span>
+            <span className="text-xs text-[var(--text-muted)]">Min</span>
             <NumInput value={data.min_gsm} onChange={(v) => onChange('min_gsm', v)} placeholder="60" />
           </div>
           <div>
-            <span className="text-[0.6rem] text-[var(--text-muted)]">Max</span>
+            <span className="text-xs text-[var(--text-muted)]">Max</span>
             <NumInput value={data.max_gsm} onChange={(v) => onChange('max_gsm', v)} placeholder="350" />
           </div>
         </div>
@@ -183,13 +183,13 @@ function StepSpecs({ data, onChange }: { data: Data; onChange: OnChange }) {
 
       {/* Duplex speed */}
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Duplex Speed Factor (%)</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Duplex Speed Factor (%)</label>
         <NumInput value={data.duplex_speed_factor} onChange={(v) => onChange('duplex_speed_factor', v)} placeholder="100" />
       </div>
 
       {/* Finishing */}
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Finishing (Output)</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Finishing (Output)</label>
         <div className="flex flex-wrap gap-2">
           <Toggle value={data.has_booklet_maker} onChange={(v) => onChange('has_booklet_maker', v)} labelOn="Booklet" labelOff="Booklet" />
           <Toggle value={data.has_stapler} onChange={(v) => onChange('has_stapler', v)} labelOn="Stapler" labelOff="Stapler" />
@@ -212,45 +212,45 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
     <div className="space-y-6">
       {/* Max sheet */}
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Μέγιστο Φύλλο (mm)</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Μέγιστο Φύλλο (mm)</label>
         <div className="grid grid-cols-2 gap-3 mb-2">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Short Side</span><NumInput value={data.max_sheet_ss} onChange={(v) => onChange('max_sheet_ss', v)} placeholder="330" /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Long Side</span><NumInput value={data.max_sheet_ls} onChange={(v) => onChange('max_sheet_ls', v)} placeholder="487" /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Short Side</span><NumInput value={data.max_sheet_ss} onChange={(v) => onChange('max_sheet_ss', v)} placeholder="330" /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Long Side</span><NumInput value={data.max_sheet_ls} onChange={(v) => onChange('max_sheet_ls', v)} placeholder="487" /></div>
         </div>
       </div>
 
       {/* Min sheet */}
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Ελάχιστο Φύλλο (mm)</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Ελάχιστο Φύλλο (mm)</label>
         <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Short Side</span><NumInput value={data.min_sheet_ss} onChange={(v) => onChange('min_sheet_ss', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Long Side</span><NumInput value={data.min_sheet_ls} onChange={(v) => onChange('min_sheet_ls', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Short Side</span><NumInput value={data.min_sheet_ss} onChange={(v) => onChange('min_sheet_ss', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Long Side</span><NumInput value={data.min_sheet_ls} onChange={(v) => onChange('min_sheet_ls', v)} /></div>
         </div>
       </div>
 
       {/* Banner */}
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Banner (mm)</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Banner (mm)</label>
         <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Short Side</span><NumInput value={data.banner_ss} onChange={(v) => onChange('banner_ss', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Long Side</span><NumInput value={data.banner_ls} onChange={(v) => onChange('banner_ls', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Short Side</span><NumInput value={data.banner_ss} onChange={(v) => onChange('banner_ss', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Long Side</span><NumInput value={data.banner_ls} onChange={(v) => onChange('banner_ls', v)} /></div>
         </div>
       </div>
 
       {/* Margins */}
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Περιθώρια Εκτύπωσης (mm)</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Περιθώρια Εκτύπωσης (mm)</label>
         <div className="grid grid-cols-4 gap-2">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Top</span><NumInput value={data.margin_top} onChange={(v) => onChange('margin_top', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Bottom</span><NumInput value={data.margin_bottom} onChange={(v) => onChange('margin_bottom', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Left</span><NumInput value={data.margin_left} onChange={(v) => onChange('margin_left', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Right</span><NumInput value={data.margin_right} onChange={(v) => onChange('margin_right', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Top</span><NumInput value={data.margin_top} onChange={(v) => onChange('margin_top', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Bottom</span><NumInput value={data.margin_bottom} onChange={(v) => onChange('margin_bottom', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Left</span><NumInput value={data.margin_left} onChange={(v) => onChange('margin_left', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Right</span><NumInput value={data.margin_right} onChange={(v) => onChange('margin_right', v)} /></div>
         </div>
       </div>
 
       {/* Feed direction */}
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Τροφοδοσία</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Τροφοδοσία</label>
         <PillToggle value={data.feed_direction} options={[{ v: 'sef', l: 'SEF' }, { v: 'lef', l: 'LEF' }, { v: 'both', l: 'Both' }]} onChange={(v) => onChange('feed_direction', v)} />
       </div>
     </div>
@@ -416,7 +416,7 @@ function StepCostModel({ data, onChange }: { data: Data; onChange: OnChange }) {
             {m.tags.map((t) => (
               <span key={t} className="rounded-full bg-[var(--blue)]/10 px-2 py-0.5 text-[0.6rem] font-semibold text-[var(--blue)]">{t}</span>
             ))}
-            <span className="ml-auto text-[0.6rem] text-[var(--text-muted)]">{m.detail}</span>
+            <span className="ml-auto text-xs text-[var(--text-muted)]">{m.detail}</span>
           </div>
         </button>
       ))}
@@ -586,7 +586,7 @@ function CostPreview({ data }: { data: Data }) {
               <span className="flex-1 text-center text-sm font-black">{r.bw}</span>
             </div>
           ))}
-          <p className="text-[0.6rem] text-[var(--text-muted)] mt-1">* 5% coverage · A3 = 2× A4</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">* 5% coverage · A3 = 2× A4</p>
         </div>
       </div>
     </div>
@@ -604,7 +604,7 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
       {/* CPC — Click costs — only for simple modes */}
       {(mode === 'simple_in' || mode === 'simple_out') && (
         <div>
-          <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Click Costs — CPC (€/όψη)</label>
+          <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Click Costs — CPC (€/όψη)</label>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-3 grid grid-cols-3 gap-3">
               <span></span>
@@ -627,7 +627,7 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
       {/* Extra color click costs — only for simple modes */}
       {(mode === 'simple_in' || mode === 'simple_out') && extraCount > 0 && (
         <div>
-          <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Extra Color Click Costs (€/όψη)</label>
+          <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Extra Color Click Costs (€/όψη)</label>
           <div className="space-y-2">
             {Array.from({ length: extraCount }).map((_, i) => {
               const name = `Σταθμός ${i + 1}`;
@@ -646,7 +646,7 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
       {/* Duplex click multiplier — only relevant for simple modes */}
       {(mode === 'simple_in' || mode === 'simple_out') && (
         <div>
-          <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Duplex Click Multiplier</label>
+          <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Duplex Click Multiplier</label>
           <p className="text-[0.65rem] text-[var(--text-dim)] mb-1">Πόσα clicks χρεώνει η 2η όψη (2 = διπλάσιο, 1 = ίδιο)</p>
           <NumInput value={data.duplex_click_multiplier} onChange={(v) => onChange('duplex_click_multiplier', v)} placeholder="2" />
         </div>
@@ -993,11 +993,11 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
   return (
     <div className="space-y-6">
       <div>
-        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Setup & Φύρα</label>
+        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">Setup & Φύρα</label>
         <div className="grid grid-cols-3 gap-3">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Φύρα Setup (φύλλα)</span><NumInput value={data.setup_sheets_waste} onChange={(v) => onChange('setup_sheets_waste', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Φύρα Εκτύπωσης (%)</span><NumInput value={data.registration_spoilage_pct} onChange={(v) => onChange('registration_spoilage_pct', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Warmup (λεπτά)</span><NumInput value={data.warmup_minutes} onChange={(v) => onChange('warmup_minutes', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Φύρα Setup (φύλλα)</span><NumInput value={data.setup_sheets_waste} onChange={(v) => onChange('setup_sheets_waste', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Φύρα Εκτύπωσης (%)</span><NumInput value={data.registration_spoilage_pct} onChange={(v) => onChange('registration_spoilage_pct', v)} /></div>
+          <div><span className="text-xs text-[var(--text-muted)]">Warmup (λεπτά)</span><NumInput value={data.warmup_minutes} onChange={(v) => onChange('warmup_minutes', v)} /></div>
         </div>
       </div>
 
@@ -1013,8 +1013,8 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
         </div>
         {!!data.include_depreciation && (
           <div className="grid grid-cols-2 gap-3">
-            <div><span className="text-[0.6rem] text-[var(--text-muted)]">Κόστος Μηχανής (€)</span><NumInput value={data.machine_cost} onChange={(v) => onChange('machine_cost', v)} /></div>
-            <div><span className="text-[0.6rem] text-[var(--text-muted)]">Όριο Ζωής (περάσματα)</span><NumInput value={data.machine_lifetime_passes} onChange={(v) => onChange('machine_lifetime_passes', v)} /></div>
+            <div><span className="text-xs text-[var(--text-muted)]">Κόστος Μηχανής (€)</span><NumInput value={data.machine_cost} onChange={(v) => onChange('machine_cost', v)} /></div>
+            <div><span className="text-xs text-[var(--text-muted)]">Όριο Ζωής (περάσματα)</span><NumInput value={data.machine_lifetime_passes} onChange={(v) => onChange('machine_lifetime_passes', v)} /></div>
             {depCost && <p className="col-span-2 text-sm text-[var(--success)]">Απόσβεση / click: €{depCost}</p>}
           </div>
         )}

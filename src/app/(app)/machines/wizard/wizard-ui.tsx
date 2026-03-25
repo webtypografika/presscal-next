@@ -73,7 +73,7 @@ export function NumInput({ value, onChange, placeholder, step }: { value: unknow
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <span className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">{label}</span>
+      <span className="text-xs font-semibold text-[var(--text-muted)] mb-1.5 block">{label}</span>
       {children}
     </div>
   );
@@ -95,9 +95,9 @@ export function WizSection({
 }) {
   return (
     <div className={`flex gap-6 ${border ? 'border-t border-[var(--border)] pt-6 mt-2' : ''}`}>
-      <div className="w-28 shrink-0 pl-3 pt-0.5" style={{ borderLeft: `3px solid ${accent}` }}>
-        <h4 className="text-[0.8rem] font-black uppercase tracking-wide">{title}</h4>
-        <p className="text-[0.6rem] text-[var(--text-muted)] mt-0.5 leading-tight">{sub}</p>
+      <div className="w-32 shrink-0 rounded-lg bg-white/[0.02] py-3 pl-3 pr-2" style={{ borderLeft: `3px solid ${accent}` }}>
+        <h4 className="text-sm font-black uppercase tracking-wide" style={{ color: accent }}>{title}</h4>
+        <p className="text-[0.7rem] text-[var(--text-muted)] mt-0.5 leading-tight">{sub}</p>
       </div>
       <div className="flex-1 space-y-3">{children}</div>
     </div>
@@ -146,7 +146,7 @@ export function ColHeaders({ labels }: { labels: Array<{ w?: string; text: strin
   return (
     <div className="flex items-center gap-3 px-3">
       {labels.map((l, i) => (
-        <span key={i} className={`${l.w ?? 'flex-1'} text-[0.6rem] font-semibold text-[var(--text-muted)]`}>{l.text}</span>
+        <span key={i} className={`${l.w ?? 'flex-1'} text-xs font-semibold text-[var(--text-muted)]`}>{l.text}</span>
       ))}
     </div>
   );
