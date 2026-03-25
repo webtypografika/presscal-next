@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { getMachines } from './actions';
 import { MachinesList } from './machines-list';
 
