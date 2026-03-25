@@ -85,6 +85,24 @@ function NumInput({ value, onChange, placeholder, step }: { value: unknown; onCh
   );
 }
 
+const CMYK_COLORS = [
+  { name: 'Cyan', key: 'c', cls: 'text-cyan-400' },
+  { name: 'Magenta', key: 'm', cls: 'text-pink-400' },
+  { name: 'Yellow', key: 'y', cls: 'text-yellow-400' },
+  { name: 'Black', key: 'k', cls: 'text-gray-400' },
+];
+
+function getColorStations(stations: number) {
+  if (stations >= 4) return CMYK_COLORS;
+  if (stations === 1) return [CMYK_COLORS[3]]; // Black only
+  // Duo or other < 4: use Station 1, Station 2 etc with generic styling
+  return Array.from({ length: stations }, (_, i) => ({
+    name: `Σταθμός ${i + 1}`,
+    key: CMYK_COLORS[i]?.key ?? `s${i + 1}`,
+    cls: CMYK_COLORS[i]?.cls ?? 'text-[var(--text-dim)]',
+  }));
+}
+
 function PillToggle({ value, options, onChange }: { value: unknown; options: { v: string; l: string }[]; onChange: (v: string) => void }) {
   return (
     <div className="flex rounded-lg border border-[var(--glass-border)] overflow-hidden">
@@ -376,6 +394,12 @@ function StepColorStations({ data, onChange }: { data: Data; onChange: OnChange 
     if (v < 5) {
       onChange('has_special_colors', false);
       onChange('color_stations', v);
+      // Clear color fields not applicable to lower station count
+      if (v < 2) {
+        onChange('click_a4_color', null);
+        onChange('click_a3_color', null);
+        onChange('click_banner_color', null);
+      }
     } else {
       onChange('has_special_colors', true);
       if (currentVal < 5) onChange('color_stations', 5);
@@ -558,15 +582,21 @@ function calcCostPreview(data: Data) {
         breakdown: { ink: inkPerImp, cpc_color: cpc_a4_color, cpc_bw: cpc_a4_bw },
       };
     }
-    // precision
+    // precision — include extra ink stations
     const colorImps = stations >= 4 ? 4 : stations;
+    const extraCount = Math.max(0, stations - 4);
+    let extraInk = 0;
+    for (let i = 1; i <= extraCount; i++) {
+      extraInk += div(data[`ink_extra_${i}_cost`], data[`ink_extra_${i}_yield`]);
+    }
+    const totalLiquid = costPerImp * colorImps + extraInk;
     return {
-      a4_color: costPerImp * colorImps,
+      a4_color: totalLiquid,
       a4_bw: costPerImp,
-      a3_color: costPerImp * colorImps * 2,
+      a3_color: totalLiquid * 2,
       a3_bw: costPerImp * 2,
-      cons_a4_color: costPerImp * colorImps, cons_a4_bw: costPerImp,
-      breakdown: { ink: inkPerImp, blanket: blanketPerImp, pip: pipPerImp, impression: impCharge },
+      cons_a4_color: totalLiquid, cons_a4_bw: costPerImp,
+      breakdown: { ink: inkPerImp, blanket: blanketPerImp, pip: pipPerImp, impression: impCharge, extraInk },
     };
   }
 
@@ -756,17 +786,13 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
                 <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Yield (σελίδες)</span>
                 <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
               </div>
-              {['Cyan', 'Magenta', 'Yellow', 'Black'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
-                const key = c[0].toLowerCase();
-                const pillColors: Record<string, string> = { Cyan: 'text-cyan-400', Magenta: 'text-pink-400', Yellow: 'text-yellow-400', Black: 'text-gray-400' };
-                return (
-                  <div key={c} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                    <span className={`w-20 text-sm font-bold ${pillColors[c]}`}>{c}</span>
-                    <div className="flex-1"><NumInput value={data[`toner_${key}_yield`]} onChange={(v) => onChange(`toner_${key}_yield`, v)} /></div>
-                    <div className="flex-1"><NumInput value={data[`toner_${key}_cost`]} onChange={(v) => onChange(`toner_${key}_cost`, v)} step="0.01" /></div>
+              {getColorStations(stations).map((c) => (
+                  <div key={c.key} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                    <span className={`w-20 text-sm font-bold ${c.cls}`}>{c.name}</span>
+                    <div className="flex-1"><NumInput value={data[`toner_${c.key}_yield`]} onChange={(v) => onChange(`toner_${c.key}_yield`, v)} /></div>
+                    <div className="flex-1"><NumInput value={data[`toner_${c.key}_cost`]} onChange={(v) => onChange(`toner_${c.key}_cost`, v)} step="0.01" /></div>
                   </div>
-                );
-              })}
+              ))}
             </div>
           </div>
 
@@ -808,17 +834,13 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
                 <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Life (σελίδες)</span>
                 <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
               </div>
-              {['Cyan', 'Magenta', 'Yellow', 'Black'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
-                const key = c[0].toLowerCase();
-                const pillColors: Record<string, string> = { Cyan: 'text-cyan-400', Magenta: 'text-pink-400', Yellow: 'text-yellow-400', Black: 'text-gray-400' };
-                return (
-                  <div key={c} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                    <span className={`w-20 text-sm font-bold ${pillColors[c]}`}>{c}</span>
-                    <div className="flex-1"><NumInput value={data[`drum_${key}_life`]} onChange={(v) => onChange(`drum_${key}_life`, v)} /></div>
-                    <div className="flex-1"><NumInput value={data[`drum_${key}_cost`]} onChange={(v) => onChange(`drum_${key}_cost`, v)} step="0.01" /></div>
+              {getColorStations(stations).map((c) => (
+                  <div key={c.key} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                    <span className={`w-20 text-sm font-bold ${c.cls}`}>{c.name}</span>
+                    <div className="flex-1"><NumInput value={data[`drum_${c.key}_life`]} onChange={(v) => onChange(`drum_${c.key}_life`, v)} /></div>
+                    <div className="flex-1"><NumInput value={data[`drum_${c.key}_cost`]} onChange={(v) => onChange(`drum_${c.key}_cost`, v)} step="0.01" /></div>
                   </div>
-                );
-              })}
+              ))}
               {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => {
                 const name = `Σταθμός ${i + 1}`;
                 return (
@@ -846,17 +868,13 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
               <PillToggle value={data.developer_type} options={[{ v: 'integrated', l: 'Στο Drum' }, { v: 'separate', l: 'Ξεχωριστό' }]} onChange={(v) => onChange('developer_type', v)} />
               {data.developer_type === 'separate' && (
                 <div className="space-y-2">
-                  {['Cyan', 'Magenta', 'Yellow', 'Black'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
-                    const key = c[0].toLowerCase();
-                    const pillColors: Record<string, string> = { Cyan: 'text-cyan-400', Magenta: 'text-pink-400', Yellow: 'text-yellow-400', Black: 'text-gray-400' };
-                    return (
-                      <div key={c} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
-                        <span className={`w-20 text-sm font-bold ${pillColors[c]}`}>{c}</span>
-                        <div className="flex-1"><NumInput value={data[`dev_${key}_life`]} onChange={(v) => onChange(`dev_${key}_life`, v)} /></div>
-                        <div className="flex-1"><NumInput value={data[`dev_${key}_cost`]} onChange={(v) => onChange(`dev_${key}_cost`, v)} step="0.01" /></div>
+                  {getColorStations(stations).map((c) => (
+                      <div key={c.key} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                        <span className={`w-20 text-sm font-bold ${c.cls}`}>{c.name}</span>
+                        <div className="flex-1"><NumInput value={data[`dev_${c.key}_life`]} onChange={(v) => onChange(`dev_${c.key}_life`, v)} /></div>
+                        <div className="flex-1"><NumInput value={data[`dev_${c.key}_cost`]} onChange={(v) => onChange(`dev_${c.key}_cost`, v)} step="0.01" /></div>
                       </div>
-                    );
-                  })}
+                  ))}
                   {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => {
                     const name = `Σταθμός ${i + 1}`;
                     return (
@@ -947,53 +965,84 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
         </div>
       )}
 
-      {/* Liquid Ink — precision: full HP Indigo breakdown */}
+      {/* ─── LIQUID INK PRECISION (HP Indigo) ─── */}
       {mode === 'precision' && inkType === 'liquid' && (
-        <div className="border-t border-[var(--border)] pt-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="h-px flex-1 bg-[var(--border)]" />
-            <span className="text-[0.65rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">HP Indigo Κόστη</span>
-            <div className="h-px flex-1 bg-[var(--border)]" />
-          </div>
-
-          {/* Ink & Impressions */}
-          <label className={labelCls}>Ink & Impressions</label>
-          <div className="space-y-2 mb-4">
-            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">Ink Can</span>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Yield (impressions)</span><NumInput value={data.ink_can_yield} onChange={(v) => onChange('ink_can_yield', v)} /></div>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data.ink_can_cost} onChange={(v) => onChange('ink_can_cost', v)} step="0.01" /></div>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">Impression</span>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Click €/impression</span><NumInput value={data.impression_charge} onChange={(v) => onChange('impression_charge', v)} step="0.001" /></div>
-              <div className="flex-1" />
-            </div>
-          </div>
-
-          {/* Wearable Parts */}
-          <label className={labelCls}>Αναλώσιμα (Wearable Parts)</label>
-          <div className="space-y-2 mb-4">
-            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">Blanket (BID)</span>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (impressions)</span><NumInput value={data.blanket_life} onChange={(v) => onChange('blanket_life', v)} /></div>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data.blanket_cost} onChange={(v) => onChange('blanket_cost', v)} step="0.01" /></div>
-            </div>
-            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-              <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">PIP</span>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (impressions)</span><NumInput value={data.pip_life} onChange={(v) => onChange('pip_life', v)} /></div>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data.pip_cost} onChange={(v) => onChange('pip_cost', v)} step="0.01" /></div>
+        <>
+          <div className="border-t border-[var(--border)] pt-5">
+            <div className="flex gap-6">
+              <div className="w-28 shrink-0 pt-1">
+                <h4 className="text-sm font-black uppercase tracking-wide">Ink</h4>
+                <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">ElectroInk cans</p>
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-3 px-3">
+                  <span className="w-20" />
+                  <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Yield (impressions)</span>
+                  <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">CMYK Can</span>
+                  <div className="flex-1"><NumInput value={data.ink_can_yield} onChange={(v) => onChange('ink_can_yield', v)} /></div>
+                  <div className="flex-1"><NumInput value={data.ink_can_cost} onChange={(v) => onChange('ink_can_cost', v)} step="0.01" /></div>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">Impression</span>
+                  <div className="flex-1"><NumInput value={data.impression_charge} onChange={(v) => onChange('impression_charge', v)} step="0.001" /></div>
+                  <div className="flex-1" />
+                </div>
+                {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--accent)]/30 bg-white/[0.02] p-3">
+                    <span className="w-20 text-sm font-bold text-[var(--accent)]">Extra {i + 1}</span>
+                    <div className="flex-1"><NumInput value={data[`ink_extra_${i + 1}_yield`]} onChange={(v) => onChange(`ink_extra_${i + 1}_yield`, v)} /></div>
+                    <div className="flex-1"><NumInput value={data[`ink_extra_${i + 1}_cost`]} onChange={(v) => onChange(`ink_extra_${i + 1}_cost`, v)} step="0.01" /></div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Setup */}
-          <label className={labelCls}>Setup</label>
-          <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-            <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">Mixing Fee</span>
-            <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">€/εργασία</span><NumInput value={data.mixing_fee} onChange={(v) => onChange('mixing_fee', v)} step="0.01" /></div>
-            <div className="flex-1" />
+          <div className="border-t border-[var(--border)] pt-5">
+            <div className="flex gap-6">
+              <div className="w-28 shrink-0 pt-1">
+                <h4 className="text-sm font-black uppercase tracking-wide">Parts</h4>
+                <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Blanket, PIP</p>
+              </div>
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-3 px-3">
+                  <span className="w-20" />
+                  <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Life (impressions)</span>
+                  <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">Blanket</span>
+                  <div className="flex-1"><NumInput value={data.blanket_life} onChange={(v) => onChange('blanket_life', v)} /></div>
+                  <div className="flex-1"><NumInput value={data.blanket_cost} onChange={(v) => onChange('blanket_cost', v)} step="0.01" /></div>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">PIP</span>
+                  <div className="flex-1"><NumInput value={data.pip_life} onChange={(v) => onChange('pip_life', v)} /></div>
+                  <div className="flex-1"><NumInput value={data.pip_cost} onChange={(v) => onChange('pip_cost', v)} step="0.01" /></div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+
+          <div className="border-t border-[var(--border)] pt-5">
+            <div className="flex gap-6">
+              <div className="w-28 shrink-0 pt-1">
+                <h4 className="text-sm font-black uppercase tracking-wide">Setup</h4>
+                <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Mixing / Prep</p>
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">Mixing Fee</span>
+                  <div className="flex-1"><NumInput value={data.mixing_fee} onChange={(v) => onChange('mixing_fee', v)} step="0.01" /></div>
+                  <div className="flex-1" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Live cost preview */}
