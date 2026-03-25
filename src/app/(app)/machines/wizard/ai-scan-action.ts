@@ -2,7 +2,7 @@
 
 function getGeminiUrl() {
   const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY not set in .env');
+  if (!key) throw new Error('Το GEMINI_API_KEY δεν έχει οριστεί. Προσθέστε το στο .env ή στο Vercel Environment Variables.');
   return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
 }
 
