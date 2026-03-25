@@ -20,6 +20,7 @@ model Org {
   machines         Machine[]
   postpressMachines PostpressMachine[]
   materials        Material[]
+  consumables      Consumable[]
   profiles         Profile[]
   customers        Customer[]
   quotes           Quote[]
@@ -52,6 +53,9 @@ model Machine {
   // Offset: towers, inks, chemicals, plates, rollers, depreciation...
   // Plotter: speed modes, ink costs, lamp life...
   specs     Json     @default("{}")
+
+  // Relations
+  consumables Consumable[]
 
   // Soft delete
   deletedAt DateTime?
@@ -96,32 +100,41 @@ model PostpressMachine {
   @@index([orgId, deletedAt])
 }
 
-// ─── MATERIALS (Papers / Films / Consumables / Services) ───
+// ─── MATERIALS (Papers / Films) ───
 model Material {
   id        String   @id @default(cuid())
   orgId     String
   org       Org      @relation(fields: [orgId], references: [id])
 
   name      String
-  cat       String   // 'sheet' | 'roll' | 'film' | 'consumable' | 'service'
-  subtype   String?  // paper type: 'velvet', 'gloss', 'uncoated', 'kraft'...
-                     // film type: 'roll', 'sheet'
+  cat       String   // 'sheet' | 'roll' | 'film'
+  groupName String?  // 'Coated', 'Uncoated', 'Special', 'Kraft'...
+  subtype   String?  // 'velvet', 'gloss', 'silk', 'munken'...
   supplier  String?  // 'Mondi', 'Antalis', 'Graphcom'...
+  supplierEmail String?
   notes     String   @default("")
 
   // Dimensions
-  width     Float?   // mm (sheet W or roll width)
-  height    Float?   // mm (sheet H, null for rolls)
+  width     Float?   // mm — short side (SS)
+  height    Float?   // mm — long side (LS), null for rolls
   thickness Float?   // gsm for paper, microns for film
+  grain     String?  // 'long' | 'short' | 'none' — fiber direction
 
-  // Cost & stock
+  // Roll-specific
+  rollLength Float?  // meters (for rolls)
+
+  // Cost & pricing
   costPerUnit  Float?  // € per sheet/meter/piece
-  sellPerUnit  Float?  // € sell price
-  stock        Float?  // current stock (sheets/meters)
-  minStock     Float?  // reorder alert level
-  unit         String  @default("φύλλο") // 'φύλλο', 'μέτρο', 'τεμ', 'λίτρο'
+  markup       Float?  // markup % for sell price
+  sellPerUnit  Float?  // € sell price (calculated or manual)
+  unit         String  @default("φύλλο") // 'φύλλο', 'μέτρο', 'τεμ'
 
-  // Film-specific, lamination-specific, etc.
+  // Stock
+  stock        Float?  // current quantity
+  stockTarget  Float?  // target max stock
+  stockAlert   Float?  // low stock alert threshold
+
+  // Type-specific in JSON (NCR layers, film tech, etc.)
   specs     Json     @default("{}")
 
   deletedAt DateTime?
@@ -129,7 +142,52 @@ model Material {
   updatedAt DateTime @updatedAt
 
   @@index([orgId, cat])
+  @@index([orgId, groupName])
   @@index([orgId, supplier])
+  @@index([orgId, deletedAt])
+}
+
+// ─── CONSUMABLES (Inks / Toner / Drums / Plates / Blankets / Chemicals) ───
+model Consumable {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  name      String
+  conType   String   // 'ink' | 'toner' | 'drum' | 'developer' | 'plate' | 'blanket' |
+                     // 'chemical' | 'varnish' | 'fuser' | 'belt' | 'waste' | 'corona' | 'other'
+  conModule String   // 'offset' | 'digital' | 'shared'
+  color     String?  // 'cyan' | 'magenta' | 'yellow' | 'black' | 'white' | 'clear' | 'gold' | 'silver'
+  groupName String?  // 'Process', 'OEM', 'Compatible'...
+  supplier  String?
+  supplierEmail String?
+  notes     String   @default("")
+
+  // Linked machine (optional — null = available to all)
+  machineId String?
+  machine   Machine? @relation(fields: [machineId], references: [id])
+
+  // Cost
+  unit         String   @default("τεμ") // 'kg' | 'lt' | 'τεμ' | 'set'
+  unitSize     Float?   // package size (e.g., 1kg, 5lt)
+  costPerUnit  Float?   // € per package
+  costPerBase  Float?   // calculated: € per kg/lt/piece
+
+  // Yield (for toner, drum, fuser, belt, etc.)
+  yieldPages   Float?   // pages at 5% coverage
+
+  // Stock
+  stock        Float?
+  stockTarget  Float?
+  stockAlert   Float?
+
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, conType])
+  @@index([orgId, conModule])
+  @@index([orgId, machineId])
   @@index([orgId, deletedAt])
 }
 
