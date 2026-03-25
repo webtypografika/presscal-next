@@ -185,13 +185,6 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
         <p className="text-[0.6rem] text-[var(--text-muted)]">Η φύρα είναι baseline — αλλάζει ανά εργασία.</p>
       </WizSection>
 
-      <WizSection title="Κόστος" sub="Εργασία & Ενέργεια" accent="var(--success)" border>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Εργατοώρα (€/ώρα)"><NumInput value={data.off_hour_c} onChange={(v) => onChange('off_hour_c', v)} step="0.01" /></Field>
-          <Field label="Ενέργεια (€/ώρα)"><NumInput value={data.off_energy_hourly} onChange={(v) => onChange('off_energy_hourly', v)} step="0.01" /></Field>
-        </div>
-      </WizSection>
-
       <WizSection title="Απόσβεση" sub="BHR method" accent="var(--success)" border>
         <Toggle value={data.off_include_depreciation} onChange={(v) => onChange('off_include_depreciation', v)} labelOn="Ναι — Υπολογισμός" labelOff="Όχι" />
         {!!data.off_include_depreciation && (
