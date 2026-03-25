@@ -161,6 +161,17 @@ export function AddButton({ label, onClick }: { label: string; onClick: () => vo
   );
 }
 
+// ─── WAREHOUSE LINK BUTTON ───
+export function WarehouseBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} title="Επιλογή από Αποθήκη"
+      className="shrink-0 flex items-center gap-1 rounded-lg border border-[var(--teal)]/30 bg-[var(--teal)]/8 px-2 py-1 text-[0.65rem] font-semibold text-[var(--teal)] hover:bg-[var(--teal)]/15 transition-all"
+    >
+      <i className="fas fa-warehouse" style={{ fontSize: '0.55rem' }} /> Αποθήκη
+    </button>
+  );
+}
+
 // ─── CMYK COLOR HELPERS ───
 export const CMYK_COLORS = [
   { name: 'Cyan', key: 'c', cls: 'text-cyan-400' },
