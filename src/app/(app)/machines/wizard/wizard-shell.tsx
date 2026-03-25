@@ -52,27 +52,22 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
         className="flex w-[800px] h-[85vh] flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] shadow-[0_32px_80px_rgba(0,0,0,0.5)]"
         style={{ background: 'rgb(20, 30, 55)' }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3">
-          <div>
-            <h2 className="text-base font-bold">{title}</h2>
-            <p className="text-xs text-[var(--text-muted)]">
-              Βήμα {visibleSteps.indexOf(step) + 1} / {visibleSteps.length} — {step.title}
-            </p>
-          </div>
+        {/* Header: title + close */}
+        <div className="flex items-center justify-between px-6 pt-4 pb-2">
+          <h2 className="text-sm font-semibold text-[var(--text-muted)]">{title}</h2>
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text)]">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Progress bar */}
-        <div className="flex gap-1 px-6 pb-3">
+        <div className="flex gap-1 px-6">
           {visibleSteps.map((s) => {
             const realIdx = steps.indexOf(s);
             return (
               <div
                 key={s.id}
-                className="h-1.5 flex-1 rounded-full transition-all"
+                className="h-1 flex-1 rounded-full transition-all"
                 style={{
                   background: realIdx < stepIdx ? 'var(--success)' : realIdx === stepIdx ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
                 }}
@@ -81,15 +76,15 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
           })}
         </div>
 
-        {/* Step title — prominent like old PressCal */}
-        <div className="px-6 pt-2 pb-4 border-b border-[var(--border)]">
-          <p className="text-[0.7rem] font-bold text-[var(--accent)] uppercase tracking-wider mb-1">Βήμα {visibleSteps.indexOf(step) + 1}</p>
-          <h3 className="text-xl font-bold">{step.title}</h3>
+        {/* Step info */}
+        <div className="px-6 pt-4 pb-4 border-b border-[var(--border)]">
+          <p className="text-[0.7rem] font-bold text-[var(--accent)] uppercase tracking-wider">Βήμα {visibleSteps.indexOf(step) + 1} / {visibleSteps.length}</p>
+          <h3 className="text-xl font-bold mt-1">{step.title}</h3>
           {step.subtitle && <p className="text-sm text-[var(--text-dim)] mt-0.5">{step.subtitle}</p>}
         </div>
 
         {/* Step content */}
-        <div className="flex-1 overflow-y-auto px-6 pb-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
           {renderStep(step.id, data, onChange)}
         </div>
 

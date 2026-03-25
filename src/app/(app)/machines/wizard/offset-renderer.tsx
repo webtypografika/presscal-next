@@ -39,7 +39,7 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Μοντέλο" sub="Όνομα μηχανής" accent="var(--violet)">
         <input className={inputCls} value={(data.name as string) ?? ''} onChange={(e) => onChange('name', e.target.value)} placeholder="π.χ. Heidelberg SM 74-4" autoFocus />
         <button onClick={handleScan} disabled={scanning || !(data.name as string)?.trim()}
@@ -68,7 +68,7 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
 
 function StepPaper({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Max Φύλλο" sub="Μέγιστο (mm)" accent="var(--blue)">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Short Side (SS)"><NumInput value={data.off_max_ss} onChange={(v) => onChange('off_max_ss', v)} /></Field>
@@ -87,7 +87,7 @@ function StepPaper({ data, onChange }: { data: Data; onChange: OnChange }) {
 
 function StepMargins({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Gripper & Tail" sub="Long sides (mm)" accent="var(--teal)">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Gripper (εμπρός)"><NumInput value={data.off_gripper} onChange={(v) => onChange('off_gripper', v)} /></Field>
@@ -103,7 +103,7 @@ function StepMargins({ data, onChange }: { data: Data; onChange: OnChange }) {
 
 function StepThickness({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Μονάδα" sub="Βάρος / Πάχος" accent="var(--violet)">
         <PillToggle value={data.off_thick_unit} options={[{ v: 'gr', l: 'Γραμμάρια (g/m²)' }, { v: 'mic', l: 'Microns (μm)' }]} onChange={(v) => onChange('off_thick_unit', v)} />
       </WizSection>
@@ -119,7 +119,7 @@ function StepThickness({ data, onChange }: { data: Data; onChange: OnChange }) {
 
 function StepMachine({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Πύργοι" sub="Ταχύτητα" accent="var(--accent)">
         <div className="grid grid-cols-3 gap-3">
           <Field label="Πύργοι"><NumInput value={data.off_towers} onChange={(v) => onChange('off_towers', v)} /></Field>
@@ -175,7 +175,7 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
     : null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Setup" sub="Φύρα & Χρόνοι" accent="var(--success)">
         <div className="grid grid-cols-3 gap-3">
           <Field label="Φύρα (φύλλα)"><NumInput value={data.off_default_waste} onChange={(v) => onChange('off_default_waste', v)} /></Field>
@@ -221,7 +221,7 @@ function StepParts({ data, onChange }: { data: Data; onChange: OnChange }) {
     ? (((data.off_roller_count as number) * (data.off_roller_recover_c as number)) / (data.off_roller_recover_life as number)).toFixed(5) : null;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Τσίγκος" sub="CTP Plates" accent="var(--blue)">
         <Toggle value={data.off_include_parts} onChange={(v) => onChange('off_include_parts', v)} labelOn="Συμπεριλαμβάνεται" labelOff="Εξαιρείται" />
         {!!data.off_include_parts && (
@@ -258,7 +258,7 @@ function StepParts({ data, onChange }: { data: Data; onChange: OnChange }) {
 
 function StepInks({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Μελάνια" sub="CMYK (€/kg)" accent="var(--accent)">
         <Toggle value={data.off_include_inks} onChange={(v) => onChange('off_include_inks', v)} labelOn="Συμπεριλαμβάνεται" labelOff="Εξαιρείται" />
         {!!data.off_include_inks && (
@@ -303,7 +303,7 @@ function StepInks({ data, onChange }: { data: Data; onChange: OnChange }) {
 
 function StepChemicals({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Χημικά" sub="Καθαρισμός" accent="var(--danger)">
         <Toggle value={data.off_include_chemicals} onChange={(v) => onChange('off_include_chemicals', v)} labelOn="Συμπεριλαμβάνεται" labelOff="Εξαιρείται" />
         {!!data.off_include_chemicals && (
@@ -323,7 +323,7 @@ function StepMaintenance({ data, onChange }: { data: Data; onChange: OnChange })
   const logs = (data.maint_log as Array<{ date: string; description: string; counter: number | null }>) ?? [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Μηχανή" sub="Τρέχουσα κατάσταση" accent="var(--teal)">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Counter"><NumInput value={data.current_counter} onChange={(v) => onChange('current_counter', v)} /></Field>
@@ -352,7 +352,7 @@ function StepContacts({ data, onChange }: { data: Data; onChange: OnChange }) {
   const techs = (data.off_techs as Array<{ role: string; name: string; phone: string }>) ?? [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <WizSection title="Τεχνικοί" sub="Επαφές service" accent="var(--accent)">
         {techs.length > 0 && <ColHeaders labels={[{ w: 'w-[30%]', text: 'Ειδικότητα' }, { w: 'w-[35%]', text: 'Όνομα' }, { text: 'Τηλέφωνο' }, { w: 'w-5', text: '' }]} />}
         {techs.map((t, i) => (

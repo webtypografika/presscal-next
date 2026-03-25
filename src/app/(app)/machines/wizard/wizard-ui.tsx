@@ -94,10 +94,10 @@ export function WizSection({
   accent?: string;
 }) {
   return (
-    <div className={`flex gap-5 ${border ? 'border-t border-[var(--border)] pt-5 mt-1' : ''}`}>
-      <div className="w-32 shrink-0 pt-1 pl-3" style={{ borderLeft: `3px solid ${accent}` }}>
-        <h4 className="text-[0.85rem] font-black uppercase tracking-wide">{title}</h4>
-        <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">{sub}</p>
+    <div className={`flex gap-6 ${border ? 'border-t border-[var(--border)] pt-6 mt-2' : ''}`}>
+      <div className="w-28 shrink-0 pl-3 pt-0.5" style={{ borderLeft: `3px solid ${accent}` }}>
+        <h4 className="text-[0.8rem] font-black uppercase tracking-wide">{title}</h4>
+        <p className="text-[0.6rem] text-[var(--text-muted)] mt-0.5 leading-tight">{sub}</p>
       </div>
       <div className="flex-1 space-y-3">{children}</div>
     </div>
