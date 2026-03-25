@@ -204,14 +204,6 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
         {depHour && <p className="text-sm text-[var(--success)] mt-2">Απόσβεση / ώρα: €{depHour}</p>}
       </WizSection>
 
-      <WizSection title="Κατανάλωση" sub="Ρυθμοί χρήσης" accent="var(--success)" border>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Μελάνι (g/m²)"><NumInput value={data.off_ink_gm2} onChange={(v) => onChange('off_ink_gm2', v)} step="0.1" /></Field>
-          <Field label="Βερνίκι OPV (g/m²)"><NumInput value={data.off_varnish_gm2} onChange={(v) => onChange('off_varnish_gm2', v)} step="0.1" /></Field>
-          {!!data.off_has_varnish_tower && <Field label="Coating (g/m²)"><NumInput value={data.off_coating_gm2} onChange={(v) => onChange('off_coating_gm2', v)} step="0.1" /></Field>}
-        </div>
-        <p className="text-[0.6rem] text-[var(--text-muted)]">Τεχνικές παράμετροι για τον υπολογισμό κόστους ανά φύλλο.</p>
-      </WizSection>
     </div>
   );
 }
