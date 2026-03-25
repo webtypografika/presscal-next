@@ -307,6 +307,17 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
         )}
         {depHour && <p className="text-sm text-[var(--success)] mt-2">Απόσβεση / ώρα: €{depHour}</p>}
       </Section>
+
+      <Section title="Κατανάλωση" sub="Ρυθμοί χρήσης" border>
+        <div className="grid grid-cols-3 gap-3">
+          <div><span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Μελάνι (g/m²)</span><NumInput value={data.off_ink_gm2} onChange={(v) => onChange('off_ink_gm2', v)} step="0.1" /></div>
+          <div><span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Βερνίκι OPV (g/m²)</span><NumInput value={data.off_varnish_gm2} onChange={(v) => onChange('off_varnish_gm2', v)} step="0.1" /></div>
+          {!!data.off_has_varnish_tower && (
+            <div><span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Coating (g/m²)</span><NumInput value={data.off_coating_gm2} onChange={(v) => onChange('off_coating_gm2', v)} step="0.1" /></div>
+          )}
+        </div>
+        <p className="text-[0.6rem] text-[var(--text-muted)]">Τεχνικές παράμετροι για τον υπολογισμό κόστους ανά φύλλο.</p>
+      </Section>
     </div>
   );
 }
@@ -377,10 +388,6 @@ function StepInks({ data, onChange }: { data: Data; onChange: OnChange }) {
                 <div className="flex-1"><NumInput value={data[c.key]} onChange={(v) => onChange(c.key, v)} step="0.01" /></div>
               </div>
             ))}
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              <div><span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Κατανάλωση μελανιού (g/m²)</span><NumInput value={data.off_ink_gm2} onChange={(v) => onChange('off_ink_gm2', v)} step="0.1" /></div>
-              <div><span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Μέγεθος δοχείου (kg)</span><NumInput value={data.off_ink_weight} onChange={(v) => onChange('off_ink_weight', v)} step="0.1" /></div>
-            </div>
           </>
         )}
       </Section>
@@ -401,14 +408,12 @@ function StepInks({ data, onChange }: { data: Data; onChange: OnChange }) {
           <div className="space-y-2">
             <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
               <span className="w-20 text-sm font-bold text-[var(--text-dim)]">OPV</span>
-              <div className="flex-1"><span className="text-[0.6rem] text-[var(--text-muted)]">€/kg</span><NumInput value={data.ink_var_c} onChange={(v) => onChange('ink_var_c', v)} step="0.01" /></div>
-              <div className="flex-1"><span className="text-[0.6rem] text-[var(--text-muted)]">g/m²</span><NumInput value={data.off_varnish_gm2} onChange={(v) => onChange('off_varnish_gm2', v)} step="0.1" /></div>
+              <div className="flex-1"><span className="text-[0.6rem] text-[var(--text-muted)]">Κόστος €/kg</span><NumInput value={data.ink_var_c} onChange={(v) => onChange('ink_var_c', v)} step="0.01" /></div>
             </div>
             {!!data.off_has_varnish_tower && (
               <div className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--accent)]/30 bg-white/[0.02] p-3">
                 <span className="w-20 text-sm font-bold text-[var(--accent)]">{data.off_varnish_type === 'uv' ? 'UV' : 'AQ'}</span>
-                <div className="flex-1"><span className="text-[0.6rem] text-[var(--text-muted)]">€/kg</span><NumInput value={data.off_coating_c} onChange={(v) => onChange('off_coating_c', v)} step="0.01" /></div>
-                <div className="flex-1"><span className="text-[0.6rem] text-[var(--text-muted)]">g/m²</span><NumInput value={data.off_coating_gm2} onChange={(v) => onChange('off_coating_gm2', v)} step="0.1" /></div>
+                <div className="flex-1"><span className="text-[0.6rem] text-[var(--text-muted)]">Κόστος €/kg</span><NumInput value={data.off_coating_c} onChange={(v) => onChange('off_coating_c', v)} step="0.01" /></div>
               </div>
             )}
           </div>

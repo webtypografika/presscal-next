@@ -20,6 +20,7 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
   const step = steps[stepIdx];
   const isFirst = stepIdx === 0;
   const isLast = stepIdx === steps.length - 1;
+  const visibleSteps = steps.filter(s => !(s.id === 'extra_colors' && !data.has_special_colors));
 
   const canAdvance = step.canAdvance ? step.canAdvance(data) : true;
 
@@ -56,7 +57,7 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
           <div>
             <h2 className="text-lg font-bold">{title}</h2>
             <p className="text-sm text-[var(--text-muted)]">
-              {step.title}
+              Βήμα {visibleSteps.indexOf(step) + 1} / {visibleSteps.length} — {step.title}
             </p>
           </div>
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text)]">
