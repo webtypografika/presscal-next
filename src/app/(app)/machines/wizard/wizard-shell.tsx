@@ -53,10 +53,10 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
         style={{ background: 'rgb(20, 30, 55)' }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
+        <div className="flex items-center justify-between px-6 py-3">
           <div>
-            <h2 className="text-lg font-bold">{title}</h2>
-            <p className="text-sm text-[var(--text-muted)]">
+            <h2 className="text-base font-bold">{title}</h2>
+            <p className="text-xs text-[var(--text-muted)]">
               Βήμα {visibleSteps.indexOf(step) + 1} / {visibleSteps.length} — {step.title}
             </p>
           </div>
@@ -65,26 +65,27 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
           </button>
         </div>
 
-        {/* Progress bar — filter out skipped steps */}
-        <div className="flex gap-1 px-6 pt-3">
-          {steps.filter(s => !(s.id === 'extra_colors' && !data.has_special_colors)).map((s, i) => {
+        {/* Progress bar */}
+        <div className="flex gap-1 px-6 pb-3">
+          {visibleSteps.map((s) => {
             const realIdx = steps.indexOf(s);
             return (
               <div
                 key={s.id}
-                className="h-1 flex-1 rounded-full transition-all"
+                className="h-1.5 flex-1 rounded-full transition-all"
                 style={{
-                  background: realIdx < stepIdx ? 'var(--success)' : realIdx === stepIdx ? 'var(--accent)' : 'var(--border)',
+                  background: realIdx < stepIdx ? 'var(--success)' : realIdx === stepIdx ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
                 }}
               />
             );
           })}
         </div>
 
-        {/* Step title */}
-        <div className="px-6 pt-4 pb-2">
+        {/* Step title — prominent like old PressCal */}
+        <div className="px-6 pt-2 pb-4 border-b border-[var(--border)]">
+          <p className="text-[0.7rem] font-bold text-[var(--accent)] uppercase tracking-wider mb-1">Βήμα {visibleSteps.indexOf(step) + 1}</p>
           <h3 className="text-xl font-bold">{step.title}</h3>
-          {step.subtitle && <p className="text-sm text-[var(--text-dim)]">{step.subtitle}</p>}
+          {step.subtitle && <p className="text-sm text-[var(--text-dim)] mt-0.5">{step.subtitle}</p>}
         </div>
 
         {/* Step content */}
