@@ -1,134 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Printer, Droplet, Zap, BookOpen, Scissors, PinIcon, CircleDot, GripVertical, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Printer, Droplet, Zap, CheckCircle, AlertTriangle } from 'lucide-react';
+// Note: BookOpen, Scissors, PinIcon, CircleDot, GripVertical removed — using Toggle instead
 import { aiScanDigital } from './ai-scan-action';
+import {
+  inputCls, NumInput, Field, WizSection, Row, RowLabel, PillToggle, Toggle,
+  ColHeaders, AddButton, fmtNum, CMYK_COLORS, getColorStations,
+} from './wizard-ui';
 
 type OnChange = (field: string, value: unknown) => void;
 type Data = Record<string, unknown>;
-
-// Shared UI helpers
-const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 no-spinners";
-const labelCls = "text-[0.65rem] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1 block";
-
-function fmtNum(v: unknown): string {
-  if (v === null || v === undefined || v === '') return '';
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return n.toLocaleString('el-GR', { maximumFractionDigits: 4 });
-}
-
-function NumInput({ value, onChange, placeholder, step }: { value: unknown; onChange: (v: number | null) => void; placeholder?: string; step?: string }) {
-  const [text, setText] = useState('');
-  const [focused, setFocused] = useState(false);
-  const isDecimal = step && parseFloat(step) < 1;
-
-  function handleChange(raw: string) {
-    // Strip everything except digits, dot, comma, minus
-    const clean = raw.replace(/[^\d.,-]/g, '');
-    // Parse: replace comma with dot for parsing
-    const parsed = parseFloat(clean.replace(/\./g, '').replace(',', '.'));
-
-    if (clean === '' || clean === '-') {
-      setText(clean);
-      onChange(null);
-      return;
-    }
-
-    if (!isNaN(parsed)) {
-      onChange(parsed);
-      // Format live: for decimals keep raw input, for integers add thousand separators
-      if (isDecimal) {
-        setText(clean);
-      } else {
-        // Format with dots but keep cursor-friendly
-        const formatted = Math.round(parsed).toLocaleString('el-GR');
-        setText(formatted);
-      }
-    } else {
-      setText(clean);
-    }
-  }
-
-  function handleFocus() {
-    setFocused(true);
-    // Show current value formatted
-    const v = value as number | null;
-    if (v !== null && v !== undefined) {
-      if (isDecimal) {
-        setText(String(v));
-      } else {
-        setText(Math.round(v).toLocaleString('el-GR'));
-      }
-    } else {
-      setText('');
-    }
-  }
-
-  function handleBlur() {
-    setFocused(false);
-  }
-
-  const display = focused ? text : fmtNum(value);
-
-  return (
-    <input
-      className={inputCls + " text-center"}
-      type="text"
-      inputMode={isDecimal ? 'decimal' : 'numeric'}
-      value={display}
-      onChange={(e) => handleChange(e.target.value)}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
-      placeholder={placeholder}
-    />
-  );
-}
-
-const CMYK_COLORS = [
-  { name: 'Cyan', key: 'c', cls: 'text-cyan-400' },
-  { name: 'Magenta', key: 'm', cls: 'text-pink-400' },
-  { name: 'Yellow', key: 'y', cls: 'text-yellow-400' },
-  { name: 'Black', key: 'k', cls: 'text-gray-400' },
-];
-
-function getColorStations(stations: number) {
-  if (stations >= 4) return CMYK_COLORS;
-  if (stations === 1) return [CMYK_COLORS[3]]; // Black only
-  // Duo or other < 4: use Station 1, Station 2 etc with generic styling
-  return Array.from({ length: stations }, (_, i) => ({
-    name: `Σταθμός ${i + 1}`,
-    key: CMYK_COLORS[i]?.key ?? `s${i + 1}`,
-    cls: CMYK_COLORS[i]?.cls ?? 'text-[var(--text-dim)]',
-  }));
-}
-
-function PillToggle({ value, options, onChange }: { value: unknown; options: { v: string; l: string }[]; onChange: (v: string) => void }) {
-  return (
-    <div className="flex rounded-lg border border-[var(--glass-border)] overflow-hidden">
-      {options.map((o) => (
-        <button
-          key={o.v}
-          onClick={() => onChange(o.v)}
-          className={`flex-1 py-2 text-sm font-semibold transition-all ${value === o.v ? 'bg-[rgba(245,130,32,0.12)] text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}
-        >
-          {o.l}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function FinishingPill({ label, icon: Icon, active, onClick }: { label: string; icon: typeof Printer; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all ${active ? 'border-[var(--accent)] bg-[rgba(245,130,32,0.12)] text-[var(--accent)]' : 'border-[var(--glass-border)] text-[var(--text-muted)]'}`}
-    >
-      <Icon className="h-4 w-4" /> {label}
-    </button>
-  );
-}
 
 // ─── STEP RENDERERS ───
 
@@ -174,7 +56,7 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
     <div className="space-y-4">
       <div>
-        <label className={labelCls}>Μοντέλο Μηχανής *</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Μοντέλο Μηχανής *</label>
         <input
           className={inputCls}
           value={(data.name as string) ?? ''}
@@ -221,7 +103,7 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
       )}
 
       <div className="border-t border-[var(--border)] pt-4">
-        <label className={labelCls}>URL Κατασκευαστή (προαιρετικό)</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">URL Κατασκευαστή (προαιρετικό)</label>
         <input
           className={inputCls}
           value={(data.spec_url as string) ?? ''}
@@ -268,10 +150,10 @@ function StepInkType({ data, onChange }: { data: Data; onChange: OnChange }) {
 
 function StepSpecs({ data, onChange }: { data: Data; onChange: OnChange }) {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Speeds */}
       <div>
-        <label className={labelCls}>Ταχύτητες (PPM)</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Ταχύτητες (PPM)</label>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <span className="text-[0.6rem] text-[var(--text-muted)]">Color *</span>
@@ -286,7 +168,7 @@ function StepSpecs({ data, onChange }: { data: Data; onChange: OnChange }) {
 
       {/* GSM Range */}
       <div>
-        <label className={labelCls}>Εύρος Βάρους (GSM)</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Εύρος Βάρους (GSM)</label>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <span className="text-[0.6rem] text-[var(--text-muted)]">Min</span>
@@ -301,19 +183,19 @@ function StepSpecs({ data, onChange }: { data: Data; onChange: OnChange }) {
 
       {/* Duplex speed */}
       <div>
-        <label className={labelCls}>Duplex Speed Factor (%)</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Duplex Speed Factor (%)</label>
         <NumInput value={data.duplex_speed_factor} onChange={(v) => onChange('duplex_speed_factor', v)} placeholder="100" />
       </div>
 
       {/* Finishing */}
       <div>
-        <label className={labelCls}>Finishing (Output)</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Finishing (Output)</label>
         <div className="flex flex-wrap gap-2">
-          <FinishingPill label="Booklet" icon={BookOpen} active={!!data.has_booklet_maker} onClick={() => onChange('has_booklet_maker', !data.has_booklet_maker)} />
-          <FinishingPill label="Stapler" icon={PinIcon} active={!!data.has_stapler} onClick={() => onChange('has_stapler', !data.has_stapler)} />
-          <FinishingPill label="Puncher" icon={CircleDot} active={!!data.has_puncher} onClick={() => onChange('has_puncher', !data.has_puncher)} />
-          <FinishingPill label="Trimmer" icon={Scissors} active={!!data.has_trimmer} onClick={() => onChange('has_trimmer', !data.has_trimmer)} />
-          <FinishingPill label="Glue Binder" icon={GripVertical} active={!!data.has_glue_binder} onClick={() => onChange('has_glue_binder', !data.has_glue_binder)} />
+          <Toggle value={data.has_booklet_maker} onChange={(v) => onChange('has_booklet_maker', v)} labelOn="Booklet" labelOff="Booklet" />
+          <Toggle value={data.has_stapler} onChange={(v) => onChange('has_stapler', v)} labelOn="Stapler" labelOff="Stapler" />
+          <Toggle value={data.has_puncher} onChange={(v) => onChange('has_puncher', v)} labelOn="Puncher" labelOff="Puncher" />
+          <Toggle value={data.has_trimmer} onChange={(v) => onChange('has_trimmer', v)} labelOn="Trimmer" labelOff="Trimmer" />
+          <Toggle value={data.has_glue_binder} onChange={(v) => onChange('has_glue_binder', v)} labelOn="Glue Binder" labelOff="Glue Binder" />
         </div>
       </div>
     </div>
@@ -327,10 +209,10 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
     { l: '35×50', ss: 350, ls: 500 },
   ];
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Max sheet */}
       <div>
-        <label className={labelCls}>Μέγιστο Φύλλο (mm)</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Μέγιστο Φύλλο (mm)</label>
         <div className="grid grid-cols-2 gap-3 mb-2">
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Short Side</span><NumInput value={data.max_sheet_ss} onChange={(v) => onChange('max_sheet_ss', v)} placeholder="330" /></div>
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Long Side</span><NumInput value={data.max_sheet_ls} onChange={(v) => onChange('max_sheet_ls', v)} placeholder="487" /></div>
@@ -339,7 +221,7 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
 
       {/* Min sheet */}
       <div>
-        <label className={labelCls}>Ελάχιστο Φύλλο (mm)</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Ελάχιστο Φύλλο (mm)</label>
         <div className="grid grid-cols-2 gap-3">
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Short Side</span><NumInput value={data.min_sheet_ss} onChange={(v) => onChange('min_sheet_ss', v)} /></div>
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Long Side</span><NumInput value={data.min_sheet_ls} onChange={(v) => onChange('min_sheet_ls', v)} /></div>
@@ -348,7 +230,7 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
 
       {/* Banner */}
       <div>
-        <label className={labelCls}>Banner (mm)</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Banner (mm)</label>
         <div className="grid grid-cols-2 gap-3">
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Short Side</span><NumInput value={data.banner_ss} onChange={(v) => onChange('banner_ss', v)} /></div>
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Long Side</span><NumInput value={data.banner_ls} onChange={(v) => onChange('banner_ls', v)} /></div>
@@ -357,7 +239,7 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
 
       {/* Margins */}
       <div>
-        <label className={labelCls}>Περιθώρια Εκτύπωσης (mm)</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Περιθώρια Εκτύπωσης (mm)</label>
         <div className="grid grid-cols-4 gap-2">
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Top</span><NumInput value={data.margin_top} onChange={(v) => onChange('margin_top', v)} /></div>
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Bottom</span><NumInput value={data.margin_bottom} onChange={(v) => onChange('margin_bottom', v)} /></div>
@@ -368,7 +250,7 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
 
       {/* Feed direction */}
       <div>
-        <label className={labelCls}>Τροφοδοσία</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Τροφοδοσία</label>
         <PillToggle value={data.feed_direction} options={[{ v: 'sef', l: 'SEF' }, { v: 'lef', l: 'LEF' }, { v: 'both', l: 'Both' }]} onChange={(v) => onChange('feed_direction', v)} />
       </div>
     </div>
@@ -718,11 +600,11 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
   const extraCount = Math.max(0, stations - 4);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* CPC — Click costs — only for simple modes */}
       {(mode === 'simple_in' || mode === 'simple_out') && (
         <div>
-          <label className={labelCls}>Click Costs — CPC (€/όψη)</label>
+          <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Click Costs — CPC (€/όψη)</label>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-3 grid grid-cols-3 gap-3">
               <span></span>
@@ -745,7 +627,7 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
       {/* Extra color click costs — only for simple modes */}
       {(mode === 'simple_in' || mode === 'simple_out') && extraCount > 0 && (
         <div>
-          <label className={labelCls}>Extra Color Click Costs (€/όψη)</label>
+          <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Extra Color Click Costs (€/όψη)</label>
           <div className="space-y-2">
             {Array.from({ length: extraCount }).map((_, i) => {
               const name = `Σταθμός ${i + 1}`;
@@ -764,7 +646,7 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
       {/* Duplex click multiplier — only relevant for simple modes */}
       {(mode === 'simple_in' || mode === 'simple_out') && (
         <div>
-          <label className={labelCls}>Duplex Click Multiplier</label>
+          <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Duplex Click Multiplier</label>
           <p className="text-[0.65rem] text-[var(--text-dim)] mb-1">Πόσα clicks χρεώνει η 2η όψη (2 = διπλάσιο, 1 = ίδιο)</p>
           <NumInput value={data.duplex_click_multiplier} onChange={(v) => onChange('duplex_click_multiplier', v)} placeholder="2" />
         </div>
@@ -1109,9 +991,9 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
     ? ((data.machine_cost as number) / (data.machine_lifetime_passes as number)).toFixed(4)
     : null;
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
-        <label className={labelCls}>Setup & Φύρα</label>
+        <label className="text-[0.6rem] font-semibold text-[var(--text-muted)] mb-1 block">Setup & Φύρα</label>
         <div className="grid grid-cols-3 gap-3">
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Φύρα Setup (φύλλα)</span><NumInput value={data.setup_sheets_waste} onChange={(v) => onChange('setup_sheets_waste', v)} /></div>
           <div><span className="text-[0.6rem] text-[var(--text-muted)]">Φύρα Εκτύπωσης (%)</span><NumInput value={data.registration_spoilage_pct} onChange={(v) => onChange('registration_spoilage_pct', v)} /></div>
