@@ -11,14 +11,75 @@ type Data = Record<string, unknown>;
 const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 no-spinners";
 const labelCls = "text-[0.65rem] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1 block";
 
+function fmtNum(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  if (isNaN(n)) return String(v);
+  return n.toLocaleString('el-GR', { maximumFractionDigits: 4 });
+}
+
 function NumInput({ value, onChange, placeholder, step }: { value: unknown; onChange: (v: number | null) => void; placeholder?: string; step?: string }) {
+  const [text, setText] = useState('');
+  const [focused, setFocused] = useState(false);
+  const isDecimal = step && parseFloat(step) < 1;
+
+  function handleChange(raw: string) {
+    // Strip everything except digits, dot, comma, minus
+    const clean = raw.replace(/[^\d.,-]/g, '');
+    // Parse: replace comma with dot for parsing
+    const parsed = parseFloat(clean.replace(/\./g, '').replace(',', '.'));
+
+    if (clean === '' || clean === '-') {
+      setText(clean);
+      onChange(null);
+      return;
+    }
+
+    if (!isNaN(parsed)) {
+      onChange(parsed);
+      // Format live: for decimals keep raw input, for integers add thousand separators
+      if (isDecimal) {
+        setText(clean);
+      } else {
+        // Format with dots but keep cursor-friendly
+        const formatted = Math.round(parsed).toLocaleString('el-GR');
+        setText(formatted);
+      }
+    } else {
+      setText(clean);
+    }
+  }
+
+  function handleFocus() {
+    setFocused(true);
+    // Show current value formatted
+    const v = value as number | null;
+    if (v !== null && v !== undefined) {
+      if (isDecimal) {
+        setText(String(v));
+      } else {
+        setText(Math.round(v).toLocaleString('el-GR'));
+      }
+    } else {
+      setText('');
+    }
+  }
+
+  function handleBlur() {
+    setFocused(false);
+  }
+
+  const display = focused ? text : fmtNum(value);
+
   return (
     <input
       className={inputCls + " text-center"}
-      type="number"
-      step={step}
-      value={(value as number | string) ?? ''}
-      onChange={(e) => onChange(e.target.value ? +e.target.value : null)}
+      type="text"
+      inputMode={isDecimal ? 'decimal' : 'numeric'}
+      value={display}
+      onChange={(e) => handleChange(e.target.value)}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
       placeholder={placeholder}
     />
   );
@@ -108,16 +169,16 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
       <button
         onClick={handleScan}
         disabled={scanning || !(data.name as string)?.trim()}
-        className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-cyan-400 to-pink-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:shadow-xl disabled:opacity-50"
+        className="flex items-center gap-2 rounded-lg border border-[var(--blue)] bg-[var(--blue)]/10 px-5 py-2.5 text-sm font-bold text-[var(--blue)] transition-all hover:bg-[var(--blue)]/20 disabled:opacity-40"
       >
         <Zap className="h-4 w-4" />
         {scanning ? 'Αναζήτηση...' : 'AI Scan'}
       </button>
 
       {scanning && (
-        <div className="flex items-center gap-3 rounded-lg bg-[var(--blue)]/10 p-4 text-sm text-[var(--blue)]">
-          <span className="animate-spin">⏳</span>
-          Αναζήτηση προδιαγραφών για &quot;{data.name as string}&quot;...
+        <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-4 text-sm text-[var(--text-dim)]">
+          <div className="h-4 w-4 shrink-0 rounded-full border-2 border-[var(--blue)] border-t-transparent animate-spin" />
+          Αναζήτηση προδιαγραφών & αναλωσίμων για &quot;{data.name as string}&quot;...
         </div>
       )}
 
@@ -156,22 +217,33 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
 
 function StepInkType({ data, onChange }: { data: Data; onChange: OnChange }) {
   const ink = data.ink_type as string;
+  const options = [
+    { v: 'toner', l: 'Toner', desc: 'Σκόνη σε κασέτα — CMYK', Icon: Printer, examples: 'Konica, Ricoh, Xerox, Canon' },
+    { v: 'liquid', l: 'Liquid Ink', desc: 'Υγρό ink — ElectroInk / Inkjet', Icon: Droplet, examples: 'HP Indigo, Riso ComColor' },
+  ];
   return (
-    <div className="grid grid-cols-2 gap-4">
-      {[
-        { v: 'toner', l: 'Toner', desc: 'Σκόνη σε κασέτα — CMYK', icon: '🖨️' },
-        { v: 'liquid', l: 'Liquid Ink', desc: 'Υγρό ink — HP Indigo / Riso', icon: '💧' },
-      ].map((t) => (
-        <button
-          key={t.v}
-          onClick={() => onChange('ink_type', t.v)}
-          className={`flex flex-col items-center gap-3 rounded-2xl border-2 p-8 text-center transition-all ${ink === t.v ? 'border-[var(--blue)] bg-[var(--blue)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
-        >
-          <span className="text-4xl">{t.icon}</span>
-          <span className="text-lg font-bold">{t.l}</span>
-          <span className="text-sm text-[var(--text-muted)]">{t.desc}</span>
-        </button>
-      ))}
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        {options.map((t) => (
+          <button
+            key={t.v}
+            onClick={() => onChange('ink_type', t.v)}
+            className={`flex flex-col items-center gap-4 rounded-xl border-2 p-8 text-center transition-all ${ink === t.v ? 'border-[var(--blue)] bg-[var(--blue)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
+          >
+            <div className={`flex h-14 w-14 items-center justify-center rounded-full border-2 transition-all ${ink === t.v ? 'border-[var(--blue)]/40 bg-[var(--blue)]/10 text-[var(--blue)]' : 'border-[var(--glass-border)] bg-white/[0.03] text-[var(--text-muted)]'}`}>
+              <t.Icon className="h-6 w-6" />
+            </div>
+            <span className="text-base font-bold">{t.l}</span>
+            <span className="text-[0.75rem] text-[var(--text-muted)]">{t.desc}</span>
+          </button>
+        ))}
+      </div>
+      {ink && (
+        <div className="rounded-lg bg-white/[0.03] px-4 py-3">
+          <span className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Παραδείγματα</span>
+          <p className="mt-1 text-sm text-[var(--text-dim)]">{options.find(o => o.v === ink)?.examples}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -339,140 +411,53 @@ function StepColorStations({ data, onChange }: { data: Data; onChange: OnChange 
 
 function StepExtraColors({ data, onChange }: { data: Data; onChange: OnChange }) {
   const stationCount = ((data.extra_station_count as number) ?? 1);
-  const extras = (data.extra_colors as Array<{ name: string; type: 'station' | 'swap' }>) ?? [];
-
-  // Stations = physical extra stations, Swaps = interchange colors
-  const stations = extras.filter(c => c.type === 'station');
-  const swaps = extras.filter(c => c.type === 'swap');
 
   function setStationCount(count: number) {
     onChange('extra_station_count', count);
     onChange('color_stations', 4 + count);
-    // Adjust station entries
-    const currentStations = extras.filter(c => c.type === 'station');
-    let newStations: Array<{ name: string; type: 'station' | 'swap' }>;
-    if (count > currentStations.length) {
-      newStations = [...currentStations, ...Array.from({ length: count - currentStations.length }, () => ({ name: '', type: 'station' as const }))];
-    } else {
-      newStations = currentStations.slice(0, count);
-    }
-    onChange('extra_colors', [...newStations, ...swaps]);
-    // Sync legacy fields
-    newStations.forEach((s, i) => onChange(`extra_color_${i + 1}_name`, s.name));
-  }
-
-  function updateStation(i: number, name: string) {
-    const newExtras = [...extras];
-    const stationIndices = extras.map((c, idx) => c.type === 'station' ? idx : -1).filter(x => x >= 0);
-    if (stationIndices[i] !== undefined) {
-      newExtras[stationIndices[i]] = { ...newExtras[stationIndices[i]], name };
-    }
-    onChange('extra_colors', newExtras);
-    onChange(`extra_color_${i + 1}_name`, name);
-  }
-
-  function updateSwap(i: number, name: string) {
-    const newExtras = [...extras];
-    const swapIndices = extras.map((c, idx) => c.type === 'swap' ? idx : -1).filter(x => x >= 0);
-    if (swapIndices[i] !== undefined) {
-      newExtras[swapIndices[i]] = { ...newExtras[swapIndices[i]], name };
-    }
-    onChange('extra_colors', newExtras);
-  }
-
-  function addSwap() {
-    onChange('extra_colors', [...extras, { name: '', type: 'swap' }]);
-  }
-
-  function removeSwap(i: number) {
-    const swapIndices = extras.map((c, idx) => c.type === 'swap' ? idx : -1).filter(x => x >= 0);
-    if (swapIndices[i] !== undefined) {
-      onChange('extra_colors', extras.filter((_, idx) => idx !== swapIndices[i]));
-    }
-  }
-
-  // Initialize stations if empty
-  if (stations.length === 0 && stationCount > 0) {
-    const initial = Array.from({ length: stationCount }, () => ({ name: '', type: 'station' as const }));
-    onChange('extra_colors', [...initial, ...swaps]);
   }
 
   return (
     <div className="space-y-6">
       {/* Section: Number of extra stations */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <div className="h-px flex-1 bg-[var(--border)]" />
-          <span className="text-[0.65rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Αριθμός Extra Σταθμών</span>
-          <div className="h-px flex-1 bg-[var(--border)]" />
+      <div className="flex gap-6">
+        <div className="w-28 shrink-0 pt-1">
+          <h4 className="text-sm font-black uppercase tracking-wide">Σταθμοί</h4>
+          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Φυσικοί extra</p>
         </div>
-        <p className="text-sm text-[var(--text-dim)] mb-3">Πόσοι φυσικοί σταθμοί ειδικού χρώματος έχει η μηχανή;</p>
-        <div className="flex gap-2">
-          {[1, 2, 3].map((n) => (
-            <button
-              key={n}
-              onClick={() => setStationCount(n)}
-              className={`flex-1 rounded-xl border-2 py-4 text-center transition-all ${stationCount === n ? 'border-[var(--accent)] bg-[var(--accent)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
-            >
-              <span className="text-2xl font-black">{n}</span>
-              <p className="text-[0.7rem] text-[var(--text-muted)] mt-1">σταθμ{n === 1 ? 'ός' : 'οί'}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Section: Station names */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <div className="h-px flex-1 bg-[var(--border)]" />
-          <span className="text-[0.65rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Ονόματα Σταθμών</span>
-          <div className="h-px flex-1 bg-[var(--border)]" />
-        </div>
-        <div className="space-y-2">
-          {stations.map((c, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--accent)]/10 text-xs font-black text-[var(--accent)]">{i + 1}</span>
-              <input
-                className={inputCls}
-                value={c.name}
-                onChange={(e) => updateStation(i, e.target.value)}
-                placeholder={`π.χ. ${i === 0 ? 'White' : i === 1 ? 'Clear' : 'Gold'}`}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Section: Swap colors */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <div className="h-px flex-1 bg-[var(--border)]" />
-          <span className="text-[0.65rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Εναλλαγές</span>
-          <div className="h-px flex-1 bg-[var(--border)]" />
-        </div>
-        <p className="text-sm text-[var(--text-dim)] mb-3">Χρώματα που εναλλάσσονται στους extra σταθμούς (προαιρετικά)</p>
-        {swaps.length > 0 && (
-          <div className="space-y-2 mb-3">
-            {swaps.map((c, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--violet)]/10 text-xs font-black text-[var(--violet)]">↻</span>
-                <input
-                  className={inputCls}
-                  value={c.name}
-                  onChange={(e) => updateSwap(i, e.target.value)}
-                  placeholder="π.χ. Silver, MICR, Varnish..."
-                />
-                <button onClick={() => removeSwap(i)} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] transition-colors text-lg">×</button>
-              </div>
+        <div className="flex-1">
+          <p className="text-sm text-[var(--text-dim)] mb-3">Πόσους φυσικούς extra σταθμούς έχει η μηχανή;</p>
+          <div className="flex gap-3">
+            {[1, 2, 3].map((n) => (
+              <button
+                key={n}
+                onClick={() => setStationCount(n)}
+                className={`flex-1 rounded-xl border-2 py-5 text-center transition-all ${stationCount === n ? 'border-[var(--accent)] bg-[var(--accent)]/8' : 'border-[var(--glass-border)] hover:border-[var(--border-hover)]'}`}
+              >
+                <span className="text-2xl font-black">{n}</span>
+                <p className="text-[0.7rem] text-[var(--text-muted)] mt-1">σταθμ{n === 1 ? 'ός' : 'οί'}</p>
+              </button>
             ))}
           </div>
-        )}
-        <button
-          onClick={addSwap}
-          className="w-full rounded-lg border border-dashed border-[var(--glass-border)] py-2.5 text-sm font-semibold text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
-        >
-          + Προσθήκη Εναλλαγής
-        </button>
+        </div>
+      </div>
+
+      {/* Info box */}
+      <div className="rounded-lg bg-white/[0.03] px-4 py-3">
+        <p className="text-sm text-[var(--text-dim)]">
+          Τα ειδικά χρώματα (White, Gold, Clear κλπ) και τα αναλώσιμά τους ορίζονται στο κοστολόγιο κάθε εργασίας.
+          Αν η δουλειά χρειάζεται περισσότερα χρώματα από τους σταθμούς, θα χρειαστεί επιπλέον πέρασμα.
+        </p>
+      </div>
+
+      {/* Examples */}
+      <div className="rounded-lg bg-white/[0.03] px-4 py-3">
+        <span className="text-[0.6rem] font-bold uppercase tracking-widest text-[var(--text-muted)]">Παραδείγματα</span>
+        <div className="mt-2 space-y-1 text-sm text-[var(--text-dim)]">
+          <p><strong className="text-[var(--text)]">1 σταθμός:</strong> Ricoh C7500, Xerox iGen 5</p>
+          <p><strong className="text-[var(--text)]">2 σταθμοί:</strong> Xerox Iridesse, Fujifilm Revoria</p>
+          <p><strong className="text-[var(--text)]">3 σταθμοί:</strong> HP Indigo 7K (7 BIDs), Fujifilm Revoria PC1120</p>
+        </div>
       </div>
     </div>
   );
@@ -546,6 +531,7 @@ function calcCostPreview(data: Data) {
       a4_bw: n(data.click_a4_bw),
       a3_color: n(data.click_a3_color) || n(data.click_a4_color) * 2,
       a3_bw: n(data.click_a3_bw) || n(data.click_a4_bw) * 2,
+      cons_a4_color: 0, cons_a4_bw: 0,
       breakdown: null,
     };
   }
@@ -561,11 +547,14 @@ function calcCostPreview(data: Data) {
     if (mode === 'simple_out') {
       const cpc_a4_color = n(data.click_a4_color);
       const cpc_a4_bw = n(data.click_a4_bw);
+      const consColor = inkPerImp * (stations >= 4 ? 4 : stations);
+      const consBw = inkPerImp;
       return {
-        a4_color: cpc_a4_color + inkPerImp * (stations >= 4 ? 4 : stations),
-        a4_bw: cpc_a4_bw + inkPerImp,
-        a3_color: (n(data.click_a3_color) || cpc_a4_color * 2) + inkPerImp * (stations >= 4 ? 4 : stations) * 2,
-        a3_bw: (n(data.click_a3_bw) || cpc_a4_bw * 2) + inkPerImp * 2,
+        a4_color: cpc_a4_color + consColor,
+        a4_bw: cpc_a4_bw + consBw,
+        a3_color: (n(data.click_a3_color) || cpc_a4_color * 2) + consColor * 2,
+        a3_bw: (n(data.click_a3_bw) || cpc_a4_bw * 2) + consBw * 2,
+        cons_a4_color: consColor, cons_a4_bw: consBw,
         breakdown: { ink: inkPerImp, cpc_color: cpc_a4_color, cpc_bw: cpc_a4_bw },
       };
     }
@@ -576,6 +565,7 @@ function calcCostPreview(data: Data) {
       a4_bw: costPerImp,
       a3_color: costPerImp * colorImps * 2,
       a3_bw: costPerImp * 2,
+      cons_a4_color: costPerImp * colorImps, cons_a4_bw: costPerImp,
       breakdown: { ink: inkPerImp, blanket: blanketPerImp, pip: pipPerImp, impression: impCharge },
     };
   }
@@ -595,6 +585,7 @@ function calcCostPreview(data: Data) {
       a4_bw: cpc_a4_bw + tonerBw,
       a3_color: (n(data.click_a3_color) || cpc_a4_color * 2) + tonerColor * 2,
       a3_bw: (n(data.click_a3_bw) || cpc_a4_bw * 2) + tonerBw * 2,
+      cons_a4_color: tonerColor, cons_a4_bw: tonerBw,
       breakdown: { toner_color: tonerColor, toner_bw: tonerBw, cpc_color: cpc_a4_color, cpc_bw: cpc_a4_bw },
     };
   }
@@ -609,48 +600,83 @@ function calcCostPreview(data: Data) {
       + div(data.dev_y_cost, data.dev_y_life) + div(data.dev_k_cost, data.dev_k_life);
     devBw = div(data.dev_k_cost, data.dev_k_life);
   }
+
+  // Extra color consumables
+  const extraCount = Math.max(0, stations - 4);
+  let extraToner = 0, extraDrum = 0, extraDev = 0;
+  for (let i = 1; i <= extraCount; i++) {
+    extraToner += div(data[`extra_color_${i}_cost`], data[`extra_color_${i}_yield`]);
+    extraDrum += div(data[`drum_extra_${i}_cost`], data[`drum_extra_${i}_life`]);
+    if (data.developer_type === 'separate') {
+      extraDev += div(data[`dev_extra_${i}_cost`], data[`dev_extra_${i}_life`]);
+    }
+  }
+
   const fuser = div(data.fuser_cost, data.fuser_life);
   const belt = div(data.belt_cost, data.belt_life);
   const waste = div(data.waste_cost, data.waste_life);
-  const corona = data.has_charge_coronas ? div(data.corona_cost, data.corona_life) * (stations >= 4 ? 4 : stations) : 0;
-  const coronaBw = data.has_charge_coronas ? div(data.corona_cost, data.corona_life) : 0;
+  const coronaPer = data.has_charge_coronas ? div(data.corona_cost, data.corona_life) : 0;
+  const colorStationCount = stations >= 4 ? 4 : stations;
+  const corona = coronaPer * colorStationCount;
+  const coronaBw = coronaPer;
   const shared = fuser + belt + waste;
 
+  const totalColor = tonerColor + drumColor + devColor + extraToner + extraDrum + extraDev + shared + corona;
+  const totalBw = tonerBw + drumBw + devBw + shared + coronaBw;
+
   return {
-    a4_color: tonerColor + drumColor + devColor + shared + corona,
-    a4_bw: tonerBw + drumBw + devBw + shared + coronaBw,
-    a3_color: (tonerColor + drumColor + devColor + shared + corona) * 2,
-    a3_bw: (tonerBw + drumBw + devBw + shared + coronaBw) * 2,
+    a4_color: totalColor,
+    a4_bw: totalBw,
+    a3_color: totalColor * 2,
+    a3_bw: totalBw * 2,
+    cons_a4_color: totalColor, cons_a4_bw: totalBw,
     breakdown: { toner_color: tonerColor, drums: drumColor, dev: devColor, shared, corona },
   };
 }
 
 function CostPreview({ data }: { data: Data }) {
   const p = calcCostPreview(data);
-  const fmt = (v: number) => v > 0 ? `€${v.toFixed(4)}` : '—';
+  const fmt = (v: number) => v > 0 ? `€${v.toLocaleString('el-GR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}` : '—';
   const stations = (data.color_stations as number) ?? 4;
+  const mode = data.cost_mode as string;
+  const isInk = data.ink_type === 'liquid';
+  const showCons = (mode === 'simple_out' || mode === 'precision') && (p.cons_a4_color > 0 || p.cons_a4_bw > 0);
+
+  const consName = isInk ? 'Ink' : 'Toner';
+  const rows: Array<{ label: string; color: string; bw: string }> = [
+    { label: 'A4 αναλώσιμα', color: fmt(p.a4_color), bw: fmt(p.a4_bw) },
+    { label: 'A3 αναλώσιμα', color: fmt(p.a3_color), bw: fmt(p.a3_bw) },
+  ];
+  if (showCons) {
+    rows.push(
+      { label: `A4 αναλώσιμα + ${consName}`, color: fmt(p.cons_a4_color), bw: fmt(p.cons_a4_bw) },
+      { label: `A3 αναλώσιμα + ${consName}`, color: fmt(p.cons_a4_color > 0 ? p.cons_a4_color * 2 : 0), bw: fmt(p.cons_a4_bw > 0 ? p.cons_a4_bw * 2 : 0) },
+    );
+  }
 
   return (
-    <div className="rounded-xl border border-[var(--glass-border)] bg-[rgba(255,255,255,0.02)] p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <div className="h-px flex-1 bg-[var(--border)]" />
-        <span className="text-[0.65rem] font-bold uppercase tracking-widest text-[var(--success)]">Εκτίμηση Κόστους / Όψη</span>
-        <div className="h-px flex-1 bg-[var(--border)]" />
+    <div className="border-t border-[var(--border)] pt-5">
+      <div className="flex gap-6">
+        <div className="w-28 shrink-0 pt-1">
+          <h4 className="text-sm font-black uppercase tracking-wide">Άθροισμα</h4>
+          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Κόστος / όψη</p>
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-3 px-3 mb-2">
+            <span className="w-36" />
+            {stations >= 2 && <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)] text-center">Color</span>}
+            <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)] text-center">B&W</span>
+          </div>
+          {rows.map((r) => (
+            <div key={r.label} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3 mb-2">
+              <span className="w-36 text-sm font-semibold text-[var(--text-dim)]">{r.label}</span>
+              {stations >= 2 && <span className="flex-1 text-center text-sm font-black">{r.color}</span>}
+              <span className="flex-1 text-center text-sm font-black">{r.bw}</span>
+            </div>
+          ))}
+          <p className="text-[0.6rem] text-[var(--text-muted)] mt-1">* 5% coverage · A3 = 2× A4</p>
+        </div>
       </div>
-      <div className="grid grid-cols-3 gap-3 text-center">
-        <div />
-        {stations >= 2 && <span className="text-[0.6rem] font-bold uppercase text-[var(--text-muted)]">Color</span>}
-        <span className="text-[0.6rem] font-bold uppercase text-[var(--text-muted)]">B&W</span>
-
-        <span className="text-sm font-semibold text-left">A4</span>
-        {stations >= 2 && <span className="text-lg font-black text-[var(--success)]">{fmt(p.a4_color)}</span>}
-        <span className="text-lg font-black text-[var(--text)]">{fmt(p.a4_bw)}</span>
-
-        <span className="text-sm font-semibold text-left">A3</span>
-        {stations >= 2 && <span className="text-lg font-black text-[var(--success)]">{fmt(p.a3_color)}</span>}
-        <span className="text-lg font-black text-[var(--text)]">{fmt(p.a3_bw)}</span>
-      </div>
-      <p className="mt-2 text-[0.6rem] text-[var(--text-muted)] text-center">* Εκτίμηση στο 5% coverage · A3 = 2× A4</p>
     </div>
   );
 }
@@ -692,7 +718,7 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
           <label className={labelCls}>Extra Color Click Costs (€/όψη)</label>
           <div className="space-y-2">
             {Array.from({ length: extraCount }).map((_, i) => {
-              const name = (data[`extra_color_${i + 1}_name`] as string) || `Extra ${i + 1}`;
+              const name = `Σταθμός ${i + 1}`;
               return (
                 <div key={i} className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
                   <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">{name}</span>
@@ -714,122 +740,191 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
         </div>
       )}
 
-      {/* Toner CMYK — for simple_out and precision (toner machines) */}
+      {/* ─── TONER CONSUMABLES (simple_out / precision) ─── */}
       {(mode === 'simple_out' || mode === 'precision') && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-4">
-          <label className={labelCls}>Toner — Yield & Cost (CMYK)</label>
-          <div className="space-y-2">
-            {['C', 'M', 'Y', 'K'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
-              const key = c.toLowerCase();
-              const colors: Record<string, string> = { C: 'bg-cyan-500/10 text-cyan-400', M: 'bg-pink-500/10 text-pink-400', Y: 'bg-yellow-500/10 text-yellow-400', K: 'bg-gray-500/10 text-gray-300' };
-              return (
-                <div key={c} className={`flex items-center gap-3 rounded-lg ${colors[c]} p-3`}>
-                  <span className="w-8 text-center text-sm font-black">{c}</span>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Yield (σελίδες)</span><NumInput value={data[`toner_${key}_yield`]} onChange={(v) => onChange(`toner_${key}_yield`, v)} /></div>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[`toner_${key}_cost`]} onChange={(v) => onChange(`toner_${key}_cost`, v)} step="0.01" /></div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Toner extra colors — for simple_out and precision */}
-      {(mode === 'simple_out' || mode === 'precision') && inkType === 'toner' && extraCount > 0 && (
-        <div>
-          <label className={labelCls}>Toner — Extra Colors Yield & Cost</label>
-          <div className="space-y-2">
-            {Array.from({ length: extraCount }).map((_, i) => {
-              const name = (data[`extra_color_${i + 1}_name`] as string) || `Extra ${i + 1}`;
-              return (
-                <div key={i} className="flex items-center gap-3 rounded-lg bg-purple-500/10 text-purple-300 p-3">
-                  <span className="w-16 text-center text-sm font-black">{name}</span>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Yield (σελίδες)</span><NumInput value={data[`extra_color_${i + 1}_yield`]} onChange={(v) => onChange(`extra_color_${i + 1}_yield`, v)} /></div>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[`extra_color_${i + 1}_cost`]} onChange={(v) => onChange(`extra_color_${i + 1}_cost`, v)} step="0.01" /></div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Drums CMYK — precision mode only */}
-      {mode === 'precision' && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-4">
-          <label className={labelCls}>Drums — Life & Cost (CMYK)</label>
-          <div className="space-y-2">
-            {['C', 'M', 'Y', 'K'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
-              const key = c.toLowerCase();
-              const colors: Record<string, string> = { C: 'bg-cyan-500/10 text-cyan-400', M: 'bg-pink-500/10 text-pink-400', Y: 'bg-yellow-500/10 text-yellow-400', K: 'bg-gray-500/10 text-gray-300' };
-              return (
-                <div key={c} className={`flex items-center gap-3 rounded-lg ${colors[c]} p-3`}>
-                  <span className="w-8 text-center text-sm font-black">{c}</span>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data[`drum_${key}_life`]} onChange={(v) => onChange(`drum_${key}_life`, v)} /></div>
-                  <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[`drum_${key}_cost`]} onChange={(v) => onChange(`drum_${key}_cost`, v)} step="0.01" /></div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Developer — precision mode */}
-      {mode === 'precision' && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-4">
-          <label className={labelCls}>Developer</label>
-          <PillToggle value={data.developer_type} options={[{ v: 'integrated', l: 'Ενσωματωμένο στο Drum' }, { v: 'separate', l: 'Ξεχωριστό' }]} onChange={(v) => onChange('developer_type', v)} />
-          {data.developer_type === 'separate' && (
-            <div className="space-y-2 mt-3">
-              {['C', 'M', 'Y', 'K'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
-                const key = c.toLowerCase();
+        <div className="border-t border-[var(--border)] pt-5">
+          {/* Section: ΧΡΩΜΑ */}
+          <div className="flex gap-6">
+            <div className="w-28 shrink-0 pt-2">
+              <h4 className="text-sm font-black uppercase tracking-wide">Χρώμα</h4>
+              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">@ 5% coverage</p>
+            </div>
+            <div className="flex-1 space-y-2">
+              {/* Header */}
+              <div className="flex items-center gap-3 px-3">
+                <span className="w-20" />
+                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Yield (σελίδες)</span>
+                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
+              </div>
+              {['Cyan', 'Magenta', 'Yellow', 'Black'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
+                const key = c[0].toLowerCase();
+                const pillColors: Record<string, string> = { Cyan: 'text-cyan-400', Magenta: 'text-pink-400', Yellow: 'text-yellow-400', Black: 'text-gray-400' };
                 return (
-                  <div key={c} className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-                    <span className="w-8 text-center text-sm font-black text-[var(--text-dim)]">{c}</span>
-                    <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data[`dev_${key}_life`]} onChange={(v) => onChange(`dev_${key}_life`, v)} /></div>
-                    <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[`dev_${key}_cost`]} onChange={(v) => onChange(`dev_${key}_cost`, v)} step="0.01" /></div>
+                  <div key={c} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                    <span className={`w-20 text-sm font-bold ${pillColors[c]}`}>{c}</span>
+                    <div className="flex-1"><NumInput value={data[`toner_${key}_yield`]} onChange={(v) => onChange(`toner_${key}_yield`, v)} /></div>
+                    <div className="flex-1"><NumInput value={data[`toner_${key}_cost`]} onChange={(v) => onChange(`toner_${key}_cost`, v)} step="0.01" /></div>
                   </div>
                 );
               })}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Coronas — precision mode */}
-      {mode === 'precision' && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-4">
-          <label className={labelCls}>Charge Coronas</label>
-          <div className="flex items-center gap-3 mb-3">
-            <button onClick={() => onChange('has_charge_coronas', !data.has_charge_coronas)}
-              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${data.has_charge_coronas ? 'border-[var(--accent)] bg-[rgba(245,130,32,0.12)] text-[var(--accent)]' : 'border-[var(--glass-border)] text-[var(--text-muted)]'}`}>
-              {data.has_charge_coronas ? 'Ναι — Έχει' : 'Όχι'}
-            </button>
           </div>
-          {!!data.has_charge_coronas && (
-            <div className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data.corona_life} onChange={(v) => onChange('corona_life', v)} /></div>
-              <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data.corona_cost} onChange={(v) => onChange('corona_cost', v)} step="0.01" /></div>
+
+          {/* Section: EXTRA */}
+          {extraCount > 0 && (
+            <div className="flex gap-6 mt-4">
+              <div className="w-28 shrink-0 pt-2">
+                <h4 className="text-sm font-black uppercase tracking-wide">Extra</h4>
+                <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">{extraCount} special χρώμ{extraCount === 1 ? 'α' : 'ατα'}</p>
+              </div>
+              <div className="flex-1 space-y-2">
+                {Array.from({ length: extraCount }).map((_, i) => {
+                  const name = `Σταθμός ${i + 1}`;
+                  return (
+                    <div key={i} className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--accent)]/30 bg-white/[0.02] p-3">
+                      <span className="w-20 text-sm font-bold text-[var(--accent)]">{name}</span>
+                      <div className="flex-1"><NumInput value={data[`extra_color_${i + 1}_yield`]} onChange={(v) => onChange(`extra_color_${i + 1}_yield`, v)} /></div>
+                      <div className="flex-1"><NumInput value={data[`extra_color_${i + 1}_cost`]} onChange={(v) => onChange(`extra_color_${i + 1}_cost`, v)} step="0.01" /></div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Service Parts — precision mode, TONER ONLY */}
+      {/* ─── DRUMS (precision only) ─── */}
       {mode === 'precision' && inkType === 'toner' && (
-        <div className="border-t border-[var(--border)] pt-4">
-          <label className={labelCls}>Service Parts</label>
-          <div className="space-y-2">
-            {[
-              { label: 'Fuser', life: 'fuser_life', cost: 'fuser_cost' },
-              { label: 'Transfer Belt', life: 'belt_life', cost: 'belt_cost' },
-              { label: 'Waste Toner', life: 'waste_life', cost: 'waste_cost' },
-            ].map((p) => (
-              <div key={p.label} className="flex items-center gap-3 rounded-lg bg-white/[0.02] p-3">
-                <span className="w-28 text-sm font-semibold text-[var(--text-dim)]">{p.label}</span>
-                <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Life (σελίδες)</span><NumInput value={data[p.life]} onChange={(v) => onChange(p.life, v)} /></div>
-                <div className="flex-1"><span className="text-[0.55rem] text-[var(--text-muted)]">Κόστος €</span><NumInput value={data[p.cost]} onChange={(v) => onChange(p.cost, v)} step="0.01" /></div>
+        <div className="border-t border-[var(--border)] pt-5">
+          <div className="flex gap-6">
+            <div className="w-28 shrink-0 pt-2">
+              <h4 className="text-sm font-black uppercase tracking-wide">Drums</h4>
+              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Life & Cost</p>
+            </div>
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-3 px-3">
+                <span className="w-20" />
+                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Life (σελίδες)</span>
+                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
               </div>
-            ))}
+              {['Cyan', 'Magenta', 'Yellow', 'Black'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
+                const key = c[0].toLowerCase();
+                const pillColors: Record<string, string> = { Cyan: 'text-cyan-400', Magenta: 'text-pink-400', Yellow: 'text-yellow-400', Black: 'text-gray-400' };
+                return (
+                  <div key={c} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                    <span className={`w-20 text-sm font-bold ${pillColors[c]}`}>{c}</span>
+                    <div className="flex-1"><NumInput value={data[`drum_${key}_life`]} onChange={(v) => onChange(`drum_${key}_life`, v)} /></div>
+                    <div className="flex-1"><NumInput value={data[`drum_${key}_cost`]} onChange={(v) => onChange(`drum_${key}_cost`, v)} step="0.01" /></div>
+                  </div>
+                );
+              })}
+              {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => {
+                const name = `Σταθμός ${i + 1}`;
+                return (
+                  <div key={i} className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--accent)]/30 bg-white/[0.02] p-3">
+                    <span className="w-20 text-sm font-bold text-[var(--accent)]">{name}</span>
+                    <div className="flex-1"><NumInput value={data[`drum_extra_${i + 1}_life`]} onChange={(v) => onChange(`drum_extra_${i + 1}_life`, v)} /></div>
+                    <div className="flex-1"><NumInput value={data[`drum_extra_${i + 1}_cost`]} onChange={(v) => onChange(`drum_extra_${i + 1}_cost`, v)} step="0.01" /></div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── DEVELOPER (precision only) ─── */}
+      {mode === 'precision' && inkType === 'toner' && (
+        <div className="border-t border-[var(--border)] pt-5">
+          <div className="flex gap-6">
+            <div className="w-28 shrink-0 pt-2">
+              <h4 className="text-sm font-black uppercase tracking-wide">Developer</h4>
+              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Life & Cost</p>
+            </div>
+            <div className="flex-1 space-y-3">
+              <PillToggle value={data.developer_type} options={[{ v: 'integrated', l: 'Στο Drum' }, { v: 'separate', l: 'Ξεχωριστό' }]} onChange={(v) => onChange('developer_type', v)} />
+              {data.developer_type === 'separate' && (
+                <div className="space-y-2">
+                  {['Cyan', 'Magenta', 'Yellow', 'Black'].slice(0, stations >= 4 ? 4 : stations).map((c) => {
+                    const key = c[0].toLowerCase();
+                    const pillColors: Record<string, string> = { Cyan: 'text-cyan-400', Magenta: 'text-pink-400', Yellow: 'text-yellow-400', Black: 'text-gray-400' };
+                    return (
+                      <div key={c} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                        <span className={`w-20 text-sm font-bold ${pillColors[c]}`}>{c}</span>
+                        <div className="flex-1"><NumInput value={data[`dev_${key}_life`]} onChange={(v) => onChange(`dev_${key}_life`, v)} /></div>
+                        <div className="flex-1"><NumInput value={data[`dev_${key}_cost`]} onChange={(v) => onChange(`dev_${key}_cost`, v)} step="0.01" /></div>
+                      </div>
+                    );
+                  })}
+                  {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => {
+                    const name = `Σταθμός ${i + 1}`;
+                    return (
+                      <div key={i} className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--accent)]/30 bg-white/[0.02] p-3">
+                        <span className="w-20 text-sm font-bold text-[var(--accent)]">{name}</span>
+                        <div className="flex-1"><NumInput value={data[`dev_extra_${i + 1}_life`]} onChange={(v) => onChange(`dev_extra_${i + 1}_life`, v)} /></div>
+                        <div className="flex-1"><NumInput value={data[`dev_extra_${i + 1}_cost`]} onChange={(v) => onChange(`dev_extra_${i + 1}_cost`, v)} step="0.01" /></div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── CORONAS (precision only) ─── */}
+      {mode === 'precision' && inkType === 'toner' && (
+        <div className="border-t border-[var(--border)] pt-5">
+          <div className="flex gap-6">
+            <div className="w-28 shrink-0 pt-2">
+              <h4 className="text-sm font-black uppercase tracking-wide">Coronas</h4>
+              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Charge wires · ×{stations >= 4 ? 4 : stations} σταθμοί</p>
+            </div>
+            <div className="flex-1 space-y-3">
+              <button onClick={() => onChange('has_charge_coronas', !data.has_charge_coronas)}
+                className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${data.has_charge_coronas ? 'border-[var(--accent)] bg-[rgba(245,130,32,0.12)] text-[var(--accent)]' : 'border-[var(--glass-border)] text-[var(--text-muted)]'}`}>
+                {data.has_charge_coronas ? 'Ναι — Έχει' : 'Όχι'}
+              </button>
+              {!!data.has_charge_coronas && (
+                <div className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">Corona</span>
+                  <div className="flex-1"><NumInput value={data.corona_life} onChange={(v) => onChange('corona_life', v)} /></div>
+                  <div className="flex-1"><NumInput value={data.corona_cost} onChange={(v) => onChange('corona_cost', v)} step="0.01" /></div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── SERVICE PARTS (precision, toner only) ─── */}
+      {mode === 'precision' && inkType === 'toner' && (
+        <div className="border-t border-[var(--border)] pt-5">
+          <div className="flex gap-6">
+            <div className="w-28 shrink-0 pt-2">
+              <h4 className="text-sm font-black uppercase tracking-wide">Service</h4>
+              <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Parts & Waste</p>
+            </div>
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-3 px-3">
+                <span className="w-20" />
+                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Life (σελίδες)</span>
+                <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Cost €</span>
+              </div>
+              {[
+                { label: 'Fuser', life: 'fuser_life', cost: 'fuser_cost' },
+                { label: 'Belt', life: 'belt_life', cost: 'belt_cost' },
+                { label: 'Waste', life: 'waste_life', cost: 'waste_cost' },
+              ].map((p) => (
+                <div key={p.label} className="flex items-center gap-3 rounded-lg bg-white/[0.03] p-3">
+                  <span className="w-20 text-sm font-bold text-[var(--text-dim)]">{p.label}</span>
+                  <div className="flex-1"><NumInput value={data[p.life]} onChange={(v) => onChange(p.life, v)} /></div>
+                  <div className="flex-1"><NumInput value={data[p.cost]} onChange={(v) => onChange(p.cost, v)} step="0.01" /></div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -998,6 +1093,78 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
 }
 
 function StepMaintenance({ data, onChange }: { data: Data; onChange: OnChange }) {
+  const logs = (data.maint_log as Array<{ date: string; description: string; counter: number | null }>) ?? [];
+
+  function addLog() {
+    onChange('maint_log', [...logs, { date: new Date().toISOString().slice(0, 10), description: '', counter: null }]);
+  }
+  function updateLog(i: number, field: string, val: unknown) {
+    onChange('maint_log', logs.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  }
+  function delLog(i: number) {
+    onChange('maint_log', logs.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div className="space-y-0">
+      {/* ─── ΚΑΤΑΣΤΑΣΗ ΜΗΧΑΝΗΣ ─── */}
+      <div className="flex gap-6 pb-5">
+        <div className="w-28 shrink-0 pt-1">
+          <h4 className="text-sm font-black uppercase tracking-wide">Μηχανή</h4>
+          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Τρέχουσα κατάσταση</p>
+        </div>
+        <div className="flex-1 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Counter</span>
+              <NumInput value={data.current_counter} onChange={(v) => onChange('current_counter', v)} placeholder="π.χ. 1250000" />
+            </div>
+            <div>
+              <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Τελευταίο Service</span>
+              <input className={inputCls} type="date" value={(data.last_service_date as string) ?? ''} onChange={(e) => onChange('last_service_date', e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Σημειώσεις</span>
+            <textarea className={inputCls + " !h-14 py-2 resize-none"} value={(data.maint_notes as string) ?? ''} onChange={(e) => onChange('maint_notes', e.target.value)} placeholder="Γενικές σημειώσεις συντήρησης..." />
+          </div>
+        </div>
+      </div>
+
+      {/* ─── ΗΜΕΡΟΛΟΓΙΟ ΣΥΝΤΗΡΗΣΗΣ ─── */}
+      <div className="flex gap-6 border-t border-[var(--border)] pt-5">
+        <div className="w-28 shrink-0 pt-1">
+          <h4 className="text-sm font-black uppercase tracking-wide">Ημερολόγιο</h4>
+          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Ιστορικό service</p>
+        </div>
+        <div className="flex-1 space-y-2">
+          {logs.length > 0 && (
+            <div className="flex items-center gap-2 px-1">
+              <span className="w-28 text-[0.6rem] font-semibold text-[var(--text-muted)]">Ημερομηνία</span>
+              <span className="w-24 text-[0.6rem] font-semibold text-[var(--text-muted)]">Counter</span>
+              <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Περιγραφή</span>
+              <span className="w-5" />
+            </div>
+          )}
+          {logs.map((l, i) => (
+            <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2">
+              <input className={inputCls + " !h-8 w-28"} type="date" value={l.date} onChange={(e) => updateLog(i, 'date', e.target.value)} />
+              <input className={inputCls + " !h-8 w-24 text-center"} type="number" value={l.counter ?? ''} onChange={(e) => updateLog(i, 'counter', e.target.value ? +e.target.value : null)} placeholder="Counter" />
+              <input className={inputCls + " !h-8 flex-1"} value={l.description} onChange={(e) => updateLog(i, 'description', e.target.value)} placeholder="π.χ. Αλλαγή fuser, PM kit..." />
+              <button onClick={() => delLog(i)} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+            </div>
+          ))}
+          <button onClick={addLog} className="w-full rounded-lg border border-dashed border-[var(--glass-border)] py-2 text-sm font-semibold text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all">
+            + Προσθήκη Εγγραφής
+          </button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+function StepContacts({ data, onChange }: { data: Data; onChange: OnChange }) {
   const techs = (data.dig_techs as Array<{ role: string; name: string; phone: string }>) ?? [];
 
   function addTech() {
@@ -1011,38 +1178,51 @@ function StepMaintenance({ data, onChange }: { data: Data; onChange: OnChange })
   }
 
   return (
-    <div className="space-y-5">
-      <div>
-        <label className={labelCls}>Κατάσταση Μηχανής</label>
-        <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Counter</span><NumInput value={data.current_counter} onChange={(v) => onChange('current_counter', v)} /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Τελευταίο Service</span><input className={inputCls} type="date" value={(data.last_service_date as string) ?? ''} onChange={(e) => onChange('last_service_date', e.target.value)} /></div>
+    <div className="space-y-0">
+      {/* ─── ΤΕΧΝΙΚΟΙ ─── */}
+      <div className="flex gap-6 pb-5">
+        <div className="w-28 shrink-0 pt-1">
+          <h4 className="text-sm font-black uppercase tracking-wide">Τεχνικοί</h4>
+          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Επαφές service</p>
+        </div>
+        <div className="flex-1 space-y-2">
+          {techs.length > 0 && (
+            <div className="flex items-center gap-2 px-1">
+              <span className="w-[30%] text-[0.6rem] font-semibold text-[var(--text-muted)]">Ειδικότητα</span>
+              <span className="w-[35%] text-[0.6rem] font-semibold text-[var(--text-muted)]">Όνομα</span>
+              <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Τηλέφωνο</span>
+              <span className="w-5" />
+            </div>
+          )}
+          {techs.map((t, i) => (
+            <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2">
+              <input className={inputCls + " !h-8 w-[30%]"} value={t.role} onChange={(e) => updateTech(i, 'role', e.target.value)} placeholder="π.χ. Service" />
+              <input className={inputCls + " !h-8 w-[35%]"} value={t.name} onChange={(e) => updateTech(i, 'name', e.target.value)} placeholder="Γιώργος Κ." />
+              <input className={inputCls + " !h-8 flex-1"} value={t.phone} onChange={(e) => updateTech(i, 'phone', e.target.value)} placeholder="210-..." />
+              <button onClick={() => delTech(i)} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+            </div>
+          ))}
+          <button onClick={addTech} className="w-full rounded-lg border border-dashed border-[var(--glass-border)] py-2 text-sm font-semibold text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all">
+            + Προσθήκη Τεχνικού
+          </button>
         </div>
       </div>
 
-      <div>
-        <label className={labelCls}>Σημειώσεις</label>
-        <textarea className={inputCls + " !h-16 py-2 resize-none"} value={(data.notes as string) ?? ''} onChange={(e) => onChange('notes', e.target.value)} placeholder="Σημειώσεις μηχανής..." />
-      </div>
-
-      <div>
-        <label className={labelCls}>Τεχνικοί</label>
-        {techs.map((t, i) => (
-          <div key={i} className="mb-2 flex items-center gap-2">
-            <input className={inputCls + " !w-28"} value={t.role} onChange={(e) => updateTech(i, 'role', e.target.value)} placeholder="Ειδικότητα" />
-            <input className={inputCls + " !w-32"} value={t.name} onChange={(e) => updateTech(i, 'name', e.target.value)} placeholder="Όνομα" />
-            <input className={inputCls + " !w-28"} value={t.phone} onChange={(e) => updateTech(i, 'phone', e.target.value)} placeholder="Τηλέφωνο" />
-            <button onClick={() => delTech(i)} className="text-[var(--text-muted)] hover:text-[var(--danger)]">×</button>
+      {/* ─── ΕΓΧΕΙΡΙΔΙΑ ─── */}
+      <div className="flex gap-6 border-t border-[var(--border)] pt-5">
+        <div className="w-28 shrink-0 pt-1">
+          <h4 className="text-sm font-black uppercase tracking-wide">Links</h4>
+          <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Εγχειρίδια & drivers</p>
+        </div>
+        <div className="flex-1 space-y-3">
+          <div>
+            <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Service Manual</span>
+            <input className={inputCls} value={(data.manual_url as string) ?? ''} onChange={(e) => onChange('manual_url', e.target.value)} placeholder="https://..." />
           </div>
-        ))}
-        <button onClick={addTech} className="text-sm font-semibold text-[var(--accent)]">+ Προσθήκη Τεχνικού</button>
-      </div>
-
-      <div>
-        <label className={labelCls}>Εγχειρίδια</label>
-        <div className="grid grid-cols-2 gap-3">
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Manual URL</span><input className={inputCls} value={(data.manual_url as string) ?? ''} onChange={(e) => onChange('manual_url', e.target.value)} placeholder="https://..." /></div>
-          <div><span className="text-[0.6rem] text-[var(--text-muted)]">Driver URL</span><input className={inputCls} value={(data.driver_url as string) ?? ''} onChange={(e) => onChange('driver_url', e.target.value)} placeholder="https://..." /></div>
+          <div>
+            <span className="text-[0.6rem] font-semibold text-[var(--text-muted)]">Driver / PPD</span>
+            <input className={inputCls} value={(data.driver_url as string) ?? ''} onChange={(e) => onChange('driver_url', e.target.value)} placeholder="https://..." />
+          </div>
         </div>
       </div>
     </div>
@@ -1064,6 +1244,7 @@ export function renderDigitalStep(stepId: string, data: Data, onChange: OnChange
     case 'speed_zones': return <StepSpeedZones data={data} onChange={onChange} />;
     case 'production': return <StepProduction data={data} onChange={onChange} />;
     case 'maintenance': return <StepMaintenance data={data} onChange={onChange} />;
+    case 'contacts': return <StepContacts data={data} onChange={onChange} />;
     default: return <p>Unknown step: {stepId}</p>;
   }
 }

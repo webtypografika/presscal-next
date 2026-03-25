@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { Machine } from '@/generated/prisma/client';
 import { deleteMachine } from './actions';
 import { DigitalWizard } from './wizard/digital-wizard';
+import { MachineServicePanel } from './wizard/service-panel';
 
 const CAT_META: Record<string, { label: string; icon: string; color: string }> = {
   digital: { label: 'Ψηφιακό', icon: 'fa-print', color: 'var(--blue)' },
@@ -17,6 +18,7 @@ interface Props { machines: Machine[] }
 export function MachinesList({ machines }: Props) {
   const [showWizard, setShowWizard] = useState<'digital' | 'offset' | 'plotter' | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [serviceId, setServiceId] = useState<string | null>(null);
   const [showCatPicker, setShowCatPicker] = useState(false);
   const [filter, setFilter] = useState<string>('all');
 
@@ -144,9 +146,17 @@ export function MachinesList({ machines }: Props) {
                 <div className="card-actions" style={{ position: 'absolute', right: 12, top: 12, display: 'flex', gap: 4, opacity: 0, transition: 'opacity 0.2s' }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditId(machine.id); setShowWizard(machine.cat as 'digital' | 'offset' | 'plotter'); }}
+                    title="Ρυθμίσεις"
                     style={{ padding: 6, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', transition: 'color 0.2s' }}
                   >
-                    <i className="fas fa-pen" />
+                    <i className="fas fa-cog" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setServiceId(machine.id); }}
+                    title="Συντήρηση & Τεχνικοί"
+                    style={{ padding: 6, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', transition: 'color 0.2s' }}
+                  >
+                    <i className="fas fa-wrench" />
                   </button>
                   <button
                     onClick={async (e) => {
@@ -155,6 +165,7 @@ export function MachinesList({ machines }: Props) {
                         await deleteMachine(machine.id);
                       }
                     }}
+                    title="Διαγραφή"
                     style={{ padding: 6, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', transition: 'color 0.2s' }}
                   >
                     <i className="fas fa-trash" />
@@ -232,6 +243,14 @@ export function MachinesList({ machines }: Props) {
             <button onClick={() => setShowWizard(null)} style={{ marginTop: 16, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Κλείσιμο</button>
           </div>
         </div>
+      )}
+
+      {/* Service Panel */}
+      {serviceId && (
+        <MachineServicePanel
+          machine={machines.find(m => m.id === serviceId)!}
+          onClose={() => setServiceId(null)}
+        />
       )}
 
       <style>{`

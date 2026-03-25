@@ -43,8 +43,8 @@ export const DIGITAL_STEPS: WizardStep[] = [
   },
   {
     id: 'extra_colors',
-    title: 'Special Colors',
-    subtitle: 'Σταθμοί & εναλλαγές ειδικών χρωμάτων',
+    title: 'Extra Σταθμοί',
+    subtitle: 'Φυσικοί σταθμοί ειδικών χρωμάτων',
   },
   {
     id: 'cost_model',
@@ -69,7 +69,12 @@ export const DIGITAL_STEPS: WizardStep[] = [
   {
     id: 'maintenance',
     title: 'Συντήρηση',
-    subtitle: 'Counter, Service, Τεχνικοί',
+    subtitle: 'Counter, Ημερολόγιο Service',
+  },
+  {
+    id: 'contacts',
+    title: 'Τεχνικοί & Links',
+    subtitle: 'Επαφές service, εγχειρίδια',
   },
 ];
 
@@ -79,11 +84,9 @@ export const DIGITAL_DEFAULTS: Record<string, unknown> = {
   name: '',
   notes: '',
   ink_type: 'toner',
-  press_type: 'standard',
   color_stations: 4,
   has_special_colors: false,
   extra_station_count: 1,
-  extra_color_count: 0,
 
   // Speeds
   speed_ppm_color: null,
@@ -114,7 +117,6 @@ export const DIGITAL_DEFAULTS: Record<string, unknown> = {
 
   // Cost model
   cost_mode: 'simple_in',
-  consumable_type: 'toner',
 
   // Click costs
   click_a4_color: null,
@@ -123,15 +125,7 @@ export const DIGITAL_DEFAULTS: Record<string, unknown> = {
   click_a3_bw: null,
   click_banner_color: null,
   click_banner_bw: null,
-  click_scan: null,
-  banner_a4_equiv: 4,
   duplex_click_multiplier: 2,
-
-  // Extra colors
-  extra_colors: [],
-  has_extra_custom: false,
-  extra_cost_label: '',
-  click_extra_custom: null,
 
   // Toner CMYK
   toner_c_yield: null, toner_c_cost: null,
@@ -168,14 +162,6 @@ export const DIGITAL_DEFAULTS: Record<string, unknown> = {
   pip_life: null, pip_cost: null,
   mixing_fee: null,
 
-  // Riso
-  riso_k_cost: null, riso_k_yield: null,
-  riso_c_cost: null, riso_c_yield: null,
-  riso_m_cost: null, riso_m_yield: null,
-  riso_y_cost: null, riso_y_yield: null,
-  riso_gray_cost: null, riso_gray_yield: null,
-  has_gray: false,
-
   // Speed zones
   speed_zones: [
     { name: 'Normal', gsm_from: 80, gsm_to: 170, ppm: 60, markup: 0 },
@@ -183,7 +169,6 @@ export const DIGITAL_DEFAULTS: Record<string, unknown> = {
     { name: 'Thick 1', gsm_from: 251, gsm_to: 300, ppm: 25, markup: 10 },
     { name: 'Thick 2', gsm_from: 301, gsm_to: 350, ppm: 15, markup: 20 },
   ],
-  speed_zones_configured: false,
 
   // Production
   setup_sheets_waste: 10,
@@ -198,7 +183,7 @@ export const DIGITAL_DEFAULTS: Record<string, unknown> = {
   last_service_date: '',
   maint_notes: '',
   dig_techs: [],
-  dig_maint_tasks: [],
+  maint_log: [],
   manual_url: '',
   driver_url: '',
 };

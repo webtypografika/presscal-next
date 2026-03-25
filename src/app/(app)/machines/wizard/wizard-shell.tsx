@@ -56,7 +56,7 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
           <div>
             <h2 className="text-lg font-bold">{title}</h2>
             <p className="text-sm text-[var(--text-muted)]">
-              Βήμα {stepIdx + 1} / {steps.length} — {step.title}
+              {step.title}
             </p>
           </div>
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text)]">
@@ -64,17 +64,20 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
           </button>
         </div>
 
-        {/* Progress bar */}
+        {/* Progress bar — filter out skipped steps */}
         <div className="flex gap-1 px-6 pt-3">
-          {steps.map((s, i) => (
-            <div
-              key={s.id}
-              className="h-1 flex-1 rounded-full transition-all"
-              style={{
-                background: i < stepIdx ? 'var(--success)' : i === stepIdx ? 'var(--accent)' : 'var(--border)',
-              }}
-            />
-          ))}
+          {steps.filter(s => !(s.id === 'extra_colors' && !data.has_special_colors)).map((s, i) => {
+            const realIdx = steps.indexOf(s);
+            return (
+              <div
+                key={s.id}
+                className="h-1 flex-1 rounded-full transition-all"
+                style={{
+                  background: realIdx < stepIdx ? 'var(--success)' : realIdx === stepIdx ? 'var(--accent)' : 'var(--border)',
+                }}
+              />
+            );
+          })}
         </div>
 
         {/* Step title */}
