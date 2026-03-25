@@ -53,7 +53,7 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
         )}
         {result?.success && (
           <div className="flex items-center gap-3 rounded-lg bg-[var(--success)]/10 p-4 text-sm text-[var(--success)]">
-            <CheckCircle className="h-5 w-5 shrink-0" /><div><strong>Βρέθηκαν {result.fieldsFound} προδιαγραφές</strong></div>
+            <CheckCircle className="h-5 w-5 shrink-0" /><div><strong>Βρέθηκαν {result.fieldsFound} προδιαγραφές</strong><p className="text-[var(--text-dim)] text-xs mt-1">Το AI μπορεί να κάνει λάθη — ελέγξτε και διορθώστε τα αποτελέσματα στα επόμενα βήματα.</p></div>
           </div>
         )}
         {result && !result.success && (

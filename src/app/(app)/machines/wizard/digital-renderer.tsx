@@ -87,7 +87,7 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
           <CheckCircle className="h-5 w-5 shrink-0" />
           <div>
             <strong>Βρέθηκαν {result.fieldsFound} προδιαγραφές</strong>
-            <p className="text-[var(--text-dim)] text-xs mt-1">Ελέγξτε τα πεδία στα επόμενα βήματα και διορθώστε ό,τι χρειάζεται.</p>
+            <p className="text-[var(--text-dim)] text-xs mt-1">Το AI μπορεί να κάνει λάθη — ελέγξτε και διορθώστε τα αποτελέσματα στα επόμενα βήματα.</p>
           </div>
         </div>
       )}
