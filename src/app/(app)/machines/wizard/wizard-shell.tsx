@@ -27,9 +27,9 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
     if (isLast) {
       onSave();
     } else if (canAdvance) {
-      // Skip extra_colors step if stations < 5
+      // Skip extra_colors step if no special colors
       let nextIdx = stepIdx + 1;
-      if (steps[nextIdx]?.id === 'extra_colors' && (data.color_stations as number) < 5) {
+      if (steps[nextIdx]?.id === 'extra_colors' && !data.has_special_colors) {
         nextIdx++;
       }
       setStepIdx(Math.min(nextIdx, steps.length - 1));
@@ -39,7 +39,7 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
   function back() {
     let prevIdx = stepIdx - 1;
     // Skip extra_colors going back too
-    if (steps[prevIdx]?.id === 'extra_colors' && (data.color_stations as number) < 5) {
+    if (steps[prevIdx]?.id === 'extra_colors' && !data.has_special_colors) {
       prevIdx--;
     }
     setStepIdx(Math.max(prevIdx, 0));
@@ -48,7 +48,7 @@ export function WizardShell({ steps, data, onChange, onSave, onClose, renderStep
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-center justify-center backdrop-blur-sm">
       <div
-        className="flex w-[800px] max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] shadow-[0_32px_80px_rgba(0,0,0,0.5)]"
+        className="flex w-[800px] h-[85vh] flex-col overflow-hidden rounded-2xl border border-[var(--glass-border)] shadow-[0_32px_80px_rgba(0,0,0,0.5)]"
         style={{ background: 'rgb(20, 30, 55)' }}
       >
         {/* Header */}

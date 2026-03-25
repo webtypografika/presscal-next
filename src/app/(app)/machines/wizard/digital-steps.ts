@@ -39,12 +39,12 @@ export const DIGITAL_STEPS: WizardStep[] = [
   {
     id: 'color_stations',
     title: 'Χρώματα Εκτυπωτή',
-    subtitle: 'Αριθμός σταθμών CMYK + extra',
+    subtitle: 'Mono, CMYK ή CMYK + Special',
   },
   {
     id: 'extra_colors',
-    title: 'Εναλλαγή Χρωμάτων',
-    subtitle: '5ος/6ος σταθμός',
+    title: 'Special Colors',
+    subtitle: 'Σταθμοί & εναλλαγές ειδικών χρωμάτων',
   },
   {
     id: 'cost_model',
@@ -81,6 +81,8 @@ export const DIGITAL_DEFAULTS: Record<string, unknown> = {
   ink_type: 'toner',
   press_type: 'standard',
   color_stations: 4,
+  has_special_colors: false,
+  extra_station_count: 1,
   extra_color_count: 0,
 
   // Speeds
@@ -126,6 +128,7 @@ export const DIGITAL_DEFAULTS: Record<string, unknown> = {
   duplex_click_multiplier: 2,
 
   // Extra colors
+  extra_colors: [],
   has_extra_custom: false,
   extra_cost_label: '',
   click_extra_custom: null,

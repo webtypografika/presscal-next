@@ -1,7 +1,10 @@
 'use server';
 
-const GEMINI_API_KEY = 'AIzaSyCqU9HQOcOA3MyWdZUMr3b6nW3Ziwo6rCU';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+function getGeminiUrl() {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY not set in .env');
+  return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+}
 
 interface ScanResult {
   success: boolean;
@@ -13,12 +16,15 @@ interface ScanResult {
 export async function aiScanDigital(machineName: string): Promise<ScanResult> {
   if (!machineName.trim()) return { success: false, specs: {}, fieldsFound: 0, error: 'Δεν δόθηκε όνομα μηχανής' };
 
-  const prompt = `You are a printing industry expert. Search the web for the EXACT technical specifications of this digital press: "${machineName}".
+  const prompt = `You are a printing industry expert. Search the web for the EXACT technical specifications AND consumable costs of this digital press: "${machineName}".
 
 Find and return ONLY verified data. If you can't find a spec, set it to null.
+For consumable yields: these are rated at 5% page coverage (A4). Search for OEM part numbers and typical market prices in EUR.
+For drums/fuser/belt: search for rated life in pages/impressions and replacement cost in EUR.
 
 Return a JSON object with these fields:
 {
+  // === BASIC SPECS ===
   "speed_ppm_color": number or null,     // Color pages per minute (A4)
   "speed_ppm_bw": number or null,        // B&W pages per minute (A4)
   "min_gsm": number or null,             // Minimum paper weight in g/m²
@@ -42,13 +48,64 @@ Return a JSON object with these fields:
   "has_trimmer": boolean or null,
   "duplex_speed_factor": number or null, // % of simplex speed
   "setup_sheets_waste": number or null,
-  "warmup_minutes": number or null
+  "warmup_minutes": number or null,
+
+  // === TONER CONSUMABLES (for toner machines) ===
+  "toner_k_yield": number or null,       // Black toner yield (pages at 5%)
+  "toner_k_cost": number or null,        // Black toner cost EUR
+  "toner_c_yield": number or null,       // Cyan toner yield
+  "toner_c_cost": number or null,        // Cyan toner cost EUR
+  "toner_m_yield": number or null,       // Magenta toner yield
+  "toner_m_cost": number or null,        // Magenta toner cost EUR
+  "toner_y_yield": number or null,       // Yellow toner yield
+  "toner_y_cost": number or null,        // Yellow toner cost EUR
+
+  // === DRUMS (for toner machines) ===
+  "drum_k_life": number or null,         // Black drum life (pages)
+  "drum_k_cost": number or null,         // Black drum cost EUR
+  "drum_c_life": number or null,         // Cyan drum life
+  "drum_c_cost": number or null,         // Cyan drum cost EUR
+  "drum_m_life": number or null,         // Magenta drum life
+  "drum_m_cost": number or null,         // Magenta drum cost EUR
+  "drum_y_life": number or null,         // Yellow drum life
+  "drum_y_cost": number or null,         // Yellow drum cost EUR
+
+  // === DEVELOPER (for toner machines, null if integrated in drum) ===
+  "developer_type": "integrated" or "separate" or null,
+  "dev_k_life": number or null,          // Black developer life
+  "dev_k_cost": number or null,          // Black developer cost EUR
+  "dev_c_life": number or null,
+  "dev_c_cost": number or null,
+  "dev_m_life": number or null,
+  "dev_m_cost": number or null,
+  "dev_y_life": number or null,
+  "dev_y_cost": number or null,
+
+  // === SERVICE PARTS (for toner machines) ===
+  "fuser_life": number or null,          // Fuser unit life (pages)
+  "fuser_cost": number or null,          // Fuser unit cost EUR
+  "belt_life": number or null,           // Transfer belt life (pages)
+  "belt_cost": number or null,           // Transfer belt cost EUR
+  "waste_life": number or null,          // Waste toner container life (pages)
+  "waste_cost": number or null,          // Waste toner container cost EUR
+  "has_charge_coronas": boolean or null,
+  "corona_life": number or null,         // Corona wire/unit life (pages)
+  "corona_cost": number or null,         // Corona wire/unit cost EUR
+
+  // === HP INDIGO / LIQUID INK CONSUMABLES ===
+  "ink_can_yield": number or null,       // ElectroInk can yield (impressions)
+  "ink_can_cost": number or null,        // ElectroInk can cost EUR
+  "impression_charge": number or null,   // Per-impression charge EUR
+  "blanket_life": number or null,        // Blanket (BID) life (impressions)
+  "blanket_cost": number or null,        // Blanket (BID) cost EUR
+  "pip_life": number or null,            // PIP life (impressions)
+  "pip_cost": number or null             // PIP cost EUR
 }
 
-IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
+IMPORTANT: Return ONLY the JSON object, no markdown, no explanation. For consumable prices use current EUR market prices (OEM or compatible). If the machine uses liquid ink (HP Indigo), fill the HP Indigo fields and leave toner fields null, and vice versa.`;
 
   try {
-    const res = await fetch(GEMINI_URL, {
+    const res = await fetch(getGeminiUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -93,10 +150,27 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
     const specs = JSON.parse(jsonStr) as Record<string, unknown>;
 
     // Validate & clean
-    const numFields = ['speed_ppm_color', 'speed_ppm_bw', 'min_gsm', 'max_gsm',
+    const numFields = [
+      'speed_ppm_color', 'speed_ppm_bw', 'min_gsm', 'max_gsm',
       'max_sheet_ss', 'max_sheet_ls', 'min_sheet_ss', 'min_sheet_ls',
       'banner_ss', 'banner_ls', 'margin_top', 'margin_bottom', 'margin_left', 'margin_right',
-      'color_stations', 'duplex_speed_factor', 'setup_sheets_waste', 'warmup_minutes'];
+      'color_stations', 'duplex_speed_factor', 'setup_sheets_waste', 'warmup_minutes',
+      // Toner consumables
+      'toner_k_yield', 'toner_k_cost', 'toner_c_yield', 'toner_c_cost',
+      'toner_m_yield', 'toner_m_cost', 'toner_y_yield', 'toner_y_cost',
+      // Drums
+      'drum_k_life', 'drum_k_cost', 'drum_c_life', 'drum_c_cost',
+      'drum_m_life', 'drum_m_cost', 'drum_y_life', 'drum_y_cost',
+      // Developer
+      'dev_k_life', 'dev_k_cost', 'dev_c_life', 'dev_c_cost',
+      'dev_m_life', 'dev_m_cost', 'dev_y_life', 'dev_y_cost',
+      // Service parts
+      'fuser_life', 'fuser_cost', 'belt_life', 'belt_cost',
+      'waste_life', 'waste_cost', 'corona_life', 'corona_cost',
+      // HP Indigo
+      'ink_can_yield', 'ink_can_cost', 'impression_charge',
+      'blanket_life', 'blanket_cost', 'pip_life', 'pip_cost',
+    ];
 
     for (const f of numFields) {
       if (specs[f] !== null && specs[f] !== undefined) {
@@ -105,7 +179,7 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
       }
     }
 
-    const boolFields = ['has_booklet_maker', 'has_stapler', 'has_puncher', 'has_trimmer'];
+    const boolFields = ['has_booklet_maker', 'has_stapler', 'has_puncher', 'has_trimmer', 'has_charge_coronas'];
     for (const f of boolFields) {
       if (specs[f] !== null && specs[f] !== undefined) {
         specs[f] = !!specs[f];
@@ -115,6 +189,7 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
     // Validate enums
     if (specs.ink_type && !['toner', 'liquid'].includes(specs.ink_type as string)) specs.ink_type = null;
     if (specs.feed_direction && !['sef', 'lef', 'both'].includes(specs.feed_direction as string)) specs.feed_direction = null;
+    if (specs.developer_type && !['integrated', 'separate'].includes(specs.developer_type as string)) specs.developer_type = null;
 
     // GSM sanity: if < 2, probably mm not GSM
     if (specs.min_gsm && (specs.min_gsm as number) < 2) specs.min_gsm = (specs.min_gsm as number) * 1000;
@@ -162,7 +237,7 @@ Return a JSON object with these fields:
 IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
 
   try {
-    const res = await fetch(GEMINI_URL, {
+    const res = await fetch(getGeminiUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
