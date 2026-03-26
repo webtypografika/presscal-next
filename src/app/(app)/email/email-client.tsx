@@ -1,0 +1,507 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import type { GmailMessageMeta, GmailFullMessage, GmailLabel } from '@/lib/gmail';
+import { parseAddress, getInitials, avatarColor, timeAgo, formatDate, formatSize, attIconClass } from '@/lib/email-utils';
+
+// ─── TYPES ───
+type Folder = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all';
+interface ComposeData { to: string; cc: string; subject: string; body: string; inReplyTo?: string; threadId?: string; mode: 'new' | 'reply' | 'forward'; }
+
+const FOLDERS: { id: Folder; label: string; icon: string; q: string; labelIds?: string[] }[] = [
+  { id: 'inbox', label: 'Εισερχομενα', icon: 'fa-inbox', q: '', labelIds: ['INBOX'] },
+  { id: 'sent', label: 'Απεσταλμενα', icon: 'fa-paper-plane', q: '', labelIds: ['SENT'] },
+  { id: 'drafts', label: 'Προχειρα', icon: 'fa-file-alt', q: '', labelIds: ['DRAFT'] },
+  { id: 'starred', label: 'Με αστερι', icon: 'fa-star', q: 'is:starred', labelIds: undefined },
+  { id: 'all', label: 'Ολα', icon: 'fa-envelope', q: '', labelIds: undefined },
+];
+
+// ─── MAIN COMPONENT ───
+export default function EmailClient() {
+  const [folder, setFolder] = useState<Folder>('inbox');
+  const [emails, setEmails] = useState<GmailMessageMeta[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<GmailFullMessage | null>(null);
+  const [labels, setLabels] = useState<GmailLabel[]>([]);
+  const [currentLabel, setCurrentLabel] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [compose, setCompose] = useState<ComposeData | null>(null);
+  const [nextPage, setNextPage] = useState<string | undefined>();
+
+  // ─── FETCH MESSAGES ───
+  const fetchMessages = useCallback(async (f: Folder, q?: string, label?: string | null) => {
+    setLoading(true);
+    try {
+      const folderDef = FOLDERS.find(fd => fd.id === f)!;
+      const params = new URLSearchParams();
+      params.set('maxResults', '30');
+      const queryParts: string[] = [];
+      if (folderDef.q) queryParts.push(folderDef.q);
+      if (q) queryParts.push(q);
+      if (label) params.set('labelIds', label);
+      else if (folderDef.labelIds) params.set('labelIds', folderDef.labelIds.join(','));
+      if (queryParts.length) params.set('q', queryParts.join(' '));
+
+      const res = await fetch(`/api/email/messages?${params}`);
+      const data = await res.json();
+      setEmails(data.messages || []);
+      setNextPage(data.nextPageToken);
+    } catch { setEmails([]); }
+    setLoading(false);
+  }, []);
+
+  // ─── FETCH DETAIL ───
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const fetchDetail = useCallback(async (id: string) => {
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const res = await fetch(`/api/email/messages/${id}`);
+      const data = await res.json();
+      if (data.error) { setDetailError(data.error); setDetail(null); }
+      else setDetail(data);
+    } catch (e) { setDetailError((e as Error).message); setDetail(null); }
+    setDetailLoading(false);
+  }, []);
+
+  // ─── FETCH LABELS ───
+  useEffect(() => {
+    fetch('/api/email/labels').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) setLabels(data.filter((l: GmailLabel) => l.type === 'user'));
+    }).catch(() => {});
+  }, []);
+
+  // ─── INITIAL LOAD ───
+  useEffect(() => { fetchMessages(folder); }, [folder, fetchMessages]);
+
+  // ─── SELECT EMAIL ───
+  function handleSelect(id: string) {
+    setSelectedId(id);
+    fetchDetail(id);
+    // Mark as read locally
+    setEmails(prev => prev.map(e => e.id === id ? { ...e, labelIds: e.labelIds.filter(l => l !== 'UNREAD') } : e));
+    // Mark as read on Gmail (fire and forget)
+    fetch(`/api/email/messages/${id}/read`, { method: 'POST' }).catch(() => {});
+  }
+
+  // ─── SEARCH ───
+  function handleSearch(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') fetchMessages(folder, search, currentLabel);
+  }
+
+  // ─── CHANGE FOLDER ───
+  function handleFolder(f: Folder) {
+    setFolder(f);
+    setSelectedId(null);
+    setDetail(null);
+    setCurrentLabel(null);
+    setSearch('');
+  }
+
+  // ─── CHANGE LABEL ───
+  function handleLabel(labelId: string) {
+    setCurrentLabel(labelId);
+    setSelectedId(null);
+    setDetail(null);
+    fetchMessages('all', search, labelId);
+  }
+
+  // ─── COMPOSE ───
+  function handleCompose() {
+    setCompose({ to: '', cc: '', subject: '', body: '', mode: 'new' });
+  }
+  function handleReply() {
+    if (!detail) return;
+    const from = parseAddress(detail.from);
+    setCompose({
+      to: from.email,
+      cc: '',
+      subject: detail.subject.startsWith('Re:') ? detail.subject : `Re: ${detail.subject}`,
+      body: `<br><br><div style="border-left:2px solid #ccc;padding-left:12px;margin-top:12px;color:#666">${detail.htmlBody || detail.textBody}</div>`,
+      inReplyTo: detail.id,
+      threadId: detail.threadId,
+      mode: 'reply',
+    });
+  }
+  function handleForward() {
+    if (!detail) return;
+    setCompose({
+      to: '',
+      cc: '',
+      subject: detail.subject.startsWith('Fwd:') ? detail.subject : `Fwd: ${detail.subject}`,
+      body: `<br><br>---------- Forwarded message ----------<br>From: ${detail.from}<br>Date: ${formatDate(detail.date)}<br>Subject: ${detail.subject}<br><br>${detail.htmlBody || detail.textBody}`,
+      threadId: detail.threadId,
+      mode: 'forward',
+    });
+  }
+
+  // ─── SEND ───
+  async function handleSend(data: ComposeData) {
+    try {
+      const res = await fetch('/api/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const result = await res.json();
+      if (result.ok) {
+        setCompose(null);
+        fetchMessages(folder, search, currentLabel);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (e) {
+      throw e;
+    }
+  }
+
+  const userLabels = labels.filter(l => l.type === 'user');
+
+  return (
+    <div style={{ display: 'flex', height: 'calc(100vh - 160px)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--glass-border)', background: 'var(--bg-surface)', marginLeft: -40, marginRight: -40, width: 'calc(100% + 80px)' }}>
+
+      {/* ═══ SIDEBAR ═══ */}
+      <div style={{ width: 160, flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', padding: '12px 0' }}>
+        {/* Compose button */}
+        <div style={{ padding: '0 12px', marginBottom: 16 }}>
+          <button onClick={handleCompose} style={{
+            width: '100%', padding: '9px 0', borderRadius: 8, border: 'none',
+            background: 'var(--accent)', color: '#fff', fontSize: '0.78rem', fontWeight: 700,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            boxShadow: '0 4px 16px rgba(245,130,32,0.3)',
+          }}>
+            <i className="fas fa-pen" style={{ fontSize: '0.65rem' }} /> Νεο
+          </button>
+        </div>
+
+        {/* Folders */}
+        <div style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
+          {FOLDERS.map(f => (
+            <button key={f.id} onClick={() => handleFolder(f.id)} style={{
+              width: '100%', padding: '6px 12px', border: 'none', textAlign: 'left',
+              background: folder === f.id && !currentLabel ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+              color: folder === f.id && !currentLabel ? 'var(--accent)' : 'var(--text-dim)',
+              fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.15s',
+            }}>
+              <i className={`fas ${f.icon}`} style={{ width: 14, fontSize: '0.68rem' }} />
+              {f.label}
+            </button>
+          ))}
+
+          {/* Gmail Labels */}
+          {userLabels.length > 0 && (
+            <>
+              <div style={{ padding: '12px 16px 4px', fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>LABELS</div>
+              {userLabels.map(l => (
+                <button key={l.id} onClick={() => handleLabel(l.id)} style={{
+                  width: '100%', padding: '6px 16px', border: 'none', textAlign: 'left',
+                  background: currentLabel === l.id ? 'color-mix(in srgb, var(--blue) 10%, transparent)' : 'transparent',
+                  color: currentLabel === l.id ? 'var(--blue)' : 'var(--text-muted)',
+                  fontSize: '0.78rem', fontWeight: 500, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <i className="fas fa-tag" style={{ fontSize: '0.6rem' }} />
+                  {l.name}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ EMAIL LIST ═══ */}
+      <div style={{ width: 300, flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+        {/* Search */}
+        <div style={{ padding: 12, borderBottom: '1px solid var(--border)' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', height: 36,
+            border: '1px solid var(--glass-border)', borderRadius: 8,
+            background: 'rgba(255,255,255,0.04)',
+          }}>
+            <i className="fas fa-search" style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }} />
+            <input
+              value={search} onChange={e => setSearch(e.target.value)} onKeyDown={handleSearch}
+              placeholder="Αναζητηση email..."
+              style={{ border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', flex: 1 }}
+            />
+            <button onClick={() => fetchMessages(folder, search, currentLabel)} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <i className="fas fa-sync-alt" style={{ fontSize: '0.7rem' }} />
+            </button>
+          </div>
+        </div>
+
+        {/* List */}
+        <div style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
+          {loading && (
+            <div style={{ padding: 32, textAlign: 'center' }}>
+              <div style={{ width: 20, height: 20, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite', margin: '0 auto' }} />
+            </div>
+          )}
+          {!loading && emails.length === 0 && (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <i className="fas fa-inbox" style={{ fontSize: '2rem', opacity: 0.2, marginBottom: 12, display: 'block' }} />
+              <p style={{ fontSize: '0.85rem' }}>Δεν υπαρχουν emails</p>
+            </div>
+          )}
+          {!loading && emails.map(email => {
+            const sender = parseAddress(email.from);
+            const isSelected = email.id === selectedId;
+            const isUnread = email.labelIds.includes('UNREAD');
+            const color = avatarColor(sender.email);
+            return (
+              <div key={email.id} onClick={() => handleSelect(email.id)} style={{
+                padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)',
+                background: isSelected ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : isUnread ? 'rgba(255,255,255,0.02)' : 'transparent',
+                borderLeft: isSelected ? '3px solid var(--accent)' : isUnread ? '3px solid var(--blue)' : '3px solid transparent',
+                transition: 'background 0.15s',
+              }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  {/* Avatar */}
+                  <div style={{
+                    width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                    background: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.65rem', fontWeight: 800, color: '#fff',
+                  }}>{getInitials(sender.name)}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: isUnread ? 800 : 600, color: isUnread ? 'var(--text)' : 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sender.name}</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>{timeAgo(email.date)}</span>
+                    </div>
+                    <p style={{ fontSize: '0.78rem', fontWeight: isUnread ? 700 : 500, color: isUnread ? 'var(--text)' : 'var(--text-muted)', margin: '2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.subject || '(χωρις θεμα)'}</p>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.snippet}</p>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    {isUnread && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--blue)' }} />}
+                    {email.hasAttachments && <i className="fas fa-paperclip" style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }} />}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {nextPage && !loading && (
+            <button onClick={() => {/* TODO: load more */}} style={{
+              width: '100%', padding: 12, border: 'none', background: 'transparent',
+              color: 'var(--blue)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+            }}>Φορτωση περισσοτερων...</button>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ DETAIL PANE ═══ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {!selectedId && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+            <div style={{ textAlign: 'center' }}>
+              <i className="fas fa-envelope-open" style={{ fontSize: '3rem', opacity: 0.15, marginBottom: 16, display: 'block' }} />
+              <p style={{ fontSize: '0.88rem' }}>Επιλεξτε ενα email</p>
+            </div>
+          </div>
+        )}
+        {selectedId && detailLoading && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 24, height: 24, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+          </div>
+        )}
+        {selectedId && detailError && !detailLoading && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+            <div style={{ textAlign: 'center', maxWidth: 400 }}>
+              <i className="fas fa-exclamation-triangle" style={{ fontSize: '2rem', color: 'var(--danger)', opacity: 0.5, marginBottom: 12, display: 'block' }} />
+              <p style={{ fontSize: '0.85rem', color: 'var(--danger)', marginBottom: 8 }}>Σφαλμα φορτωσης email</p>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{detailError}</p>
+            </div>
+          </div>
+        )}
+        {selectedId && detail && !detailLoading && (
+          <>
+            {/* Detail header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <h2 style={{ fontSize: '1.05rem', fontWeight: 800, flex: 1 }}>{detail.subject || '(χωρις θεμα)'}</h2>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <ActionBtn icon="fa-reply" title="Απαντηση" onClick={handleReply} />
+                  <ActionBtn icon="fa-share" title="Προωθηση" onClick={handleForward} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                  background: avatarColor(parseAddress(detail.from).email),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.6rem', fontWeight: 800, color: '#fff',
+                }}>{getInitials(parseAddress(detail.from).name)}</div>
+                <div>
+                  <p style={{ fontSize: '0.82rem', fontWeight: 700 }}>{parseAddress(detail.from).name}</p>
+                  <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                    Προς: {parseAddress(detail.to).email}
+                    {detail.cc ? ` · CC: ${detail.cc}` : ''}
+                    <span style={{ marginLeft: 8 }}>{formatDate(detail.date)}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Attachments */}
+            {detail.attachments.length > 0 && (
+              <div style={{ padding: '8px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {detail.attachments.map((att, i) => (
+                  <button key={i} onClick={() => downloadAttachment(detail.id, att.id, att.filename)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 6,
+                      border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.03)',
+                      color: 'var(--text-dim)', fontSize: '0.72rem', cursor: 'pointer',
+                    }}>
+                    <i className={`fas ${attIconClass(att.filename)}`} style={{ fontSize: '0.65rem' }} />
+                    <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.filename}</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{formatSize(att.size)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Body */}
+            <div style={{ flex: 1, overflow: 'auto', padding: 0 }}>
+              {detail.htmlBody ? (
+                <iframe
+                  srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:14px;color:#1e293b;margin:16px 20px;line-height:1.6}img{max-width:100%}a{color:#3b82f6}blockquote{border-left:2px solid #e2e8f0;margin:8px 0;padding-left:12px;color:#64748b}</style></head><body>${detail.htmlBody}</body></html>`}
+                  style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
+                  sandbox="allow-same-origin"
+                />
+              ) : (
+                <pre style={{ padding: 20, fontSize: '0.85rem', color: 'var(--text-dim)', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{detail.textBody}</pre>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ═══ COMPOSE OVERLAY ═══ */}
+      {compose && <ComposePanel data={compose} onSend={handleSend} onClose={() => setCompose(null)} />}
+    </div>
+  );
+}
+
+// ─── ACTION BUTTON ───
+function ActionBtn({ icon, title, onClick }: { icon: string; title: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      width: 32, height: 32, borderRadius: 8, border: '1px solid var(--glass-border)',
+      background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem',
+    }}>
+      <i className={`fas ${icon}`} />
+    </button>
+  );
+}
+
+// ─── DOWNLOAD ATTACHMENT ───
+async function downloadAttachment(messageId: string, attachmentId: string, filename: string) {
+  try {
+    const res = await fetch(`/api/email/messages/${messageId}/attachments/${attachmentId}`);
+    const data = await res.json();
+    if (!data.data) return;
+
+    const binary = atob(data.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes]);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch { /* download failed */ }
+}
+
+// ─── COMPOSE PANEL ───
+function ComposePanel({ data, onSend, onClose }: { data: ComposeData; onSend: (d: ComposeData) => Promise<void>; onClose: () => void }) {
+  const [to, setTo] = useState(data.to);
+  const [cc, setCc] = useState(data.cc);
+  const [subject, setSubject] = useState(data.subject);
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15";
+
+  async function handleSubmit() {
+    if (!to.trim()) return;
+    setSending(true);
+    setError('');
+    try {
+      const htmlBody = (bodyRef.current?.innerHTML || '') + (data.body || '');
+      await onSend({ ...data, to, cc, subject, body: htmlBody });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+    setSending(false);
+  }
+
+  return createPortal(
+    <div style={{ position: 'fixed', bottom: 0, right: 40, zIndex: 200, width: 520 }}>
+      <div style={{
+        background: 'rgb(20,30,55)', border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: '12px 12px 0 0', boxShadow: '0 -8px 40px rgba(0,0,0,0.4)',
+        display: 'flex', flexDirection: 'column', maxHeight: '70vh',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '10px 16px', background: 'var(--accent)', borderRadius: '12px 12px 0 0',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>
+            {data.mode === 'reply' ? 'Απαντηση' : data.mode === 'forward' ? 'Προωθηση' : 'Νεο Email'}
+          </span>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', fontSize: '1rem' }}>&times;</button>
+        </div>
+
+        {/* Fields */}
+        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input className={inputCls} value={to} onChange={e => setTo(e.target.value)} placeholder="Προς" />
+          <input className={inputCls} value={cc} onChange={e => setCc(e.target.value)} placeholder="CC" />
+          <input className={inputCls} value={subject} onChange={e => setSubject(e.target.value)} placeholder="Θεμα" />
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, padding: '0 16px', minHeight: 180, maxHeight: 300, overflowY: 'auto' }}>
+          <div ref={bodyRef} contentEditable suppressContentEditableWarning
+            style={{
+              minHeight: 160, padding: 12, borderRadius: 8,
+              border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.04)',
+              color: 'var(--text)', fontSize: '0.85rem', lineHeight: 1.6,
+              outline: 'none', fontFamily: 'inherit',
+            }}
+            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSubmit(); }}
+          />
+          {data.body && (
+            <div style={{ marginTop: 8, padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.02)', fontSize: '0.78rem', color: 'var(--text-muted)', maxHeight: 150, overflowY: 'auto' }}
+              dangerouslySetInnerHTML={{ __html: data.body }}
+            />
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {error && <span style={{ fontSize: '0.72rem', color: 'var(--danger)', flex: 1 }}>{error}</span>}
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Ctrl+Enter</span>
+          <button onClick={handleSubmit} disabled={sending || !to.trim()} style={{
+            padding: '8px 24px', borderRadius: 8, border: 'none',
+            background: 'var(--accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 700,
+            cursor: 'pointer', opacity: sending ? 0.5 : 1,
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <i className="fas fa-paper-plane" style={{ fontSize: '0.7rem' }} />
+            {sending ? 'Αποστολη...' : 'Αποστολη'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
