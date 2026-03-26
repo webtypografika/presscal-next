@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Zap, CheckCircle, AlertTriangle } from 'lucide-react';
 import { aiScanOffset } from './ai-scan-action';
 import { inputCls, NumInput, Field, WizSection, Row, RowLabel, PillToggle, Toggle, ColHeaders, AddButton } from './wizard-ui';
+import { ConsumableSlot } from './consumable-slot';
 
 type OnChange = (field: string, value: unknown) => void;
 type Data = Record<string, unknown>;
@@ -210,17 +211,18 @@ function StepParts({ data, onChange }: { data: Data; onChange: OnChange }) {
       <WizSection title="Τσίγκος" sub="CTP Plates" accent="var(--blue)">
         <Toggle value={data.off_include_parts} onChange={(v) => onChange('off_include_parts', v)} labelOn="Συμπεριλαμβάνεται" labelOff="Εξαιρείται" />
         {!!data.off_include_parts && (
-          <Row><RowLabel>Plate</RowLabel><div className="flex-1"><Field label="Κόστος €/τεμ"><NumInput value={data.off_plate_c} onChange={(v) => onChange('off_plate_c', v)} step="0.01" /></Field></div></Row>
+          <ConsumableSlot label="Plate" conType="plate" conModule="offset"
+            costField="off_plate_c" idField="off_plate_consumable_id" nameField="off_plate_consumable_name"
+            data={data} onChange={onChange} />
         )}
       </WizSection>
 
       <WizSection title="Καουτσούκ" sub="Blankets" accent="var(--blue)" border>
         {!!data.off_include_parts && (
-          <Row>
-            <RowLabel>Blanket</RowLabel>
-            <div className="flex-1"><Field label="Κόστος €"><NumInput value={data.off_blanket_c} onChange={(v) => onChange('off_blanket_c', v)} step="0.01" /></Field></div>
-            <div className="flex-1"><Field label="Life (impressions)"><NumInput value={data.off_blanket_life} onChange={(v) => onChange('off_blanket_life', v)} /></Field></div>
-          </Row>
+          <ConsumableSlot label="Blanket" conType="blanket" conModule="offset"
+            costField="off_blanket_c" yieldField="off_blanket_life"
+            idField="off_blanket_consumable_id" nameField="off_blanket_consumable_name"
+            data={data} onChange={onChange} />
         )}
       </WizSection>
 
@@ -248,14 +250,16 @@ function StepInks({ data, onChange }: { data: Data; onChange: OnChange }) {
         <Toggle value={data.off_include_inks} onChange={(v) => onChange('off_include_inks', v)} labelOn="Συμπεριλαμβάνεται" labelOff="Εξαιρείται" />
         {!!data.off_include_inks && (
           <>
-            <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Κόστος €/kg' }]} />
             {[
-              { name: 'Cyan', key: 'ink_c_p', cls: 'text-cyan-400' },
-              { name: 'Magenta', key: 'ink_m_p', cls: 'text-pink-400' },
-              { name: 'Yellow', key: 'ink_y_p', cls: 'text-yellow-400' },
-              { name: 'Black', key: 'ink_k_p', cls: 'text-gray-400' },
+              { name: 'Cyan', key: 'ink_c_p', cls: 'text-cyan-400', color: 'cyan' },
+              { name: 'Magenta', key: 'ink_m_p', cls: 'text-pink-400', color: 'magenta' },
+              { name: 'Yellow', key: 'ink_y_p', cls: 'text-yellow-400', color: 'yellow' },
+              { name: 'Black', key: 'ink_k_p', cls: 'text-gray-400', color: 'black' },
             ].map((c) => (
-              <Row key={c.key}><RowLabel className={c.cls}>{c.name}</RowLabel><div className="flex-1"><NumInput value={data[c.key]} onChange={(v) => onChange(c.key, v)} step="0.01" /></div></Row>
+              <ConsumableSlot key={c.key} label={c.name} labelCls={c.cls}
+                conType="ink" conModule="offset" color={c.color}
+                costField={c.key} idField={`${c.key}_consumable_id`} nameField={`${c.key}_consumable_name`}
+                data={data} onChange={onChange} />
             ))}
           </>
         )}
@@ -264,20 +268,27 @@ function StepInks({ data, onChange }: { data: Data; onChange: OnChange }) {
       <WizSection title="Αλκοόλη" sub="IPA / Fountain" accent="var(--accent)" border>
         <Toggle value={data.off_include_alcohol} onChange={(v) => onChange('off_include_alcohol', v)} labelOn="Συμπεριλαμβάνεται" labelOff="Εξαιρείται" />
         {!!data.off_include_alcohol && (
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Κόστος IPA (€/lt)"><NumInput value={data.chem_alcohol_c} onChange={(v) => onChange('chem_alcohol_c', v)} step="0.01" /></Field>
+          <>
+            <ConsumableSlot label="IPA" conType="chemical" conModule="offset"
+              costField="chem_alcohol_c" idField="chem_alcohol_consumable_id" nameField="chem_alcohol_consumable_name"
+              data={data} onChange={onChange} />
             <Field label="Κατανάλωση (ml/ώρα)"><NumInput value={data.off_chem_fountain_ml_h} onChange={(v) => onChange('off_chem_fountain_ml_h', v)} /></Field>
-          </div>
+          </>
         )}
       </WizSection>
 
-      <WizSection title="Βερνίκι" sub="OPV & Coating" accent="var(--accent)" border>
+      <WizSection title="Βερνίκι" sub={data.off_has_varnish_tower ? 'Λαδιού & Βερνικιέρα' : 'Λαδιού (OPV)'} accent="var(--accent)" border>
         <Toggle value={data.off_include_varnish} onChange={(v) => onChange('off_include_varnish', v)} labelOn="Συμπεριλαμβάνεται" labelOff="Εξαιρείται" />
         {!!data.off_include_varnish && (
           <>
-            <Row><RowLabel>OPV</RowLabel><div className="flex-1"><Field label="Κόστος €/kg"><NumInput value={data.ink_var_c} onChange={(v) => onChange('ink_var_c', v)} step="0.01" /></Field></div></Row>
+            <ConsumableSlot label="Λαδιού (OPV)" conType="varnish" conModule="offset"
+              costField="ink_var_c" idField="ink_var_consumable_id" nameField="ink_var_consumable_name"
+              data={data} onChange={onChange} />
             {!!data.off_has_varnish_tower && (
-              <Row dashed><RowLabel className="text-[var(--accent)]">{data.off_varnish_type === 'uv' ? 'UV' : 'AQ'}</RowLabel><div className="flex-1"><Field label="Κόστος €/kg"><NumInput value={data.off_coating_c} onChange={(v) => onChange('off_coating_c', v)} step="0.01" /></Field></div></Row>
+              <ConsumableSlot label={data.off_varnish_type === 'uv' ? 'UV Coating' : 'Νερού (AQ)'} labelCls="text-[var(--accent)]"
+                conType="varnish" conModule="offset" dashed
+                costField="off_coating_c" idField="off_coating_consumable_id" nameField="off_coating_consumable_name"
+                data={data} onChange={onChange} />
             )}
           </>
         )}
@@ -293,9 +304,12 @@ function StepChemicals({ data, onChange }: { data: Data; onChange: OnChange }) {
         <Toggle value={data.off_include_chemicals} onChange={(v) => onChange('off_include_chemicals', v)} labelOn="Συμπεριλαμβάνεται" labelOff="Εξαιρείται" />
         {!!data.off_include_chemicals && (
           <>
-            <ColHeaders labels={[{ w: 'w-28', text: '' }, { text: 'Κόστος €/lt' }]} />
-            <Row><RowLabel className="!w-28">Wash Ink</RowLabel><div className="flex-1"><NumInput value={data.chem_wash_ink_c} onChange={(v) => onChange('chem_wash_ink_c', v)} step="0.01" /></div></Row>
-            <Row><RowLabel className="!w-28">Wash Water</RowLabel><div className="flex-1"><NumInput value={data.chem_wash_water_c} onChange={(v) => onChange('chem_wash_water_c', v)} step="0.01" /></div></Row>
+            <ConsumableSlot label="Wash Ink" conType="chemical" conModule="offset"
+              costField="chem_wash_ink_c" idField="chem_wash_ink_consumable_id" nameField="chem_wash_ink_consumable_name"
+              data={data} onChange={onChange} />
+            <ConsumableSlot label="Wash Water" conType="chemical" conModule="offset"
+              costField="chem_wash_water_c" idField="chem_wash_water_consumable_id" nameField="chem_wash_water_consumable_name"
+              data={data} onChange={onChange} />
             <Field label="Wash χημικό / εργασία (ml)"><NumInput value={data.off_chem_wash_ml} onChange={(v) => onChange('off_chem_wash_ml', v)} /></Field>
           </>
         )}
@@ -318,13 +332,15 @@ function StepMaintenance({ data, onChange }: { data: Data; onChange: OnChange })
       </WizSection>
 
       <WizSection title="Ημερολόγιο" sub="Ιστορικό service" accent="var(--teal)" border>
-        {logs.length > 0 && <ColHeaders labels={[{ w: 'w-28', text: 'Ημερομηνία' }, { w: 'w-24', text: 'Counter' }, { text: 'Περιγραφή' }, { w: 'w-5', text: '' }]} />}
         {logs.map((l, i) => (
-          <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2">
-            <input className={inputCls + " !h-8 w-28"} type="date" value={l.date} onChange={(e) => { const u = [...logs]; u[i] = { ...l, date: e.target.value }; onChange('maint_log', u); }} />
-            <input className={inputCls + " !h-8 w-24 text-center"} type="number" value={l.counter ?? ''} onChange={(e) => { const u = [...logs]; u[i] = { ...l, counter: e.target.value ? +e.target.value : null }; onChange('maint_log', u); }} placeholder="Counter" />
-            <input className={inputCls + " !h-8 flex-1"} value={l.description} onChange={(e) => { const u = [...logs]; u[i] = { ...l, description: e.target.value }; onChange('maint_log', u); }} placeholder="π.χ. Αλλαγή blanket..." />
-            <button onClick={() => onChange('maint_log', logs.filter((_, idx) => idx !== i))} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+          <div key={i} className="rounded-lg bg-white/[0.03] p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <input className={inputCls + " !h-8 w-32"} type="date" value={l.date} onChange={(e) => { const u = [...logs]; u[i] = { ...l, date: e.target.value }; onChange('maint_log', u); }} />
+              <input className={inputCls + " !h-8 w-28 text-center no-spinners"} type="number" value={l.counter ?? ''} onChange={(e) => { const u = [...logs]; u[i] = { ...l, counter: e.target.value ? +e.target.value : null }; onChange('maint_log', u); }} placeholder="Counter" />
+              <span className="flex-1" />
+              <button onClick={() => onChange('maint_log', logs.filter((_, idx) => idx !== i))} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+            </div>
+            <textarea className={inputCls + " !h-16 py-2 resize-none text-sm"} value={l.description} onChange={(e) => { const u = [...logs]; u[i] = { ...l, description: e.target.value }; onChange('maint_log', u); }} placeholder="Τι αλλάχτηκε; π.χ. Αλλαγή blanket, πλύσιμο κυλίνδρων..." />
           </div>
         ))}
         <AddButton label="+ Προσθήκη Εγγραφής" onClick={() => onChange('maint_log', [...logs, { date: new Date().toISOString().slice(0, 10), description: '', counter: null }])} />

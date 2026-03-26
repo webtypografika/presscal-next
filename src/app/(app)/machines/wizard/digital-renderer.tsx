@@ -7,6 +7,7 @@ import {
   inputCls, NumInput, Field, WizSection, Row, RowLabel, PillToggle, Toggle,
   ColHeaders, AddButton, fmtNum, CMYK_COLORS, getColorStations,
 } from './wizard-ui';
+import { ConsumableSlot } from './consumable-slot';
 
 type OnChange = (field: string, value: unknown) => void;
 type Data = Record<string, unknown>;
@@ -519,6 +520,11 @@ function CostPreview({ data }: { data: Data }) {
   );
 }
 
+<<<<<<< Updated upstream
+=======
+const KEY_TO_COLOR: Record<string, string> = { c: 'cyan', m: 'magenta', y: 'yellow', k: 'black' };
+
+>>>>>>> Stashed changes
 function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
   const mode = data.cost_mode as string;
   const inkType = data.ink_type as string;
@@ -578,6 +584,7 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
       {/* ─── TONER CONSUMABLES (simple_out / precision) ─── */}
       {(mode === 'simple_out' || mode === 'precision') && inkType === 'toner' && (
         <WizSection title="Χρώμα" sub="@ 5% coverage" accent="var(--accent)" border>
+<<<<<<< Updated upstream
           <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Yield (σελίδες)' }, { text: 'Cost €' }]} />
           {getColorStations(stations).map((c) => (
             <Row key={c.key}>
@@ -596,12 +603,29 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
               </Row>
             );
           })}
+=======
+          {getColorStations(stations).map((c) => (
+            <ConsumableSlot key={c.key} label={c.name} labelCls={c.cls}
+              conType="toner" conModule="digital" color={KEY_TO_COLOR[c.key]}
+              costField={`toner_${c.key}_cost`} yieldField={`toner_${c.key}_yield`}
+              idField={`toner_${c.key}_consumable_id`} nameField={`toner_${c.key}_consumable_name`}
+              data={data} onChange={onChange} />
+          ))}
+          {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => (
+            <ConsumableSlot key={i} label={`Σταθμός ${i + 1}`} labelCls="text-[var(--accent)]"
+              conType="toner" conModule="digital" dashed
+              costField={`extra_color_${i + 1}_cost`} yieldField={`extra_color_${i + 1}_yield`}
+              idField={`extra_color_${i + 1}_consumable_id`} nameField={`extra_color_${i + 1}_consumable_name`}
+              data={data} onChange={onChange} />
+          ))}
+>>>>>>> Stashed changes
         </WizSection>
       )}
 
       {/* ─── DRUMS (precision only) ─── */}
       {mode === 'precision' && inkType === 'toner' && (
         <WizSection title="Drums" sub="Life & Cost" accent="var(--accent)" border>
+<<<<<<< Updated upstream
           <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Life (σελίδες)' }, { text: 'Cost €' }]} />
           {getColorStations(stations).map((c) => (
             <Row key={c.key}>
@@ -620,6 +644,22 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
               </Row>
             );
           })}
+=======
+          {getColorStations(stations).map((c) => (
+            <ConsumableSlot key={c.key} label={c.name} labelCls={c.cls}
+              conType="drum" conModule="digital" color={KEY_TO_COLOR[c.key]}
+              costField={`drum_${c.key}_cost`} yieldField={`drum_${c.key}_life`}
+              idField={`drum_${c.key}_consumable_id`} nameField={`drum_${c.key}_consumable_name`}
+              data={data} onChange={onChange} />
+          ))}
+          {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => (
+            <ConsumableSlot key={i} label={`Σταθμός ${i + 1}`} labelCls="text-[var(--accent)]"
+              conType="drum" conModule="digital" dashed
+              costField={`drum_extra_${i + 1}_cost`} yieldField={`drum_extra_${i + 1}_life`}
+              idField={`drum_extra_${i + 1}_consumable_id`} nameField={`drum_extra_${i + 1}_consumable_name`}
+              data={data} onChange={onChange} />
+          ))}
+>>>>>>> Stashed changes
         </WizSection>
       )}
 
@@ -630,6 +670,7 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
           {data.developer_type === 'separate' && (
             <>
               {getColorStations(stations).map((c) => (
+<<<<<<< Updated upstream
                 <Row key={c.key}>
                   <RowLabel className={c.cls}>{c.name}</RowLabel>
                   <div className="flex-1"><NumInput value={data[`dev_${c.key}_life`]} onChange={(v) => onChange(`dev_${c.key}_life`, v)} /></div>
@@ -646,6 +687,21 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
                   </Row>
                 );
               })}
+=======
+                <ConsumableSlot key={c.key} label={c.name} labelCls={c.cls}
+                  conType="developer" conModule="digital" color={KEY_TO_COLOR[c.key]}
+                  costField={`dev_${c.key}_cost`} yieldField={`dev_${c.key}_life`}
+                  idField={`dev_${c.key}_consumable_id`} nameField={`dev_${c.key}_consumable_name`}
+                  data={data} onChange={onChange} />
+              ))}
+              {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => (
+                <ConsumableSlot key={i} label={`Σταθμός ${i + 1}`} labelCls="text-[var(--accent)]"
+                  conType="developer" conModule="digital" dashed
+                  costField={`dev_extra_${i + 1}_cost`} yieldField={`dev_extra_${i + 1}_life`}
+                  idField={`dev_extra_${i + 1}_consumable_id`} nameField={`dev_extra_${i + 1}_consumable_name`}
+                  data={data} onChange={onChange} />
+              ))}
+>>>>>>> Stashed changes
             </>
           )}
         </WizSection>
@@ -656,11 +712,18 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
         <WizSection title="Coronas" sub={`Charge wires · ×${stations >= 4 ? 4 : stations} σταθμοί`} accent="var(--accent)" border>
           <Toggle value={data.has_charge_coronas} onChange={(v) => onChange('has_charge_coronas', v)} labelOn="Ναι — Έχει" labelOff="Όχι" />
           {!!data.has_charge_coronas && (
+<<<<<<< Updated upstream
             <Row>
               <RowLabel>Corona</RowLabel>
               <div className="flex-1"><NumInput value={data.corona_life} onChange={(v) => onChange('corona_life', v)} /></div>
               <div className="flex-1"><NumInput value={data.corona_cost} onChange={(v) => onChange('corona_cost', v)} step="0.01" /></div>
             </Row>
+=======
+            <ConsumableSlot label="Corona" conType="corona" conModule="digital"
+              costField="corona_cost" yieldField="corona_life"
+              idField="corona_consumable_id" nameField="corona_consumable_name"
+              data={data} onChange={onChange} />
+>>>>>>> Stashed changes
           )}
         </WizSection>
       )}
@@ -668,6 +731,7 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
       {/* ─── SERVICE PARTS (precision, toner only) ─── */}
       {mode === 'precision' && inkType === 'toner' && (
         <WizSection title="Service" sub="Parts & Waste" accent="var(--accent)" border>
+<<<<<<< Updated upstream
           <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Life (σελίδες)' }, { text: 'Cost €' }]} />
           {[
             { label: 'Fuser', life: 'fuser_life', cost: 'fuser_cost' },
@@ -679,6 +743,17 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
               <div className="flex-1"><NumInput value={data[p.life]} onChange={(v) => onChange(p.life, v)} /></div>
               <div className="flex-1"><NumInput value={data[p.cost]} onChange={(v) => onChange(p.cost, v)} step="0.01" /></div>
             </Row>
+=======
+          {[
+            { label: 'Fuser', life: 'fuser_life', cost: 'fuser_cost', type: 'fuser' },
+            { label: 'Belt', life: 'belt_life', cost: 'belt_cost', type: 'belt' },
+            { label: 'Waste', life: 'waste_life', cost: 'waste_cost', type: 'waste' },
+          ].map((p) => (
+            <ConsumableSlot key={p.label} label={p.label} conType={p.type} conModule="digital"
+              costField={p.cost} yieldField={p.life}
+              idField={`${p.type}_consumable_id`} nameField={`${p.type}_consumable_name`}
+              data={data} onChange={onChange} />
+>>>>>>> Stashed changes
           ))}
         </WizSection>
       )}
@@ -686,11 +761,18 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
       {/* Liquid Ink — simple_out: only ink can */}
       {mode === 'simple_out' && inkType === 'liquid' && (
         <WizSection title="Ink Cans" sub="ElectroInk" accent="var(--accent)" border>
+<<<<<<< Updated upstream
           <Row>
             <RowLabel className="!w-28">ElectroInk Can</RowLabel>
             <div className="flex-1"><Field label="Yield (impressions)"><NumInput value={data.ink_can_yield} onChange={(v) => onChange('ink_can_yield', v)} /></Field></div>
             <div className="flex-1"><Field label="Κόστος €"><NumInput value={data.ink_can_cost} onChange={(v) => onChange('ink_can_cost', v)} step="0.01" /></Field></div>
           </Row>
+=======
+          <ConsumableSlot label="ElectroInk Can" conType="ink" conModule="digital"
+            costField="ink_can_cost" yieldField="ink_can_yield"
+            idField="ink_can_consumable_id" nameField="ink_can_consumable_name"
+            data={data} onChange={onChange} />
+>>>>>>> Stashed changes
         </WizSection>
       )}
 
@@ -698,27 +780,43 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
       {mode === 'precision' && inkType === 'liquid' && (
         <>
           <WizSection title="Ink" sub="ElectroInk cans" accent="var(--accent)" border>
+<<<<<<< Updated upstream
             <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Yield (impressions)' }, { text: 'Cost €' }]} />
             <Row>
               <RowLabel>CMYK Can</RowLabel>
               <div className="flex-1"><NumInput value={data.ink_can_yield} onChange={(v) => onChange('ink_can_yield', v)} /></div>
               <div className="flex-1"><NumInput value={data.ink_can_cost} onChange={(v) => onChange('ink_can_cost', v)} step="0.01" /></div>
             </Row>
+=======
+            <ConsumableSlot label="CMYK Can" conType="ink" conModule="digital"
+              costField="ink_can_cost" yieldField="ink_can_yield"
+              idField="ink_can_consumable_id" nameField="ink_can_consumable_name"
+              data={data} onChange={onChange} />
+>>>>>>> Stashed changes
             <Row>
               <RowLabel>Impression</RowLabel>
               <div className="flex-1"><NumInput value={data.impression_charge} onChange={(v) => onChange('impression_charge', v)} step="0.001" /></div>
               <div className="flex-1" />
             </Row>
             {extraCount > 0 && Array.from({ length: extraCount }).map((_, i) => (
+<<<<<<< Updated upstream
               <Row dashed key={i}>
                 <RowLabel className="text-[var(--accent)]">Extra {i + 1}</RowLabel>
                 <div className="flex-1"><NumInput value={data[`ink_extra_${i + 1}_yield`]} onChange={(v) => onChange(`ink_extra_${i + 1}_yield`, v)} /></div>
                 <div className="flex-1"><NumInput value={data[`ink_extra_${i + 1}_cost`]} onChange={(v) => onChange(`ink_extra_${i + 1}_cost`, v)} step="0.01" /></div>
               </Row>
+=======
+              <ConsumableSlot key={i} label={`Extra ${i + 1}`} labelCls="text-[var(--accent)]"
+                conType="ink" conModule="digital" dashed
+                costField={`ink_extra_${i + 1}_cost`} yieldField={`ink_extra_${i + 1}_yield`}
+                idField={`ink_extra_${i + 1}_consumable_id`} nameField={`ink_extra_${i + 1}_consumable_name`}
+                data={data} onChange={onChange} />
+>>>>>>> Stashed changes
             ))}
           </WizSection>
 
           <WizSection title="Parts" sub="Blanket, PIP" accent="var(--accent)" border>
+<<<<<<< Updated upstream
             <ColHeaders labels={[{ w: 'w-20', text: '' }, { text: 'Life (impressions)' }, { text: 'Cost €' }]} />
             <Row>
               <RowLabel>Blanket</RowLabel>
@@ -730,6 +828,16 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
               <div className="flex-1"><NumInput value={data.pip_life} onChange={(v) => onChange('pip_life', v)} /></div>
               <div className="flex-1"><NumInput value={data.pip_cost} onChange={(v) => onChange('pip_cost', v)} step="0.01" /></div>
             </Row>
+=======
+            <ConsumableSlot label="Blanket" conType="blanket" conModule="digital"
+              costField="blanket_cost" yieldField="blanket_life"
+              idField="blanket_consumable_id" nameField="blanket_consumable_name"
+              data={data} onChange={onChange} />
+            <ConsumableSlot label="PIP" conType="other" conModule="digital"
+              costField="pip_cost" yieldField="pip_life"
+              idField="pip_consumable_id" nameField="pip_consumable_name"
+              data={data} onChange={onChange} />
+>>>>>>> Stashed changes
           </WizSection>
 
           <WizSection title="Setup" sub="Mixing / Prep" accent="var(--accent)" border>
@@ -744,6 +852,10 @@ function StepCosts({ data, onChange }: { data: Data; onChange: OnChange }) {
 
       {/* Live cost preview */}
       <CostPreview data={data} />
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
     </div>
   );
 }
@@ -853,6 +965,7 @@ function StepMaintenance({ data, onChange }: { data: Data; onChange: OnChange })
       </WizSection>
 
       <WizSection title="Ημερολόγιο" sub="Ιστορικό service" accent="var(--teal)" border>
+<<<<<<< Updated upstream
         {logs.length > 0 && <ColHeaders labels={[{ w: 'w-28', text: 'Ημερομηνία' }, { w: 'w-24', text: 'Counter' }, { text: 'Περιγραφή' }, { w: 'w-5', text: '' }]} />}
         {logs.map((l, i) => (
           <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2">
@@ -860,6 +973,17 @@ function StepMaintenance({ data, onChange }: { data: Data; onChange: OnChange })
             <input className={inputCls + " !h-8 w-24 text-center"} type="number" value={l.counter ?? ''} onChange={(e) => updateLog(i, 'counter', e.target.value ? +e.target.value : null)} placeholder="Counter" />
             <input className={inputCls + " !h-8 flex-1"} value={l.description} onChange={(e) => updateLog(i, 'description', e.target.value)} placeholder="π.χ. Αλλαγή fuser, PM kit..." />
             <button onClick={() => delLog(i)} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+=======
+        {logs.map((l, i) => (
+          <div key={i} className="rounded-lg bg-white/[0.03] p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <input className={inputCls + " !h-8 w-32"} type="date" value={l.date} onChange={(e) => updateLog(i, 'date', e.target.value)} />
+              <input className={inputCls + " !h-8 w-28 text-center no-spinners"} type="number" value={l.counter ?? ''} onChange={(e) => updateLog(i, 'counter', e.target.value ? +e.target.value : null)} placeholder="Counter" />
+              <span className="flex-1" />
+              <button onClick={() => delLog(i)} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+            </div>
+            <textarea className={inputCls + " !h-16 py-2 resize-none text-sm"} value={l.description} onChange={(e) => updateLog(i, 'description', e.target.value)} placeholder="Τι αλλάχτηκε; π.χ. Αλλαγή fuser kit, καθαρισμός coronas, PM 500K..." />
+>>>>>>> Stashed changes
           </div>
         ))}
         <AddButton label="+ Προσθήκη Εγγραφής" onClick={addLog} />

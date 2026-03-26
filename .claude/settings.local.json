@@ -1,8 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find:*)",
-      "Bash(npx next:*)"
+      "Skill(update-config)",
+      "Bash(npx next:*)",
+      "Bash(npx tsc:*)",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash(*)"
     ]
   }
 }

@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
+import { ConsumablePanel } from '../../inventory/consumable-panel';
 
-interface ConsumableItem {
+export interface ConsumableItem {
   id: string;
   name: string;
   conType: string;
@@ -17,9 +18,9 @@ interface ConsumableItem {
 }
 
 interface Props {
-  conType: string; // filter by type
-  conModule: string; // 'offset' | 'digital'
-  color?: string; // optional color filter
+  conType: string;
+  conModule: string;
+  color?: string;
   onSelect: (item: ConsumableItem) => void;
   onClose: () => void;
 }
@@ -28,6 +29,7 @@ export function ConsumablePicker({ conType, conModule, color, onSelect, onClose 
   const [items, setItems] = useState<ConsumableItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     fetch(`/api/consumables?conType=${conType}&conModule=${conModule}${color ? `&color=${color}` : ''}`)
@@ -57,7 +59,7 @@ export function ConsumablePicker({ conType, conModule, color, onSelect, onClose 
       <div className="w-[500px] max-h-[70vh] flex flex-col rounded-2xl border border-[var(--glass-border)] shadow-[0_32px_80px_rgba(0,0,0,0.5)]"
         style={{ background: 'rgb(20, 30, 55)' }} onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
+        {/* Header — clean, no create button */}
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-3">
           <div>
             <h3 className="text-base font-bold">Επιλογή από Αποθήκη</h3>
@@ -85,8 +87,10 @@ export function ConsumablePicker({ conType, conModule, color, onSelect, onClose 
             </div>
           ) : filtered.length === 0 ? (
             <div className="py-8 text-center">
-              <p className="text-sm text-[var(--text-muted)]">{items.length === 0 ? 'Δεν υπάρχουν αναλώσιμα αυτού του τύπου' : 'Κανένα αποτέλεσμα'}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Προσθέστε πρώτα στη σελίδα Αποθήκης</p>
+              <p className="text-sm text-[var(--text-muted)]">
+                {items.length === 0 ? 'Δεν υπάρχουν αναλώσιμα αυτού του τύπου' : 'Κανένα αποτέλεσμα'}
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">Δημιουργήστε ένα νέο παρακάτω</p>
             </div>
           ) : (
             filtered.map(item => (
@@ -95,20 +99,15 @@ export function ConsumablePicker({ conType, conModule, color, onSelect, onClose 
                 onClick={() => onSelect(item)}
                 className="w-full flex items-center gap-3 px-5 py-3 text-left transition-all hover:bg-white/[0.03] border-b border-[var(--border)]"
               >
-                {/* Color dot */}
                 {item.color && COLOR_DOTS[item.color] ? (
                   <span className="shrink-0 w-3 h-3 rounded-full" style={{ background: COLOR_DOTS[item.color] }} />
                 ) : (
                   <span className="shrink-0 w-3" />
                 )}
-
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">{item.name}</p>
                   {item.supplier && <p className="text-[0.65rem] text-[var(--text-muted)]">{item.supplier}</p>}
                 </div>
-
-                {/* Cost */}
                 <div className="shrink-0 text-right">
                   {item.costPerUnit !== null && (
                     <p className="text-sm font-bold text-[var(--accent)]">€{item.costPerUnit.toFixed(2)}</p>
@@ -117,14 +116,34 @@ export function ConsumablePicker({ conType, conModule, color, onSelect, onClose 
                     <p className="text-[0.65rem] text-[var(--text-muted)]">{item.yieldPages.toLocaleString('el-GR')} pages</p>
                   )}
                 </div>
-
-                {/* Select indicator */}
                 <i className="fas fa-arrow-right text-[var(--text-muted)] text-xs shrink-0" />
               </button>
             ))
           )}
         </div>
+
+        {/* Sticky footer — single create button */}
+        <div className="border-t border-[var(--border)] px-5 py-3">
+          <button onClick={() => setCreating(true)}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-dashed border-[var(--accent)]/30 bg-[var(--accent)]/5 py-2.5 text-sm font-semibold text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-all">
+            <Plus className="h-3.5 w-3.5" /> Δημιουργία Νέου
+          </button>
+        </div>
       </div>
+
+      {/* Inline create panel */}
+      {creating && (
+        <ConsumablePanel
+          defaultModule={conModule}
+          defaultConType={conType}
+          defaultColor={color}
+          onClose={() => setCreating(false)}
+          onSaved={(item) => {
+            setCreating(false);
+            onSelect(item as ConsumableItem);
+          }}
+        />
+      )}
     </div>,
     document.body
   );

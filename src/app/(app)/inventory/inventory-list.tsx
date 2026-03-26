@@ -6,6 +6,10 @@ import type { Material, Consumable, Machine } from '@/generated/prisma/client';
 import { deleteMaterial, deleteConsumable } from './actions';
 import { MaterialPanel } from './material-panel';
 import { ConsumablePanel } from './consumable-panel';
+import { ImportCenter } from './import-center';
+import { ImportMapper } from './import-mapper';
+import { parseStandardRows } from './parse-import';
+import { bulkCreateMaterials } from './actions';
 
 type ConsumableWithMachine = Consumable & { machine: { id: string; name: string } | null };
 
@@ -40,6 +44,8 @@ export function InventoryList({ materials, consumables }: Props) {
   const [editMaterialId, setEditMaterialId] = useState<string | null>(null);
   const [editConsumableId, setEditConsumableId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState<'material' | 'consumable' | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [smartRows, setSmartRows] = useState<string[][] | null>(null);
 
   const sheets = materials.filter(m => m.cat === 'sheet');
   const offsetCons = consumables.filter(c => c.conModule === 'offset');
@@ -89,18 +95,34 @@ export function InventoryList({ materials, consumables }: Props) {
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{totalItems} items{lowStock > 0 ? ` · ${lowStock} χαμηλό stock` : ''}</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowNew(tab === 'sheet' ? 'material' : 'consumable')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            background: 'var(--accent)', color: '#fff',
-            padding: '10px 20px', borderRadius: 10, border: 'none',
-            fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer',
-            boxShadow: '0 4px 16px rgba(245,130,32,0.3)',
-          }}
-        >
-          <i className="fas fa-plus" /> Νέο Item
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {tab === 'sheet' && (
+            <button
+              onClick={() => setShowImport(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: 'var(--blue)', color: '#fff',
+                padding: '10px 20px', borderRadius: 10, border: 'none',
+                fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(29,47,110,0.3)',
+              }}
+            >
+              <i className="fas fa-database" /> Εισαγωγή
+            </button>
+          )}
+          <button
+            onClick={() => setShowNew(tab === 'sheet' ? 'material' : 'consumable')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'var(--accent)', color: '#fff',
+              padding: '10px 20px', borderRadius: 10, border: 'none',
+              fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer',
+              boxShadow: '0 4px 16px rgba(245,130,32,0.3)',
+            }}
+          >
+            <i className="fas fa-plus" /> Νέο Item
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -173,6 +195,38 @@ export function InventoryList({ materials, consumables }: Props) {
       )}
       {showNew === 'consumable' && (
         <ConsumablePanel defaultModule={tab === 'consumable-offset' ? 'offset' : 'digital'} onClose={() => setShowNew(null)} />
+      )}
+
+      {/* Import Center */}
+      {showImport && (
+        <ImportCenter
+          onStandardFile={async (rows) => {
+            setShowImport(false);
+            const parsed = parseStandardRows(rows);
+            const bulkRows = parsed.map(p => ({
+              name: p.name, cat: 'sheet' as const,
+              groupName: p.groupName || undefined, subtype: p.subtype || undefined,
+              supplier: p.supplier || undefined, supplierEmail: p.supplierEmail || undefined,
+              width: p.width || null, height: p.height || null, thickness: p.thickness || null,
+              grain: p.grain || undefined, costPerUnit: p.costPerUnit || null,
+              markup: p.markup, unit: 'φύλλο',
+            }));
+            const res = await bulkCreateMaterials(bulkRows);
+            alert(`Εισαγωγή ολοκληρώθηκε!\n\nΝέα: ${res.added}\nΕνημερώθηκαν: ${res.updated}\nΑγνοήθηκαν: ${res.skipped}`);
+          }}
+          onSmartFile={(rows) => { setShowImport(false); setSmartRows(rows); }}
+          onSmartPdf={(rows) => { setShowImport(false); setSmartRows(rows); }}
+          onClose={() => setShowImport(false)}
+        />
+      )}
+
+      {/* Smart Mapper */}
+      {smartRows && (
+        <ImportMapper
+          rawRows={smartRows}
+          onClose={() => setSmartRows(null)}
+          onDone={() => setSmartRows(null)}
+        />
       )}
     </>
   );

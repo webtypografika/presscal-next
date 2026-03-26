@@ -6,7 +6,7 @@ import { X } from 'lucide-react';
 import type { Machine } from '@/generated/prisma/client';
 import { updateMachine } from '../actions';
 
-const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15";
+const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 no-spinners";
 
 type Tab = 'maintenance' | 'contacts';
 
@@ -123,20 +123,15 @@ export function MachineServicePanel({ machine, onClose }: Props) {
                   <p className="text-[0.65rem] text-[var(--text-muted)] mt-0.5">Ιστορικό service</p>
                 </div>
                 <div className="flex-1 space-y-2">
-                  {logs.length > 0 && (
-                    <div className="flex items-center gap-2 px-1">
-                      <span className="w-28 text-[0.6rem] font-semibold text-[var(--text-muted)]">Ημερομηνία</span>
-                      <span className="w-24 text-[0.6rem] font-semibold text-[var(--text-muted)]">Counter</span>
-                      <span className="flex-1 text-[0.6rem] font-semibold text-[var(--text-muted)]">Περιγραφή</span>
-                      <span className="w-5" />
-                    </div>
-                  )}
                   {logs.map((l, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-lg bg-white/[0.03] p-2">
-                      <input className={inputCls + " !h-8 w-28"} type="date" value={l.date} onChange={e => { const u = [...logs]; u[i] = { ...l, date: e.target.value }; setLogs(u); }} />
-                      <input className={inputCls + " !h-8 w-24 text-center"} type="number" value={l.counter ?? ''} onChange={e => { const u = [...logs]; u[i] = { ...l, counter: e.target.value ? +e.target.value : null }; setLogs(u); }} placeholder="Counter" />
-                      <input className={inputCls + " !h-8 flex-1"} value={l.description} onChange={e => { const u = [...logs]; u[i] = { ...l, description: e.target.value }; setLogs(u); }} placeholder="π.χ. Αλλαγή fuser..." />
-                      <button onClick={() => setLogs(logs.filter((_, idx) => idx !== i))} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+                    <div key={i} className="rounded-lg bg-white/[0.03] p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input className={inputCls + " !h-8 w-32"} type="date" value={l.date} onChange={e => { const u = [...logs]; u[i] = { ...l, date: e.target.value }; setLogs(u); }} />
+                        <input className={inputCls + " !h-8 w-28 text-center"} type="number" value={l.counter ?? ''} onChange={e => { const u = [...logs]; u[i] = { ...l, counter: e.target.value ? +e.target.value : null }; setLogs(u); }} placeholder="Counter" />
+                        <span className="flex-1" />
+                        <button onClick={() => setLogs(logs.filter((_, idx) => idx !== i))} className="shrink-0 text-[var(--text-muted)] hover:text-[var(--danger)] text-lg">×</button>
+                      </div>
+                      <textarea className={inputCls + " !h-16 py-2 resize-none text-sm"} value={l.description} onChange={e => { const u = [...logs]; u[i] = { ...l, description: e.target.value }; setLogs(u); }} placeholder="Τι αλλάχτηκε; π.χ. Αλλαγή fuser kit, καθαρισμός coronas, PM 500K..." />
                     </div>
                   ))}
                   <button
