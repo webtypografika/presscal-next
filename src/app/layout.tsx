@@ -27,6 +27,7 @@ export default function RootLayout({
     <html
       lang="el"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      style={{ colorScheme: 'dark' }}
       suppressHydrationWarning
     >
       <head>

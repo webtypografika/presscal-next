@@ -1,0 +1,333 @@
+'use client';
+
+import { useState, useRef } from 'react';
+import type { Org } from '@/generated/prisma/client';
+import { updateOrg } from './actions';
+
+const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15";
+
+type Tab = 'company' | 'subscription' | 'integrations';
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'company', label: 'Επιχείρηση', icon: 'fa-building' },
+  { id: 'subscription', label: 'Συνδρομή', icon: 'fa-crown' },
+  { id: 'integrations', label: 'Ενσωματώσεις', icon: 'fa-plug' },
+];
+
+const PLANS: { id: string; name: string; price: string; features: string[] }[] = [
+  { id: 'free', name: 'Free', price: '€0', features: ['1 μηχανή', '100 χαρτιά', 'Βασική κοστολόγηση'] },
+  { id: 'starter', name: 'Starter', price: '€19/μήνα', features: ['5 μηχανές', 'Απεριόριστα χαρτιά', 'Smart Import', 'Email παραγγελίες'] },
+  { id: 'pro', name: 'Pro', price: '€49/μήνα', features: ['Απεριόριστα', 'Elorus τιμολόγηση', 'API access', 'Priority support'] },
+  { id: 'enterprise', name: 'Enterprise', price: 'Custom', features: ['Multi-branch', 'Custom integrations', 'SLA', 'Dedicated support'] },
+];
+
+export function SettingsShell({ org }: { org: Org }) {
+  const [tab, setTab] = useState<Tab>('company');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Company fields
+  const [legalName, setLegalName] = useState(org.legalName ?? '');
+  const [afm, setAfm] = useState(org.afm ?? '');
+  const [doy, setDoy] = useState(org.doy ?? '');
+  const [gemh, setGemh] = useState(org.gemh ?? '');
+  const [profession, setProfession] = useState(org.profession ?? '');
+  const [address, setAddress] = useState(org.address ?? '');
+  const [city, setCity] = useState(org.city ?? '');
+  const [postalCode, setPostalCode] = useState(org.postalCode ?? '');
+  const [phone, setPhone] = useState(org.phone ?? '');
+  const [email, setEmail] = useState(org.email ?? '');
+  const [website, setWebsite] = useState(org.website ?? '');
+
+  // Logo
+  const [logo, setLogo] = useState(org.logo ?? '');
+  const [uploading, setUploading] = useState(false);
+  const logoRef = useRef<HTMLInputElement>(null);
+
+  // APIs
+  const [apiElorus, setApiElorus] = useState(org.apiElorus ?? '');
+  const [apiGmail, setApiGmail] = useState(org.apiGmail ?? '');
+  const [apiGemini, setApiGemini] = useState(org.apiGemini ?? '');
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch('/api/upload-logo', { method: 'POST', body: form });
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { setUploading(false); return; }
+      if (data.url) {
+        // Logo already saved to DB by the API route, just update UI
+        setLogo(data.url);
+      }
+    } catch { /* silently fail — logo already saved by API */ }
+    setUploading(false);
+    e.target.value = '';
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const result = await updateOrg({
+      legalName: legalName || null, afm: afm || null, doy: doy || null,
+      gemh: gemh || null, profession: profession || null,
+      address: address || null, city: city || null, postalCode: postalCode || null,
+      phone: phone || null, email: email || null, website: website || null,
+      apiElorus: apiElorus || null, apiGmail: apiGmail || null, apiGemini: apiGemini || null,
+    });
+    setSaving(false);
+    if (result.ok) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } else {
+      alert(`Σφάλμα αποθήκευσης: ${result.error}`);
+    }
+  }
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        <div style={{
+          width: 46, height: 46, borderRadius: '50%',
+          border: '2px solid color-mix(in srgb, var(--violet) 35%, transparent)',
+          background: 'color-mix(in srgb, var(--violet) 10%, transparent)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '1.1rem', color: 'var(--violet)',
+        }}>
+          <i className="fas fa-cog" />
+        </div>
+        <div>
+          <h1 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Ρυθμίσεις</h1>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Λογαριασμός & Ενσωματώσεις</p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 3, marginBottom: 24, width: 'fit-content' }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: '8px 20px', borderRadius: 8, border: 'none',
+            fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+            color: tab === t.id ? 'var(--violet)' : 'var(--text-muted)',
+            background: tab === t.id ? 'color-mix(in srgb, var(--violet) 12%, transparent)' : 'transparent',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <i className={`fas ${t.icon}`} style={{ fontSize: '0.7rem' }} />{t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ═══ COMPANY TAB ═══ */}
+      {tab === 'company' && (
+        <div className="panel" style={{ maxWidth: 700 }}>
+          <Section icon="fa-image" iconColor="var(--blue)" title="Λογότυπο">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div onClick={() => logoRef.current?.click()} style={{
+                width: 120, height: 70, borderRadius: 10,
+                border: `2px dashed ${logo ? 'var(--glass-border)' : 'color-mix(in srgb, var(--blue) 40%, transparent)'}`,
+                background: logo ? 'rgba(255,255,255,0.03)' : 'color-mix(in srgb, var(--blue) 5%, transparent)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', overflow: 'hidden', position: 'relative',
+              }}>
+                {logo ? (
+                  <img src={logo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                ) : (
+                  <div style={{ textAlign: 'center' }}>
+                    <i className="fas fa-cloud-upload-alt" style={{ color: 'var(--blue)', fontSize: '1.2rem' }} />
+                    <p style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: 2 }}>Ανέβασμα</p>
+                  </div>
+                )}
+                {uploading && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 16, height: 16, border: '2px solid var(--blue)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+                  </div>
+                )}
+              </div>
+              <div>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+                  {logo ? 'Κλικ για αλλαγή' : 'Ανεβάστε το λογότυπο της εταιρείας'}
+                </p>
+                <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 2 }}>PNG, JPG ή SVG, μέγιστο 2MB</p>
+                {logo && (
+                  <button onClick={async (e) => { e.stopPropagation(); setLogo(''); await updateOrg({ logo: null }); }}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--danger)', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer', marginTop: 4 }}>
+                    <i className="fas fa-trash" style={{ marginRight: 3, fontSize: '0.6rem' }} />Αφαίρεση
+                  </button>
+                )}
+              </div>
+              <input ref={logoRef} type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: 'none' }} />
+            </div>
+          </Section>
+
+          <Section icon="fa-file-invoice" iconColor="var(--accent)" title="Φορολογικά Στοιχεία">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Field label="Επωνυμία *"><input className={inputCls} value={legalName} onChange={e => setLegalName(e.target.value)} placeholder="π.χ. PressCal ΕΠΕ" /></Field>
+              <Field label="ΑΦΜ *"><input className={inputCls} value={afm} onChange={e => setAfm(e.target.value)} placeholder="999999999" /></Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Field label="ΔΟΥ"><input className={inputCls} value={doy} onChange={e => setDoy(e.target.value)} placeholder="π.χ. Α' Αθηνών" /></Field>
+              <Field label="ΓΕΜΗ"><input className={inputCls} value={gemh} onChange={e => setGemh(e.target.value)} placeholder="123456789" /></Field>
+              <Field label="Δραστηριότητα"><input className={inputCls} value={profession} onChange={e => setProfession(e.target.value)} placeholder="Τυπογραφείο" /></Field>
+            </div>
+          </Section>
+
+          <Section icon="fa-map-marker-alt" iconColor="var(--teal)" title="Στοιχεία Επικοινωνίας">
+            <Field label="Διεύθυνση"><input className={inputCls} value={address} onChange={e => setAddress(e.target.value)} placeholder="Οδός, Αριθμός" /></Field>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+              <Field label="Πόλη"><input className={inputCls} value={city} onChange={e => setCity(e.target.value)} placeholder="Αθήνα" /></Field>
+              <Field label="ΤΚ"><input className={inputCls} value={postalCode} onChange={e => setPostalCode(e.target.value)} placeholder="11111" /></Field>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <Field label="Τηλέφωνο"><input className={inputCls} value={phone} onChange={e => setPhone(e.target.value)} placeholder="210-..." /></Field>
+              <Field label="Email"><input className={inputCls} value={email} onChange={e => setEmail(e.target.value)} placeholder="info@..." /></Field>
+              <Field label="Website"><input className={inputCls} value={website} onChange={e => setWebsite(e.target.value)} placeholder="www..." /></Field>
+            </div>
+          </Section>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20 }}>
+            <button onClick={handleSave} disabled={saving} style={{
+              padding: '10px 28px', borderRadius: 10, border: 'none',
+              background: 'var(--accent)', color: '#fff', fontSize: '0.88rem', fontWeight: 700,
+              cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,130,32,0.3)',
+              opacity: saving ? 0.5 : 1,
+            }}>
+              {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+            </button>
+            {saved && (
+              <span style={{ fontSize: '0.82rem', color: 'var(--success)', fontWeight: 600 }}>
+                <i className="fas fa-check" style={{ marginRight: 4 }} /> Αποθηκεύτηκε
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ SUBSCRIPTION TAB ═══ */}
+      {tab === 'subscription' && (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, maxWidth: 900 }}>
+            {PLANS.map(p => {
+              const isActive = org.plan === p.id;
+              return (
+                <div key={p.id} style={{
+                  padding: 20, borderRadius: 14,
+                  border: `2px solid ${isActive ? 'var(--accent)' : 'var(--glass-border)'}`,
+                  background: isActive ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : 'rgba(255,255,255,0.02)',
+                  display: 'flex', flexDirection: 'column', gap: 12,
+                }}>
+                  <div>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>{p.name}</h3>
+                    <p style={{ fontSize: '1.3rem', fontWeight: 900, color: 'var(--accent)', marginTop: 4 }}>{p.price}</p>
+                  </div>
+                  <ul style={{ flex: 1, listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {p.features.map(f => (
+                      <li key={f} style={{ fontSize: '0.75rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <i className="fas fa-check" style={{ color: 'var(--success)', fontSize: '0.6rem' }} />{f}
+                      </li>
+                    ))}
+                  </ul>
+                  {isActive ? (
+                    <div style={{ padding: '8px 0', textAlign: 'center', fontSize: '0.78rem', fontWeight: 700, color: 'var(--success)' }}>
+                      <i className="fas fa-check-circle" style={{ marginRight: 4 }} /> Ενεργό
+                    </div>
+                  ) : (
+                    <button style={{
+                      padding: '8px 0', borderRadius: 8, border: '1px solid var(--glass-border)',
+                      background: 'transparent', color: 'var(--text-dim)', fontSize: '0.78rem',
+                      fontWeight: 600, cursor: 'pointer',
+                    }}>Αναβάθμιση</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {org.planExpiry && (
+            <p style={{ marginTop: 16, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              <i className="fas fa-calendar" style={{ marginRight: 4 }} />
+              Λήξη: {new Date(org.planExpiry).toLocaleDateString('el-GR')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ═══ INTEGRATIONS TAB ═══ */}
+      {tab === 'integrations' && (
+        <div className="panel" style={{ maxWidth: 700 }}>
+          <Section icon="fa-file-invoice-dollar" iconColor="#4f46e5" title="Elorus — Τιμολόγηση">
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+              Σύνδεση με <a href="https://www.elorus.com" target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>Elorus</a> για αυτόματη έκδοση τιμολογίων και παραστατικών.
+            </p>
+            <Field label="API Key">
+              <input className={inputCls} type="password" value={apiElorus} onChange={e => setApiElorus(e.target.value)} placeholder="el_live_..." />
+            </Field>
+            {apiElorus && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success)' }} />
+                <span style={{ fontSize: '0.72rem', color: 'var(--success)' }}>Συνδεδεμένο</span>
+              </div>
+            )}
+          </Section>
+
+          <Section icon="fa-envelope" iconColor="#ea4335" title="Gmail — Αποστολή Email">
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+              App Password για αποστολή email μέσω Gmail (Παραγγελίες, Προσφορές).
+            </p>
+            <Field label="Gmail App Password">
+              <input className={inputCls} type="password" value={apiGmail} onChange={e => setApiGmail(e.target.value)} placeholder="xxxx xxxx xxxx xxxx" />
+            </Field>
+          </Section>
+
+          <Section icon="fa-robot" iconColor="var(--blue)" title="Gemini AI — Scan & Import">
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+              Override Gemini API key (αν θέλετε δικό σας αντί του default).
+            </p>
+            <Field label="Gemini API Key">
+              <input className={inputCls} type="password" value={apiGemini} onChange={e => setApiGemini(e.target.value)} placeholder="AIza..." />
+            </Field>
+          </Section>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20 }}>
+            <button onClick={handleSave} disabled={saving} style={{
+              padding: '10px 28px', borderRadius: 10, border: 'none',
+              background: 'var(--accent)', color: '#fff', fontSize: '0.88rem', fontWeight: 700,
+              cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,130,32,0.3)',
+              opacity: saving ? 0.5 : 1,
+            }}>
+              {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+            </button>
+            {saved && (
+              <span style={{ fontSize: '0.82rem', color: 'var(--success)', fontWeight: 600 }}>
+                <i className="fas fa-check" style={{ marginRight: 4 }} /> Αποθηκεύτηκε
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Section({ icon, iconColor, title, children }: { icon: string; iconColor: string; title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+        <i className={`fas ${icon}`} style={{ color: iconColor, fontSize: '0.85rem' }} />
+        <h3 style={{ fontSize: '0.82rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{title}</h3>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>{label}</span>
+      {children}
+    </div>
+  );
+}

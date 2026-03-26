@@ -1,13 +1,8 @@
-import { Settings } from 'lucide-react';
-import { PageHeader } from '@/components/layout/page-header';
+import { getOrg } from './actions';
+import { SettingsShell } from './settings-shell';
 
-export default function SettingsPage() {
-  return (
-    <div className="space-y-6">
-      <PageHeader title="Ρυθμίσεις" description="Προφίλ, Εταιρείες, Γενικά" icon={Settings} />
-      <div className="rounded-xl border border-card-border bg-card-bg p-8 text-center text-muted">
-        Phase 6 — Settings & Profile
-      </div>
-    </div>
-  );
+export default async function SettingsPage() {
+  const org = await getOrg();
+  if (!org) return <p>Org not found</p>;
+  return <SettingsShell org={org} />;
 }

@@ -29,7 +29,7 @@ export function MachineServicePanel({ machine, onClose }: Props) {
 
   // Contacts state
   const [techs, setTechs] = useState<Array<{ role: string; name: string; phone: string }>>(
-    (specs.dig_techs as Array<{ role: string; name: string; phone: string }>) ?? []
+    ((specs.off_techs ?? specs.dig_techs) as Array<{ role: string; name: string; phone: string }>) ?? []
   );
   const [manualUrl, setManualUrl] = useState<string>((specs.manual_url as string) ?? '');
   const [driverUrl, setDriverUrl] = useState<string>((specs.driver_url as string) ?? '');
@@ -45,6 +45,7 @@ export function MachineServicePanel({ machine, onClose }: Props) {
         last_service_date: lastService,
         maint_notes: notes,
         maint_log: logs,
+        off_techs: techs,
         dig_techs: techs,
         manual_url: manualUrl,
         driver_url: driverUrl,
@@ -135,7 +136,7 @@ export function MachineServicePanel({ machine, onClose }: Props) {
                     </div>
                   ))}
                   <button
-                    onClick={() => setLogs([...logs, { date: new Date().toISOString().slice(0, 10), description: '', counter: null }])}
+                    onClick={() => setLogs([...logs, { date: new Date().toLocaleDateString('sv-SE'), description: '', counter: null }])}
                     className="w-full rounded-lg border border-dashed border-[var(--glass-border)] py-2 text-sm font-semibold text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
                   >
                     + Προσθήκη Εγγραφής

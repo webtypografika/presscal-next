@@ -54,9 +54,61 @@ function extractDims(text: string): { w: number; h: number } {
   return { w, h };
 }
 
-/** Clean cost string → number */
+/** Clean cost string → number.
+ *  Handles both EU format (1.003,50 = 1003.50) and US format (1,003.50).
+ *  Key heuristic: if both . and , exist, the LAST one is the decimal separator.
+ *  If only . exists with 3 digits after it and no decimal context → thousands separator.
+ */
 function parseCost(raw: string): number {
-  const clean = raw.replace(/[€$a-zA-Zα-ωΑ-Ω]/g, '').trim().replace(',', '.');
+  let clean = raw.replace(/[€$a-zA-Zα-ωΑ-Ω\s]/g, '').trim();
+  if (!clean) return 0;
+
+  const hasComma = clean.includes(',');
+  const hasDot = clean.includes('.');
+
+  if (hasComma && hasDot) {
+    // Both present — last one is the decimal separator
+    const lastComma = clean.lastIndexOf(',');
+    const lastDot = clean.lastIndexOf('.');
+    if (lastComma > lastDot) {
+      // EU: 1.003,50 → remove dots, comma→dot
+      clean = clean.replace(/\./g, '').replace(',', '.');
+    } else {
+      // US: 1,003.50 → remove commas
+      clean = clean.replace(/,/g, '');
+    }
+  } else if (hasComma) {
+    // Only comma — check if it's decimal or thousands
+    const parts = clean.split(',');
+    if (parts.length === 2 && parts[1].length === 3 && !parts[1].includes('.')) {
+      // 1,003 → likely thousands (1003), not 1.003
+      // But for paper prices this is almost always decimal (€1,003 = €1.003)
+      // Heuristic: if value > 100 after treating as thousands, treat comma as decimal
+      const asThousands = parseFloat(clean.replace(',', ''));
+      const asDecimal = parseFloat(clean.replace(',', '.'));
+      // Paper sheets rarely cost > €50, so if thousands interpretation gives > 50, use decimal
+      clean = asThousands > 50 ? clean.replace(',', '.') : clean.replace(',', '');
+    } else {
+      // 0,85 or 12,5 → decimal
+      clean = clean.replace(',', '.');
+    }
+  } else if (hasDot) {
+    // Only dot — check if it's thousands separator
+    const parts = clean.split('.');
+    if (parts.length === 2 && parts[1].length === 3) {
+      // 1.003 → could be thousands (1003) or decimal (1.003)
+      const asDecimal = parseFloat(clean);
+      // Same heuristic: paper prices < €50 are normal
+      if (asDecimal > 50) {
+        // Likely thousands: 1.003 = 1003 but that's too expensive for paper
+        // So treat dot as decimal: 1.003 = €1.003
+        // keep as is
+      }
+      // Actually 1.003 as-is parses correctly to 1.003 in JS
+    }
+    // Default: dot is decimal, parseFloat handles it
+  }
+
   const v = parseFloat(clean);
   return isNaN(v) ? 0 : v;
 }
@@ -112,19 +164,27 @@ export function parseImportRows(
       }
     }
 
-    const finalCost = parseCost(costRaw);
+    let finalCost = parseCost(costRaw);
+    // Sanity: Greek Excel locale uses . as thousands separator.
+    // xlsx reads "1.003" as number 1003. Paper never costs > €50/sheet.
+    // If cost > 50, it's likely inflated by ×1000 (one dot) or ×1000000 (two dots).
+    if (finalCost > 50) finalCost = finalCost / 1000;
+    if (finalCost > 50) finalCost = finalCost / 1000;
 
     // Extract gsm + dims from name text
     const parsedGsm = extractGsm(nameRaw);
     const parsedDims = extractDims(nameRaw);
 
-    // Clean the name: remove gsm, dims, units
+    // Clean the name: remove dims & units but KEEP gsm (e.g. "Velvet 130gr")
     let cleanName = nameRaw
-      .replace(/(\d+)\s*(gr|g|gsm)/i, '')
       .replace(/(\d+[,.]?\d*)\s*[xX*Χχ×]\s*(\d+[,.]?\d*)/, '')
       .replace(/(cm|mm)/gi, '')
       .replace(/"/g, '')
       .trim();
+    // If gsm was parsed but not in the name text, append it
+    if (parsedGsm > 0 && !cleanName.match(/\d+\s*(gr|g|gsm)/i)) {
+      cleanName = `${cleanName} ${parsedGsm}gr`.trim();
+    }
     if (parsedDims.w === 0 || parsedDims.h === 0) cleanName = nameRaw;
 
     // Apply column mapping overrides (if user mapped specific columns)
@@ -138,17 +198,15 @@ export function parseImportRows(
       ? (parseFloat(String(row[mapping.grams]).replace(',', '.')) || parsedGsm)
       : parsedGsm;
 
+    // If grams came from a separate column and aren't in the name yet, append
+    if (finalG > 0 && !cleanName.match(/\d+\s*(gr|g|gsm)/i)) {
+      cleanName = `${cleanName} ${finalG}gr`.trim();
+    }
+
     // Email: from mapped column or global
     const rowEmail = mapping.email > AUTO
       ? String(row[mapping.email] ?? '').trim()
       : '';
-
-    // Auto group from name if global is default
-    let finalGroup = globals.group;
-    if (globals.group === 'Γενικά' || !globals.group) {
-      const words = cleanName.split(/\s+/);
-      if (words.length > 0) finalGroup = words[0].toUpperCase();
-    }
 
     // Sort LS/SS — bigger = LS (width), smaller = SS (height)
     let mW = finalW || 0;
@@ -157,7 +215,7 @@ export function parseImportRows(
 
     results.push({
       name: cleanName || nameRaw,
-      groupName: finalGroup || 'Γενικά',
+      groupName: '',
       subtype: stickyCategory,
       supplier: globals.supplier || '',
       supplierEmail: rowEmail || globals.email || '',

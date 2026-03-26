@@ -70,8 +70,8 @@ export function MaterialPanel({ material, onClose }: Props) {
           <Section title="Κατηγοριοποίηση">
             <Field label="Όνομα *"><input className={inputCls} value={name} onChange={e => setName(e.target.value)} placeholder="π.χ. Velvet 130gr" autoFocus /></Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Ομάδα"><input className={inputCls} value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="π.χ. Coated" /></Field>
-              <Field label="Κατηγορία"><input className={inputCls} value={subtype} onChange={e => setSubtype(e.target.value)} placeholder="π.χ. Velvet" /></Field>
+              <Field label="Προμηθευτής"><input className={inputCls} value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="π.χ. Antalis" /></Field>
+              <Field label="Οικογένεια"><input className={inputCls} value={subtype} onChange={e => setSubtype(e.target.value)} placeholder="π.χ. Velvet, Munken" /></Field>
             </div>
           </Section>
 
@@ -106,12 +106,9 @@ export function MaterialPanel({ material, onClose }: Props) {
             ) : null}
           </Section>
 
-          {/* Προμηθευτής */}
+          {/* Email Προμηθευτή */}
           <Section title="Προμηθευτής">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Όνομα"><input className={inputCls} value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="π.χ. Antalis" /></Field>
-              <Field label="Email"><input className={inputCls} value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="orders@..." /></Field>
-            </div>
+            <Field label="Email"><input className={inputCls} value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="orders@supplier.com" /></Field>
           </Section>
 
           {/* Stock */}

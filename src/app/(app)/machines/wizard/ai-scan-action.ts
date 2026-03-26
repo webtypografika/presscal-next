@@ -264,6 +264,34 @@ IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
     const jsonStr = jsonMatch[0].replace(/,\s*}/g, '}').replace(/,\s*]/g, ']').replace(/:\s*undefined/g, ': null').replace(/\/\/[^\n]*/g, '');
     const specs = JSON.parse(jsonStr) as Record<string, unknown>;
 
+    // Validate & clean numeric fields
+    const numFields = [
+      'off_max_ls', 'off_max_ss', 'off_min_ls', 'off_min_ss',
+      'off_gripper', 'off_side_margin', 'off_margin_tail',
+      'off_min_thick', 'off_max_thick',
+      'off_towers', 'off_speed', 'off_common_speed',
+      'off_default_waste', 'off_setup_min', 'off_wash_min',
+    ];
+    for (const f of numFields) {
+      if (specs[f] !== null && specs[f] !== undefined) {
+        const n = Number(specs[f]);
+        specs[f] = isNaN(n) ? null : n;
+      }
+    }
+
+    // Validate boolean fields
+    const boolFields = ['off_perfecting', 'off_has_varnish_tower', 'off_num_h', 'off_num_v'];
+    for (const f of boolFields) {
+      if (specs[f] !== null && specs[f] !== undefined) {
+        specs[f] = !!specs[f];
+      }
+    }
+
+    // Validate enum fields
+    if (specs.off_varnish_type && !['aqueous', 'uv'].includes(specs.off_varnish_type as string)) {
+      specs.off_varnish_type = null;
+    }
+
     const fieldsFound = Object.values(specs).filter((v) => v !== null && v !== undefined).length;
     return { success: true, specs, fieldsFound };
   } catch (e) {

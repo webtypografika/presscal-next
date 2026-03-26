@@ -54,6 +54,33 @@ export async function deleteMaterial(id: string) {
   revalidatePath('/inventory');
 }
 
+export async function bulkDeleteMaterials(ids: string[]) {
+  const result = await prisma.material.updateMany({
+    where: { id: { in: ids } },
+    data: { deletedAt: new Date() },
+  });
+  revalidatePath('/inventory');
+  return result.count;
+}
+
+export async function bulkUpdateMaterials(ids: string[], data: Record<string, unknown>) {
+  const result = await prisma.material.updateMany({
+    where: { id: { in: ids } },
+    data,
+  });
+  revalidatePath('/inventory');
+  return result.count;
+}
+
+export async function deleteAllMaterials() {
+  const result = await prisma.material.updateMany({
+    where: { orgId: ORG_ID, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+  revalidatePath('/inventory');
+  return result.count;
+}
+
 // ─── BULK IMPORT MATERIALS ───
 
 export interface BulkMaterialRow {

@@ -32,6 +32,8 @@ export function OffsetWizard({ machine, onClose }: Props) {
   async function handleSave() {
     const { name, notes, off_max_ss, off_max_ls, off_min_ss, off_min_ls, off_gripper, off_side_margin, off_margin_tail, ...specs } = data;
 
+    // Specs is the single source of truth for offset-specific fields;
+    // Machine model fields are kept in sync for cross-module queries.
     const payload = {
       name: (name as string) || 'Untitled Offset',
       cat: 'offset',
@@ -44,7 +46,7 @@ export function OffsetWizard({ machine, onClose }: Props) {
       marginBottom: (off_margin_tail as number) ?? undefined,
       marginLeft: (off_side_margin as number) ?? undefined,
       marginRight: (off_side_margin as number) ?? undefined,
-      specs: { ...specs, off_gripper, off_side_margin, off_margin_tail },
+      specs: { ...specs, off_max_ss, off_max_ls, off_min_ss, off_min_ls, off_gripper, off_side_margin, off_margin_tail },
     };
 
     if (machine) {

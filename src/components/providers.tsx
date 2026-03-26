@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { SessionProvider } from 'next-auth/react';
 import { useUIStore } from '@/stores/ui-store';
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -10,5 +11,5 @@ export function Providers({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  return <>{children}</>;
+  return <SessionProvider>{children}</SessionProvider>;
 }

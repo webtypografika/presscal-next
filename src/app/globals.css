@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: dark;
   --bg: #0f172a;
   --bg-surface: rgba(15, 23, 42, 0.75);
   --bg-elevated: rgba(20, 30, 55, 0.8);
@@ -76,10 +77,17 @@ body::before {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 2px; }
 
-/* Hide number input spinners/arrows */
-.no-spinners::-webkit-outer-spin-button,
-.no-spinners::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.no-spinners { -moz-appearance: textfield; }
+/* Dark native controls (select dropdowns, date pickers) */
+select, select option {
+  color-scheme: dark;
+  background-color: #1e293b;
+  color: #f1f5f9;
+}
+
+/* Hide number input spinners/arrows — globally */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
 
 /* Header button hover */
 .h-btn:hover { color: var(--accent) !important; }
@@ -118,6 +126,9 @@ body::before {
 
 /* Job pulse animation */
 @keyframes jobPulse { 0%,100%{opacity:1;} 50%{opacity:0.5;} }
+
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Fade in */
 @keyframes fadeIn {

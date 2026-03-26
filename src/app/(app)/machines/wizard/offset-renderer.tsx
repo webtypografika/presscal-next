@@ -68,6 +68,13 @@ function StepAiScan({ data, onChange }: { data: Data; onChange: OnChange }) {
 }
 
 function StepPaper({ data, onChange }: { data: Data; onChange: OnChange }) {
+  const maxSS = Number(data.off_max_ss) || 0;
+  const minSS = Number(data.off_min_ss) || 0;
+  const maxLS = Number(data.off_max_ls) || 0;
+  const minLS = Number(data.off_min_ls) || 0;
+  const warnSS = minSS > 0 && maxSS > 0 && minSS > maxSS;
+  const warnLS = minLS > 0 && maxLS > 0 && minLS > maxLS;
+
   return (
     <div className="space-y-6">
       <WizSection title="Max Φύλλο" sub="Μέγιστο (mm)" accent="var(--blue)">
@@ -81,6 +88,13 @@ function StepPaper({ data, onChange }: { data: Data; onChange: OnChange }) {
           <Field label="Short Side (SS)"><NumInput value={data.off_min_ss} onChange={(v) => onChange('off_min_ss', v)} /></Field>
           <Field label="Long Side (LS)"><NumInput value={data.off_min_ls} onChange={(v) => onChange('off_min_ls', v)} /></Field>
         </div>
+        {(warnSS || warnLS) && (
+          <p className="text-xs text-[var(--danger)] flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />
+            {warnSS && 'Min SS μεγαλύτερο από Max SS. '}
+            {warnLS && 'Min LS μεγαλύτερο από Max LS.'}
+            {' '}Ελέγξτε τις τιμές.
+          </p>
+        )}
       </WizSection>
     </div>
   );
@@ -103,6 +117,10 @@ function StepMargins({ data, onChange }: { data: Data; onChange: OnChange }) {
 }
 
 function StepThickness({ data, onChange }: { data: Data; onChange: OnChange }) {
+  const minT = Number(data.off_min_thick) || 0;
+  const maxT = Number(data.off_max_thick) || 0;
+  const warn = minT > 0 && maxT > 0 && minT > maxT;
+
   return (
     <div className="space-y-6">
       <WizSection title="Μονάδα" sub="Βάρος / Πάχος" accent="var(--violet)">
@@ -113,6 +131,9 @@ function StepThickness({ data, onChange }: { data: Data; onChange: OnChange }) {
           <Field label="Ελάχιστο"><NumInput value={data.off_min_thick} onChange={(v) => onChange('off_min_thick', v)} /></Field>
           <Field label="Μέγιστο"><NumInput value={data.off_max_thick} onChange={(v) => onChange('off_max_thick', v)} /></Field>
         </div>
+        {warn && (
+          <p className="text-xs text-[var(--danger)] flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />Ελάχιστο {'>'} Μέγιστο. Ελέγξτε τις τιμές.</p>
+        )}
       </WizSection>
     </div>
   );
@@ -171,8 +192,11 @@ function StepMachine({ data, onChange }: { data: Data; onChange: OnChange }) {
 }
 
 function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) {
-  const depHour = data.off_include_depreciation && data.off_machine_cost && data.off_depreciation_years && data.off_hours_per_year
-    ? ((data.off_machine_cost as number) / ((data.off_depreciation_years as number) * (data.off_hours_per_year as number))).toFixed(2)
+  const depYears = Number(data.off_depreciation_years) || 0;
+  const depHoursYr = Number(data.off_hours_per_year) || 0;
+  const depCost = Number(data.off_machine_cost) || 0;
+  const depHour = data.off_include_depreciation && depCost > 0 && depYears > 0 && depHoursYr > 0
+    ? (depCost / (depYears * depHoursYr)).toFixed(2)
     : null;
 
   return (
@@ -203,8 +227,11 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
 }
 
 function StepParts({ data, onChange }: { data: Data; onChange: OnChange }) {
-  const rollerCost = data.off_include_rollers && data.off_roller_count && data.off_roller_recover_c && data.off_roller_recover_life
-    ? (((data.off_roller_count as number) * (data.off_roller_recover_c as number)) / (data.off_roller_recover_life as number)).toFixed(5) : null;
+  const rCount = Number(data.off_roller_count) || 0;
+  const rCost = Number(data.off_roller_recover_c) || 0;
+  const rLife = Number(data.off_roller_recover_life) || 0;
+  const rollerCost = data.off_include_rollers && rCount > 0 && rCost > 0 && rLife > 0
+    ? ((rCount * rCost) / rLife).toFixed(5) : null;
 
   return (
     <div className="space-y-6">
@@ -343,7 +370,7 @@ function StepMaintenance({ data, onChange }: { data: Data; onChange: OnChange })
             <textarea className={inputCls + " !h-16 py-2 resize-none text-sm"} value={l.description} onChange={(e) => { const u = [...logs]; u[i] = { ...l, description: e.target.value }; onChange('maint_log', u); }} placeholder="Τι αλλάχτηκε; π.χ. Αλλαγή blanket, πλύσιμο κυλίνδρων..." />
           </div>
         ))}
-        <AddButton label="+ Προσθήκη Εγγραφής" onClick={() => onChange('maint_log', [...logs, { date: new Date().toISOString().slice(0, 10), description: '', counter: null }])} />
+        <AddButton label="+ Προσθήκη Εγγραφής" onClick={() => onChange('maint_log', [...logs, { date: new Date().toLocaleDateString('sv-SE'), description: '', counter: null }])} />
       </WizSection>
     </div>
   );

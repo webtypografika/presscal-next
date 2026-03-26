@@ -25,22 +25,32 @@ export function ImportCenter({ onStandardFile, onSmartFile, onSmartPdf, onClose 
   async function handleStandard(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const XLSX = await loadXlsx();
-    const data = new Uint8Array(await file.arrayBuffer());
-    const wb = XLSX.read(data, { type: 'array' });
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]) as Record<string, unknown>[];
-    onStandardFile(rows);
+    try {
+      const XLSX = await loadXlsx();
+      const data = new Uint8Array(await file.arrayBuffer());
+      const wb = XLSX.read(data, { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]) as Record<string, unknown>[];
+      if (rows.length === 0) { alert('Το αρχείο είναι κενό.'); return; }
+      onStandardFile(rows);
+    } catch (err) {
+      alert(`Σφάλμα ανάγνωσης αρχείου: ${(err as Error).message}`);
+    }
     e.target.value = '';
   }
 
   async function handleSmart(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const XLSX = await loadXlsx();
-    const data = new Uint8Array(await file.arrayBuffer());
-    const wb = XLSX.read(data, { type: 'array' });
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as string[][];
-    onSmartFile(rows);
+    try {
+      const XLSX = await loadXlsx();
+      const data = new Uint8Array(await file.arrayBuffer());
+      const wb = XLSX.read(data, { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }) as string[][];
+      if (rows.length === 0) { alert('Το αρχείο είναι κενό.'); return; }
+      onSmartFile(rows);
+    } catch (err) {
+      alert(`Σφάλμα ανάγνωσης αρχείου: ${(err as Error).message}`);
+    }
     e.target.value = '';
   }
 
@@ -215,10 +225,12 @@ export function ImportCenter({ onStandardFile, onSmartFile, onSmartPdf, onClose 
         </div>
       </div>
 
-      {/* Hidden file inputs */}
-      <input ref={stdRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleStandard} />
-      <input ref={smartRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleSmart} />
-      <input ref={pdfRef} type="file" accept=".pdf" className="hidden" onChange={handlePdf} />
+      {/* Hidden file inputs — outside the backdrop so click doesn't trigger onClose */}
+      <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', top: -9999, left: -9999 }}>
+        <input ref={stdRef} type="file" accept=".xlsx,.xls" onChange={handleStandard} />
+        <input ref={smartRef} type="file" accept=".xlsx,.xls" onChange={handleSmart} />
+        <input ref={pdfRef} type="file" accept=".pdf" onChange={handlePdf} />
+      </div>
     </div>,
     document.body
   );

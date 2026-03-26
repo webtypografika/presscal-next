@@ -44,7 +44,6 @@ export function ImportMapper({ rawRows, onClose, onDone }: Props) {
     const rows: BulkMaterialRow[] = parsed.map(p => ({
       name: p.name,
       cat: 'sheet',
-      groupName: p.groupName || undefined,
       subtype: p.subtype || undefined,
       supplier: p.supplier || undefined,
       supplierEmail: p.supplierEmail || undefined,
@@ -109,11 +108,6 @@ export function ImportMapper({ rawRows, onClose, onDone }: Props) {
               <h4 className="text-xs font-black uppercase tracking-wider text-[var(--text-muted)] mb-2">
                 2. Καθολικά πεδία
               </h4>
-              <div>
-                <label className="text-[0.65rem] font-bold text-[var(--text-muted)] mb-1 block">ΥΠΕΡ-ΟΜΑΔΑ</label>
-                <input className={inputCls} placeholder="π.χ. Uncoated"
-                  value={globals.group} onChange={e => setGlobals(p => ({ ...p, group: e.target.value }))} />
-              </div>
               <div>
                 <label className="text-[0.65rem] font-bold text-[var(--text-muted)] mb-1 block">ΠΡΟΜΗΘΕΥΤΗΣ</label>
                 <input className={inputCls} placeholder="π.χ. Περράκης"
