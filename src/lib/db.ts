@@ -12,5 +12,13 @@ function makePrisma() {
   return new (PrismaClient as any)({ adapter }) as InstanceType<typeof PrismaClient>;
 }
 
+// Invalidate cache if model set changes (e.g. after prisma generate adds new models)
+const PRISMA_VERSION = 3; // bump when schema changes
+if (g.prisma && g._prismaV !== PRISMA_VERSION) {
+  g.prisma = undefined;
+}
 export const prisma: InstanceType<typeof PrismaClient> = g.prisma ?? makePrisma();
-if (process.env.NODE_ENV !== 'production') g.prisma = prisma;
+if (process.env.NODE_ENV !== 'production') {
+  g.prisma = prisma;
+  g._prismaV = PRISMA_VERSION;
+}

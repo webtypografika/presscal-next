@@ -1,12 +1,8 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist_Mono } from 'next/font/google';
+import Script from 'next/script';
 import { Providers } from '@/components/providers';
 import './globals.css';
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin', 'latin-ext'],
-});
 
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
@@ -26,13 +22,16 @@ export default function RootLayout({
   return (
     <html
       lang="el"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistMono.variable} h-full antialiased`}
       style={{ colorScheme: 'dark' }}
       suppressHydrationWarning
     >
       <head>
+        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&subset=greek,latin,latin-ext&display=swap" rel="stylesheet" />
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" />
-        <script
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `try{if(JSON.parse(localStorage.getItem('ui-store')||'{}').state?.theme==='dark')document.documentElement.classList.add('dark')}catch(e){}`,
           }}

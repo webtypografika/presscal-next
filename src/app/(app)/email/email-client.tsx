@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import type { GmailMessageMeta, GmailFullMessage, GmailLabel } from '@/lib/gmail';
 import { parseAddress, getInitials, avatarColor, timeAgo, formatDate, formatSize, attIconClass } from '@/lib/email-utils';
+import { createQuote, updateQuote, linkEmailToQuote, getCustomers } from '../quotes/actions';
 
 // ─── TYPES ───
 type Folder = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all';
@@ -19,6 +21,7 @@ const FOLDERS: { id: Folder; label: string; icon: string; q: string; labelIds?: 
 
 // ─── MAIN COMPONENT ───
 export default function EmailClient() {
+  const router = useRouter();
   const [folder, setFolder] = useState<Folder>('inbox');
   const [emails, setEmails] = useState<GmailMessageMeta[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -30,6 +33,7 @@ export default function EmailClient() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [compose, setCompose] = useState<ComposeData | null>(null);
   const [nextPage, setNextPage] = useState<string | undefined>();
+  const [creatingQuote, setCreatingQuote] = useState(false);
 
   // ─── FETCH MESSAGES ───
   const fetchMessages = useCallback(async (f: Folder, q?: string, label?: string | null) => {
@@ -136,6 +140,63 @@ export default function EmailClient() {
       threadId: detail.threadId,
       mode: 'forward',
     });
+  }
+
+  // ─── CREATE QUOTE FROM EMAIL ───
+  async function handleCreateQuote() {
+    if (!detail || creatingQuote) return;
+    setCreatingQuote(true);
+    try {
+      const senderEmail = parseAddress(detail.from).email;
+      const senderName = parseAddress(detail.from).name || senderEmail;
+      const emailBody = detail.textBody || detail.htmlBody || '';
+
+      // Match customer
+      const customers = await getCustomers();
+      const matched = customers.find(c => c.email?.toLowerCase() === senderEmail.toLowerCase());
+
+      // AI parse + create quote in parallel
+      const [aiRes, q] = await Promise.all([
+        fetch('/api/ai/parse-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ emailBody, subject: detail.subject, senderEmail }),
+        }).then(r => r.json()).catch(() => null),
+        createQuote({
+          customerId: matched?.id || undefined,
+          title: detail.subject || undefined,
+          description: `Email από: ${senderName}`,
+        }),
+      ]);
+
+      // Link email
+      await linkEmailToQuote(q.id, detail.id, detail.threadId);
+
+      // Save AI items
+      if (aiRes?.success && aiRes.items?.length > 0) {
+        const items = aiRes.items.map((ai: any) => {
+          const nameParts = [ai.description || 'Προϊόν'];
+          if (ai.dimensions) nameParts.push(ai.dimensions);
+          if (ai.colors) nameParts.push(ai.colors);
+          const notesParts: string[] = [];
+          if (ai.paperType) notesParts.push(`Χαρτί: ${ai.paperType}`);
+          if (ai.finishing?.length) notesParts.push(`Φινίρισμα: ${ai.finishing.join(', ')}`);
+          if (ai.specialNotes) notesParts.push(ai.specialNotes);
+          return {
+            id: crypto.randomUUID(), name: nameParts.join(' '), type: 'manual',
+            qty: ai.quantity || 1, unit: 'τεμ', unitPrice: 0, finalPrice: 0,
+            cost: 0, profit: 0, status: 'pending',
+            notes: notesParts.join(' · '), aiParsed: ai,
+          };
+        });
+        await updateQuote(q.id, { items, description: aiRes.customerInterpretation || undefined });
+      }
+
+      router.push(`/quotes/${q.id}`);
+    } catch (e) {
+      alert('Σφάλμα: ' + (e as Error).message);
+      setCreatingQuote(false);
+    }
   }
 
   // ─── SEND ───
@@ -322,6 +383,22 @@ export default function EmailClient() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <h2 style={{ fontSize: '1.05rem', fontWeight: 800, flex: 1 }}>{detail.subject || '(χωρις θεμα)'}</h2>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <button
+                    onClick={handleCreateQuote}
+                    disabled={creatingQuote}
+                    title="Νέα Προσφορά από αυτό το email"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 700,
+                      background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+                      color: 'var(--accent)', cursor: creatingQuote ? 'wait' : 'pointer',
+                      opacity: creatingQuote ? 0.6 : 1,
+                    }}
+                  >
+                    {creatingQuote ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-file-invoice" />}
+                    Προσφορά
+                  </button>
                   <ActionBtn icon="fa-reply" title="Απαντηση" onClick={handleReply} />
                   <ActionBtn icon="fa-share" title="Προωθηση" onClick={handleForward} />
                 </div>

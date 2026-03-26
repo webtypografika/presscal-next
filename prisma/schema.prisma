@@ -99,6 +99,7 @@ model Org {
   profiles         Profile[]
   customers        Customer[]
   quotes           Quote[]
+  products         Product[]
 }
 
 // ─── MACHINES (Digital / Offset / Plotter) ───
@@ -297,6 +298,37 @@ model Profile {
   updatedAt DateTime @updatedAt
 
   @@index([orgId])
+}
+
+// ─── GLOBAL PRODUCTS ───
+model Product {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  name      String
+  archetype String   // 'single_leaf' | 'pad' | 'booklet' | 'perfect_bound' | 'die_cut' | 'custom'
+  notes     String   @default("")
+
+  // Archetype-specific fields
+  pages          Int?     // booklet pages
+  sheetsPerPad   Int?     // pad sheets
+  bodyPages      Int?     // perfect bound body pages
+  customMult     Float?   // custom multiplier
+
+  // Offset profit settings
+  offset    Json     @default("{}")
+  // Digital profit settings
+  digital   Json     @default("{}")
+  // Finishing settings
+  finishing Json     @default("[]")
+
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, archetype])
+  @@index([orgId, deletedAt])
 }
 
 // ─── CUSTOMERS ───
