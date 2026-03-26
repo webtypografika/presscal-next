@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { Material, Consumable, Machine, Org } from '@/generated/prisma/client';
 import { deleteMaterial, deleteConsumable, deleteAllMaterials, bulkDeleteMaterials, bulkUpdateMaterials } from './actions';
@@ -12,6 +12,50 @@ import { parseStandardRows } from './parse-import';
 import { bulkCreateMaterials } from './actions';
 
 type ConsumableWithMachine = Consumable & { machine: { id: string; name: string } | null };
+
+// ─── TOAST ───
+type ToastType = 'success' | 'error' | 'info';
+interface ToastData { message: string; type: ToastType; id: number; }
+let toastId = 0;
+
+function Toast({ toast, onRemove }: { toast: ToastData; onRemove: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onRemove, toast.type === 'error' ? 5000 : 3000);
+    return () => clearTimeout(t);
+  }, [toast, onRemove]);
+
+  const colors = {
+    success: { bg: 'var(--success)', icon: 'fa-check-circle' },
+    error: { bg: 'var(--danger)', icon: 'fa-exclamation-circle' },
+    info: { bg: 'var(--blue)', icon: 'fa-info-circle' },
+  };
+  const c = colors[toast.type];
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '12px 20px', borderRadius: 10,
+      background: 'rgb(20,30,55)', border: `1px solid ${c.bg}`,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+      animation: 'fadeIn 0.3s ease',
+      minWidth: 280,
+    }}>
+      <i className={`fas ${c.icon}`} style={{ color: c.bg, fontSize: '1rem' }} />
+      <span style={{ fontSize: '0.82rem', color: 'var(--text)', flex: 1 }}>{toast.message}</span>
+      <button onClick={onRemove} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>&times;</button>
+    </div>
+  );
+}
+
+function ToastContainer({ toasts, onRemove }: { toasts: ToastData[]; onRemove: (id: number) => void }) {
+  if (toasts.length === 0) return null;
+  return createPortal(
+    <div style={{ position: 'fixed', bottom: 80, right: 20, zIndex: 300, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {toasts.map(t => <Toast key={t.id} toast={t} onRemove={() => onRemove(t.id)} />)}
+    </div>,
+    document.body
+  );
+}
 
 const TABS = [
   { id: 'sheet', label: 'Χαρτιά', icon: 'fa-file', color: 'var(--blue)' },
@@ -48,6 +92,14 @@ export function InventoryList({ materials, consumables, org }: Props) {
   const [showImport, setShowImport] = useState(false);
   const [smartRows, setSmartRows] = useState<string[][] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [toasts, setToasts] = useState<ToastData[]>([]);
+
+  const toast = useCallback((message: string, type: ToastType = 'success') => {
+    setToasts(prev => [...prev, { message, type, id: ++toastId }]);
+  }, []);
+  const removeToast = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   // Sheet filters
   const [filterSupplier, setFilterSupplier] = useState<string | null>(null);
@@ -134,7 +186,7 @@ export function InventoryList({ materials, consumables, org }: Props) {
                 onClick={async () => {
                   if (!confirm(`Διαγραφή ΟΛΩΝ των ${sheets.length} χαρτιών;\n\nΑυτή η ενέργεια δεν αναιρείται.`)) return;
                   const count = await deleteAllMaterials();
-                  alert(`Διαγράφηκαν ${count} χαρτιά.`);
+                  toast(`Διαγράφηκαν ${count} χαρτιά`);
                 }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
@@ -276,7 +328,7 @@ export function InventoryList({ materials, consumables, org }: Props) {
                 label="Γραμμάρια"
                 value={filterGrams}
                 options={gramOptions.map(String)}
-                formatOption={(v) => `${v}g`}
+                formatOption={(v) => `${v}gsm`}
                 onChange={setFilterGrams}
               />
             )}
@@ -305,14 +357,17 @@ export function InventoryList({ materials, consumables, org }: Props) {
           count={selected.size}
           selectedItems={sheets.filter(m => selected.has(m.id))}
           org={org}
+          toast={toast}
           onDelete={async () => {
             if (!confirm(`Διαγραφή ${selected.size} επιλεγμένων χαρτιών;`)) return;
             await bulkDeleteMaterials([...selected]);
             setSelected(new Set());
+            toast(`Διαγράφηκαν ${selected.size} χαρτιά`);
           }}
           onUpdate={async (data) => {
             await bulkUpdateMaterials([...selected], data);
             setSelected(new Set());
+            toast(`Ενημερώθηκαν ${selected.size} χαρτιά`);
           }}
           onClear={() => setSelected(new Set())}
         />
@@ -361,7 +416,7 @@ export function InventoryList({ materials, consumables, org }: Props) {
               markup: p.markup, unit: 'φύλλο',
             }));
             const res = await bulkCreateMaterials(bulkRows);
-            alert(`Εισαγωγή ολοκληρώθηκε!\n\nΝέα: ${res.added}\nΕνημερώθηκαν: ${res.updated}\nΑγνοήθηκαν: ${res.skipped}`);
+            toast(`Εισαγωγή: ${res.added} νέα, ${res.updated} ενημερώθηκαν, ${res.skipped} αγνοήθηκαν`);
           }}
           onSmartFile={(rows) => { setShowImport(false); setSmartRows(rows); }}
           onSmartPdf={(rows) => { setShowImport(false); setSmartRows(rows); }}
@@ -377,6 +432,8 @@ export function InventoryList({ materials, consumables, org }: Props) {
           onDone={() => setSmartRows(null)}
         />
       )}
+
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>
   );
 }
@@ -529,7 +586,7 @@ function MassEditPopup({ count, onApply, onClose }: {
 }
 
 // ─── ORDER POPUP ───
-function OrderPopup({ items, org, onClose }: { items: Material[]; org: Org | null; onClose: () => void }) {
+function OrderPopup({ items, org, toast, onClose }: { items: Material[]; org: Org | null; toast: (msg: string, type?: ToastType) => void; onClose: () => void }) {
   // Group by supplier email
   const bySupplier = new Map<string, { supplier: string; email: string; items: Material[] }>();
   for (const m of items) {
@@ -562,7 +619,7 @@ function OrderPopup({ items, org, onClose }: { items: Material[]; org: Org | nul
     const lines = supplierItems.map(m => {
       const qty = quantities[m.id] || '___';
       const dims = m.width && m.height ? ` ${m.width}×${m.height}mm` : '';
-      const gsm = m.thickness ? ` ${m.thickness}g` : '';
+      const gsm = m.thickness ? ` ${m.thickness}gsm` : '';
       return `• ${m.name}${dims}${gsm} — ${qty} φύλλα`;
     });
 
@@ -616,7 +673,7 @@ function OrderPopup({ items, org, onClose }: { items: Material[]; org: Org | nul
 
           {/* Company info from Settings */}
           <div style={{ marginBottom: 16 }}>
-            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Στοιχεία Εταιρείας</span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>ΣΤΟΙΧΕΙΑ ΕΤΑΙΡΕΙΑΣ</span>
             {hasCompany ? (
               <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', fontSize: '0.78rem', color: 'var(--text-dim)', lineHeight: 1.7 }}>
                 <strong style={{ color: 'var(--text)' }}>{org!.legalName}</strong> · ΑΦΜ: {org!.afm}
@@ -721,7 +778,7 @@ function OrderPopup({ items, org, onClose }: { items: Material[]; org: Org | nul
                 <button onClick={async () => {
                   const orderItems = group.items.map(m => ({
                     name: m.name,
-                    dims: m.width && m.height ? `${m.width}×${m.height}mm${m.thickness ? ` · ${m.thickness}g` : ''}` : '',
+                    dims: m.width && m.height ? `${m.width}×${m.height}mm${m.thickness ? ` · ${m.thickness}gsm` : ''}` : '',
                     qty: quantities[m.id] || '',
                   }));
                   try {
@@ -732,11 +789,12 @@ function OrderPopup({ items, org, onClose }: { items: Material[]; org: Org | nul
                     });
                     const data = await res.json();
                     if (data.ok) {
-                      alert(`Email στάλθηκε στο ${targetEmail}`);
+                      toast(`Email στάλθηκε στο ${targetEmail}`);
+                      onClose();
                     } else {
-                      alert(data.error || 'Αποτυχία αποστολής');
+                      toast(data.error || 'Αποτυχία αποστολής', 'error');
                     }
-                  } catch { alert('Σφάλμα σύνδεσης'); }
+                  } catch { toast('Σφάλμα σύνδεσης', 'error'); }
                 }} style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '10px 20px', borderRadius: 8, border: 'none',
@@ -768,10 +826,11 @@ function OrderPopup({ items, org, onClose }: { items: Material[]; org: Org | nul
 }
 
 // ─── MASS ACTION BAR ───
-function MassActionBar({ count, selectedItems, org, onDelete, onUpdate, onClear }: {
+function MassActionBar({ count, selectedItems, org, toast, onDelete, onUpdate, onClear }: {
   count: number;
   selectedItems: Material[];
   org: Org | null;
+  toast: (msg: string, type?: ToastType) => void;
   onDelete: () => void;
   onUpdate: (data: Record<string, unknown>) => void;
   onClear: () => void;
@@ -844,6 +903,7 @@ function MassActionBar({ count, selectedItems, org, onDelete, onUpdate, onClear 
         <OrderPopup
           items={selectedItems}
           org={org}
+          toast={toast}
           onClose={() => setShowOrder(false)}
         />
       )}
@@ -876,16 +936,16 @@ function SheetTable({ items, selected, onSelect, onSelectAll, onEdit, onDelete }
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid var(--border)', fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+          <tr style={{ borderBottom: '1px solid var(--border)', fontSize: '0.7rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
             <th style={{ width: 40, padding: '8px 12px' }}>
               <input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
                 onChange={() => onSelectAll(allIds)} style={cbStyle} />
             </th>
-            <th style={{ textAlign: 'left', padding: '8px 12px' }}>Χαρτί</th>
-            <th style={{ textAlign: 'center', padding: '8px 12px' }}>Διαστάσεις</th>
-            <th style={{ textAlign: 'center', padding: '8px 12px' }}>Βάρος</th>
-            <th style={{ textAlign: 'right', padding: '8px 12px' }}>Κόστος</th>
-            <th style={{ textAlign: 'center', padding: '8px 12px' }}>Stock</th>
+            <th style={{ textAlign: 'left', padding: '8px 12px' }}>ΧΑΡΤΙ</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>ΔΙΑΣΤΑΣΕΙΣ</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>ΒΑΡΟΣ</th>
+            <th style={{ textAlign: 'right', padding: '8px 12px' }}>ΚΟΣΤΟΣ</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>STOCK</th>
             <th style={{ width: 60 }} />
           </tr>
         </thead>
@@ -919,7 +979,7 @@ function SheetTable({ items, selected, onSelect, onSelectAll, onEdit, onDelete }
                 <td style={{ textAlign: 'center', padding: '10px 12px', fontFamily: 'monospace', fontSize: '0.8rem' }}>
                   {m.width && m.height ? `${m.width}×${m.height}` : '—'}{m.grain === 'long' ? ' ↓' : m.grain === 'short' ? ' →' : ''}
                 </td>
-                <td style={{ textAlign: 'center', padding: '10px 12px' }}>{m.thickness ? `${m.thickness}g` : '—'}</td>
+                <td style={{ textAlign: 'center', padding: '10px 12px' }}>{m.thickness ? `${m.thickness}gsm` : '—'}</td>
                 <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 700, color: 'var(--accent)' }}>
                   {m.costPerUnit ? `€${m.costPerUnit.toFixed(2)}` : '—'}
                 </td>
@@ -954,13 +1014,13 @@ function ConsumableTable({ items, onEdit, onDelete }: { items: ConsumableWithMac
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
         <thead>
-          <tr style={{ borderBottom: '1px solid var(--border)', fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-            <th style={{ textAlign: 'left', padding: '8px 12px' }}>Αναλώσιμο</th>
-            <th style={{ textAlign: 'center', padding: '8px 12px' }}>Τύπος</th>
-            <th style={{ textAlign: 'center', padding: '8px 12px' }}>Χρώμα</th>
-            <th style={{ textAlign: 'right', padding: '8px 12px' }}>Κόστος</th>
-            <th style={{ textAlign: 'center', padding: '8px 12px' }}>Yield</th>
-            <th style={{ textAlign: 'center', padding: '8px 12px' }}>Stock</th>
+          <tr style={{ borderBottom: '1px solid var(--border)', fontSize: '0.7rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+            <th style={{ textAlign: 'left', padding: '8px 12px' }}>ΑΝΑΛΩΣΙΜΟ</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>ΤΥΠΟΣ</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>ΧΡΩΜΑ</th>
+            <th style={{ textAlign: 'right', padding: '8px 12px' }}>ΚΟΣΤΟΣ</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>YIELD</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>STOCK</th>
             <th style={{ width: 60 }} />
           </tr>
         </thead>

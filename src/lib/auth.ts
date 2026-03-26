@@ -11,17 +11,37 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          scope: 'openid email profile https://www.googleapis.com/auth/gmail.send',
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
     }),
   ],
   callbacks: {
-    async signIn() {
-      // Allow all Google sign-ins
+    async signIn({ account }) {
+      // Save tokens to Account for Gmail API use
+      if (account) {
+        try {
+          await prisma.account.updateMany({
+            where: { provider: account.provider, providerAccountId: account.providerAccountId },
+            data: {
+              access_token: account.access_token,
+              refresh_token: account.refresh_token,
+              expires_at: account.expires_at,
+            },
+          });
+        } catch {
+          // First sign-in — adapter will create the account
+        }
+      }
       return true;
     },
     async session({ session, user }) {
       if (session.user && user) {
         (session.user as Record<string, unknown>).id = user.id;
-        // Auto-assign to org if not yet
         try {
           const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
           if (dbUser && !dbUser.orgId) {
@@ -38,5 +58,4 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/login',
   },
-  debug: true, // Enable debug logs temporarily
 };

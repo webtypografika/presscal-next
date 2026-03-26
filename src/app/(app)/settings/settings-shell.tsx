@@ -124,7 +124,7 @@ export function SettingsShell({ org }: { org: Org }) {
       {/* ═══ COMPANY TAB ═══ */}
       {tab === 'company' && (
         <div className="panel" style={{ maxWidth: 700 }}>
-          <Section icon="fa-image" iconColor="var(--blue)" title="Λογότυπο">
+          <Section icon="fa-image" iconColor="var(--blue)" title="ΛΟΓΟΤΥΠΟ">
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <div onClick={() => logoRef.current?.click()} style={{
                 width: 120, height: 70, borderRadius: 10,
@@ -163,7 +163,7 @@ export function SettingsShell({ org }: { org: Org }) {
             </div>
           </Section>
 
-          <Section icon="fa-file-invoice" iconColor="var(--accent)" title="Φορολογικά Στοιχεία">
+          <Section icon="fa-file-invoice" iconColor="var(--accent)" title="ΦΟΡΟΛΟΓΙΚΑ ΣΤΟΙΧΕΙΑ">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Field label="Επωνυμία *"><input className={inputCls} value={legalName} onChange={e => setLegalName(e.target.value)} placeholder="π.χ. PressCal ΕΠΕ" /></Field>
               <Field label="ΑΦΜ *"><input className={inputCls} value={afm} onChange={e => setAfm(e.target.value)} placeholder="999999999" /></Field>
@@ -175,7 +175,7 @@ export function SettingsShell({ org }: { org: Org }) {
             </div>
           </Section>
 
-          <Section icon="fa-map-marker-alt" iconColor="var(--teal)" title="Στοιχεία Επικοινωνίας">
+          <Section icon="fa-map-marker-alt" iconColor="var(--teal)" title="ΣΤΟΙΧΕΙΑ ΕΠΙΚΟΙΝΩΝΙΑΣ">
             <Field label="Διεύθυνση"><input className={inputCls} value={address} onChange={e => setAddress(e.target.value)} placeholder="Οδός, Αριθμός" /></Field>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
               <Field label="Πόλη"><input className={inputCls} value={city} onChange={e => setCity(e.target.value)} placeholder="Αθήνα" /></Field>
@@ -257,7 +257,7 @@ export function SettingsShell({ org }: { org: Org }) {
       {/* ═══ INTEGRATIONS TAB ═══ */}
       {tab === 'integrations' && (
         <div className="panel" style={{ maxWidth: 700 }}>
-          <Section icon="fa-file-invoice-dollar" iconColor="#4f46e5" title="Elorus — Τιμολόγηση">
+          <Section icon="fa-file-invoice-dollar" iconColor="#4f46e5" title="ELORUS — ΤΙΜΟΛΟΓΗΣΗ">
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
               Σύνδεση με <a href="https://www.elorus.com" target="_blank" rel="noreferrer" style={{ color: 'var(--blue)' }}>Elorus</a> για αυτόματη έκδοση τιμολογίων και παραστατικών.
             </p>
@@ -272,7 +272,7 @@ export function SettingsShell({ org }: { org: Org }) {
             )}
           </Section>
 
-          <Section icon="fa-envelope" iconColor="#ea4335" title="Gmail — Αποστολή Email">
+          <Section icon="fa-envelope" iconColor="#ea4335" title="GMAIL — ΑΠΟΣΤΟΛΗ EMAIL">
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
               App Password για αποστολή email μέσω Gmail (Παραγγελίες, Προσφορές).
             </p>
@@ -281,7 +281,7 @@ export function SettingsShell({ org }: { org: Org }) {
             </Field>
           </Section>
 
-          <Section icon="fa-robot" iconColor="var(--blue)" title="Gemini AI — Scan & Import">
+          <Section icon="fa-robot" iconColor="var(--blue)" title="GEMINI AI — SCAN & IMPORT">
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
               Override Gemini API key (αν θέλετε δικό σας αντί του default).
             </p>
@@ -316,7 +316,7 @@ function Section({ icon, iconColor, title, children }: { icon: string; iconColor
     <div style={{ marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
         <i className={`fas ${icon}`} style={{ color: iconColor, fontSize: '0.85rem' }} />
-        <h3 style={{ fontSize: '0.82rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{title}</h3>
+        <h3 style={{ fontSize: '0.82rem', fontWeight: 800, letterSpacing: '0.04em' }}>{title}</h3>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>{children}</div>
     </div>

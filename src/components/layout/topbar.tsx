@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
+import { signOut, useSession } from 'next-auth/react';
 
 const DAYS_GR = ['Κυρ', 'Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ'];
 const MONTHS_GR = ['Ιαν', 'Φεβ', 'Μαρ', 'Απρ', 'Μάι', 'Ιούν', 'Ιούλ', 'Αύγ', 'Σεπ', 'Οκτ', 'Νοέ', 'Δεκ'];
@@ -89,8 +90,76 @@ export function Topbar() {
           <span style={{ position: 'absolute' as const, top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)' }} />
         </button>
         <Link href="/settings" className="h-btn" style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'color 0.2s', textDecoration: 'none' }} title="Ρυθμίσεις"><i className="fas fa-cog" /></Link>
-        <Link href="/settings" className="h-btn" style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'color 0.2s', textDecoration: 'none' }} title="Λογαριασμός"><i className="fas fa-user" /></Link>
+        <UserMenu />
       </div>
+    </div>
+  );
+}
+
+function UserMenu() {
+  const { data: session } = useSession();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(!open)} className="h-btn" style={{
+        width: 36, height: 36, borderRadius: 8, border: 'none',
+        background: open ? 'rgba(255,255,255,0.08)' : 'transparent',
+        color: 'var(--text-muted)', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1rem', transition: 'color 0.2s',
+      }} title="Λογαριασμός">
+        {session?.user?.image ? (
+          <img src={session.user.image} alt="" style={{ width: 28, height: 28, borderRadius: '50%' }} />
+        ) : (
+          <i className="fas fa-user" />
+        )}
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 42, right: 0, width: 220, zIndex: 100,
+          background: 'rgb(20,30,55)', border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: 12, padding: 8, boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+        }}>
+          {session?.user && (
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 4 }}>
+              <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text)' }}>{session.user.name}</p>
+              <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{session.user.email}</p>
+            </div>
+          )}
+          <Link href="/settings" onClick={() => setOpen(false)} style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 12px', borderRadius: 8, fontSize: '0.82rem', color: 'var(--text-dim)',
+            textDecoration: 'none', transition: 'background 0.15s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <i className="fas fa-cog" style={{ fontSize: '0.7rem', width: 16 }} /> Ρυθμίσεις
+          </Link>
+          <button onClick={() => signOut({ callbackUrl: '/login' })} style={{
+            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+            padding: '8px 12px', borderRadius: 8, fontSize: '0.82rem', color: 'var(--danger)',
+            border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left',
+            transition: 'background 0.15s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <i className="fas fa-sign-out-alt" style={{ fontSize: '0.7rem', width: 16 }} /> Αποσύνδεση
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -50,13 +50,13 @@ const MACHINES: MachineTab[] = [
 
 // ─── PAPER CATALOG (demo) ───
 const PAPERS: PaperData[] = [
-  { name: 'Γραφής', weight: '70g', size: '860×610mm', price: 0.085 },
-  { name: 'Γραφής', weight: '70g', size: '1000×700mm', price: 0.092 },
-  { name: 'Γραφής', weight: '80g', size: '860×610mm', price: 0.095 },
-  { name: 'Γραφής', weight: '80g', size: '1000×700mm', price: 0.105 },
-  { name: 'Γραφής', weight: '100g', size: '860×610mm', price: 0.118 },
-  { name: 'Γραφής', weight: '120g', size: '860×610mm', price: 0.140 },
-  { name: 'Γραφής', weight: '120g', size: '1000×700mm', price: 0.155 },
+  { name: 'Γραφής', weight: '70gsm', size: '860×610mm', price: 0.085 },
+  { name: 'Γραφής', weight: '70gsm', size: '1000×700mm', price: 0.092 },
+  { name: 'Γραφής', weight: '80gsm', size: '860×610mm', price: 0.095 },
+  { name: 'Γραφής', weight: '80gsm', size: '1000×700mm', price: 0.105 },
+  { name: 'Γραφής', weight: '100gsm', size: '860×610mm', price: 0.118 },
+  { name: 'Γραφής', weight: '120gsm', size: '860×610mm', price: 0.140 },
+  { name: 'Γραφής', weight: '120gsm', size: '1000×700mm', price: 0.155 },
 ];
 
 // ─── IMPOSITION MODES ───
@@ -335,28 +335,28 @@ export default function CalculatorShell() {
         }}>
           {/* Price hero */}
           <div style={{ textAlign: 'center', padding: '16px 0', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ fontSize: '0.62rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Τελική Τιμή</div>
+            <div style={{ fontSize: '0.62rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.08em' }}>ΤΕΛΙΚΗ ΤΙΜΗ</div>
             <div style={{ fontSize: '2.6rem', fontWeight: 900, color: 'var(--accent)', letterSpacing: '-0.03em', lineHeight: 1, margin: '4px 0' }}>€{fmt(totalPrice)}</div>
             <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}><strong style={{ fontWeight: 700 }}>€{fmt(pricePerUnit)}</strong> / τεμάχιο</div>
           </div>
 
           {/* Stat pills */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-            <StatPill label="Ups" value={String(ups)} />
-            <StatPill label="Φύλλα" value={String(sheets)} />
-            <StatPill label="Stock" value={String(sheets)} />
-            <StatPill label="Χρόνος" value={`~${timeMin}'`} />
+            <StatPill label="UPS" value={String(ups)} />
+            <StatPill label="ΦΥΛΛΑ" value={String(sheets)} />
+            <StatPill label="STOCK" value={String(sheets)} />
+            <StatPill label="ΧΡΟΝΟΣ" value={`~${timeMin}'`} />
           </div>
 
           {/* Cost breakdown */}
-          <CostGroup title="Κόστη">
+          <CostGroup title="ΚΟΣΤΗ">
             <CostLine label="Χαρτί" val={`€${fmt(costPaper)}`} />
             <CostLine label="Εκτύπωση" val={`€${fmt(costPrint)}`} />
             {costGuillotine > 0 && <CostLine label="Γκιλοτίνα" val={`€${fmt(costGuillotine)}`} />}
             {costLamination > 0 && <CostLine label="Πλαστικοποίηση" val={`€${fmt(costLamination)}`} />}
           </CostGroup>
 
-          <CostGroup title="Έσοδα">
+          <CostGroup title="ΕΣΟΔΑ">
             <CostLine label="Κέρδος εκτύπωσης" val={`€${fmt(profitPrint)}`} />
             <CostLine label="Markup χαρτιού" val={`€${fmt(markupPaper)}`} />
             {profitGuillotine > 0 && <CostLine label="Γκιλοτίνα" val={`€${fmt(profitGuillotine)}`} />}
@@ -442,13 +442,13 @@ export default function CalculatorShell() {
       <ModalPortal open={modal === 'job'} onClose={closeModal}>
         <ModalBox small>
           <ModalHead icon="fas fa-ruler-combined" iconColor="var(--accent)" title="Εργασία" onClose={closeModal} />
-          <MfLabel>Προϊόν / Archetype</MfLabel>
+          <MfLabel>ΠΡΟΪΟΝ / ARCHETYPE</MfLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
             {ARCHETYPES.map((a) => (
               <Pill key={a} active={job.archetype === a} onClick={() => setJob({ ...job, archetype: a })}>{a}</Pill>
             ))}
           </div>
-          <MfLabel>Διαστάσεις (mm)</MfLabel>
+          <MfLabel>ΔΙΑΣΤΑΣΕΙΣ (MM)</MfLabel>
           <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <MfInput value={job.width} onChange={(v) => setJob({ ...job, width: Number(v) || 0 })} style={{ width: 90, textAlign: 'center' }} />
@@ -456,14 +456,14 @@ export default function CalculatorShell() {
               <MfInput value={job.height} onChange={(v) => setJob({ ...job, height: Number(v) || 0 })} style={{ width: 90, textAlign: 'center' }} />
             </div>
             <div style={{ marginLeft: 'auto' }}>
-              <MfLabel>Bleed</MfLabel>
+              <MfLabel>BLEED</MfLabel>
               <MfInput value={job.bleed} onChange={(v) => setJob({ ...job, bleed: Number(v) || 0 })} style={{ width: 60, textAlign: 'center' }} />
             </div>
           </div>
-          <MfLabel>Ποσότητα</MfLabel>
+          <MfLabel>ΠΟΣΟΤΗΤΑ</MfLabel>
           <MfInput value={job.qty} onChange={(v) => setJob({ ...job, qty: Number(v) || 0 })} style={{ width: 140, fontSize: '1.1rem', fontWeight: 800 }} />
           <div style={{ marginTop: 14 }}>
-            <MfLabel>Όψεις</MfLabel>
+            <MfLabel>ΟΨΕΙΣ</MfLabel>
             <ToggleBar value={String(job.sides)} onChange={(v) => setJob({ ...job, sides: Number(v) as 1 | 2 })} options={[{ v: '1', l: 'Μονή' }, { v: '2', l: 'Διπλή' }]} />
           </div>
         </ModalBox>
@@ -473,22 +473,22 @@ export default function CalculatorShell() {
       <ModalPortal open={modal === 'color'} onClose={closeModal}>
         <ModalBox small>
           <ModalHead icon="fas fa-palette" iconColor="var(--blue)" title="Χρώμα" onClose={closeModal} />
-          <MfLabel>Χρωματικό μοντέλο</MfLabel>
+          <MfLabel>ΧΡΩΜΑΤΙΚΟ ΜΟΝΤΕΛΟ</MfLabel>
           <div style={{ marginBottom: 14 }}>
             <ToggleBar value={color.model} onChange={(v) => setColor({ ...color, model: v as 'cmyk' | 'bw' })} options={[{ v: 'cmyk', l: '4χρ CMYK' }, { v: 'bw', l: 'Ασπρόμαυρο' }]} />
           </div>
-          <MfLabel>Ειδικά χρώματα (Offset)</MfLabel>
+          <MfLabel>ΕΙΔΙΚΑ ΧΡΩΜΑΤΑ (OFFSET)</MfLabel>
           <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center' }}>
             <div>
-              <MfLabel>PMS Front</MfLabel>
+              <MfLabel>PMS FRONT</MfLabel>
               <MfInput value={color.pmsFront} onChange={(v) => setColor({ ...color, pmsFront: Number(v) || 0 })} style={{ width: 60, textAlign: 'center' }} />
             </div>
             <div>
-              <MfLabel>PMS Back</MfLabel>
+              <MfLabel>PMS BACK</MfLabel>
               <MfInput value={color.pmsBack} onChange={(v) => setColor({ ...color, pmsBack: Number(v) || 0 })} style={{ width: 60, textAlign: 'center' }} />
             </div>
             <div>
-              <MfLabel>Βερνίκι</MfLabel>
+              <MfLabel>ΒΕΡΝΙΚΙ</MfLabel>
               <ToggleBar value={color.varnish} onChange={(v) => setColor({ ...color, varnish: v as 'none' | 'oil' })} options={[{ v: 'none', l: 'Όχι' }, { v: 'oil', l: 'Λαδιού' }]} />
             </div>
           </div>
@@ -499,19 +499,19 @@ export default function CalculatorShell() {
       <ModalPortal open={modal === 'finish'} onClose={closeModal}>
         <ModalBox small>
           <ModalHead icon="fas fa-scissors" iconColor="var(--violet)" title="Φινίρισμα" onClose={closeModal} />
-          <MfLabel>Γκιλοτίνα</MfLabel>
+          <MfLabel>ΓΚΙΛΟΤΙΝΑ</MfLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
             {['Polar 78', 'Χωρίς'].map((g) => (
               <Pill key={g} active={finish.guillotine === g} onClick={() => setFinish({ ...finish, guillotine: g })} color="var(--violet)">{g}</Pill>
             ))}
           </div>
-          <MfLabel>Πλαστικοποίηση</MfLabel>
+          <MfLabel>ΠΛΑΣΤΙΚΟΠΟΙΗΣΗ</MfLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
             {['Matt 1 όψη', 'Gloss 1 όψη', 'Matt 2 όψεις', 'Χωρίς'].map((l) => (
               <Pill key={l} active={finish.lamination === l} onClick={() => setFinish({ ...finish, lamination: l })} color="var(--violet)">{l}</Pill>
             ))}
           </div>
-          <MfLabel>Βιβλιοδεσία</MfLabel>
+          <MfLabel>ΒΙΒΛΙΟΔΕΣΙΑ</MfLabel>
           <ToggleBar value={finish.binding} onChange={(v) => setFinish({ ...finish, binding: v })}
             options={[{ v: 'none', l: 'Καμία' }, { v: 'staple', l: 'Συρραφή' }, { v: 'glue', l: 'Κόλλα' }, { v: 'spiral', l: 'Σπιράλ' }]}
           />
@@ -551,7 +551,7 @@ function ImpoChip({ children }: { children: React.ReactNode }) {
 function StatPill({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ flex: '1 1 calc(50% - 3px)', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 7, padding: '7px 10px' }}>
-      <div style={{ fontSize: '0.55rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ fontSize: '0.55rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.04em' }}>{label}</div>
       <div style={{ fontSize: '1rem', fontWeight: 800, marginTop: 1 }}>{value}</div>
     </div>
   );
@@ -560,7 +560,7 @@ function StatPill({ label, value }: { label: string; value: string }) {
 function CostGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 6 }}>
-      <div style={{ fontSize: '0.58rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#64748b', paddingBottom: 3, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.06em', color: '#64748b', paddingBottom: 3, borderBottom: '1px solid var(--border)', marginBottom: 4 }}>{title}</div>
       {children}
     </div>
   );
@@ -576,7 +576,7 @@ function CostLine({ label, val }: { label: string; val: string }) {
 }
 
 function MfLabel({ children }: { children: React.ReactNode }) {
-  return <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block' }}>{children}</span>;
+  return <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', marginBottom: 4, display: 'block' }}>{children}</span>;
 }
 
 function MfInput({ value, onChange, style }: { value: string | number; onChange: (v: string) => void; style?: React.CSSProperties }) {
