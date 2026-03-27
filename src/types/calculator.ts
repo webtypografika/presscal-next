@@ -6,6 +6,10 @@ export type ImpositionMode = 'nup' | 'booklet' | 'perfect_bound' | 'cutstack' | 
 
 export type CoverageLevel = 'low' | 'mid' | 'high' | 'pdf';
 
+export type CutStackOrder = 'row' | 'column' | 'snake' | 'custom';
+
+export type WorkTurnType = 'turn' | 'tumble';
+
 export interface CalculatorInput {
   machineId: UUID;
   paperId: UUID;
@@ -89,6 +93,59 @@ export interface ImpositionCell {
   rotation?: number;
 }
 
+// ─── BOOKLET SIGNATURE MAP ───
+
+export interface BookletSignatureSheet {
+  front: [number, number];  // [leftPage, rightPage]
+  back: [number, number];   // [leftPage, rightPage]
+}
+
+export interface BookletSignatureMap {
+  sheets: BookletSignatureSheet[];
+  paddedPages: number;
+  totalSheets: number;
+}
+
+// ─── CUT & STACK POSITION ───
+
+export interface CutStackPosition {
+  col: number;
+  row: number;
+  posLabel: number;    // 1-indexed display number
+  stackNum: number;    // 0-indexed stack order
+  seqFrom: number;     // starting sequential number
+  seqTo: number;       // ending sequential number
+}
+
+// ─── GANG RUN ───
+
+export interface GangRunData {
+  cellAssign: Record<number, number>;      // posIdx → front page number
+  cellAssignBack: Record<number, number>;  // posIdx → back page number
+  cellQty: Record<number, number>;         // posIdx → copies
+  gangSheetsNeeded: number;
+  pageCount: number;
+}
+
+// ─── STEP MULTI BLOCK ───
+
+export interface StepBlock {
+  pageNum: number;
+  backPageNum: number | null;
+  trimW: number;
+  trimH: number;
+  cols: number;
+  rows: number;
+  rotation: 0 | 90 | 180 | 270;
+  x: number;       // position in printable area (mm)
+  y: number;
+  blockW: number;  // computed: cols × cellW + gutters
+  blockH: number;  // computed: rows × cellH + gutters
+  _manualGrid?: boolean;
+}
+
+// ─── IMPOSITION RESULT ───
+
 export interface ImpositionResult {
   mode: ImpositionMode;
   ups: number;
@@ -105,4 +162,22 @@ export interface ImpositionResult {
   cells: ImpositionCell[];
   totalSheets?: number;
   signatures?: number;
+
+  // Booklet-specific
+  signatureMap?: BookletSignatureMap;
+  creepPerSheet?: number[];
+
+  // Cut & Stack-specific
+  stackPositions?: CutStackPosition[];
+  stackOrder?: CutStackOrder;
+
+  // Gang Run-specific
+  gangData?: GangRunData;
+
+  // Step Multi-specific
+  blocks?: StepBlock[];
+
+  // Work & Turn-specific
+  turnType?: WorkTurnType;
+  fitsPerHalf?: number;
 }

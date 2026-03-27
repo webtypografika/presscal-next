@@ -1,0 +1,494 @@
+'use client';
+
+import { useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
+import type { Quote, Customer } from '@/generated/prisma/client';
+import { updateJobStage, updateJobDetails } from './actions';
+
+type JobQuote = Quote & { customer: Customer | null };
+
+// ─── STAGES ───
+const STAGES = [
+  { id: 'files', label: 'Αρχεία', icon: 'fa-folder-open', color: '#60a5fa' },
+  { id: 'printing', label: 'Εκτύπωση', icon: 'fa-print', color: 'var(--accent)' },
+  { id: 'cutting', label: 'Κοπή', icon: 'fa-cut', color: '#a78bfa' },
+  { id: 'finishing', label: 'Φινίρισμα', icon: 'fa-magic', color: '#f472b6' },
+  { id: 'delivery', label: 'Παράδοση', icon: 'fa-truck', color: 'var(--success)' },
+] as const;
+
+type StageId = typeof STAGES[number]['id'];
+
+const PRIORITY_COLORS: Record<string, string> = {
+  rush: 'var(--danger)',
+  urgent: '#fb923c',
+  normal: 'var(--text-muted)',
+};
+
+// ─── HELPERS ───
+function formatDate(d: Date | string | null | undefined) {
+  if (!d) return '';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' });
+}
+
+function isOverdue(d: Date | string | null | undefined) {
+  if (!d) return false;
+  return new Date(d) < new Date(new Date().toDateString());
+}
+
+function stageIndex(stage: string | null): number {
+  return STAGES.findIndex(s => s.id === stage);
+}
+
+// ─── TOAST ───
+interface ToastData { message: string; type: 'success' | 'error' | 'info'; id: number; }
+let tId = 0;
+
+// ─── JOB CARD ───
+function JobCard({ job, onDragStart, onDetail }: { job: JobQuote; onDragStart: (e: React.DragEvent, id: string) => void; onDetail: (j: JobQuote) => void }) {
+  const items = (job.items as any[]) || [];
+  const itemCount = items.length;
+  const desc = items.map((i: any) => i.name).filter(Boolean).slice(0, 2).join(', ');
+  const overdue = isOverdue(job.deadline);
+  const priority = job.jobPriority || 'normal';
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, job.id)}
+      onClick={() => onDetail(job)}
+      style={{
+        padding: '10px 12px', borderRadius: 8,
+        border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
+        background: overdue ? 'rgba(239,68,68,0.04)' : 'rgba(255,255,255,0.02)',
+        cursor: 'grab', transition: 'all 0.15s',
+        borderLeft: `3px solid ${PRIORITY_COLORS[priority] || 'var(--text-muted)'}`,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent)' }}>{job.number}</span>
+        <span style={{ fontSize: '0.82rem', fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {job.customer?.name || job.customer?.company || '—'}
+        </span>
+        {priority === 'rush' && <i className="fas fa-bolt" style={{ color: 'var(--danger)', fontSize: '0.65rem' }} />}
+        {priority === 'urgent' && <i className="fas fa-exclamation-triangle" style={{ color: '#fb923c', fontSize: '0.6rem' }} />}
+      </div>
+
+      {desc && (
+        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {desc}{itemCount > 2 ? ` +${itemCount - 2}` : ''}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        {job.deadline && (
+          <span style={{
+            fontSize: '0.65rem', fontWeight: 600,
+            color: overdue ? 'var(--danger)' : 'var(--text-muted)',
+            display: 'flex', alignItems: 'center', gap: 3,
+          }}>
+            <i className="fas fa-clock" style={{ fontSize: '0.55rem' }} />
+            {formatDate(job.deadline)}
+          </span>
+        )}
+        <span style={{ fontSize: '0.72rem', fontWeight: 700, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
+          {new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(job.grandTotal)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── DETAIL MODAL ───
+function JobDetailModal({ job, onClose, onUpdate }: { job: JobQuote; onClose: () => void; onUpdate: () => void }) {
+  const router = useRouter();
+  const [deadline, setDeadline] = useState(job.deadline ? new Date(job.deadline).toISOString().split('T')[0] : '');
+  const [priority, setPriority] = useState(job.jobPriority || 'normal');
+  const [notes, setNotes] = useState(job.jobNotes || '');
+  const [saving, setSaving] = useState(false);
+
+  const items = (job.items as any[]) || [];
+  const currentStage = stageIndex(job.jobStage);
+
+  async function handleSave() {
+    setSaving(true);
+    await updateJobDetails(job.id, { deadline: deadline || null, jobPriority: priority, jobNotes: notes });
+    setSaving(false);
+    onUpdate();
+  }
+
+  async function handleStageClick(stageId: string) {
+    await updateJobStage(job.id, stageId);
+    onUpdate();
+  }
+
+  return createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', background: 'rgba(0,0,0,0.3)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 560, maxHeight: '85vh', overflow: 'auto', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--glass-border)', padding: 28, boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }} className="custom-scrollbar">
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--accent)' }}>{job.number}</span>
+          <span style={{ fontSize: '1.1rem', fontWeight: 700, flex: 1 }}>{job.customer?.name || '—'}</span>
+          <button onClick={() => router.push(`/quotes/${job.id}`)} style={{
+            border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.04)', borderRadius: 8,
+            padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', cursor: 'pointer',
+          }}>
+            <i className="fas fa-file-invoice" style={{ marginRight: 4 }} /> Προσφορά
+          </button>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}>&times;</button>
+        </div>
+
+        {/* Stage progress */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
+          {STAGES.map((s, i) => {
+            const isDone = i < currentStage;
+            const isActive = i === currentStage;
+            return (
+              <button key={s.id} onClick={() => handleStageClick(s.id)} style={{
+                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                border: 'none', background: 'transparent', cursor: 'pointer', padding: '8px 0',
+              }}>
+                <div style={{
+                  width: '100%', height: 6, borderRadius: 3,
+                  background: isDone ? 'var(--success)' : isActive ? s.color : 'rgba(255,255,255,0.06)',
+                  transition: 'background 0.3s',
+                }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <i className={`fas ${s.icon}`} style={{
+                    fontSize: '0.6rem',
+                    color: isDone ? 'var(--success)' : isActive ? s.color : 'var(--text-muted)',
+                  }} />
+                  <span style={{
+                    fontSize: '0.62rem', fontWeight: isActive ? 700 : 500,
+                    color: isDone ? 'var(--success)' : isActive ? s.color : 'var(--text-muted)',
+                  }}>{s.label}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Items */}
+        {items.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.05em' }}>ΠΡΟΙΟΝΤΑ</div>
+            {items.map((item: any, i: number) => (
+              <div key={i} style={{ fontSize: '0.82rem', padding: '5px 0', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8 }}>
+                <span style={{ flex: 1 }}>{item.name || '—'}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>×{item.qty}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Fields */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div>
+            <label style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Προθεσμία</label>
+            <input
+              type="date" value={deadline} onChange={e => setDeadline(e.target.value)}
+              style={{
+                width: '100%', padding: '8px 12px', borderRadius: 8,
+                border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.04)',
+                color: 'var(--text)', fontSize: '0.82rem', fontFamily: 'inherit',
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Προτεραιότητα</label>
+            <select
+              value={priority} onChange={e => setPriority(e.target.value)}
+              style={{
+                width: '100%', padding: '8px 12px', borderRadius: 8,
+                border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.04)',
+                color: 'var(--text)', fontSize: '0.82rem', fontFamily: 'inherit',
+              }}
+            >
+              <option value="normal">Κανονική</option>
+              <option value="urgent">Επείγον</option>
+              <option value="rush">Rush</option>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Σημειώσεις Εργασίας</label>
+          <textarea
+            value={notes} onChange={e => setNotes(e.target.value)}
+            rows={3}
+            style={{
+              width: '100%', padding: '8px 12px', borderRadius: 8,
+              border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.04)',
+              color: 'var(--text)', fontSize: '0.82rem', fontFamily: 'inherit', resize: 'vertical',
+            }}
+          />
+        </div>
+
+        {/* Totals */}
+        <div style={{ display: 'flex', gap: 20, padding: '12px 0', borderTop: '1px solid var(--border)' }}>
+          <div>
+            <div style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)' }}>Σύνολο</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800 }}>
+              {new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(job.grandTotal)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)' }}>Κόστος</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-dim)' }}>
+              {new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(job.totalCost)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-muted)' }}>Κέρδος</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--success)' }}>
+              {new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(job.totalProfit)}
+            </div>
+          </div>
+        </div>
+
+        {/* Save */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+          <button onClick={handleSave} disabled={saving} style={{
+            padding: '8px 20px', borderRadius: 8, border: 'none',
+            background: 'var(--accent)', color: '#fff', fontSize: '0.82rem', fontWeight: 700,
+            cursor: 'pointer', opacity: saving ? 0.6 : 1,
+          }}>
+            {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ─── MAIN BOARD ───
+interface Props { jobs: JobQuote[]; customers: Customer[]; }
+
+export function JobsBoard({ jobs: initialJobs }: Props) {
+  const router = useRouter();
+  const [jobs, setJobs] = useState(initialJobs);
+  const [detailJob, setDetailJob] = useState<JobQuote | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
+  const [view, setView] = useState<'board' | 'list'>('board');
+
+  function toast(message: string, type: ToastData['type'] = 'success') {
+    const id = ++tId;
+    setToasts(p => [...p, { message, type, id }]);
+  }
+
+  // ─── DRAG & DROP ───
+  function handleDragStart(e: React.DragEvent, id: string) {
+    setDragId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  async function handleDrop(e: React.DragEvent, stageId: string) {
+    e.preventDefault();
+    if (!dragId) return;
+    const job = jobs.find(j => j.id === dragId);
+    if (!job) return;
+
+    // Optimistic update
+    setJobs(prev => prev.map(j => j.id === dragId ? { ...j, jobStage: stageId, jobStageUpdatedAt: new Date() } as any : j));
+    setDragId(null);
+
+    try {
+      await updateJobStage(dragId, stageId);
+      const stageLabel = STAGES.find(s => s.id === stageId)?.label || stageId;
+      toast(`${job.number} → ${stageLabel}`);
+    } catch {
+      // Revert
+      setJobs(prev => prev.map(j => j.id === dragId ? job : j));
+      toast('Σφάλμα ενημέρωσης', 'error');
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleRefresh() {
+    router.refresh();
+    // Also refresh local state after a tick
+    setTimeout(() => window.location.reload(), 300);
+  }
+
+  // Jobs without a stage (newly approved, not yet assigned)
+  const unassigned = jobs.filter(j => !j.jobStage || !STAGES.find(s => s.id === j.jobStage));
+  const completed = jobs.filter(j => j.status === 'completed');
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+        <h1 style={{ fontSize: '1.3rem', fontWeight: 800, flex: 1, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <i className="fas fa-tasks" style={{ color: 'var(--accent)', fontSize: '1.1rem' }} />
+          Εργασίες
+          <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', padding: '2px 10px', borderRadius: 12 }}>
+            {jobs.length}
+          </span>
+        </h1>
+
+        <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 2 }}>
+          <button onClick={() => setView('board')} style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: '0.72rem', fontWeight: 600,
+            background: view === 'board' ? 'var(--accent)' : 'transparent',
+            color: view === 'board' ? '#fff' : 'var(--text-muted)',
+            cursor: 'pointer',
+          }}>
+            <i className="fas fa-columns" style={{ marginRight: 4 }} /> Board
+          </button>
+          <button onClick={() => setView('list')} style={{
+            padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: '0.72rem', fontWeight: 600,
+            background: view === 'list' ? 'var(--accent)' : 'transparent',
+            color: view === 'list' ? '#fff' : 'var(--text-muted)',
+            cursor: 'pointer',
+          }}>
+            <i className="fas fa-list" style={{ marginRight: 4 }} /> List
+          </button>
+        </div>
+      </div>
+
+      {/* Unassigned bar */}
+      {unassigned.length > 0 && (
+        <div style={{ marginBottom: 16, padding: '10px 16px', borderRadius: 10, background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)' }}>
+          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#60a5fa', marginBottom: 8 }}>
+            <i className="fas fa-inbox" style={{ marginRight: 6 }} /> Νέες εγκεκριμένες — σύρετε σε στάδιο
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {unassigned.map(j => (
+              <div key={j.id} draggable onDragStart={(e) => handleDragStart(e, j.id)} style={{
+                padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                background: 'rgba(255,255,255,0.03)', cursor: 'grab', fontSize: '0.78rem', fontWeight: 600,
+              }}>
+                <span style={{ color: 'var(--accent)', marginRight: 6 }}>{j.number}</span>
+                {j.customer?.name || '—'}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'board' ? (
+        /* ═══ BOARD VIEW ═══ */
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAGES.length}, 1fr)`, gap: 10, minHeight: 400 }}>
+          {STAGES.map(stage => {
+            const stageJobs = jobs.filter(j => j.jobStage === stage.id && j.status !== 'completed');
+            return (
+              <div
+                key={stage.id}
+                onDrop={e => handleDrop(e, stage.id)}
+                onDragOver={handleDragOver}
+                style={{
+                  borderRadius: 12, padding: 10,
+                  background: dragId ? 'rgba(255,255,255,0.02)' : 'transparent',
+                  border: '1px solid var(--border)',
+                  transition: 'background 0.2s',
+                  display: 'flex', flexDirection: 'column',
+                }}
+              >
+                {/* Column header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, padding: '0 4px' }}>
+                  <i className={`fas ${stage.icon}`} style={{ color: stage.color, fontSize: '0.72rem' }} />
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: stage.color }}>{stage.label}</span>
+                  <span style={{
+                    fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)',
+                    background: 'rgba(255,255,255,0.06)', padding: '1px 6px', borderRadius: 8, marginLeft: 'auto',
+                  }}>{stageJobs.length}</span>
+                </div>
+
+                {/* Cards */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                  {stageJobs.map(j => (
+                    <JobCard key={j.id} job={j} onDragStart={handleDragStart} onDetail={setDetailJob} />
+                  ))}
+                  {stageJobs.length === 0 && (
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.72rem', opacity: 0.5 }}>
+                      Σύρετε εδώ
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* ═══ LIST VIEW ═══ */
+        <div className="panel" style={{ overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Αριθμός</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Πελάτης</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Στάδιο</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Προθεσμία</th>
+                <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Σύνολο</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.filter(j => j.status !== 'completed').map(j => {
+                const stage = STAGES.find(s => s.id === j.jobStage);
+                const overdue = isOverdue(j.deadline);
+                return (
+                  <tr key={j.id} onClick={() => setDetailJob(j)} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s' }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--accent)' }}>{j.number}</td>
+                    <td style={{ padding: '10px 12px' }}>{j.customer?.name || '—'}</td>
+                    <td style={{ padding: '10px 12px' }}>
+                      {stage ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 600, color: stage.color }}>
+                          <i className={`fas ${stage.icon}`} style={{ fontSize: '0.6rem' }} /> {stage.label}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Αρχικό</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px 12px', color: overdue ? 'var(--danger)' : 'var(--text-muted)', fontWeight: overdue ? 700 : 400 }}>
+                      {formatDate(j.deadline) || '—'}
+                    </td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      {new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(j.grandTotal)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Detail modal */}
+      {detailJob && (
+        <JobDetailModal
+          job={detailJob}
+          onClose={() => setDetailJob(null)}
+          onUpdate={() => {
+            setDetailJob(null);
+            handleRefresh();
+          }}
+        />
+      )}
+
+      {/* Toasts */}
+      {toasts.length > 0 && createPortal(
+        <div style={{ position: 'fixed', bottom: 80, right: 20, zIndex: 300, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {toasts.map(t => (
+            <div key={t.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '12px 20px', borderRadius: 10,
+              background: 'rgb(20,30,55)', border: `1px solid ${t.type === 'error' ? 'var(--danger)' : 'var(--success)'}`,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)', animation: 'fadeIn 0.3s ease', minWidth: 220,
+            }}>
+              <i className={`fas ${t.type === 'error' ? 'fa-exclamation-circle' : 'fa-check-circle'}`} style={{ color: t.type === 'error' ? 'var(--danger)' : 'var(--success)', fontSize: '0.92rem' }} />
+              <span style={{ fontSize: '0.85rem', color: 'var(--text)' }}>{t.message}</span>
+            </div>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}

@@ -15,6 +15,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
 } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/', icon: LayoutDashboard, labelEl: 'Πίνακας Ελέγχου', labelEn: 'Dashboard' },
   { href: '/calculator', icon: Calculator, labelEl: 'Κοστολόγηση', labelEn: 'Calculator' },
   { href: '/quotes', icon: FileText, labelEl: 'Προσφορές', labelEn: 'Quotes' },
+  { href: '/jobs', icon: ClipboardList, labelEl: 'Εργασίες', labelEn: 'Jobs' },
   { href: '/email', icon: Mail, labelEl: 'Email', labelEn: 'Email' },
   { href: '/machines', icon: Printer, labelEl: 'Μηχανήματα', labelEn: 'Machines' },
   { href: '/inventory', icon: Warehouse, labelEl: 'Αποθήκη', labelEn: 'Inventory' },

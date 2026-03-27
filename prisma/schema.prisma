@@ -391,8 +391,11 @@ model Quote {
   totalProfit Float   @default(0)
 
   // Job board
-  jobStageId        String?
+  jobStage          String?   // 'files' | 'printing' | 'cutting' | 'finishing' | 'delivery'
   jobStageUpdatedAt DateTime?
+  deadline          DateTime?
+  jobPriority       String?   // 'normal' | 'urgent' | 'rush'
+  jobNotes          String?
 
   // Email
   threadId     String?

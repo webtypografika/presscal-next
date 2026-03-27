@@ -34,6 +34,8 @@ export default function EmailClient() {
   const [compose, setCompose] = useState<ComposeData | null>(null);
   const [nextPage, setNextPage] = useState<string | undefined>();
   const [creatingQuote, setCreatingQuote] = useState(false);
+  const [matchedCustomer, setMatchedCustomer] = useState<any>(null);
+  const [customerLoading, setCustomerLoading] = useState(false);
 
   // ─── FETCH MESSAGES ───
   const fetchMessages = useCallback(async (f: Folder, q?: string, label?: string | null) => {
@@ -84,11 +86,45 @@ export default function EmailClient() {
   // ─── SELECT EMAIL ───
   function handleSelect(id: string) {
     setSelectedId(id);
+    setMatchedCustomer(null);
     fetchDetail(id);
     // Mark as read locally
     setEmails(prev => prev.map(e => e.id === id ? { ...e, labelIds: e.labelIds.filter(l => l !== 'UNREAD') } : e));
     // Mark as read on Gmail (fire and forget)
     fetch(`/api/email/messages/${id}/read`, { method: 'POST' }).catch(() => {});
+  }
+
+  // ─── MATCH CUSTOMER FROM EMAIL SENDER ───
+  useEffect(() => {
+    if (!detail) return;
+    const senderEmail = parseAddress(detail.from).email;
+    if (!senderEmail) return;
+    setCustomerLoading(true);
+    fetch(`/api/email/match-customer?email=${encodeURIComponent(senderEmail)}`)
+      .then(r => r.json())
+      .then(data => setMatchedCustomer(data.customer))
+      .catch(() => setMatchedCustomer(null))
+      .finally(() => setCustomerLoading(false));
+  }, [detail]);
+
+  // ─── TOGGLE STAR ───
+  async function handleToggleStar(emailId: string) {
+    const email = emails.find(e => e.id === emailId);
+    if (!email) return;
+    const isStarred = email.labelIds.includes('STARRED');
+    // Optimistic update
+    setEmails(prev => prev.map(e => e.id === emailId
+      ? { ...e, labelIds: isStarred ? e.labelIds.filter(l => l !== 'STARRED') : [...e.labelIds, 'STARRED'] }
+      : e
+    ));
+    fetch(`/api/email/messages/${emailId}/star`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ starred: !isStarred }),
+    }).catch(() => {
+      // Revert on error
+      setEmails(prev => prev.map(e => e.id === emailId ? email : e));
+    });
   }
 
   // ─── SEARCH ───
@@ -336,6 +372,12 @@ export default function EmailClient() {
                     <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.snippet}</p>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleToggleStar(email.id); }}
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontSize: '0.7rem', color: email.labelIds.includes('STARRED') ? '#facc15' : 'var(--text-muted)', opacity: email.labelIds.includes('STARRED') ? 1 : 0.4, transition: 'all 0.15s' }}
+                    >
+                      <i className={email.labelIds.includes('STARRED') ? 'fas fa-star' : 'far fa-star'} />
+                    </button>
                     {isUnread && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--blue)' }} />}
                     {email.hasAttachments && <i className="fas fa-paperclip" style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }} />}
                   </div>
@@ -410,7 +452,7 @@ export default function EmailClient() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '0.6rem', fontWeight: 800, color: '#fff',
                 }}>{getInitials(parseAddress(detail.from).name)}</div>
-                <div>
+                <div style={{ flex: 1 }}>
                   <p style={{ fontSize: '0.82rem', fontWeight: 700 }}>{parseAddress(detail.from).name}</p>
                   <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
                     Προς: {parseAddress(detail.to).email}
@@ -418,6 +460,25 @@ export default function EmailClient() {
                     <span style={{ marginLeft: 8 }}>{formatDate(detail.date)}</span>
                   </p>
                 </div>
+                {/* Customer match badge */}
+                {matchedCustomer && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 8,
+                    background: 'color-mix(in srgb, var(--success) 8%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--success) 20%, transparent)',
+                  }}>
+                    <i className="fas fa-user-check" style={{ color: 'var(--success)', fontSize: '0.65rem' }} />
+                    <div>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--success)' }}>{matchedCustomer.name}</div>
+                      {matchedCustomer.company && <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{matchedCustomer.company}</div>}
+                      {matchedCustomer.quotes?.length > 0 && (
+                        <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                          {matchedCustomer.quotes.length} προσφορ{matchedCustomer.quotes.length === 1 ? 'ά' : 'ές'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
