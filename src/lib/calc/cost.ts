@@ -73,6 +73,23 @@ export interface CostInput {
   offsetBackPms?: number;
   offsetOilVarnish?: boolean;
   offsetCoating?: boolean;
+
+  // Product pricing (overrides profile markups when present)
+  productPricing?: {
+    // Offset product
+    charge_per_color?: number;     // € per color setup
+    min_charge?: number;           // € minimum charge
+    extra_pantone?: number;        // € per PMS color
+    extra_varnish?: number;        // € varnish surcharge
+    hourly_enabled?: boolean;
+    hourly_rate?: number;          // € profit/hour
+    // Digital product
+    price_color?: number;          // € per page (color)
+    price_bw?: number;             // € per page (BW)
+    discount_step_qty?: number;    // qty for discount step
+    discount_step_pct?: number;    // % discount per step
+    discount_max?: number;         // % max discount
+  };
 }
 
 // ─── COVERAGE MULTIPLIERS ───
@@ -631,10 +648,69 @@ export function calculateCost(input: CostInput): CalculatorResult {
   const chargeFinishing = chargeGuillotine + chargeLamination + chargeBinding;
 
   const chargePaper = paper.cost * (1 + input.paperMarkup / 100);
-  const chargePrint = Math.max(
-    costPrint * (1 + input.printMarkup / 100),
-    input.minChargePrint || 0,
-  );
+
+  // ─── PRODUCT PRICING (overrides profile print markup if present) ───
+  let chargePrint: number;
+  let productPricingApplied = false;
+  const pp = input.productPricing;
+
+  if (pp && input.machineCat === 'digital' && (pp.price_color || pp.price_bw)) {
+    // Digital product: per-page pricing
+    const totalFaces = input.sides === 2 ? totalMachineSheets * 2 : totalMachineSheets;
+    const pricePerPage = input.colorMode === 'color' ? (pp.price_color || 0) : (pp.price_bw || 0);
+    let productRevenue = totalFaces * pricePerPage;
+
+    // Quantity discount
+    if (pp.discount_step_qty && pp.discount_step_pct && input.qty > pp.discount_step_qty) {
+      const steps = Math.floor(input.qty / pp.discount_step_qty) - 1;
+      const discountPct = Math.min(steps * pp.discount_step_pct, pp.discount_max || 50);
+      productRevenue *= (1 - discountPct / 100);
+    }
+
+    // Hourly profit
+    if (pp.hourly_enabled && pp.hourly_rate) {
+      const speedPpm = (input.specs as DigitalSpecs).speedPpmColor || 60;
+      const runMinutes = totalFaces / speedPpm;
+      productRevenue += (runMinutes / 60) * pp.hourly_rate;
+    }
+
+    chargePrint = Math.max(productRevenue, costPrint);
+    productPricingApplied = true;
+  } else if (pp && input.machineCat === 'offset' && pp.charge_per_color) {
+    // Offset product: per-color charge + extras
+    const frontColors = (input.offsetFrontCmyk || 4) + (input.offsetFrontPms || 0);
+    const backColors = input.sides === 2 ? (input.offsetBackCmyk || 0) + (input.offsetBackPms || 0) : 0;
+    let productRevenue = (frontColors + backColors) * pp.charge_per_color;
+
+    // PMS surcharge
+    if (pp.extra_pantone) {
+      productRevenue += ((input.offsetFrontPms || 0) + (input.offsetBackPms || 0)) * pp.extra_pantone;
+    }
+    // Varnish surcharge
+    if (pp.extra_varnish && input.offsetOilVarnish) {
+      productRevenue += pp.extra_varnish;
+    }
+    // Hourly profit
+    if (pp.hourly_enabled && pp.hourly_rate) {
+      const oSpecs = input.specs as OffsetSpecs;
+      const runHours = totalMachineSheets / (oSpecs.speed || 5000);
+      const setupHours = (oSpecs.setupMin || 15) / 60;
+      productRevenue += (runHours + setupHours) * pp.hourly_rate;
+    }
+    // Minimum charge
+    if (pp.min_charge) {
+      productRevenue = Math.max(productRevenue, pp.min_charge);
+    }
+
+    chargePrint = Math.max(productRevenue + costPrint, costPrint);
+    productPricingApplied = true;
+  } else {
+    // Default: profile markup
+    chargePrint = Math.max(
+      costPrint * (1 + input.printMarkup / 100),
+      input.minChargePrint || 0,
+    );
+  }
 
   const sellPrice = chargePaper + chargePrint + chargeFinishing;
   const profitAmount = sellPrice - totalCost;
@@ -671,6 +747,17 @@ export function calculateCost(input: CostInput): CalculatorResult {
       areaRatio: impo.ups * impo.pieceW * impo.pieceH / (input.machineMaxW * input.machineMaxH),
       totalFaces: input.sides === 2 ? totalMachineSheets * 2 : totalMachineSheets,
       wastePercent: impo.wastePercent,
+      productPricingApplied,
+      costBreakdown: {
+        paperCostPerUnit: input.paperCostPerUnit,
+        paperStockSheets: paper.totalStockSheets,
+        paperCutsPerStock: Math.ceil(totalMachineSheets / paper.totalStockSheets),
+        machineSheets: totalMachineSheets,
+        wasteSheets,
+        printCostRaw: costPrint,
+        printMarkup: input.printMarkup,
+        paperMarkup: input.paperMarkup,
+      },
     },
   };
 }

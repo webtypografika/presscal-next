@@ -215,6 +215,9 @@ export default function CalculatorShell() {
 
   // ─── STATE ───
   const [activeMachine, setActiveMachine] = useState(0);
+  const [activeCalcModule, setActiveCalcModule] = useState<'sheetfed' | 'plotter'>('sheetfed');
+  const [showModulePopup, setShowModulePopup] = useState(false);
+  const moduleBtnRef = useRef<HTMLDivElement>(null);
   const [activePaperId, setActivePaperId] = useState<string>(DEMO_PAPERS[0].id);
   const [activePanel, setActivePanel] = useState<'machine' | 'paper' | 'job' | 'color' | 'finish' | 'mode-settings'>('job');
   const [impoMode, setImpoMode] = useState<ImpositionMode>('nup');
@@ -248,7 +251,9 @@ export default function CalculatorShell() {
   const [impoColorBar, setImpoColorBar] = useState(false);
   const [impoColorBarType, setImpoColorBarType] = useState<'cmyk' | 'cmyk_tint50'>('cmyk');
   const [impoColorBarEdge, setImpoColorBarEdge] = useState<'tail' | 'gripper'>('tail');
+  const [impoColorBarOffY, setImpoColorBarOffY] = useState(0); // mm micro-adjust
   const [impoPlateSlug, setImpoPlateSlug] = useState(false);
+  const [impoPlateSlugEdge, setImpoPlateSlugEdge] = useState<'tail' | 'gripper'>('tail');
   const [impoModeTab, setImpoModeTab] = useState<'spacing' | 'position' | 'rotation' | 'marks'>('spacing');
   // Machine sheet override (null = use machine default)
   const [machineSheetW, setMachineSheetW] = useState<number | null>(null);
@@ -263,6 +268,8 @@ export default function CalculatorShell() {
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const [calcResult, setCalcResult] = useState<CalculatorResult | null>(null);
+  const [calcDebug, setCalcDebug] = useState<Record<string, unknown> | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const calcTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -322,8 +329,11 @@ export default function CalculatorShell() {
   const laminators = postpress.filter(p => p.subtype === 'lam_roll' || p.subtype === 'lam_sheet');
   const binders = postpress.filter(p => ['spiral', 'glue_bind', 'staple'].includes(p.subtype));
 
-  // Unique suppliers from papers
-  const suppliers = [...new Set(papers.map(p => p.supplier).filter(Boolean))] as string[];
+  // Unique suppliers — filtered by current category
+  const suppliersForCat = paperCat
+    ? papers.filter(p => paperCategory(p) === paperCat)
+    : papers;
+  const suppliers = [...new Set(suppliersForCat.map(p => p.supplier).filter(Boolean))] as string[];
 
   // Derive category from groupName or first word of name (e.g. "MUNKEN PURE 90gr" → "Munken")
   function paperCategory(p: DbMaterial): string {
@@ -332,7 +342,10 @@ export default function CalculatorShell() {
     if (firstWord.length >= 3) return firstWord.charAt(0) + firstWord.slice(1).toLowerCase();
     return '';
   }
-  const categories = [...new Set(papers.map(paperCategory).filter(Boolean))];
+  const catsForSupplier = supplier
+    ? papers.filter(p => p.supplier === supplier)
+    : papers;
+  const categories = [...new Set(catsForSupplier.map(paperCategory).filter(Boolean))];
 
   // ─── CLIENT-SIDE IMPOSITION (instant feedback) ───
   const effectiveBleed = job.bleedOn ? (impoBleedOverride ?? job.bleed) : 0;
@@ -378,6 +391,7 @@ export default function CalculatorShell() {
         body: JSON.stringify({
           machineId: machine.id,
           paperId: activePaperId,
+          productId: job.productId || undefined,
           jobW: job.width,
           jobH: job.height,
           qty: job.qty,
@@ -402,7 +416,10 @@ export default function CalculatorShell() {
       })
         .then(r => r.json())
         .then(data => {
-          if (data.result) setCalcResult(data.result);
+          if (data.result) {
+            setCalcResult(data.result);
+            setCalcDebug({ ...data.result.printDetail, debug: data.debug });
+          }
         })
         .catch(() => {})
         .finally(() => setCalculating(false));
@@ -434,17 +451,53 @@ export default function CalculatorShell() {
         flexShrink: 0, borderBottom: '1px solid var(--border)',
         background: 'rgba(0,0,0,0.15)', flexWrap: 'nowrap', overflow: 'hidden',
       }}>
-        {/* Machine name (click → machine panel) */}
-        <button onClick={() => togglePanel('machine')} style={{
-          display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-          borderRadius: 8, border: `1px solid ${activePanel === 'machine' ? 'color-mix(in srgb, var(--blue) 50%, transparent)' : 'color-mix(in srgb, var(--blue) 25%, transparent)'}`,
-          background: 'color-mix(in srgb, var(--blue) 6%, transparent)',
-          color: 'var(--blue)', fontSize: '0.78rem', fontWeight: 600,
-          cursor: 'pointer', transition: 'all 0.2s', flexShrink: 0, fontFamily: 'inherit',
-        }}>
-          <i className={machine?.cat === 'offset' ? 'fas fa-industry' : 'fas fa-print'} style={{ fontSize: '0.65rem' }} />
-          {machine?.name || 'Μηχανή'}
-        </button>
+        {/* Module selector */}
+        <div ref={moduleBtnRef} style={{ flexShrink: 0 }}>
+          <button onClick={() => setShowModulePopup(p => !p)} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
+            borderRadius: 8, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+            background: 'color-mix(in srgb, var(--accent) 6%, transparent)',
+            color: 'var(--accent)', fontSize: '0.72rem', fontWeight: 700,
+            cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit',
+            letterSpacing: '0.03em',
+          }}>
+            <i className={activeCalcModule === 'plotter' ? 'fas fa-scroll' : 'fas fa-print'} style={{ fontSize: '0.6rem' }} />
+            {activeCalcModule === 'sheetfed' ? 'Sheetfed' : 'Plotter'}
+            <i className="fas fa-chevron-down" style={{ fontSize: '0.45rem', opacity: 0.5 }} />
+          </button>
+          {showModulePopup && createPortal(<>
+            <div onClick={() => setShowModulePopup(false)} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
+            <div style={{
+              position: 'fixed',
+              top: (moduleBtnRef.current?.getBoundingClientRect().bottom ?? 60) + 4,
+              left: moduleBtnRef.current?.getBoundingClientRect().left ?? 12,
+              zIndex: 1000,
+              background: 'rgb(20,30,55)', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+              minWidth: 200, padding: 4,
+            }}>
+              {([
+                { id: 'sheetfed' as const, label: 'Sheetfed', desc: 'Offset & Digital', icon: 'fas fa-print' },
+                { id: 'plotter' as const, label: 'Plotter', desc: 'Plotter & Vinyl', icon: 'fas fa-scroll' },
+              ]).map(mod => (
+                <div key={mod.id} onClick={() => { setActiveCalcModule(mod.id); setShowModulePopup(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 7,
+                    cursor: 'pointer', transition: 'background 0.15s',
+                    background: activeCalcModule === mod.id ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+                  }}>
+                  <i className={mod.icon} style={{ fontSize: '0.8rem', color: activeCalcModule === mod.id ? 'var(--accent)' : '#64748b', width: 20, textAlign: 'center' }} />
+                  <div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: activeCalcModule === mod.id ? 'var(--accent)' : 'var(--text)' }}>{mod.label}</div>
+                    <div style={{ fontSize: '0.58rem', color: '#64748b' }}>{mod.desc}</div>
+                  </div>
+                  {activeCalcModule === mod.id && <i className="fas fa-check" style={{ color: 'var(--accent)', fontSize: '0.6rem', marginLeft: 'auto' }} />}
+                </div>
+              ))}
+            </div>
+          </>, document.body)}
+        </div>
+
 
         <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0 }} />
 
@@ -508,8 +561,9 @@ export default function CalculatorShell() {
                 showColorBar: impoColorBar,
                 colorBarType: impoColorBarType as 'cmyk' | 'cmyk_tint50',
                 colorBarEdge: impoColorBarEdge as 'tail' | 'gripper',
+                colorBarOffsetY: impoColorBarOffY,
                 showPlateSlug: impoPlateSlug,
-                plateSlugEdge: impoColorBarEdge as 'tail' | 'gripper',
+                plateSlugEdge: impoPlateSlugEdge,
                 keepSourceMarks: impoKeepSourceMarks,
                 isDuplex: job.sides === 2,
                 duplexOrient: impoDuplexOrient,
@@ -529,9 +583,40 @@ export default function CalculatorShell() {
           }} title="Εξαγωγή imposition PDF">
             <i className="fas fa-file-pdf" /> PDF
           </button>
+          <button onClick={() => setShowDebug(d => !d)} style={{
+            padding: '7px 8px', borderRadius: 7, border: `1px solid ${showDebug ? 'var(--accent)' : 'var(--glass-border)'}`,
+            background: showDebug ? 'rgba(245,130,32,0.08)' : 'rgba(255,255,255,0.04)',
+            color: showDebug ? 'var(--accent)' : 'var(--text-muted)', fontSize: '0.65rem', fontWeight: 600,
+            cursor: 'pointer', flexShrink: 0, fontFamily: 'inherit',
+          }} title="Debug breakdown">
+            <i className="fas fa-bug" />
+          </button>
         </div>
         {calculating && <i className="fas fa-spinner fa-spin" style={{ color: 'var(--accent)', fontSize: '0.7rem', flexShrink: 0 }} />}
       </div>
+
+      {/* ═══ DEBUG PANEL ═══ */}
+      {showDebug && calcResult && (
+        <div style={{
+          padding: '6px 12px', fontSize: '0.65rem', fontFamily: 'monospace',
+          background: 'rgba(0,0,0,0.3)', borderBottom: '1px solid var(--border)',
+          display: 'flex', gap: 16, flexWrap: 'wrap', color: '#94a3b8', lineHeight: 1.6,
+        }}>
+          <span>model: <b style={{ color: 'var(--text)' }}>{calcResult.printModel}</b></span>
+          <span>sheets: <b style={{ color: 'var(--text)' }}>{calcResult.rawMachineSheets}+{calcResult.wasteSheets}={calcResult.totalMachineSheets}</b></span>
+          <span>stock: <b style={{ color: 'var(--text)' }}>{calcResult.totalStockSheets}</b></span>
+          <span>paper: <b style={{ color: 'var(--text)' }}>€{calcResult.costPaper.toFixed(3)}</b></span>
+          <span>print: <b style={{ color: 'var(--text)' }}>€{calcResult.costPrint.toFixed(3)}</b></span>
+          <span>guill: <b style={{ color: 'var(--text)' }}>€{calcResult.costGuillotine.toFixed(3)}</b></span>
+          <span>lam: <b style={{ color: 'var(--text)' }}>€{calcResult.costLamination.toFixed(3)}</b></span>
+          <span>bind: <b style={{ color: 'var(--text)' }}>€{calcResult.costBinding.toFixed(3)}</b></span>
+          <span>total: <b style={{ color: '#f87171' }}>€{calcResult.totalCost.toFixed(3)}</b></span>
+          <span>sell: <b style={{ color: 'var(--success)' }}>€{calcResult.sellPrice.toFixed(3)}</b></span>
+          <span>profit: <b style={{ color: 'var(--success)' }}>€{calcResult.profitAmount.toFixed(3)}</b></span>
+          {calcDebug?.productPricingApplied ? <span style={{ color: 'var(--accent)' }}>PRODUCT PRICING ✓</span> : null}
+          {calcDebug?.debug ? <span>product: <b style={{ color: 'var(--accent)' }}>{String((calcDebug.debug as Record<string, unknown>)?.productPricing || '—')}</b></span> : null}
+        </div>
+      )}
 
       {/* ═══ MAIN: LEFT PANEL + CENTER ═══ */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -657,11 +742,11 @@ export default function CalculatorShell() {
               </div>
               {/* Filters — 2 column row */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
-                <FilterDrop icon="fas fa-folder" label="Κατηγορία" value={paperCat} options={categories} onChange={setPaperCat} color="var(--teal)" />
                 {suppliers.length > 0
                   ? <FilterDrop icon="fas fa-truck" label="Προμηθευτής" value={supplier} options={suppliers} onChange={setSupplier} color="var(--teal)" />
                   : <div />
                 }
+                <FilterDrop icon="fas fa-folder" label="Κατηγορία" value={paperCat} options={categories} onChange={setPaperCat} color="var(--teal)" />
               </div>
               {/* Active chips */}
               {(paperCat || supplier) && (
@@ -686,17 +771,26 @@ export default function CalculatorShell() {
                       {items.map(p => {
                         const isActive = p.id === activePaperId;
                         return (
-                          <div key={p.id} onClick={() => setActivePaperId(p.id)} style={{
-                            display: 'flex', alignItems: 'center', gap: 6, padding: '5px 6px', borderRadius: 6,
-                            cursor: 'pointer', fontSize: '0.75rem', color: '#94a3b8',
-                            border: `1px solid ${isActive ? 'color-mix(in srgb, var(--teal) 40%, transparent)' : 'transparent'}`,
+                          <div key={p.id} onClick={() => setActivePaperId(p.id)}
+                            onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--teal) 10%, transparent)'; }}
+                            onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                            style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 6, padding: '5px 6px', borderRadius: 6,
+                            cursor: 'pointer', color: '#94a3b8',
+                            marginBottom: 3,
+                            border: `1px solid ${isActive ? 'color-mix(in srgb, var(--teal) 40%, transparent)' : 'color-mix(in srgb, var(--teal) 8%, transparent)'}`,
                             background: isActive ? 'color-mix(in srgb, var(--teal) 6%, transparent)' : 'transparent',
                             transition: 'background 0.15s',
                           }}>
-                            <span style={{ color: 'var(--teal)', fontSize: '0.6rem', width: 12, flexShrink: 0 }}>{isActive && <i className="fas fa-check" />}</span>
-                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                            <span style={{ fontSize: '0.62rem', color: '#475569', flexShrink: 0 }}>{p.thickness}g</span>
-                            <span style={{ fontWeight: 600, color: 'var(--teal)', fontSize: '0.7rem', flexShrink: 0 }}>€{(p.costPerUnit || 0).toFixed(3)}</span>
+                            <span style={{ color: 'var(--teal)', fontSize: '0.6rem', width: 12, flexShrink: 0, marginTop: 2 }}>{isActive && <i className="fas fa-check" />}</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '0.75rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text)', background: 'rgba(255,255,255,0.06)', padding: '0 5px', borderRadius: 4 }}>{p.thickness}gr</span>
+                                <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#94a3b8' }}>{p.width}×{p.height}</span>
+                                <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--teal)', marginLeft: 'auto' }}>€{(p.costPerUnit || 0).toFixed(3)}</span>
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
@@ -814,7 +908,7 @@ export default function CalculatorShell() {
                       <i className="fas fa-times" style={{ fontSize: '0.55rem' }} /> Χωρίς προϊόν
                     </div>
                   )}
-                  {products.map(p => {
+                  {products.filter(p => p.archetype === job.archetype).map(p => {
                     const active = job.productId === p.id;
                     const arch = ARCHETYPES.find(a => a.id === p.archetype);
                     return (
@@ -1217,11 +1311,15 @@ export default function CalculatorShell() {
                       <Pill active={impoColorBarEdge === 'tail'} onClick={() => setImpoColorBarEdge('tail')} color="var(--blue)">Tail</Pill>
                       <Pill active={impoColorBarEdge === 'gripper'} onClick={() => setImpoColorBarEdge('gripper')} color="var(--blue)">Gripper</Pill>
                     </div>
+                    <div>
+                      <MfLabel>OFFSET Y (MM)</MfLabel>
+                      <MfStepper value={impoColorBarOffY} onChange={v => setImpoColorBarOffY(Number(v) || 0)} step={0.5} />
+                    </div>
                   </>)}
                 </div>
 
                 {/* Plate Slug (offset only) */}
-                {machine?.cat === 'offset' && (
+                {machine?.cat === 'offset' && (<>
                   <button onClick={() => setImpoPlateSlug(!impoPlateSlug)} style={{
                     display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
                     borderRadius: 7, border: `1px solid ${impoPlateSlug ? 'var(--violet)' : 'var(--border)'}`,
@@ -1232,7 +1330,13 @@ export default function CalculatorShell() {
                     <i className="fas fa-tag" style={{ fontSize: '0.58rem' }} /> Plate Slug
                     <span style={{ marginLeft: 'auto', fontSize: '0.58rem' }}>{impoPlateSlug ? 'ON' : 'OFF'}</span>
                   </button>
-                )}
+                  {impoPlateSlug && (
+                    <div style={{ display: 'flex', gap: 3, marginTop: 6 }}>
+                      <Pill active={impoPlateSlugEdge === 'tail'} onClick={() => setImpoPlateSlugEdge('tail')} color="var(--violet)">Tail</Pill>
+                      <Pill active={impoPlateSlugEdge === 'gripper'} onClick={() => setImpoPlateSlugEdge('gripper')} color="var(--violet)">Gripper</Pill>
+                    </div>
+                  )}
+                </>)}
               </>)}
             </>)}
           </div>
@@ -1290,6 +1394,11 @@ export default function CalculatorShell() {
                 sides={job.sides}
                 offsetX={impoOffsetX}
                 offsetY={impoOffsetY}
+                showColorBar={impoColorBar}
+                colorBarEdge={impoColorBarEdge as 'tail' | 'gripper'}
+                colorBarOffY={impoColorBarOffY}
+                showPlateSlug={impoPlateSlug}
+                plateSlugEdge={impoPlateSlugEdge}
                 pdf={pdf}
                 onDrop={handlePdfFiles}
               />

@@ -24,6 +24,11 @@ interface ImpositionCanvasProps {
   sides?: 1 | 2;
   offsetX?: number;
   offsetY?: number;
+  showColorBar?: boolean;
+  colorBarEdge?: 'tail' | 'gripper';
+  colorBarOffY?: number;  // mm micro-adjust
+  showPlateSlug?: boolean;
+  plateSlugEdge?: 'tail' | 'gripper';
   pdf?: ParsedPDF | null;
   onDrop?: (files: FileList) => void;
 }
@@ -75,6 +80,8 @@ function drawSheet(
   marginTop: number, marginBottom: number, marginLeft: number, marginRight: number,
   bleed: number, gutter: number, cropMarks: boolean,
   gridOffsetX: number, gridOffsetY: number,
+  showColorBar: boolean, colorBarEdge: string, colorBarOffY: number,
+  showPlateSlug: boolean, plateSlugEdge: string,
   machCat: string | undefined,
   pdf: ParsedPDF | null | undefined,
   pdfPageIdx: number, // which PDF page to show in step-repeat cells
@@ -99,11 +106,12 @@ function drawSheet(
   ctx.fill();
   ctx.stroke();
 
-  // Margins
+  // Margins — for offset: marginTop=gripper goes to bottom, marginBottom=tail goes to top
+  const isOffset = machCat === 'offset';
   const mL = marginLeft * scale;
   const mR = marginRight * scale;
-  const mT = marginTop * scale;
-  const mB = marginBottom * scale;
+  const mT = (isOffset ? marginBottom : marginTop) * scale;  // visual top
+  const mB = (isOffset ? marginTop : marginBottom) * scale;   // visual bottom (gripper for offset)
 
   ctx.fillStyle = COLORS.margin;
   ctx.fillRect(offX, offY, drawW, mT);
@@ -118,14 +126,16 @@ function drawSheet(
   ctx.setLineDash([]);
 
   // Gripper/Tail labels (offset)
-  // Gripper = bottom edge (feed edge, larger margin), Tail = top edge (trailing)
+  // DB convention: marginTop = gripper (off_gripper), marginBottom = tail (off_margin_tail)
+  // Display: gripper at BOTTOM of sheet (feed edge), tail at TOP (trailing)
+  // So we visually swap: draw marginTop value at bottom, marginBottom at top
   if (machCat === 'offset') {
     ctx.font = '600 7px Inter, DM Sans, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillStyle = COLORS.gripper;
-    ctx.fillText('GRIPPER', offX + drawW / 2, offY + drawH - mB / 2 + 3);
     ctx.fillStyle = COLORS.tail;
-    ctx.fillText('TAIL', offX + drawW / 2, offY + mT / 2 + 3);
+    ctx.fillText('TAIL', offX + drawW / 2, offY + mB / 2 + 3);
+    ctx.fillStyle = COLORS.gripper;
+    ctx.fillText('GRIPPER', offX + drawW / 2, offY + drawH - mT / 2 + 3);
   }
 
   // Print area
@@ -297,6 +307,56 @@ function drawSheet(
     }
   }
 
+  // ─── COLOR BAR ───
+  if (showColorBar) {
+    const cbPatchH = 2.5; // patch height px
+    const cbPatchW = 6;   // patch width px
+    const cmykFull = ['#00aeef', '#ec008c', '#fff200', '#231f20'];
+    const cmykTint = ['rgba(0,174,239,0.5)', 'rgba(236,0,140,0.5)', 'rgba(255,242,0,0.5)', 'rgba(35,31,32,0.5)'];
+    const isTailEdge = colorBarEdge === 'tail';
+    const cbOffPx = colorBarOffY * scale;
+    // Position inside margin + micro-adjust
+    const cbBaseY = isTailEdge
+      ? offY + mT * 0.3 + cbOffPx
+      : offY + drawH - mB * 0.3 - cbPatchH * 2 - 1 - cbOffPx;
+    // Tile patches across printable width
+    const startX = offX + mL;
+    const endX = offX + drawW - mR;
+    let cx = startX;
+    let colorIdx = 0;
+    while (cx + cbPatchW <= endX) {
+      const ci = colorIdx % 4;
+      // Full patch
+      ctx.fillStyle = cmykFull[ci];
+      ctx.fillRect(cx, cbBaseY, cbPatchW, cbPatchH);
+      // 50% tint patch below
+      ctx.fillStyle = cmykTint[ci];
+      ctx.fillRect(cx, cbBaseY + cbPatchH + 0.5, cbPatchW, cbPatchH);
+      cx += cbPatchW + 0.5;
+      colorIdx++;
+    }
+  }
+
+  // ─── PLATE SLUG ───
+  if (showPlateSlug && machCat === 'offset') {
+    const slugColors = ['#00aeef', '#ec008c', '#d4a017', '#231f20'];
+    const slugNames = ['Cyan', 'Magenta', 'Yellow', 'Black'];
+    const slugFS = 5;
+    ctx.font = `600 ${slugFS}px Inter, DM Sans, sans-serif`;
+    ctx.textAlign = 'left';
+    const isTailEdge = plateSlugEdge === 'tail';
+    // Position inside the margin area (not overlapping content)
+    const slugY = isTailEdge
+      ? offY + Math.max(mT * 0.5 + slugFS * 0.3, 4)
+      : offY + drawH - Math.max(mB * 0.5 - slugFS * 0.3, 4);
+    let slugX = offX + mL + 2;
+    for (let si = 0; si < 4; si++) {
+      ctx.fillStyle = slugColors[si];
+      ctx.fillText(slugNames[si], slugX, slugY);
+      slugX += ctx.measureText(slugNames[si]).width + 3;
+    }
+  }
+
   // Label (Front / Back)
   if (label) {
     ctx.font = '700 8px Inter, DM Sans, sans-serif';
@@ -308,7 +368,9 @@ function drawSheet(
 
 export default function ImpositionCanvas({
   impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
-  bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, pdf, onDrop,
+  bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
+  showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge,
+  pdf, onDrop,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -371,12 +433,16 @@ export default function ImpositionCanvas({
       // Front
       drawSheet(ctx, baseX, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
-        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0, machCat, pdf, 0, false, 'A');
+        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
+        showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
+        machCat, pdf, 0, false, 'A');
 
       // Back
       drawSheet(ctx, baseX + drawW + gap, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
-        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0, machCat, pdf, 1, true, 'B');
+        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
+        showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
+        machCat, pdf, 1, true, 'B');
     } else {
       // ═══ SINGLE VIEW: one sheet, pagination ═══
       const scaleX = (cW - 24 - markLen * 2) / sheetW;
@@ -391,7 +457,9 @@ export default function ImpositionCanvas({
       const isBack = pageIdx > 0;
       drawSheet(ctx, offX, offY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
-        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0, machCat, pdf, pageIdx, isBack);
+        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
+        showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
+        machCat, pdf, pageIdx, isBack);
     }
 
     // Bottom info strip
@@ -412,7 +480,7 @@ export default function ImpositionCanvas({
     ctx.textAlign = 'center';
     ctx.fillText(parts.join(' · '), cW / 2, cH - 5);
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, pdf, viewMode, activePage, isDuplex]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge, pdf, viewMode, activePage, isDuplex]);
 
   useEffect(() => { draw(); }, [draw]);
 

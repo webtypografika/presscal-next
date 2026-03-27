@@ -268,8 +268,14 @@ async function prepareColorBar(
     if (!colorBarCache[colorBarType]) {
       try {
         const resp = await fetch(`/colorbars/${fileName}`);
-        if (resp.ok) colorBarCache[colorBarType] = new Uint8Array(await resp.arrayBuffer());
-      } catch { /* ignore */ }
+        if (resp.ok) {
+          colorBarCache[colorBarType] = new Uint8Array(await resp.arrayBuffer());
+        } else {
+          console.warn(`Color bar fetch failed: ${resp.status} /colorbars/${fileName}`);
+        }
+      } catch (e) {
+        console.warn('Color bar fetch error:', e);
+      }
     }
     bytes = colorBarCache[colorBarType];
   }

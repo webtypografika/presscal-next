@@ -13,6 +13,7 @@ export type WorkTurnType = 'turn' | 'tumble';
 export interface CalculatorInput {
   machineId: UUID;
   paperId: UUID;
+  productId?: UUID;
   jobW: number;           // trim width mm
   jobH: number;           // trim height mm
   qty: number;
