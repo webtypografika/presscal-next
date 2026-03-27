@@ -8,6 +8,7 @@ import type { ImpositionMode, ImpositionResult, CalculatorResult } from '@/types
 import ImpositionCanvas from './imposition-canvas';
 import { parsePDF } from '@/lib/calc/pdf-utils';
 import type { ParsedPDF } from '@/lib/calc/pdf-utils';
+import { downloadImpositionPDF } from '@/lib/calc/pdf-export';
 
 /* ═══════════════════════════════════════════════════
    PressCal Calculator — Draft H (Live Engine)
@@ -242,7 +243,7 @@ export default function CalculatorShell() {
   const [impoForceRows, setImpoForceRows] = useState<number | null>(null);
   const [impoOffsetX, setImpoOffsetX] = useState(0);
   const [impoOffsetY, setImpoOffsetY] = useState(0);
-  const [impoRotation, setImpoRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [impoRotation, setImpoRotation] = useState<number>(0);
   const [impoDuplexOrient, setImpoDuplexOrient] = useState<'h2h' | 'h2f'>('h2h');
   const [impoColorBar, setImpoColorBar] = useState(false);
   const [impoColorBarType, setImpoColorBarType] = useState<'cmyk' | 'cmyk_tint50'>('cmyk');
@@ -352,8 +353,10 @@ export default function CalculatorShell() {
       marginRight: machine?.marginRight || 0,
     },
     forceUps: impoForceUps || undefined,
-    rotation: job.rotation ? 90 : 0,
-    pages: job.archetype === 'booklet' ? job.pages : undefined,
+    forceCols: impoForceCols || undefined,
+    forceRows: impoForceRows || undefined,
+    rotation: impoRotation || (job.rotation ? 90 : 0),
+    pages: job.archetype === 'booklet' ? job.pages : job.archetype === 'perfect_bound' ? job.bodyPages : undefined,
   };
 
   const impo: ImpositionResult = calcImposition(impoInput);
@@ -380,14 +383,15 @@ export default function CalculatorShell() {
           qty: job.qty,
           sides: job.sides,
           colorMode: color.model === 'cmyk' ? 'color' : 'bw',
-          bleed: job.bleed,
+          bleed: effectiveBleed,
           impositionMode: impoMode,
-          impoRotation: 0,
-          impoDuplexOrient: 'h2h',
-          impoGutter: 0,
-          impoBleed: job.bleed,
-          impoCropMarks: false,
-          coverageLevel: 'mid',
+          impoRotation: impoRotation,
+          impoDuplexOrient: impoDuplexOrient,
+          impoGutter: impoGutter,
+          impoBleed: effectiveBleed,
+          impoForceUps: impoForceUps || undefined,
+          impoCropMarks: impoCropMarks,
+          coverageLevel: color.coverage || 'mid',
           guillotineId: finish.guillotineId || undefined,
           lamMachineId: finish.lamMachineId || undefined,
           lamFilmId: finish.lamFilmId || undefined,
@@ -404,7 +408,7 @@ export default function CalculatorShell() {
         .finally(() => setCalculating(false));
     }, 300);
     return () => { if (calcTimer.current) clearTimeout(calcTimer.current); };
-  }, [machine.id, activePaperId, job, color.model, impoMode, finish]);
+  }, [machine.id, activePaperId, job, color.model, color.coverage, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish]);
 
   // ─── DISPLAY VALUES ───
   const r = calcResult;
@@ -485,6 +489,45 @@ export default function CalculatorShell() {
             boxShadow: '0 2px 12px rgba(245,130,32,0.3)', transition: 'all 0.2s', flexShrink: 0,
           }}>
             <i className="fas fa-cart-plus" /> Καλάθι
+          </button>
+          <button onClick={async () => {
+            try {
+              await downloadImpositionPDF({
+                imposition: impo,
+                pdfBytes: pdf?.bytes,
+                pdfPageSizes: pdf?.pageSizes?.map(p => ({ trimW: p.trimW, trimH: p.trimH })),
+                machineCat: machine.cat as 'digital' | 'offset',
+                machineName: machine.name,
+                paperName: paper?.name,
+                jobW: job.width,
+                jobH: job.height,
+                bleed: effectiveBleed,
+                gutter: impoGutter,
+                showCropMarks: impoCropMarks,
+                showRegistration: machine.cat === 'offset',
+                showColorBar: impoColorBar,
+                colorBarType: impoColorBarType as 'cmyk' | 'cmyk_tint50',
+                colorBarEdge: impoColorBarEdge as 'tail' | 'gripper',
+                showPlateSlug: impoPlateSlug,
+                plateSlugEdge: impoColorBarEdge as 'tail' | 'gripper',
+                keepSourceMarks: impoKeepSourceMarks,
+                isDuplex: job.sides === 2,
+                duplexOrient: impoDuplexOrient,
+                rotation: impoRotation,
+                jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
+              });
+            } catch (e) {
+              console.error('PDF export error:', e);
+              alert('PDF export error: ' + (e as Error).message);
+            }
+          }} style={{
+            padding: '7px 10px', borderRadius: 7,
+            background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)',
+            fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 5,
+            transition: 'all 0.2s', flexShrink: 0,
+          }} title="Εξαγωγή imposition PDF">
+            <i className="fas fa-file-pdf" /> PDF
           </button>
         </div>
         {calculating && <i className="fas fa-spinner fa-spin" style={{ color: 'var(--accent)', fontSize: '0.7rem', flexShrink: 0 }} />}
@@ -1032,11 +1075,11 @@ export default function CalculatorShell() {
                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                   <div style={{ flex: 1 }}>
                     <MfLabel>GUTTER (MM)</MfLabel>
-                    <MfInput value={impoGutter} onChange={v => setImpoGutter(Math.max(0, Number(v) || 0))} style={{ width: '100%', textAlign: 'center' }} />
+                    <MfStepper value={impoGutter} onChange={v => setImpoGutter(Math.max(0, Number(v) || 0))} step={0.5} min={0} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <MfLabel>BLEED (MM)</MfLabel>
-                    <MfInput value={effectiveBleed} onChange={v => setImpoBleedOverride(Number(v) || 0)} style={{ width: '100%', textAlign: 'center' }} />
+                    <MfStepper value={effectiveBleed} onChange={v => setImpoBleedOverride(Number(v) || 0)} step={0.5} min={0} />
                   </div>
                 </div>
 
@@ -1045,11 +1088,11 @@ export default function CalculatorShell() {
                   <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                     <div style={{ flex: 1 }}>
                       <MfLabel>FORCE COLS</MfLabel>
-                      <MfInput value={impoForceCols ?? ''} onChange={v => setImpoForceCols(v ? Number(v) : null)} style={{ width: '100%', textAlign: 'center' }} />
+                      <MfStepper value={impoForceCols ?? ''} onChange={v => setImpoForceCols(v ? Number(v) : null)} step={1} min={1} max={20} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <MfLabel>FORCE ROWS</MfLabel>
-                      <MfInput value={impoForceRows ?? ''} onChange={v => setImpoForceRows(v ? Number(v) : null)} style={{ width: '100%', textAlign: 'center' }} />
+                      <MfStepper value={impoForceRows ?? ''} onChange={v => setImpoForceRows(v ? Number(v) : null)} step={1} min={1} max={20} />
                     </div>
                   </div>
                 )}
@@ -1058,7 +1101,7 @@ export default function CalculatorShell() {
                 {impoMode === 'booklet' && (
                   <div style={{ marginBottom: 10 }}>
                     <MfLabel>ΣΕΛΙΔΕΣ (×4)</MfLabel>
-                    <MfInput value={job.pages || 8} onChange={v => setJob({ ...job, pages: Math.max(4, Number(v) || 4) })} style={{ width: 80, textAlign: 'center' }} />
+                    <MfStepper value={job.pages || 8} onChange={v => setJob({ ...job, pages: Math.max(4, Number(v) || 4) })} step={4} min={4} />
                     <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: 4 }}>
                       <i className="fas fa-info-circle" style={{ marginRight: 3 }} />Πολλαπλάσιο του 4
                     </div>
@@ -1070,11 +1113,11 @@ export default function CalculatorShell() {
                   <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                     <div style={{ flex: 1 }}>
                       <MfLabel>ΣΕΛΙΔΕΣ ΣΩΜΑΤΟΣ</MfLabel>
-                      <MfInput value={job.bodyPages || 64} onChange={v => setJob({ ...job, bodyPages: Math.max(4, Number(v) || 4) })} style={{ width: '100%', textAlign: 'center' }} />
+                      <MfStepper value={job.bodyPages || 64} onChange={v => setJob({ ...job, bodyPages: Math.max(4, Number(v) || 4) })} step={4} min={4} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <MfLabel>ΠΑΧΟΣ (MM)</MfLabel>
-                      <MfInput value={0.1} onChange={() => {}} style={{ width: '100%', textAlign: 'center' }} />
+                      <MfStepper value={0.1} onChange={() => {}} step={0.01} min={0.01} />
                     </div>
                   </div>
                 </>)}
@@ -1093,11 +1136,11 @@ export default function CalculatorShell() {
                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                   <div style={{ flex: 1 }}>
                     <MfLabel>OFFSET X (MM)</MfLabel>
-                    <MfInput value={impoOffsetX} onChange={v => setImpoOffsetX(Number(v) || 0)} style={{ width: '100%', textAlign: 'center' }} />
+                    <MfStepper value={impoOffsetX} onChange={v => setImpoOffsetX(Number(v) || 0)} step={0.5} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <MfLabel>OFFSET Y (MM)</MfLabel>
-                    <MfInput value={impoOffsetY} onChange={v => setImpoOffsetY(Number(v) || 0)} style={{ width: '100%', textAlign: 'center' }} />
+                    <MfStepper value={impoOffsetY} onChange={v => setImpoOffsetY(Number(v) || 0)} step={0.5} />
                   </div>
                 </div>
                 <div style={{ fontSize: '0.6rem', color: '#64748b', marginBottom: 10 }}>
@@ -1109,12 +1152,16 @@ export default function CalculatorShell() {
               {/* Tab: Στροφή (Rotation) */}
               {impoModeTab === 'rotation' && (<>
                 <MfLabel>ΠΕΡΙΣΤΡΟΦΗ PDF</MfLabel>
-                <div style={{ display: 'flex', gap: 3, marginBottom: 12 }}>
-                  {([0, 90, 180, 270] as const).map(deg => (
+                <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
+                  {[0, 90, 180, 270].map(deg => (
                     <Pill key={deg} active={impoRotation === deg} onClick={() => setImpoRotation(deg)}>
                       {deg}°
                     </Pill>
                   ))}
+                </div>
+                <MfStepper value={impoRotation} onChange={v => setImpoRotation(((Number(v) || 0) % 360 + 360) % 360)} step={1} min={0} max={359} />
+                <div style={{ fontSize: '0.55rem', color: '#64748b', marginTop: 3, marginBottom: 10 }}>
+                  <i className="fas fa-info-circle" style={{ marginRight: 3 }} />0-359° ελεύθερη περιστροφή
                 </div>
 
                 {job.sides === 2 && (<>
@@ -1240,6 +1287,9 @@ export default function CalculatorShell() {
                 gutter={impoGutter}
                 cropMarks={impoCropMarks}
                 machCat={machine?.cat as 'digital' | 'offset' | undefined}
+                sides={job.sides}
+                offsetX={impoOffsetX}
+                offsetY={impoOffsetY}
                 pdf={pdf}
                 onDrop={handlePdfFiles}
               />
@@ -1422,5 +1472,47 @@ function MfInput({ value, onChange, style }: { value: string | number; onChange:
       fontSize: '0.85rem', fontFamily: 'inherit', transition: 'border-color 0.2s',
       outline: 'none', ...style,
     }} />
+  );
+}
+
+function MfStepper({ value, onChange, step = 1, min, max, style }: {
+  value: number | string;
+  onChange: (v: string) => void;
+  step?: number;
+  min?: number;
+  max?: number;
+  style?: React.CSSProperties;
+}) {
+  const num = typeof value === 'string' ? parseFloat(value) || 0 : value;
+  const dec = step < 1 ? (step.toString().split('.')[1]?.length || 1) : 0;
+  function bump(dir: 1 | -1) {
+    let next = Math.round((num + dir * step) * 1e6) / 1e6;
+    if (min != null) next = Math.max(min, next);
+    if (max != null) next = Math.min(max, next);
+    onChange(dec ? next.toFixed(dec) : String(next));
+  }
+  const btnStyle: React.CSSProperties = {
+    width: 22, height: 30, border: 'none', cursor: 'pointer',
+    background: 'rgba(255,255,255,0.06)', color: '#94a3b8',
+    fontSize: '0.65rem', fontWeight: 700, display: 'flex',
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    transition: 'background 0.15s',
+  };
+  return (
+    <div style={{ display: 'flex', borderRadius: 7, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', ...style }}>
+      <button type="button" onClick={() => bump(-1)} style={btnStyle}>−</button>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          flex: 1, width: 0, height: 30, border: 'none',
+          borderLeft: '1px solid rgba(255,255,255,0.06)',
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          background: 'rgba(255,255,255,0.02)', color: 'var(--text)', padding: '0 2px',
+          fontSize: '0.8rem', fontFamily: 'inherit', textAlign: 'center', outline: 'none',
+        }}
+      />
+      <button type="button" onClick={() => bump(1)} style={btnStyle}>+</button>
+    </div>
   );
 }

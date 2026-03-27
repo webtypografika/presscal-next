@@ -5,8 +5,8 @@ import type { ImpositionResult, ImpositionCell } from '@/types/calculator';
 import type { ParsedPDF, PDFPageSize } from '@/lib/calc/pdf-utils';
 
 /* ═══════════════════════════════════════════════════
-   Imposition Canvas — Phase 1+2: Preview + Zoom/Pan + PDF Thumbnails
-   Port of mod_imposer.js canvas renderer
+   Imposition Canvas — Preview + Zoom/Pan + PDF Thumbnails
+   Dual view (side-by-side) + Single view (pagination)
    ═══════════════════════════════════════════════════ */
 
 interface ImpositionCanvasProps {
@@ -21,9 +21,14 @@ interface ImpositionCanvasProps {
   gutter: number;
   cropMarks: boolean;
   machCat?: 'digital' | 'offset';
+  sides?: 1 | 2;
+  offsetX?: number;
+  offsetY?: number;
   pdf?: ParsedPDF | null;
   onDrop?: (files: FileList) => void;
 }
+
+type ViewMode = 'single' | 'dual';
 
 // ─── COLOR HELPERS ───
 const COLORS = {
@@ -47,7 +52,6 @@ const COLORS = {
   rotatedNum: 'rgba(56,189,248,0.35)',
 };
 
-// ─── ROUND RECT HELPER ───
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -62,20 +66,264 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
+// ─── DRAW ONE SHEET ───
+function drawSheet(
+  ctx: CanvasRenderingContext2D,
+  offX: number, offY: number, drawW: number, drawH: number,
+  impo: ImpositionResult,
+  sheetW: number, sheetH: number,
+  marginTop: number, marginBottom: number, marginLeft: number, marginRight: number,
+  bleed: number, gutter: number, cropMarks: boolean,
+  gridOffsetX: number, gridOffsetY: number,
+  machCat: string | undefined,
+  pdf: ParsedPDF | null | undefined,
+  pdfPageIdx: number, // which PDF page to show in step-repeat cells
+  isBack: boolean,
+  label?: string,
+) {
+  const scale = drawW / sheetW;
+  const hasBleed = bleed > 0;
+  const hasGutter = gutter > 0;
+  const markLen = cropMarks ? 8 : 0;
+
+  // Shadow
+  ctx.fillStyle = COLORS.shadow;
+  roundRect(ctx, offX + 2, offY + 2, drawW, drawH, 2);
+  ctx.fill();
+
+  // Paper
+  ctx.fillStyle = COLORS.paper;
+  ctx.strokeStyle = COLORS.paperStroke;
+  ctx.lineWidth = 1;
+  roundRect(ctx, offX, offY, drawW, drawH, 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Margins
+  const mL = marginLeft * scale;
+  const mR = marginRight * scale;
+  const mT = marginTop * scale;
+  const mB = marginBottom * scale;
+
+  ctx.fillStyle = COLORS.margin;
+  ctx.fillRect(offX, offY, drawW, mT);
+  ctx.fillRect(offX, offY + drawH - mB, drawW, mB);
+  ctx.fillRect(offX, offY + mT, mL, drawH - mT - mB);
+  ctx.fillRect(offX + drawW - mR, offY + mT, mR, drawH - mT - mB);
+
+  ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = COLORS.marginStroke;
+  ctx.lineWidth = 0.6;
+  ctx.strokeRect(offX + mL, offY + mT, drawW - mL - mR, drawH - mT - mB);
+  ctx.setLineDash([]);
+
+  // Gripper/Tail labels (offset)
+  // Gripper = bottom edge (feed edge, larger margin), Tail = top edge (trailing)
+  if (machCat === 'offset') {
+    ctx.font = '600 7px Inter, DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = COLORS.gripper;
+    ctx.fillText('GRIPPER', offX + drawW / 2, offY + drawH - mB / 2 + 3);
+    ctx.fillStyle = COLORS.tail;
+    ctx.fillText('TAIL', offX + drawW / 2, offY + mT / 2 + 3);
+  }
+
+  // Print area
+  const paX = offX + mL;
+  const paY = offY + mT;
+  const printAreaW = drawW - mL - mR;
+  const printAreaH = drawH - mT - mB;
+
+  // Cell grid
+  const pw = impo.pieceW * scale;
+  const ph = impo.pieceH * scale;
+  const gutterPx = hasGutter ? gutter * scale : 0;
+  const bleedPx = hasBleed ? bleed * scale : 0;
+  const totalGridW = impo.cols * pw + Math.max(0, impo.cols - 1) * gutterPx;
+  const totalGridH = impo.rows * ph + Math.max(0, impo.rows - 1) * gutterPx;
+  const cenX = paX + (printAreaW - totalGridW) / 2 + gridOffsetX * scale;
+  const cenY = paY + (printAreaH - totalGridH) / 2 + gridOffsetY * scale;
+
+  // Draw cells
+  for (let row = 0; row < impo.rows; row++) {
+    for (let col = 0; col < impo.cols; col++) {
+      const idx = row * impo.cols + col;
+      if (idx >= impo.cells.length) continue;
+      const cell = impo.cells[idx];
+
+      const x = cenX + col * (pw + gutterPx);
+      const y = cenY + row * (ph + gutterPx);
+      const isRotated = cell.rotation && cell.rotation !== 0;
+
+      // Bleed zone
+      if (hasBleed) {
+        ctx.fillStyle = COLORS.bleedBand;
+        ctx.fillRect(x, y, pw, bleedPx);
+        ctx.fillRect(x, y + ph - bleedPx, pw, bleedPx);
+        ctx.fillRect(x, y + bleedPx, bleedPx, ph - 2 * bleedPx);
+        ctx.fillRect(x + pw - bleedPx, y + bleedPx, bleedPx, ph - 2 * bleedPx);
+
+        ctx.setLineDash([3, 2]);
+        ctx.strokeStyle = COLORS.bleedStroke;
+        ctx.lineWidth = 0.6;
+        ctx.strokeRect(x + bleedPx, y + bleedPx, pw - 2 * bleedPx, ph - 2 * bleedPx);
+        ctx.setLineDash([]);
+      }
+
+      // Trim area
+      const trimX = x + (hasBleed ? bleedPx : 0);
+      const trimY = y + (hasBleed ? bleedPx : 0);
+      const trimW = hasBleed ? pw - 2 * bleedPx : pw;
+      const trimH = hasBleed ? ph - 2 * bleedPx : ph;
+
+      // PDF page to show
+      const mode = impo.mode;
+      const isStepRepeat = mode === 'nup' || mode === 'cutstack' || mode === 'gangrun';
+      let pidx: number;
+      if (isStepRepeat) {
+        pidx = pdfPageIdx; // controlled by caller (front=0, back=1)
+      } else {
+        pidx = (cell.pageNum || idx + 1) - 1;
+      }
+      const thumb = pdf?.thumbnails?.[pidx % (pdf?.thumbnails?.length || 1)];
+      const pgSize = pdf?.pageSizes?.[pidx % (pdf?.pageSizes?.length || 1)];
+
+      if (thumb && pgSize) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, pw, ph);
+        ctx.clip();
+
+        const rendW = (pgSize.cropW || pgSize.w) * scale;
+        const rendH = (pgSize.cropH || pgSize.h) * scale;
+        const tOffX = (pgSize.trimOffX != null ? pgSize.trimOffX : ((pgSize.cropW || pgSize.w) - pgSize.trimW) / 2) * scale;
+        const tOffY = (pgSize.trimOffY != null ? pgSize.trimOffY : ((pgSize.cropH || pgSize.h) - pgSize.trimH) / 2) * scale;
+
+        // The cell dimensions (pw × ph) already reflect any grid rotation
+        // (e.g. 90° → cells swapped W↔H by imposition engine).
+        // We only need to check if the PDF page orientation matches the CURRENT cell.
+        const pdfPortrait = pgSize.trimW <= pgSize.trimH;
+        const cellPortrait = pw <= ph;
+        const needsAutoRot = pdfPortrait !== cellPortrait;
+
+        // User content rotation from cell (set by imposition engine)
+        const userRot = cell.rotation || 0;
+        // Auto-rotate PDF to match cell orientation, then add user rotation
+        // But if user already rotated 90°/270° (which swapped the cell),
+        // the cell now matches the PDF — so autoRot would be wrong.
+        // Rule: autoRot only when PDF and cell mismatch AFTER swap.
+        const autoRot = needsAutoRot ? 90 : 0;
+        // For user rotations that already swapped the grid (90°/270°),
+        // the content rotation is purely the user angle — no auto.
+        // The cell dimensions already match. Only apply autoRot at 0°/180°.
+        const userSwapped = (userRot > 45 && userRot < 135) || (userRot > 225 && userRot < 315);
+        const totalRot = userSwapped ? (userRot % 360) : ((autoRot + userRot) % 360);
+
+        // Draw with rotation around cell center
+        const cx = trimX + trimW / 2;
+        const cy = trimY + trimH / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate((totalRot * Math.PI) / 180);
+
+        // The PDF thumbnail is always in its native orientation.
+        // Scale it to fit the UN-rotated cell (i.e. what the PDF looks like before rotation).
+        // If totalRot is 90/270-ish, the PDF fills the swapped dimensions.
+        const effSwap = Math.round(totalRot / 90) % 2 === 1;
+        const fitW = effSwap ? trimH : trimW;
+        const fitH = effSwap ? trimW : trimH;
+        const drawRendW = (pgSize.cropW || pgSize.w) * scale;
+        const drawRendH = (pgSize.cropH || pgSize.h) * scale;
+        const scX = fitW / (pgSize.trimW * scale);
+        const scY = fitH / (pgSize.trimH * scale);
+        const sc = Math.min(scX, scY);
+        const finalW = drawRendW * sc;
+        const finalH = drawRendH * sc;
+        const drawTOffX = (pgSize.trimOffX != null ? pgSize.trimOffX : ((pgSize.cropW || pgSize.w) - pgSize.trimW) / 2) * scale * sc;
+        const drawTOffY = (pgSize.trimOffY != null ? pgSize.trimOffY : ((pgSize.cropH || pgSize.h) - pgSize.trimH) / 2) * scale * sc;
+
+        ctx.drawImage(thumb, -fitW / 2 - drawTOffX, -fitH / 2 - drawTOffY, finalW, finalH);
+        ctx.restore();
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+      } else {
+        ctx.fillStyle = isRotated ? COLORS.rotatedFill : COLORS.trimFill;
+        ctx.fillRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+
+        ctx.strokeStyle = isRotated ? COLORS.rotatedStroke : COLORS.trimStroke;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+
+        const fontSize = Math.min(trimW * 0.3, trimH * 0.3, 20);
+        ctx.font = `600 ${fontSize}px Inter, DM Sans, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = isRotated ? COLORS.rotatedNum : COLORS.cellNum;
+        ctx.fillText(String(cell.pageNum || idx + 1), trimX + trimW / 2, trimY + trimH / 2 + fontSize * 0.35);
+      }
+    }
+  }
+
+  // Gutter lines
+  if (hasGutter && gutterPx > 1) {
+    ctx.fillStyle = COLORS.gutterFill;
+    for (let col = 1; col < impo.cols; col++) {
+      const gx = cenX + col * pw + (col - 1) * gutterPx;
+      ctx.fillRect(gx, cenY, gutterPx, totalGridH);
+    }
+    for (let row = 1; row < impo.rows; row++) {
+      const gy = cenY + row * ph + (row - 1) * gutterPx;
+      ctx.fillRect(cenX, gy, totalGridW, gutterPx);
+    }
+  }
+
+  // Crop marks
+  if (cropMarks) {
+    ctx.strokeStyle = COLORS.cropMark;
+    ctx.lineWidth = 0.5;
+    for (let row = 0; row <= impo.rows; row++) {
+      for (let col = 0; col <= impo.cols; col++) {
+        const cx = cenX + col * (pw + gutterPx) - (col > 0 ? gutterPx : 0);
+        const cy = cenY + row * (ph + gutterPx) - (row > 0 ? gutterPx : 0);
+        ctx.beginPath();
+        ctx.moveTo(cx - markLen, cy); ctx.lineTo(cx - 2, cy);
+        ctx.moveTo(cx + pw + 2, cy); ctx.lineTo(cx + pw + markLen, cy);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - markLen); ctx.lineTo(cx, cy - 2);
+        ctx.moveTo(cx, cy + ph + 2); ctx.lineTo(cx, cy + ph + markLen);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Label (Front / Back)
+  if (label) {
+    ctx.font = '700 8px Inter, DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isBack ? 'rgba(96,165,250,0.6)' : 'rgba(245,130,32,0.6)';
+    ctx.fillText(label, offX + drawW / 2, offY - 4);
+  }
+}
+
 export default function ImpositionCanvas({
   impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
-  bleed, gutter, cropMarks, machCat, pdf, onDrop,
+  bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, pdf, onDrop,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Zoom & Pan state
   const [zoom, setZoom] = useState(1);
   const panRef = useRef({ x: 0, y: 0 });
   const draggingRef = useRef(false);
   const dragLastRef = useRef({ x: 0, y: 0 });
 
-  // Logical canvas size
+  // View controls
+  const isDuplex = (sides ?? 1) === 2 && (pdf?.thumbnails?.length ?? 0) >= 2;
+  const totalPages = isDuplex ? (pdf?.thumbnails?.length ?? 1) : 1;
+  const [viewMode, setViewMode] = useState<ViewMode>('single');
+  const [activePage, setActivePage] = useState(0); // 0=front, 1=back, 2+=booklet pages
+
   const LOGICAL_W = 750;
   const LOGICAL_H = 625;
 
@@ -83,14 +331,12 @@ export default function ImpositionCanvas({
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const container = containerRef.current;
     if (!container) return;
     const dpr = window.devicePixelRatio || 1;
     const renderScale = 2;
     canvas.width = LOGICAL_W * dpr * renderScale;
     canvas.height = LOGICAL_H * dpr * renderScale;
-    // Fit within container using object-fit contain behavior
     canvas.style.width = '100%';
     canvas.style.height = '100%';
     canvas.style.objectFit = 'contain';
@@ -102,203 +348,50 @@ export default function ImpositionCanvas({
 
     const cW = LOGICAL_W;
     const cH = LOGICAL_H;
-
-    const hasBleed = bleed > 0;
-    const hasGutter = gutter > 0;
-    const markLen = cropMarks ? 8 : 0;
     const reserveTop = 20;
     const reserveBot = 22;
+    const markLen = cropMarks ? 8 : 0;
 
-    // Scale to fit
-    const scaleX = (cW - 24 - markLen * 2) / sheetW;
-    const scaleY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;
-    const scale = Math.min(scaleX, scaleY);
+    if (isDuplex && viewMode === 'dual') {
+      // ═══ DUAL VIEW: front + back side by side ═══
+      const gap = 12;
+      const availW = cW - 24 - markLen * 2 - gap;
+      const availH = cH - reserveTop - reserveBot - markLen * 2;
+      const halfW = availW / 2;
+      const scaleX = halfW / sheetW;
+      const scaleY = availH / sheetH;
+      const scale = Math.min(scaleX, scaleY);
+      const drawW = sheetW * scale;
+      const drawH = sheetH * scale;
 
-    const drawW = sheetW * scale;
-    const drawH = sheetH * scale;
-    const offX = (cW - drawW) / 2;
-    const offY = reserveTop + markLen + (cH - reserveTop - reserveBot - markLen * 2 - drawH) / 2;
+      const totalW = drawW * 2 + gap;
+      const baseX = (cW - totalW) / 2;
+      const baseY = reserveTop + markLen + (availH - drawH) / 2;
 
-    // Shadow
-    ctx.fillStyle = COLORS.shadow;
-    roundRect(ctx, offX + 3, offY + 3, drawW, drawH, 3);
-    ctx.fill();
+      // Front
+      drawSheet(ctx, baseX, baseY, drawW, drawH,
+        impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
+        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0, machCat, pdf, 0, false, 'A');
 
-    // Paper
-    ctx.fillStyle = COLORS.paper;
-    ctx.strokeStyle = COLORS.paperStroke;
-    ctx.lineWidth = 1;
-    roundRect(ctx, offX, offY, drawW, drawH, 3);
-    ctx.fill();
-    ctx.stroke();
+      // Back
+      drawSheet(ctx, baseX + drawW + gap, baseY, drawW, drawH,
+        impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
+        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0, machCat, pdf, 1, true, 'B');
+    } else {
+      // ═══ SINGLE VIEW: one sheet, pagination ═══
+      const scaleX = (cW - 24 - markLen * 2) / sheetW;
+      const scaleY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;
+      const scale = Math.min(scaleX, scaleY);
+      const drawW = sheetW * scale;
+      const drawH = sheetH * scale;
+      const offX = (cW - drawW) / 2;
+      const offY = reserveTop + markLen + (cH - reserveTop - reserveBot - markLen * 2 - drawH) / 2;
 
-    // Margins
-    const mL = marginLeft * scale;
-    const mR = marginRight * scale;
-    const mT = marginTop * scale;
-    const mB = marginBottom * scale;
-
-    ctx.fillStyle = COLORS.margin;
-    ctx.fillRect(offX, offY, drawW, mT);
-    ctx.fillRect(offX, offY + drawH - mB, drawW, mB);
-    ctx.fillRect(offX, offY + mT, mL, drawH - mT - mB);
-    ctx.fillRect(offX + drawW - mR, offY + mT, mR, drawH - mT - mB);
-
-    ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = COLORS.marginStroke;
-    ctx.lineWidth = 0.6;
-    ctx.strokeRect(offX + mL, offY + mT, drawW - mL - mR, drawH - mT - mB);
-    ctx.setLineDash([]);
-
-    // Gripper/Tail labels (offset)
-    if (machCat === 'offset') {
-      ctx.font = '600 7px Inter, DM Sans, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = COLORS.tail;
-      ctx.fillText('TAIL', offX + drawW / 2, offY + mT / 2 + 3);
-      ctx.fillStyle = COLORS.gripper;
-      ctx.fillText('GRIPPER', offX + drawW / 2, offY + drawH - mB / 2 + 3);
-    }
-
-    // Print area
-    const paX = offX + mL;
-    const paY = offY + mT;
-    const printAreaW = drawW - mL - mR;
-    const printAreaH = drawH - mT - mB;
-
-    // Cell grid
-    const pw = impo.pieceW * scale;
-    const ph = impo.pieceH * scale;
-    const gutterPx = hasGutter ? gutter * scale : 0;
-    const bleedPx = hasBleed ? bleed * scale : 0;
-    const totalGridW = impo.cols * pw + Math.max(0, impo.cols - 1) * gutterPx;
-    const totalGridH = impo.rows * ph + Math.max(0, impo.rows - 1) * gutterPx;
-    const cenX = paX + (printAreaW - totalGridW) / 2;
-    const cenY = paY + (printAreaH - totalGridH) / 2;
-
-    // Draw cells
-    for (let row = 0; row < impo.rows; row++) {
-      for (let col = 0; col < impo.cols; col++) {
-        const idx = row * impo.cols + col;
-        if (idx >= impo.cells.length) continue;
-        const cell = impo.cells[idx];
-
-        const x = cenX + col * (pw + gutterPx);
-        const y = cenY + row * (ph + gutterPx);
-        const isRotated = cell.rotation && cell.rotation !== 0;
-
-        // Bleed zone
-        if (hasBleed) {
-          ctx.fillStyle = COLORS.bleedBand;
-          ctx.fillRect(x, y, pw, bleedPx);
-          ctx.fillRect(x, y + ph - bleedPx, pw, bleedPx);
-          ctx.fillRect(x, y + bleedPx, bleedPx, ph - 2 * bleedPx);
-          ctx.fillRect(x + pw - bleedPx, y + bleedPx, bleedPx, ph - 2 * bleedPx);
-
-          ctx.setLineDash([3, 2]);
-          ctx.strokeStyle = COLORS.bleedStroke;
-          ctx.lineWidth = 0.6;
-          ctx.strokeRect(x + bleedPx, y + bleedPx, pw - 2 * bleedPx, ph - 2 * bleedPx);
-          ctx.setLineDash([]);
-        }
-
-        // Trim area
-        const trimX = x + (hasBleed ? bleedPx : 0);
-        const trimY = y + (hasBleed ? bleedPx : 0);
-        const trimW = hasBleed ? pw - 2 * bleedPx : pw;
-        const trimH = hasBleed ? ph - 2 * bleedPx : ph;
-
-        // PDF thumbnail or colored fill
-        const pageIdx = (cell.pageNum || idx + 1) - 1;
-        const thumb = pdf?.thumbnails?.[pageIdx % (pdf?.thumbnails?.length || 1)];
-        const pgSize = pdf?.pageSizes?.[pageIdx % (pdf?.pageSizes?.length || 1)];
-
-        if (thumb && pgSize) {
-          // Render PDF thumbnail clipped to cell
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(x, y, pw, ph);
-          ctx.clip();
-
-          const rendW = (pgSize.cropW || pgSize.w) * scale;
-          const rendH = (pgSize.cropH || pgSize.h) * scale;
-          const tOffX = (pgSize.trimOffX != null ? pgSize.trimOffX : ((pgSize.cropW || pgSize.w) - pgSize.trimW) / 2) * scale;
-          const tOffY = (pgSize.trimOffY != null ? pgSize.trimOffY : ((pgSize.cropH || pgSize.h) - pgSize.trimH) / 2) * scale;
-
-          // Check if PDF page orientation matches cell orientation
-          const pdfPortrait = pgSize.trimW <= pgSize.trimH;
-          const cellPortrait = pw <= ph;
-
-          if (pdfPortrait !== cellPortrait) {
-            // Rotate 90° to fit
-            ctx.translate(trimX + trimW / 2, trimY + trimH / 2);
-            ctx.rotate(Math.PI / 2);
-            ctx.drawImage(thumb, -(tOffX + (pgSize.trimW * scale) / 2), -(tOffY + (pgSize.trimH * scale) / 2), rendW, rendH);
-          } else {
-            // Align TrimBox with cell trim area
-            ctx.drawImage(thumb, trimX - tOffX, trimY - tOffY, rendW, rendH);
-          }
-          ctx.restore();
-
-          // Light border over thumbnail
-          ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
-        } else {
-          // No PDF — colored fill + page number
-          ctx.fillStyle = isRotated ? COLORS.rotatedFill : COLORS.trimFill;
-          ctx.fillRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
-
-          ctx.strokeStyle = isRotated ? COLORS.rotatedStroke : COLORS.trimStroke;
-          ctx.lineWidth = 1;
-          ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
-
-          const fontSize = Math.min(trimW * 0.3, trimH * 0.3, 20);
-          ctx.font = `600 ${fontSize}px Inter, DM Sans, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.fillStyle = isRotated ? COLORS.rotatedNum : COLORS.cellNum;
-          ctx.fillText(String(cell.pageNum || idx + 1), trimX + trimW / 2, trimY + trimH / 2 + fontSize * 0.35);
-        }
-      }
-    }
-
-    // Gutter lines
-    if (hasGutter && gutterPx > 1) {
-      ctx.fillStyle = COLORS.gutterFill;
-      for (let col = 1; col < impo.cols; col++) {
-        const gx = cenX + col * pw + (col - 1) * gutterPx;
-        ctx.fillRect(gx, cenY, gutterPx, totalGridH);
-      }
-      for (let row = 1; row < impo.rows; row++) {
-        const gy = cenY + row * ph + (row - 1) * gutterPx;
-        ctx.fillRect(cenX, gy, totalGridW, gutterPx);
-      }
-    }
-
-    // Crop marks
-    if (cropMarks) {
-      ctx.strokeStyle = COLORS.cropMark;
-      ctx.lineWidth = 0.5;
-      for (let row = 0; row <= impo.rows; row++) {
-        for (let col = 0; col <= impo.cols; col++) {
-          const cx = cenX + col * (pw + gutterPx) - (col > 0 ? gutterPx : 0);
-          const cy = cenY + row * (ph + gutterPx) - (row > 0 ? gutterPx : 0);
-          // Horizontal marks
-          ctx.beginPath();
-          ctx.moveTo(cx - markLen, cy);
-          ctx.lineTo(cx - 2, cy);
-          ctx.moveTo(cx + pw + 2, cy);
-          ctx.lineTo(cx + pw + markLen, cy);
-          ctx.stroke();
-          // Vertical marks
-          ctx.beginPath();
-          ctx.moveTo(cx, cy - markLen);
-          ctx.lineTo(cx, cy - 2);
-          ctx.moveTo(cx, cy + ph + 2);
-          ctx.lineTo(cx, cy + ph + markLen);
-          ctx.stroke();
-        }
-      }
+      const pageIdx = isDuplex ? activePage : 0;
+      const isBack = pageIdx > 0;
+      drawSheet(ctx, offX, offY, drawW, drawH,
+        impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
+        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0, machCat, pdf, pageIdx, isBack);
     }
 
     // Bottom info strip
@@ -319,16 +412,14 @@ export default function ImpositionCanvas({
     ctx.textAlign = 'center';
     ctx.fillText(parts.join(' · '), cW / 2, cH - 5);
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, pdf]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, pdf, viewMode, activePage, isDuplex]);
 
-  // ─── DRAW ON CHANGE ───
   useEffect(() => { draw(); }, [draw]);
 
   // ─── ZOOM ───
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const container = containerRef.current;
@@ -344,12 +435,10 @@ export default function ImpositionCanvas({
       panRef.current.y = my - canvasY * newZoom;
       setZoom(newZoom);
     };
-
     canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', onWheel);
   }, [zoom]);
 
-  // Apply zoom transform
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -361,13 +450,12 @@ export default function ImpositionCanvas({
     }
   }, [zoom]);
 
-  // ─── PAN (drag when zoomed) ───
+  // ─── PAN ───
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     if (zoom <= 1.02) return;
     draggingRef.current = true;
     dragLastRef.current = { x: e.clientX, y: e.clientY };
   }, [zoom]);
-
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (!draggingRef.current) return;
     const dx = e.clientX - dragLastRef.current.x;
@@ -376,35 +464,27 @@ export default function ImpositionCanvas({
     panRef.current.x += dx;
     panRef.current.y += dy;
     const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
-    }
+    if (canvas) canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
   }, [zoom]);
+  const onMouseUp = useCallback(() => { draggingRef.current = false; }, []);
+  const onDoubleClick = useCallback(() => { setZoom(1); panRef.current = { x: 0, y: 0 }; }, []);
 
-  const onMouseUp = useCallback(() => {
-    draggingRef.current = false;
-  }, []);
-
-  // ─── DOUBLE-CLICK RESET ───
-  const onDoubleClick = useCallback(() => {
-    setZoom(1);
-    panRef.current = { x: 0, y: 0 };
-  }, []);
-
-  // ─── DROP ZONE ───
+  // ─── DROP ───
   const [dragOver, setDragOver] = useState(false);
-  const onDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
-  }, []);
+  const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragOver(true); }, []);
   const onDragLeave = useCallback(() => setDragOver(false), []);
   const onDropHandler = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (onDrop && e.dataTransfer.files.length) {
-      onDrop(e.dataTransfer.files);
-    }
+    e.preventDefault(); setDragOver(false);
+    if (onDrop && e.dataTransfer.files.length) onDrop(e.dataTransfer.files);
   }, [onDrop]);
+
+  // ─── PILL STYLE ───
+  const pillStyle = (active: boolean): React.CSSProperties => ({
+    padding: '3px 10px', borderRadius: 6, border: 'none', fontSize: '0.62rem', fontWeight: 700,
+    background: active ? 'var(--accent)' : 'rgba(255,255,255,0.06)',
+    color: active ? '#fff' : 'rgba(148,163,184,0.7)',
+    cursor: 'pointer', transition: 'all 0.15s',
+  });
 
   return (
     <div
@@ -415,19 +495,42 @@ export default function ImpositionCanvas({
         border: dragOver ? '2px dashed var(--accent)' : '2px solid rgba(255,255,255,0.06)',
         background: 'rgba(0,0,0,0.25)',
       }}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
-      onDoubleClick={onDoubleClick}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDropHandler}
+      onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp} onDoubleClick={onDoubleClick}
+      onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDropHandler}
     >
-      <canvas
-        ref={canvasRef}
-        style={{ display: 'block', width: '100%', transformOrigin: '0 0' }}
-      />
+      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', transformOrigin: '0 0' }} />
+
+      {/* ═══ VIEW CONTROLS (bottom-right) ═══ */}
+      {isDuplex && (
+        <div style={{
+          position: 'absolute', bottom: 26, right: 8, zIndex: 3,
+          display: 'flex', gap: 3, alignItems: 'center',
+          background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+          borderRadius: 8, padding: '3px 4px',
+        }}>
+          {/* View mode toggle */}
+          <button onClick={() => setViewMode('single')} style={pillStyle(viewMode === 'single')} title="Single view">
+            <i className="fas fa-square" style={{ fontSize: '0.5rem' }} />
+          </button>
+          <button onClick={() => setViewMode('dual')} style={pillStyle(viewMode === 'dual')} title="Side-by-side">
+            <i className="fas fa-columns" style={{ fontSize: '0.5rem' }} />
+          </button>
+
+          {/* Pagination (single mode only) */}
+          {viewMode === 'single' && (
+            <>
+              <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.1)', margin: '0 2px' }} />
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button key={i} onClick={() => setActivePage(i)} style={pillStyle(activePage === i)}>
+                  {i === 0 ? 'A' : i === 1 ? 'B' : `${i + 1}`}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Zoom indicator */}
       {zoom > 1.02 && (
         <div style={{
@@ -438,22 +541,20 @@ export default function ImpositionCanvas({
         }}>
           <i className="fas fa-search-plus" style={{ fontSize: '0.55rem' }} />
           {Math.round(zoom * 100)}%
-          <button onClick={onDoubleClick} style={{
-            border: 'none', background: 'none', color: '#64748b',
-            cursor: 'pointer', fontSize: '0.6rem', padding: 0,
-          }}><i className="fas fa-compress" /></button>
+          <button onClick={onDoubleClick} style={{ border: 'none', background: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.6rem', padding: 0 }}>
+            <i className="fas fa-compress" />
+          </button>
         </div>
       )}
+
       {/* Drop overlay */}
       {dragOver && (
         <div style={{
           position: 'absolute', inset: 0, background: 'rgba(245,130,32,0.08)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          pointerEvents: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
         }}>
           <div style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <i className="fas fa-file-pdf" style={{ fontSize: '1.2rem' }} />
-            Drop PDF εδώ
+            <i className="fas fa-file-pdf" style={{ fontSize: '1.2rem' }} /> Drop PDF
           </div>
         </div>
       )}

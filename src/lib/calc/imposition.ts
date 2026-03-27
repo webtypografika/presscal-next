@@ -31,7 +31,7 @@ export interface ImpositionInput {
   forceUps?: number;
   forceCols?: number;
   forceRows?: number;
-  rotation?: 0 | 90 | 180 | 270;
+  rotation?: number;  // degrees (0-359)
 
   // Booklet/PB specific
   pages?: number;        // total pages for booklet/PB
@@ -118,6 +118,19 @@ function buildCells(
   return cells;
 }
 
+/** Extract margin info for PDF export */
+function marginInfo(a: PrintableArea) {
+  const { w, h } = printable(a);
+  return {
+    marginL: a.marginLeft,
+    marginR: a.marginRight,
+    marginT: a.marginTop,
+    marginB: a.marginBottom,
+    printableW: w,
+    printableH: h,
+  };
+}
+
 /** Calculate waste percentage */
 function wastePercent(paperW: number, paperH: number, usedW: number, usedH: number): number {
   const total = paperW * paperH;
@@ -133,47 +146,45 @@ function wastePercent(paperW: number, paperH: number, usedW: number, usedH: numb
 export function calcNUp(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, sides, gutter, area, forceUps, forceCols, forceRows, rotation } = input;
 
-  const cellW = trimW + bleed * 2;
-  const cellH = trimH + bleed * 2;
+  const rawCellW = trimW + bleed * 2;
+  const rawCellH = trimH + bleed * 2;
   const { w: pw, h: ph } = printable(area);
 
-  const toggleRotation = rotation === 90 || rotation === 270;
+  // Normalize rotation to 0-359
+  const rot = ((rotation || 0) % 360 + 360) % 360;
+  // 90°-ish or 270°-ish: cells are placed rotated (swap W↔H)
+  const isSwapped = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
+  // Cell dimensions after rotation swap
+  const cellW = isSwapped ? rawCellH : rawCellW;
+  const cellH = isSwapped ? rawCellW : rawCellH;
+  // Content rotation applied to rendering
+  const contentRotation = rot;
 
-  let cols: number, rows: number, rotated: boolean;
+  let cols: number, rows: number;
 
   if (forceCols && forceRows) {
     cols = forceCols;
     rows = forceRows;
-    rotated = false;
+  } else if (forceCols) {
+    cols = forceCols;
+    rows = fitCount(ph, cellH, gutter);
+  } else if (forceRows) {
+    rows = forceRows;
+    cols = fitCount(pw, cellW, gutter);
   } else if (forceUps) {
-    const best = bestOrientation(pw, ph, cellW, cellH, gutter);
-    cols = best.cols;
-    rows = best.rows;
-    rotated = best.rotated;
+    cols = fitCount(pw, cellW, gutter);
+    rows = fitCount(ph, cellH, gutter);
     while (cols * rows > forceUps && cols > 1) cols--;
     while (cols * rows > forceUps && rows > 1) rows--;
   } else {
-    const best = bestOrientation(pw, ph, cellW, cellH, gutter);
-    // Toggle rotation flips the auto decision
-    rotated = toggleRotation ? !best.rotated : best.rotated;
-    if (!toggleRotation) {
-      cols = best.cols;
-      rows = best.rows;
-    } else {
-      // Re-pick cols/rows for the toggled orientation
-      if (rotated) {
-        cols = fitCount(pw, cellH, gutter);
-        rows = fitCount(ph, cellW, gutter);
-      } else {
-        cols = fitCount(pw, cellW, gutter);
-        rows = fitCount(ph, cellH, gutter);
-      }
-    }
+    cols = fitCount(pw, cellW, gutter);
+    rows = fitCount(ph, cellH, gutter);
   }
 
   const ups = Math.max(cols * rows, 1);
-  const actualCellW = rotated ? cellH : cellW;
-  const actualCellH = rotated ? cellW : cellH;
+  const actualCellW = cellW;
+  const actualCellH = cellH;
+  const rotated = isSwapped;
 
   const usedW = cols * actualCellW + (cols - 1) * gutter;
   const usedH = rows * actualCellH + (rows - 1) * gutter;
@@ -183,11 +194,12 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   const cells = buildCells(
     cols, rows, actualCellW, actualCellH, gutter,
     area.marginLeft, area.marginTop,
-    rotated ? 90 : 0,
+    contentRotation,
   );
 
   return {
     mode: 'nup',
+    pageRotation: contentRotation,
     ups,
     cols,
     rows,
@@ -201,6 +213,7 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     wastePercent: wastePercent(area.paperW, area.paperH, usedW, usedH),
     cells,
     totalSheets: rawSheets,
+    ...marginInfo(area),
   };
 }
 
@@ -415,6 +428,7 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
     signatures: signatureMap.totalSheets,
     signatureMap,
     creepPerSheet,
+    ...marginInfo(area),
   };
 }
 
@@ -504,6 +518,7 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
     cells,
     totalSheets,
     signatures: totalSigs,
+    ...marginInfo(area),
   };
 }
 
@@ -541,7 +556,7 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
       paperW: area.paperW, paperH: area.paperH,
       pieceW: cellW, pieceH: cellH, trimW, trimH,
       rotated: false, wastePercent: 100, cells: [], totalSheets: 0,
-      turnType, fitsPerHalf: 0,
+      turnType, fitsPerHalf: 0, ...marginInfo(area),
     };
   }
 
@@ -642,6 +657,7 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
     totalSheets: rawSheets,
     turnType,
     fitsPerHalf,
+    ...marginInfo(area),
   };
 }
 
@@ -999,6 +1015,7 @@ export function calcStepMulti(input: ImpositionInput): ImpositionResult {
     cells,
     totalSheets: rawSheets,
     blocks,
+    ...marginInfo(area),
   };
 }
 

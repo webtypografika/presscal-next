@@ -1,167 +1,1826 @@
-// PressCal Pro — PDF Export for Imposition Preview
-// Uses pdf-lib to generate a PDF with imposed layout
+// PressCal Pro — PDF Export for Imposition
+// Full port of mod_imposer.js export functions to TypeScript + pdf-lib
+// Supports: N-Up, Booklet, PerfectBound, Cut&Stack, Work&Turn, GangRun, StepMulti
 
-import type { ImpositionResult } from '@/types/calculator';
+import {
+  PDFDocument,
+  PDFPage,
+  PDFEmbeddedPage,
+  rgb,
+  StandardFonts,
+  PDFFont,
+  pushGraphicsState,
+  popGraphicsState,
+  rectangle,
+  clip,
+  endPath,
+  degrees,
+} from 'pdf-lib';
 
-// Lazy-load pdf-lib from CDN
-let PDFLib: typeof import('pdf-lib') | null = null;
+import type {
+  ImpositionResult,
+  BookletSignatureMap,
+  StepBlock,
+  GangRunData,
+  CutStackPosition,
+} from '@/types/calculator';
 
-async function getPDFLib() {
-  if (PDFLib) return PDFLib;
-  // @ts-expect-error dynamic CDN import
-  PDFLib = await import('https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm');
-  return PDFLib!;
+// ─── Constants ───
+
+const MM = 72 / 25.4; // mm → PDF points
+
+function mmToPt(mm: number): number {
+  return mm * MM;
 }
 
-// mm to PDF points (72 pt per inch, 25.4 mm per inch)
-const MM_TO_PT = 72 / 25.4;
+/** Strip non-WinAnsi characters (Greek etc) for pdf-lib StandardFonts */
+function ascii(s: string): string {
+  return s.replace(/[^\x20-\x7E\u00A0-\u00FF\u2014]/g, '');
+}
+
+// ─── Types ───
 
 export interface ExportOptions {
   imposition: ImpositionResult;
+  pdfBytes?: Uint8Array;           // source PDF bytes
+  machineCat?: 'digital' | 'offset';
   machineName?: string;
   paperName?: string;
   jobDescription?: string;
-  showCropMarks?: boolean;
-  showBleed?: boolean;
+  jobW?: number;
+  jobH?: number;
   bleed?: number;
+  gutter?: number;
+
+  // Marks
+  showCropMarks?: boolean;
+  showRegistration?: boolean;      // offset only
+  showColorBar?: boolean;
+  colorBarType?: 'cmyk' | 'cmyk_tint50';
+  colorBarEdge?: 'tail' | 'gripper';
+  colorBarPdfBytes?: Uint8Array;   // color bar PDF content
+  colorBarOffsetY?: number;
+  showPlateSlug?: boolean;
+  plateSlugEdge?: 'tail' | 'gripper';
+  keepSourceMarks?: boolean;
+
+  // Duplex
+  isDuplex?: boolean;
+  duplexOrient?: 'h2h' | 'h2f';
+
+  // Mode-specific
+  rotation?: number;
+
+  // Booklet
+  signatureMap?: BookletSignatureMap;
+  creepPerSheet?: number[];
+
+  // Cut & Stack
+  stackPositions?: CutStackPosition[];
+  fixedBackPdfBytes?: Uint8Array;
+  fixedBackPage?: number;
+  fixedBack?: boolean;
+  numberingEnabled?: boolean;
+  numberPrefix?: string;
+  numberStartNum?: number;
+  numberDigits?: number;
+  numberFontSize?: number;
+  numberColor?: string;
+  numberFont?: 'Helvetica' | 'Courier';
+  numberRotation?: number;
+  numberPositions?: Record<number, { x: number; y: number }>;
+  numberGlobalPos?: { x: number; y: number };
+  cellOffsets?: Record<number, { x: number; y: number }>;
+  csStackSize?: number;
+  csGetStackNum?: (posIdx: number, ups: number) => number;
+
+  // Gang Run
+  gangData?: GangRunData;
+
+  // Step Multi
+  blocks?: StepBlock[];
+
+  // Work & Turn
+  turnType?: 'turn' | 'tumble';
+
+  // PDF page orientation info (for rotation detection)
+  pdfPageSizes?: Array<{ trimW: number; trimH: number }>;
 }
 
-export async function exportImpositionPDF(options: ExportOptions): Promise<Uint8Array> {
-  const { PDFDocument, rgb, StandardFonts } = await getPDFLib();
-  const { imposition, machineName, paperName, jobDescription, showCropMarks, bleed = 0 } = options;
+interface EmbeddedPageInfo {
+  page: PDFEmbeddedPage;
+  rotation: number;
+  trimOffsetX: number;
+  trimOffsetY: number;
+  trimW: number;
+  trimH: number;
+}
 
-  const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
+interface DrawMarksOptions {
+  font?: PDFFont;
+  jobName?: string;
+  foldLine?: boolean;
+  colorBarPage?: PDFEmbeddedPage | null;
+  skipCropMarks?: boolean;
+  machineCat?: string;
+  showPlateSlug?: boolean;
+  plateSlugEdge?: string;
+  colorBarEdge?: string;
+  colorBarOffsetY?: number;
+}
 
-  const pageW = imposition.paperW * MM_TO_PT;
-  const pageH = imposition.paperH * MM_TO_PT;
+// ─── Embed Source Pages ───
 
-  const page = doc.addPage([pageW, pageH]);
+async function embedSourcePages(
+  outputDoc: PDFDocument,
+  sourceBytes: Uint8Array,
+  mode: string,
+  bleedMM: number,
+  keepSourceMarks?: boolean,
+): Promise<EmbeddedPageInfo[]> {
+  const srcDoc = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
+  const srcPages = srcDoc.getPages();
+  const embedded: EmbeddedPageInfo[] = [];
+  const bleedPt = bleedMM * MM;
 
-  // ─── PAPER OUTLINE ───
-  page.drawRectangle({
-    x: 0, y: 0, width: pageW, height: pageH,
-    borderColor: rgb(0.7, 0.7, 0.7), borderWidth: 0.5,
-  });
+  for (let i = 0; i < srcPages.length; i++) {
+    const pg = srcPages[i];
 
-  // ─── CELLS ───
-  const cells = imposition.cells;
-  for (const cell of cells) {
-    const x = cell.x * MM_TO_PT;
-    // PDF Y is bottom-up, canvas Y is top-down
-    const y = pageH - (cell.y + cell.h) * MM_TO_PT;
-    const w = cell.w * MM_TO_PT;
-    const h = cell.h * MM_TO_PT;
+    // Detect page /Rotate
+    let rotation = 0;
+    try { rotation = pg.getRotation().angle || 0; } catch { /* noop */ }
 
-    // Bleed zone (light red)
-    if (bleed > 0) {
-      page.drawRectangle({
-        x, y, width: w, height: h,
-        color: rgb(1, 0.85, 0.85), opacity: 0.3,
-      });
+    // Read all PDF boxes
+    const mediaBox = pg.getMediaBox();
+    const cropBox = pg.getCropBox();
+
+    let trimBox: { x: number; y: number; width: number; height: number } | null = null;
+    try {
+      const tb = pg.getTrimBox();
+      if (Math.abs(tb.width - mediaBox.width) > 0.5 || Math.abs(tb.height - mediaBox.height) > 0.5) {
+        trimBox = tb;
+      }
+    } catch { /* noop */ }
+
+    let bleedBox: { x: number; y: number; width: number; height: number } | null = null;
+    try {
+      const bb = pg.getBleedBox();
+      if (Math.abs(bb.width - mediaBox.width) > 0.5 || Math.abs(bb.height - mediaBox.height) > 0.5) {
+        bleedBox = bb;
+      }
+    } catch { /* noop */ }
+
+    let bounds: { left: number; bottom: number; right: number; top: number };
+    let trimOffsetX = 0;
+    let trimOffsetY = 0;
+    let trimW: number;
+    let trimH: number;
+
+    if (mode === 'cropbox') {
+      bounds = {
+        left: cropBox.x, bottom: cropBox.y,
+        right: cropBox.x + cropBox.width, top: cropBox.y + cropBox.height,
+      };
+      const cbt = trimBox || cropBox;
+      trimOffsetX = cbt.x - cropBox.x;
+      trimOffsetY = cbt.y - cropBox.y;
+      trimW = cbt.width;
+      trimH = cbt.height;
+    } else if (mode === 'nup') {
+      if (keepSourceMarks) {
+        bounds = {
+          left: cropBox.x, bottom: cropBox.y,
+          right: cropBox.x + cropBox.width, top: cropBox.y + cropBox.height,
+        };
+        const cbtSrc = trimBox || cropBox;
+        trimOffsetX = cbtSrc.x - cropBox.x;
+        trimOffsetY = cbtSrc.y - cropBox.y;
+        trimW = cbtSrc.width;
+        trimH = cbtSrc.height;
+      } else if (bleedBox && trimBox) {
+        bounds = {
+          left: bleedBox.x, bottom: bleedBox.y,
+          right: bleedBox.x + bleedBox.width, top: bleedBox.y + bleedBox.height,
+        };
+        trimOffsetX = trimBox.x - bleedBox.x;
+        trimOffsetY = trimBox.y - bleedBox.y;
+        trimW = trimBox.width;
+        trimH = trimBox.height;
+      } else if (trimBox) {
+        const synL = Math.max(cropBox.x, trimBox.x - bleedPt);
+        const synB = Math.max(cropBox.y, trimBox.y - bleedPt);
+        const synR = Math.min(cropBox.x + cropBox.width, trimBox.x + trimBox.width + bleedPt);
+        const synT = Math.min(cropBox.y + cropBox.height, trimBox.y + trimBox.height + bleedPt);
+        bounds = { left: synL, bottom: synB, right: synR, top: synT };
+        trimOffsetX = trimBox.x - synL;
+        trimOffsetY = trimBox.y - synB;
+        trimW = trimBox.width;
+        trimH = trimBox.height;
+      } else if (bleedBox) {
+        bounds = {
+          left: bleedBox.x, bottom: bleedBox.y,
+          right: bleedBox.x + bleedBox.width, top: bleedBox.y + bleedBox.height,
+        };
+        trimW = bleedBox.width;
+        trimH = bleedBox.height;
+      } else {
+        bounds = {
+          left: cropBox.x, bottom: cropBox.y,
+          right: cropBox.x + cropBox.width, top: cropBox.y + cropBox.height,
+        };
+        trimW = cropBox.width;
+        trimH = cropBox.height;
+      }
+    } else {
+      // Booklet/PerfectBound/CutStack: embed at TrimBox for clean fit
+      const tb = trimBox || cropBox;
+      bounds = { left: tb.x, bottom: tb.y, right: tb.x + tb.width, top: tb.y + tb.height };
+      trimW = tb.width;
+      trimH = tb.height;
     }
 
-    // Trim area
-    const trimX = x + bleed * MM_TO_PT;
-    const trimY = y + bleed * MM_TO_PT;
-    const trimW = w - bleed * 2 * MM_TO_PT;
-    const trimH = h - bleed * 2 * MM_TO_PT;
-
-    page.drawRectangle({
-      x: trimX, y: trimY, width: trimW, height: trimH,
-      borderColor: rgb(0.3, 0.3, 0.3), borderWidth: 0.25,
+    const ep = await outputDoc.embedPage(pg, bounds);
+    embedded.push({
+      page: ep,
+      rotation,
+      trimOffsetX,
+      trimOffsetY,
+      trimW,
+      trimH,
     });
+  }
+  return embedded;
+}
 
-    // Page number label
-    if (cell.pageNum) {
-      const label = String(cell.pageNum);
-      const textW = font.widthOfTextAtSize(label, 8);
-      page.drawText(label, {
-        x: trimX + (trimW - textW) / 2,
-        y: trimY + (trimH - 8) / 2,
-        size: 8, font, color: rgb(0.5, 0.5, 0.5),
-      });
+// ─── Color Bar Embedder ───
+
+const colorBarCache: Record<string, Uint8Array> = {};
+
+async function prepareColorBar(
+  outputDoc: PDFDocument,
+  colorBarPdfBytes?: Uint8Array,
+  colorBarType?: string,
+): Promise<PDFEmbeddedPage | null> {
+  let bytes = colorBarPdfBytes;
+  // If no bytes provided, fetch from public folder
+  if ((!bytes || bytes.length === 0) && colorBarType && colorBarType !== 'none') {
+    const fileName = colorBarType === 'cmyk' ? 'ColorBar_CMYK_only.pdf' : 'ColorBar_CMYK_tint50.pdf';
+    if (!colorBarCache[colorBarType]) {
+      try {
+        const resp = await fetch(`/colorbars/${fileName}`);
+        if (resp.ok) colorBarCache[colorBarType] = new Uint8Array(await resp.arrayBuffer());
+      } catch { /* ignore */ }
+    }
+    bytes = colorBarCache[colorBarType];
+  }
+  if (!bytes || bytes.length === 0) return null;
+  try {
+    const cbDoc = await PDFDocument.load(bytes);
+    const embeddedPage = await outputDoc.embedPage(cbDoc.getPages()[0]);
+    return embeddedPage;
+  } catch (e) {
+    console.warn('Color bar PDF not loaded:', e);
+    return null;
+  }
+}
+
+// ─── Draw Embedded Page Helper ───
+
+function drawEmbeddedPage(
+  page: PDFPage,
+  epObj: EmbeddedPageInfo,
+  x: number,
+  y: number,
+  targetW: number,
+  targetH: number,
+  rotateDeg?: number,
+) {
+  const ep = epObj.page;
+  const srcRot = (360 - (epObj.rotation || 0)) % 360;
+  const totalRot = ((srcRot || 0) + (rotateDeg || 0)) % 360;
+  const epW = ep.width || targetW;
+  const epH = ep.height || targetH;
+  const scaleX = targetW / epW;
+  const scaleY = targetH / epH;
+  const opts: Parameters<PDFPage['drawPage']>[1] = { x, y, xScale: scaleX, yScale: scaleY };
+  if (totalRot) opts.rotate = degrees(totalRot);
+  page.drawPage(ep, opts);
+}
+
+// ─── Draw PDF Marks ───
+
+function drawPDFMarks(
+  page: PDFPage,
+  paperWpt: number,
+  paperHpt: number,
+  impo: {
+    marginL: number; marginR: number; marginT: number; marginB: number;
+    pieceW: number; pieceH: number;
+    cols: number; rows: number;
+    gutterMM?: number; gutterRowMM?: number;
+    bleedMM?: number;
+    offsetX?: number; offsetY?: number;
+    cropMarks?: boolean;
+  },
+  options?: DrawMarksOptions,
+) {
+  const drawCropMarks = impo.cropMarks !== false && !(options?.skipCropMarks);
+  let markLen = mmToPt(4);
+  const markOffset = mmToPt(1);
+  const mL = mmToPt(impo.marginL);
+  const mR = mmToPt(impo.marginR);
+  const mT = mmToPt(impo.marginT);
+  const mB = mmToPt(impo.marginB);
+  const pieceW = mmToPt(impo.pieceW);
+  const pieceH = mmToPt(impo.pieceH);
+  const gutterColPt = mmToPt(impo.gutterMM || 0);
+  const gutterRowPt = mmToPt(impo.gutterRowMM != null ? impo.gutterRowMM : (impo.gutterMM || 0));
+
+  const printableW = paperWpt - mL - mR;
+  const printableH = paperHpt - mT - mB;
+  const cols = impo.cols;
+  const rows = impo.rows;
+  const totalGridW = cols * pieceW + Math.max(0, cols - 1) * gutterColPt;
+  const totalGridH = rows * pieceH + Math.max(0, rows - 1) * gutterRowPt;
+  const offXpt = mmToPt(impo.offsetX || 0);
+  const offYpt = mmToPt(impo.offsetY || 0);
+  const cenX = mL + (printableW - totalGridW) / 2 + offXpt;
+  const cenY = mB + (printableH - totalGridH) / 2 - offYpt;
+
+  const black = rgb(0, 0, 0);
+
+  // Crop marks
+  const bleedPt = mmToPt(impo.bleedMM || 0);
+  const cropGap = markOffset;
+
+  // Cap mark length to available margin space
+  const spaceAbove = paperHpt - (cenY + totalGridH);
+  const spaceBelow = cenY;
+  const spaceLeft = cenX;
+  const spaceRight = paperWpt - (cenX + totalGridW);
+  const minSpace = Math.min(spaceAbove, spaceBelow, spaceLeft, spaceRight);
+  if (cropGap + markLen > minSpace) {
+    markLen = Math.max(mmToPt(1), minSpace - cropGap);
+  }
+
+  if (drawCropMarks) {
+    // Collect unique vertical cut positions (X)
+    const vCuts: number[] = [];
+    for (let vc = 0; vc < cols; vc++) {
+      vCuts.push(cenX + vc * (pieceW + gutterColPt) + bleedPt);
+      vCuts.push(cenX + vc * (pieceW + gutterColPt) + pieceW - bleedPt);
+    }
+    vCuts.sort((a, b) => a - b);
+    const uV = [vCuts[0]];
+    for (let vi = 1; vi < vCuts.length; vi++) {
+      if (vCuts[vi] - uV[uV.length - 1] > 0.1) uV.push(vCuts[vi]);
     }
 
-    // Crop marks
-    if (showCropMarks) {
-      const markLen = 3 * MM_TO_PT;
-      const markOffset = 1.5 * MM_TO_PT;
-      const corners = [
-        { cx: trimX, cy: trimY },
-        { cx: trimX + trimW, cy: trimY },
-        { cx: trimX, cy: trimY + trimH },
-        { cx: trimX + trimW, cy: trimY + trimH },
-      ];
-      for (const { cx, cy } of corners) {
-        // Horizontal
-        page.drawLine({
-          start: { x: cx - markLen - markOffset, y: cy },
-          end: { x: cx - markOffset, y: cy },
-          thickness: 0.25, color: rgb(0, 0, 0),
-        });
-        page.drawLine({
-          start: { x: cx + markOffset, y: cy },
-          end: { x: cx + markLen + markOffset, y: cy },
-          thickness: 0.25, color: rgb(0, 0, 0),
-        });
-        // Vertical
-        page.drawLine({
-          start: { x: cx, y: cy - markLen - markOffset },
-          end: { x: cx, y: cy - markOffset },
-          thickness: 0.25, color: rgb(0, 0, 0),
-        });
-        page.drawLine({
-          start: { x: cx, y: cy + markOffset },
-          end: { x: cx, y: cy + markLen + markOffset },
-          thickness: 0.25, color: rgb(0, 0, 0),
-        });
+    // Collect unique horizontal cut positions (Y)
+    const hCuts: number[] = [];
+    for (let hr = 0; hr < rows; hr++) {
+      hCuts.push(cenY + hr * (pieceH + gutterRowPt) + bleedPt);
+      hCuts.push(cenY + hr * (pieceH + gutterRowPt) + pieceH - bleedPt);
+    }
+    hCuts.sort((a, b) => a - b);
+    const uH = [hCuts[0]];
+    for (let hi = 1; hi < hCuts.length; hi++) {
+      if (hCuts[hi] - uH[uH.length - 1] > 0.1) uH.push(hCuts[hi]);
+    }
+
+    const gL = uV[0], gR = uV[uV.length - 1], gB = uH[0], gT = uH[uH.length - 1];
+
+    // Perimeter marks — top & bottom
+    for (let vmi = 0; vmi < uV.length; vmi++) {
+      const vx = uV[vmi];
+      page.drawLine({ start: { x: vx, y: gT + cropGap }, end: { x: vx, y: gT + cropGap + markLen }, thickness: 0.5, color: black });
+      page.drawLine({ start: { x: vx, y: gB - cropGap }, end: { x: vx, y: gB - cropGap - markLen }, thickness: 0.5, color: black });
+    }
+    // Perimeter marks — left & right
+    for (let hmi = 0; hmi < uH.length; hmi++) {
+      const hy = uH[hmi];
+      page.drawLine({ start: { x: gL - cropGap, y: hy }, end: { x: gL - cropGap - markLen, y: hy }, thickness: 0.5, color: black });
+      page.drawLine({ start: { x: gR + cropGap, y: hy }, end: { x: gR + cropGap + markLen, y: hy }, thickness: 0.5, color: black });
+    }
+
+    // Gutter marks — vertical gutters (between columns)
+    const gutGapPt = markOffset;
+    if (gutterColPt > mmToPt(0.5)) {
+      const gutColMarkLen = Math.min(markLen, gutterColPt / 2 - gutGapPt);
+      if (gutColMarkLen > mmToPt(0.3)) {
+        for (let vg = 0; vg < cols - 1; vg++) {
+          const gxVg = cenX + vg * (pieceW + gutterColPt) + pieceW;
+          for (let hci = 0; hci < uH.length; hci++) {
+            const hy2 = uH[hci];
+            page.drawLine({ start: { x: gxVg + gutGapPt, y: hy2 }, end: { x: gxVg + gutGapPt + gutColMarkLen, y: hy2 }, thickness: 0.5, color: black });
+            page.drawLine({ start: { x: gxVg + gutterColPt - gutGapPt, y: hy2 }, end: { x: gxVg + gutterColPt - gutGapPt - gutColMarkLen, y: hy2 }, thickness: 0.5, color: black });
+          }
+        }
+      }
+    }
+    // Gutter marks — horizontal gutters (between rows)
+    if (gutterRowPt > mmToPt(0.5)) {
+      const gutRowMarkLen = Math.min(markLen, gutterRowPt / 2 - gutGapPt);
+      if (gutRowMarkLen > mmToPt(0.3)) {
+        for (let hg = 0; hg < rows - 1; hg++) {
+          const gyHg = cenY + hg * (pieceH + gutterRowPt) + pieceH;
+          for (let vci = 0; vci < uV.length; vci++) {
+            const vx2 = uV[vci];
+            page.drawLine({ start: { x: vx2, y: gyHg + gutGapPt }, end: { x: vx2, y: gyHg + gutGapPt + gutRowMarkLen }, thickness: 0.5, color: black });
+            page.drawLine({ start: { x: vx2, y: gyHg + gutterRowPt - gutGapPt }, end: { x: vx2, y: gyHg + gutterRowPt - gutGapPt - gutRowMarkLen }, thickness: 0.5, color: black });
+          }
+        }
       }
     }
   }
 
-  // ─── INFO STRIP (bottom) ───
-  const infoY = 8;
-  const infoSize = 6;
-  const modeLabels: Record<string, string> = {
-    nup: 'N-Up', booklet: 'Booklet', perfect_bound: 'Perfect Bound',
-    cutstack: 'Cut & Stack', workturn: 'Work & Turn', gangrun: 'Gang Run', stepmulti: 'Step Multi',
-  };
-  const parts = [
-    modeLabels[imposition.mode] || imposition.mode,
-    `${imposition.ups} ups`,
-    `${imposition.cols}×${imposition.rows}`,
-    `${imposition.paperW}×${imposition.paperH}mm`,
-    `Trim: ${imposition.trimW}×${imposition.trimH}mm`,
-    `Waste: ${imposition.wastePercent.toFixed(1)}%`,
-  ];
-  if (machineName) parts.unshift(machineName);
-  if (paperName) parts.push(paperName);
+  // Registration crosses — offset only
+  if (options?.machineCat === 'offset') {
+    const regSize = mmToPt(2.5);
+    const regPts = [
+      { x: paperWpt / 2, y: paperHpt },
+      { x: paperWpt / 2, y: 0 },
+      { x: 0, y: paperHpt / 2 },
+      { x: paperWpt, y: paperHpt / 2 },
+    ];
+    for (const p of regPts) {
+      page.drawLine({ start: { x: p.x - regSize, y: p.y }, end: { x: p.x + regSize, y: p.y }, thickness: 0.3, color: black });
+      page.drawLine({ start: { x: p.x, y: p.y - regSize }, end: { x: p.x, y: p.y + regSize }, thickness: 0.3, color: black });
+      page.drawCircle({ x: p.x, y: p.y, size: regSize * 0.6, borderWidth: 0.3, borderColor: black });
+    }
+  }
 
-  const infoText = parts.join('  ·  ');
-  page.drawText(infoText, {
-    x: 10, y: infoY, size: infoSize, font, color: rgb(0.5, 0.5, 0.5),
+  // Plate sluglines — offset only
+  if (options?.showPlateSlug && options.machineCat === 'offset' && options.font) {
+    const cmykRGB = [[0, 0.68, 0.94], [0.93, 0, 0.55], [0.83, 0.66, 0], [0.14, 0.12, 0.13]];
+    const slugFont = options.font;
+    const slugSize = 5.5;
+    const slugNames = ['Cyan', 'Magenta', 'Yellow', 'Black'];
+    const slugJobText = options.jobName ? (' \u2014 ' + options.jobName).replace(/[^\x20-\x7E\u2014]/g, '') : '';
+
+    let slugY: number;
+    if (options.plateSlugEdge === 'tail') {
+      slugY = paperHpt - mmToPt(3);
+    } else {
+      slugY = mmToPt(3) + slugSize;
+    }
+    let slugX = mmToPt(5);
+    for (let si = 0; si < 4; si++) {
+      const slugColor = rgb(cmykRGB[si][0], cmykRGB[si][1], cmykRGB[si][2]);
+      const slugText = slugNames[si] + (si === 3 ? slugJobText : '');
+      const slugTw = slugFont.widthOfTextAtSize(slugText, slugSize);
+      page.drawText(slugText, {
+        x: slugX, y: slugY,
+        size: slugSize, font: slugFont, color: slugColor,
+      });
+      slugX += slugTw + mmToPt(3);
+    }
+  }
+
+  // Job info text
+  if (options?.jobName && options.font) {
+    const safeText = ascii(options.jobName + ' | ' + new Date().toLocaleDateString('en-GB'));
+    page.drawText(safeText, {
+      x: mmToPt(5), y: paperHpt - mmToPt(3),
+      size: 6, font: options.font, color: rgb(0.4, 0.4, 0.4),
+    });
+  }
+
+  // Color bar (tiled at natural size across paper width)
+  if (options?.colorBarPage) {
+    const cbp = options.colorBarPage;
+    const cbNatW = cbp.width;
+    const cbNatH = cbp.height;
+    const cbOffY = mmToPt(options.colorBarOffsetY || 0);
+    let cbY: number;
+    if (options.colorBarEdge === 'tail') {
+      cbY = paperHpt - cbNatH - mmToPt(1) - cbOffY;
+    } else {
+      cbY = mmToPt(1) + cbOffY;
+    }
+    const cbTiles = Math.ceil(paperWpt / cbNatW);
+    for (let cbt = 0; cbt < cbTiles; cbt++) {
+      const cbX = cbt * cbNatW;
+      page.drawPage(cbp, { x: cbX, y: cbY, width: cbNatW, height: cbNatH });
+    }
+  }
+
+  // Fold marks for booklet
+  if (options?.foldLine) {
+    const foldX = paperWpt / 2;
+    page.drawLine({
+      start: { x: foldX, y: mB }, end: { x: foldX, y: paperHpt - mT },
+      thickness: 0.5, color: rgb(1, 0, 0), dashArray: [4, 3],
+    });
+  }
+}
+
+// ─── Masking helpers ───
+
+function drawMarginalMasks(
+  page: PDFPage,
+  paperWpt: number,
+  paperHpt: number,
+  gridL: number,
+  gridR: number,
+  gridB: number,
+  gridT: number,
+) {
+  const white = rgb(1, 1, 1);
+  if (gridL > 0.5) page.drawRectangle({ x: 0, y: 0, width: gridL, height: paperHpt, color: white });
+  if (paperWpt - gridR > 0.5) page.drawRectangle({ x: gridR, y: 0, width: paperWpt - gridR, height: paperHpt, color: white });
+  if (gridB > 0.5) page.drawRectangle({ x: gridL, y: 0, width: gridR - gridL, height: gridB, color: white });
+  if (paperHpt - gridT > 0.5) page.drawRectangle({ x: gridL, y: gridT, width: gridR - gridL, height: paperHpt - gridT, color: white });
+}
+
+function drawGutterMasks(
+  page: PDFPage,
+  paperWpt: number,
+  paperHpt: number,
+  cenX: number,
+  cenY: number,
+  cols: number,
+  rows: number,
+  pieceW: number,
+  pieceH: number,
+  gutterPt: number,
+  bleedPt: number,
+  totalGridH: number,
+) {
+  const white = rgb(1, 1, 1);
+  if (gutterPt > 0.5) {
+    for (let gc = 0; gc < cols - 1; gc++) {
+      const gx = cenX + gc * (pieceW + gutterPt) + pieceW;
+      const gutL = gx + Math.min(bleedPt, gutterPt / 2);
+      const gutR = gx + gutterPt - Math.min(bleedPt, gutterPt / 2);
+      if (gutR > gutL + 0.5) page.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
+    }
+    for (let gr = 0; gr < rows - 1; gr++) {
+      const gy = cenY + gr * (pieceH + gutterPt) + pieceH;
+      const gutB = gy + Math.min(bleedPt, gutterPt / 2);
+      const gutT = gy + gutterPt - Math.min(bleedPt, gutterPt / 2);
+      if (gutT > gutB + 0.5) page.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
+    }
+  }
+}
+
+// ─── PerfectBound rotation helper ───
+
+function pbIsRotated(row: number, totalRows: number): boolean {
+  const rowFromBottom = totalRows - 1 - row;
+  return (rowFromBottom % 2 === 1);
+}
+
+// ─── Format number for Cut&Stack numbering ───
+
+function formatNumber(prefix: string, num: number, digits: number): string {
+  let s = String(num);
+  while (s.length < digits) s = '0' + s;
+  return (prefix || '') + s;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  N-Up Export
+// ═══════════════════════════════════════════════════════════
+
+async function exportNUp(
+  doc: PDFDocument,
+  opts: ExportOptions,
+  embeddedPages: EmbeddedPageInfo[],
+  font: PDFFont,
+  cbEmbed: PDFEmbeddedPage | null,
+): Promise<void> {
+  const impo = opts.imposition;
+  const paperWpt = mmToPt(impo.paperW);
+  const paperHpt = mmToPt(impo.paperH);
+  const mL = mmToPt(impo.marginL ?? 0);
+  const pieceW = mmToPt(impo.pieceW);
+  const pieceH = mmToPt(impo.pieceH);
+  const gutterPt = mmToPt(opts.gutter || 0);
+  const printableW = paperWpt - mL - mmToPt(impo.marginR ?? 0);
+  const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mmToPt(impo.marginB ?? 0);
+  const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
+  const totalGridH = impo.rows * pieceH + Math.max(0, impo.rows - 1) * gutterPt;
+  const offXpt = mmToPt(impo.offsetX ?? 0);
+  const offYpt = mmToPt(impo.offsetY ?? 0);
+  const cenX = mL + (printableW - totalGridW) / 2 + offXpt;
+  const cenY = mmToPt(impo.marginB ?? 0) + (printableH - totalGridH) / 2 - offYpt;
+
+  // Detect orientation mismatch
+  const pdfPg = opts.pdfPageSizes?.[0];
+  const pdfPortrait = pdfPg ? (pdfPg.trimW <= pdfPg.trimH) : true;
+  const cellPortrait = impo.pieceW <= impo.pieceH;
+  const isRotated = pdfPortrait !== cellPortrait;
+
+  const pdfPageCount = embeddedPages.length;
+  const sheetsNeeded = pdfPageCount;
+  const bleedPt = mmToPt(opts.bleed || 0);
+  const maxSheets = 50;
+
+  const isDuplex = !!opts.isDuplex && pdfPageCount >= 2;
+
+  for (let s = 0; s < Math.min(sheetsNeeded, maxSheets); s++) {
+    const isBackSide = isDuplex && (s % 2 === 1);
+    const page = doc.addPage([paperWpt, paperHpt]);
+
+    for (let row = 0; row < impo.rows; row++) {
+      for (let col = 0; col < impo.cols; col++) {
+        const pageIdx = s;
+        if (pageIdx < embeddedPages.length) {
+          const epObj = embeddedPages[pageIdx];
+          const epPage = epObj.page;
+          const frontCellX = cenX + col * (pieceW + gutterPt);
+          const cellY = cenY + (impo.rows - 1 - row) * (pieceH + gutterPt);
+
+          // Unified page placement
+          const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
+          const gridRot = isRotated ? (isBackSide ? 90 : 270) : 0;
+          const userRot = opts.rotation || 0;
+          const extraRot0 = (userRot === 180 || userRot === 270) ? 180 : 0;
+          let extraRot = extraRot0;
+          if (opts.duplexOrient === 'h2f' && (row % 2 === 1)) extraRot = (extraRot + 180) % 360;
+          const h2fRot = (isBackSide && opts.duplexOrient === 'h2f') ? 180 : 0;
+          const totalRot = (epSrcRot + gridRot + extraRot + h2fRot) % 360;
+
+          const epRawW = epPage.width || pieceW;
+          const epRawH = epPage.height || pieceH;
+
+          const needsSwap = (totalRot === 90 || totalRot === 270);
+          const scaleX = needsSwap ? (pieceH / epRawW) : (pieceW / epRawW);
+          const scaleY = needsSwap ? (pieceW / epRawH) : (pieceH / epRawH);
+
+          // Cell position
+          let visX: number, visY: number;
+          if (isBackSide && opts.duplexOrient === 'h2f') {
+            visX = frontCellX;
+            visY = paperHpt - cellY - pieceH;
+          } else {
+            visX = isBackSide ? (paperWpt - frontCellX - pieceW) : frontCellX;
+            visY = cellY;
+          }
+
+          // Adjust draw origin for rotation
+          let drawX = visX, drawY = visY;
+          if (totalRot === 90) { drawX = visX + pieceW; }
+          else if (totalRot === 270) { drawY = visY + pieceH; }
+          else if (totalRot === 180) { drawX = visX + pieceW; drawY = visY + pieceH; }
+
+          const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: scaleX, yScale: scaleY };
+          if (totalRot) drawOpts.rotate = degrees(totalRot);
+          page.drawPage(epPage, drawOpts);
+        }
+      }
+    }
+
+    // When preserving source marks, skip masking + own crop marks
+    if (!opts.keepSourceMarks) {
+      const white = rgb(1, 1, 1);
+      const maskCenX = isBackSide ? (paperWpt - cenX - totalGridW) : cenX;
+
+      // Gutter masks
+      if (gutterPt > 0.5) {
+        for (let gc = 0; gc < impo.cols - 1; gc++) {
+          const gx = maskCenX + gc * (pieceW + gutterPt) + pieceW;
+          const gutL = gx + Math.min(bleedPt, gutterPt / 2);
+          const gutR = gx + gutterPt - Math.min(bleedPt, gutterPt / 2);
+          if (gutR > gutL + 0.5) page.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
+        }
+        for (let gr = 0; gr < impo.rows - 1; gr++) {
+          const gy = cenY + gr * (pieceH + gutterPt) + pieceH;
+          const gutB = gy + Math.min(bleedPt, gutterPt / 2);
+          const gutT = gy + gutterPt - Math.min(bleedPt, gutterPt / 2);
+          if (gutT > gutB + 0.5) page.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
+        }
+      }
+
+      // Margin masks
+      const gridL = maskCenX;
+      const gridB = cenY;
+      const gridR = maskCenX + totalGridW;
+      const gridT = cenY + totalGridH;
+      drawMarginalMasks(page, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
+
+      const sheetLabel = isDuplex
+        ? ascii((opts.jobDescription || 'Job') + (isBackSide ? ' (Back)' : ' (Front)'))
+        : ascii(opts.jobDescription || 'Job');
+
+      drawPDFMarks(page, paperWpt, paperHpt, {
+        marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
+        marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
+        pieceW: impo.pieceW, pieceH: impo.pieceH,
+        cols: impo.cols, rows: impo.rows,
+        gutterMM: opts.gutter || 0,
+        bleedMM: opts.bleed || 0,
+        offsetX: impo.offsetX, offsetY: impo.offsetY,
+        cropMarks: opts.showCropMarks,
+      }, {
+        font, jobName: sheetLabel, foldLine: false, colorBarPage: cbEmbed,
+        machineCat: opts.machineCat,
+        showPlateSlug: opts.showPlateSlug,
+        plateSlugEdge: opts.plateSlugEdge,
+        colorBarEdge: opts.colorBarEdge,
+        colorBarOffsetY: opts.colorBarOffsetY,
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Booklet Export
+// ═══════════════════════════════════════════════════════════
+
+async function exportBooklet(
+  doc: PDFDocument,
+  opts: ExportOptions,
+  embeddedPages: EmbeddedPageInfo[],
+  font: PDFFont,
+  cbEmbed: PDFEmbeddedPage | null,
+): Promise<void> {
+  const impo = opts.imposition;
+  const sigMap = opts.signatureMap || impo.signatureMap;
+  if (!sigMap) return;
+  const creep = opts.creepPerSheet || impo.creepPerSheet || [];
+
+  const paperWpt = mmToPt(impo.paperW);
+  const paperHpt = mmToPt(impo.paperH);
+  const mL = mmToPt(impo.marginL ?? 0);
+  const mB = mmToPt(impo.marginB ?? 0);
+  const pieceW = mmToPt(impo.pieceW);
+  const pieceH = mmToPt(impo.pieceH);
+  const bleedPt = mmToPt(opts.bleed || 0);
+  const printableW = paperWpt - mL - mmToPt(impo.marginR ?? 0);
+  const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mB;
+  const offXpt = mmToPt(impo.offsetX || 0);
+  const offYpt = mmToPt(impo.offsetY || 0);
+  const rows = impo.rows || 1;
+  const spreadsAcross = (impo as any).spreadsAcross || 1;
+  const sigsPerSheet = (impo as any).sigsPerSheet || (spreadsAcross * rows);
+  const spreadWpt = 2 * pieceW;
+  const gapVpt = mmToPt((impo as any).spineOffset || 0);
+  const gapHpt = mmToPt((impo as any).rowGap || 0);
+  const totalGridW = spreadsAcross * spreadWpt + (spreadsAcross - 1) * gapVpt;
+  const totalGridH = rows * pieceH + (rows - 1) * gapHpt;
+  const gridX = mL + (printableW - totalGridW) / 2 + offXpt;
+  const gridY = mB + (printableH - totalGridH) / 2 - offYpt;
+
+  const totalSigs = sigMap.totalSheets;
+  const trimWpt = mmToPt(impo.trimW || opts.jobW || 0);
+  const trimHpt = mmToPt(impo.trimH || opts.jobH || 0);
+  const pageRot = (impo as any).pageRotation || 0;
+
+  // Crop marks config for booklet
+  const bkMarks = {
+    marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
+    marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
+    cols: spreadsAcross,
+    rows,
+    pieceW: 2 * (impo.trimW || opts.jobW || 0) + 2 * (opts.bleed || 0),
+    pieceH: (impo.trimH || opts.jobH || 0) + 2 * (opts.bleed || 0),
+    gutterMM: (impo as any).spineOffset || 0,
+    gutterRowMM: (impo as any).rowGap || 0,
+    bleedMM: opts.bleed || 0,
+    offsetX: impo.offsetX, offsetY: impo.offsetY,
+    cropMarks: opts.showCropMarks,
+  };
+
+  const canRepeat = sigsPerSheet >= totalSigs;
+  const totalPressSheets = canRepeat ? 1 : Math.ceil(totalSigs / sigsPerSheet);
+
+  for (let ps = 0; ps < totalPressSheets; ps++) {
+    const frontPage = doc.addPage([paperWpt, paperHpt]);
+    const backPage = doc.addPage([paperWpt, paperHpt]);
+
+    for (let row = 0; row < rows; row++) {
+      for (let sp2 = 0; sp2 < spreadsAcross; sp2++) {
+        const slotIdx = row * spreadsAcross + sp2;
+        let si: number;
+        if (canRepeat) {
+          si = slotIdx % totalSigs;
+        } else {
+          si = ps * sigsPerSheet + slotIdx;
+          if (si >= totalSigs) continue;
+        }
+        const sheet = sigMap.sheets[si];
+        const creepPt = mmToPt(creep[si] || 0);
+        const rowY = gridY + (rows - 1 - row) * (pieceH + gapHpt);
+        const spreadX = gridX + sp2 * (spreadWpt + gapVpt);
+        const foldX = spreadX + bleedPt + trimWpt;
+
+        // Front side
+        for (let fp = 0; fp < 2; fp++) {
+          const pn = sheet.front[fp];
+          if (pn > embeddedPages.length) continue;
+          const shiftX = fp === 0 ? creepPt : -creepPt;
+          const ep = embeddedPages[pn - 1];
+          const epPage = ep.page;
+          const trimXf = spreadX + bleedPt + fp * trimWpt + shiftX;
+          const trimYf = rowY + bleedPt;
+          const clipL = fp === 0 ? spreadX : foldX;
+          const clipW = fp === 0 ? (foldX - spreadX) : (spreadX + spreadWpt - foldX);
+          frontPage.pushOperators(pushGraphicsState(), rectangle(clipL, rowY, clipW, pieceH), clip(), endPath());
+          const headToHead = (impo as any).headToHead;
+          const rot = pageRot + ((headToHead && fp === 1) ? 180 : 0);
+          if (rot % 360 !== 0) {
+            drawEmbeddedPage(frontPage, ep, trimXf + ep.trimOffsetX + ep.trimW, trimYf + ep.trimOffsetY + ep.trimH, epPage.width, epPage.height, rot);
+          } else {
+            drawEmbeddedPage(frontPage, ep, trimXf - ep.trimOffsetX, trimYf - ep.trimOffsetY, epPage.width, epPage.height);
+          }
+          frontPage.pushOperators(popGraphicsState());
+        }
+
+        // Back side
+        for (let bp = 0; bp < 2; bp++) {
+          const pnb = sheet.back[bp];
+          if (pnb > embeddedPages.length) continue;
+          const shiftXb = bp === 0 ? creepPt : -creepPt;
+          const epb = embeddedPages[pnb - 1];
+          const epPageB = epb.page;
+          const trimXbk = spreadX + bleedPt + bp * trimWpt + shiftXb;
+          const trimYbk = rowY + bleedPt;
+          const clipLb = bp === 0 ? spreadX : foldX;
+          const clipWb = bp === 0 ? (foldX - spreadX) : (spreadX + spreadWpt - foldX);
+          backPage.pushOperators(pushGraphicsState(), rectangle(clipLb, rowY, clipWb, pieceH), clip(), endPath());
+          const headToHead = (impo as any).headToHead;
+          const rotB = pageRot + ((headToHead && bp === 1) ? 180 : 0);
+          if (rotB % 360 !== 0) {
+            drawEmbeddedPage(backPage, epb, trimXbk + epb.trimOffsetX + epb.trimW, trimYbk + epb.trimOffsetY + epb.trimH, epPageB.width, epPageB.height, rotB);
+          } else {
+            drawEmbeddedPage(backPage, epb, trimXbk - epb.trimOffsetX, trimYbk - epb.trimOffsetY, epPageB.width, epPageB.height);
+          }
+          backPage.pushOperators(popGraphicsState());
+        }
+      }
+    }
+
+    const psLabel = totalPressSheets > 1 ? ' Press ' + (ps + 1) + '/' + totalPressSheets : '';
+    const marksOpts = {
+      font, foldLine: false, colorBarPage: cbEmbed,
+      machineCat: opts.machineCat,
+      showPlateSlug: opts.showPlateSlug,
+      plateSlugEdge: opts.plateSlugEdge,
+      colorBarEdge: opts.colorBarEdge,
+      colorBarOffsetY: opts.colorBarOffsetY,
+    };
+    drawPDFMarks(frontPage, paperWpt, paperHpt, bkMarks, { ...marksOpts, jobName: ascii((opts.jobDescription || 'Job') + psLabel + ' Front') });
+    drawPDFMarks(backPage, paperWpt, paperHpt, bkMarks, { ...marksOpts, jobName: ascii((opts.jobDescription || 'Job') + psLabel + ' Back') });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Perfect Bound Export
+// ═══════════════════════════════════════════════════════════
+
+async function exportPerfectBound(
+  doc: PDFDocument,
+  opts: ExportOptions,
+  embeddedPages: EmbeddedPageInfo[],
+  font: PDFFont,
+  cbEmbed: PDFEmbeddedPage | null,
+): Promise<void> {
+  const impo = opts.imposition;
+  const sigRows = impo.rows || 1;
+  const sigCols = impo.cols || 2;
+
+  const paperWpt = mmToPt(impo.paperW);
+  const paperHpt = mmToPt(impo.paperH);
+  const mL = mmToPt(impo.marginL ?? 0);
+  const mB = mmToPt(impo.marginB ?? 0);
+  const pieceWpt = mmToPt(impo.pieceW);
+  const pieceHpt = mmToPt(impo.pieceH);
+  const printableW = paperWpt - mL - mmToPt(impo.marginR ?? 0);
+  const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mB;
+  const offXpt = mmToPt(impo.offsetX || 0);
+  const offYpt = mmToPt(impo.offsetY || 0);
+  const fgVpt = mmToPt((impo as any).gapVmm || 0);
+  const fgHpt = mmToPt((impo as any).gapHmm || 0);
+  const bleedPt = mmToPt(opts.bleed || 0);
+  const trimWpt = mmToPt(impo.trimW || (impo.pieceW - 2 * (opts.bleed || 0)));
+  const trimHpt = mmToPt(impo.trimH || (impo.pieceH - 2 * (opts.bleed || 0)));
+
+  const numPairs = Math.ceil(sigCols / 2);
+  const pairW = 2 * trimWpt + 2 * bleedPt;
+  const hasVGap = numPairs >= 2 && fgVpt > 0;
+  const hasHGap = sigRows >= 2 && fgHpt > 0;
+  const blockWpt = numPairs * pairW + (hasVGap ? fgVpt : 0);
+  const blockHpt = sigRows * pieceHpt + (hasHGap ? fgHpt : 0);
+
+  const sigsAcross = (impo as any).sigsAcross || 1;
+  const sigsDown = (impo as any).sigsDown || 1;
+  const sigsPerSheet = (impo as any).sigsPerSheet || 1;
+  const blockGapHpt = mmToPt((impo as any).blockGapH || 3);
+  const blockGapVpt = mmToPt((impo as any).blockGapV || 3);
+  const totalGridW = sigsAcross * blockWpt + (sigsAcross - 1) * blockGapHpt;
+  const totalGridH = sigsDown * blockHpt + (sigsDown - 1) * blockGapVpt;
+  const gridOriginX = mL + (printableW - totalGridW) / 2 + offXpt;
+  const gridOriginY = mB + (printableH - totalGridH) / 2 - offYpt;
+
+  const signatures = (impo as any).signatures || [];
+  const numSigs = (impo as any).numSigs || signatures.length;
+  const canRepeat = (impo as any).canRepeat || false;
+  const totalPressSheets = (impo as any).totalPressSheets || 1;
+
+  const drawBlock = (page: PDFPage, sig: any, faceName: string, blockBaseX: number, blockBaseY: number) => {
+    const sigMapLocal = sig.signatureMap;
+    const sigOffset = sig.startPage - 1;
+    const faceRows = faceName === 'front' ? sigMapLocal.front : sigMapLocal.back;
+
+    for (let row = 0; row < sigRows; row++) {
+      const rowPages = faceRows[row] || [];
+      const cellRot = pbIsRotated(row, sigRows);
+      const rowFromBot = sigRows - 1 - row;
+      const rowY = blockBaseY + rowFromBot * pieceHpt + (hasHGap && rowFromBot >= Math.floor(sigRows / 2) ? fgHpt : 0);
+
+      for (let col = 0; col < sigCols; col++) {
+        const localPN = rowPages[col] || 0;
+        const globalPN = sigOffset + localPN;
+        if (globalPN > 0 && globalPN <= embeddedPages.length && localPN <= sig.actualPages) {
+          const ep = embeddedPages[globalPN - 1];
+          const epPage = ep.page;
+          const pairIdx = Math.floor(col / 2);
+          const colInPair = col % 2;
+          const pairX = blockBaseX + pairIdx * pairW + (hasVGap && pairIdx >= 1 ? fgVpt : 0);
+          const foldXLocal = pairX + bleedPt + trimWpt;
+          const trimX = pairX + bleedPt + colInPair * trimWpt;
+          const trimY = rowY + bleedPt;
+
+          const clipL = (colInPair === 0) ? pairX : foldXLocal;
+          const clipW = (colInPair === 0) ? (foldXLocal - pairX) : (pairX + pairW - foldXLocal);
+          page.pushOperators(pushGraphicsState(), rectangle(clipL, rowY, clipW, pieceHpt), clip(), endPath());
+
+          if (cellRot) {
+            drawEmbeddedPage(page, ep, trimX + ep.trimOffsetX + ep.trimW, trimY + ep.trimOffsetY + ep.trimH, epPage.width, epPage.height, 180);
+          } else {
+            drawEmbeddedPage(page, ep, trimX - ep.trimOffsetX, trimY - ep.trimOffsetY, epPage.width, epPage.height);
+          }
+
+          page.pushOperators(popGraphicsState());
+        }
+      }
+    }
+  }
+
+  for (let ps = 0; ps < totalPressSheets; ps++) {
+    const frontP = doc.addPage([paperWpt, paperHpt]);
+    const backP = doc.addPage([paperWpt, paperHpt]);
+
+    for (let bRow = 0; bRow < sigsDown; bRow++) {
+      for (let bCol = 0; bCol < sigsAcross; bCol++) {
+        const slotIdx = bRow * sigsAcross + bCol;
+        let sigIdx: number;
+        if (canRepeat) {
+          sigIdx = slotIdx % numSigs;
+        } else {
+          sigIdx = ps * sigsPerSheet + slotIdx;
+          if (sigIdx >= numSigs) continue;
+        }
+        const sig = signatures[sigIdx];
+
+        const blockX = gridOriginX + bCol * (blockWpt + blockGapHpt);
+        const blockY = gridOriginY + (sigsDown - 1 - bRow) * (blockHpt + blockGapVpt);
+
+        drawBlock(frontP, sig, 'front', blockX, blockY);
+        drawBlock(backP, sig, 'back', blockX, blockY);
+      }
+    }
+
+    // Crop marks
+    const pbMarksImpo = {
+      marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
+      marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
+      cols: numPairs * sigsAcross,
+      rows: sigRows * sigsDown,
+      pieceW: pairW * 25.4 / 72,
+      pieceH: impo.pieceH,
+      gutterMM: (impo as any).gapVmm || 0,
+      gutterRowMM: (impo as any).gapHmm || 0,
+      bleedMM: opts.bleed || 0,
+      offsetX: impo.offsetX, offsetY: impo.offsetY,
+      cropMarks: opts.showCropMarks,
+    };
+    const pressLabel = totalPressSheets > 1 ? 'Press ' + (ps + 1) + '/' + totalPressSheets : '';
+    const marksOpts: DrawMarksOptions = {
+      font, foldLine: false, colorBarPage: cbEmbed,
+      machineCat: opts.machineCat,
+      showPlateSlug: opts.showPlateSlug,
+      plateSlugEdge: opts.plateSlugEdge,
+      colorBarEdge: opts.colorBarEdge,
+      colorBarOffsetY: opts.colorBarOffsetY,
+    };
+    drawPDFMarks(frontP, paperWpt, paperHpt, pbMarksImpo, { ...marksOpts, jobName: ascii((pressLabel ? pressLabel + ' ' : '') + 'Front (' + sigsAcross + '\u00d7' + sigsDown + ')') });
+    drawPDFMarks(backP, paperWpt, paperHpt, pbMarksImpo, { ...marksOpts, jobName: ascii((pressLabel ? pressLabel + ' ' : '') + 'Back (' + sigsAcross + '\u00d7' + sigsDown + ')') });
+
+    // Mask outer edges
+    const white = rgb(1, 1, 1);
+    const gridL = gridOriginX;
+    const gridR = gridOriginX + totalGridW;
+    const gridB = gridOriginY;
+    const gridT = gridOriginY + totalGridH;
+    for (const pg of [frontP, backP]) {
+      drawMarginalMasks(pg, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Cut & Stack Export
+// ═══════════════════════════════════════════════════════════
+
+async function exportCutStack(
+  doc: PDFDocument,
+  opts: ExportOptions,
+  embeddedPages: EmbeddedPageInfo[],
+  font: PDFFont,
+  cbEmbed: PDFEmbeddedPage | null,
+): Promise<void> {
+  const impo = opts.imposition;
+
+  // Embed numbering font
+  let numFont = font;
+  if (opts.numberingEnabled && opts.numberFont === 'Courier') {
+    numFont = await doc.embedFont(StandardFonts.Courier);
+  }
+
+  // Fixed back: embed back pages from separate PDF or reuse from main PDF
+  const isDuplex = !!opts.fixedBack;
+  let backEmbedded: EmbeddedPageInfo[] | null = null;
+  const fixedBackIdx = (opts.fixedBackPage != null && opts.fixedBackPage >= 0)
+    ? opts.fixedBackPage
+    : Math.max(0, embeddedPages.length - 1);
+  if (isDuplex && opts.fixedBackPdfBytes) {
+    backEmbedded = await embedSourcePages(doc, opts.fixedBackPdfBytes, 'nup', opts.bleed || 0, opts.keepSourceMarks);
+  }
+
+  const paperWpt = mmToPt(impo.paperW);
+  const paperHpt = mmToPt(impo.paperH);
+  const pieceW = mmToPt(impo.pieceW);
+  const pieceH = mmToPt(impo.pieceH);
+  const gutterPt = mmToPt(opts.gutter || 0);
+  const printableW = paperWpt - mmToPt(impo.marginL ?? 0) - mmToPt(impo.marginR ?? 0);
+  const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mmToPt(impo.marginB ?? 0);
+  const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
+  const totalGridH = impo.rows * pieceH + Math.max(0, impo.rows - 1) * gutterPt;
+  const offXpt = mmToPt(impo.offsetX || 0);
+  const offYpt = mmToPt(impo.offsetY || 0);
+  const cenX = mmToPt(impo.marginL ?? 0) + (printableW - totalGridW) / 2 + offXpt;
+  const cenY = mmToPt(impo.marginB ?? 0) + (printableH - totalGridH) / 2 - offYpt;
+
+  const numPdfColor = (opts.numberColor === '#cc0000') ? rgb(0.8, 0, 0) : rgb(0, 0, 0);
+  const startNum = opts.numberStartNum || 1;
+
+  const bleedPt = mmToPt(opts.bleed || 0);
+  const isH2H = (opts.duplexOrient || 'h2h') === 'h2h';
+
+  const sheetsNeeded = opts.csStackSize || Math.max(1, embeddedPages.length);
+
+  // Helper: draw masking on a page
+  const csMask = (pg: PDFPage, mirrored: boolean) => {
+    const white = rgb(1, 1, 1);
+    const mCenX = mirrored ? (paperWpt - cenX - totalGridW) : cenX;
+    if (gutterPt > 0.5) {
+      for (let gc = 0; gc < impo.cols - 1; gc++) {
+        const gx = mCenX + gc * (pieceW + gutterPt) + pieceW;
+        const gutL = gx + Math.min(bleedPt, gutterPt / 2);
+        const gutR = gx + gutterPt - Math.min(bleedPt, gutterPt / 2);
+        if (gutR > gutL + 0.5) pg.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
+      }
+      for (let gr = 0; gr < impo.rows - 1; gr++) {
+        const gy = cenY + gr * (pieceH + gutterPt) + pieceH;
+        const gutB = gy + Math.min(bleedPt, gutterPt / 2);
+        const gutT = gy + gutterPt - Math.min(bleedPt, gutterPt / 2);
+        if (gutT > gutB + 0.5) pg.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
+      }
+    }
+    const gridL = mCenX - bleedPt;
+    const gridB = cenY - bleedPt;
+    const gridR = mCenX + totalGridW + bleedPt;
+    const gridT = cenY + totalGridH + bleedPt;
+    drawMarginalMasks(pg, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
+  }
+
+  const defaultStackNumFn = (posIdx: number, ups: number) => posIdx;
+
+  for (let s = 0; s < sheetsNeeded; s++) {
+    // FRONT PAGE
+    const page = doc.addPage([paperWpt, paperHpt]);
+
+    for (let row = 0; row < impo.rows; row++) {
+      for (let col = 0; col < impo.cols; col++) {
+        const posIdx = row * impo.cols + col;
+        const cellOff = opts.cellOffsets?.[posIdx] || { x: 0, y: 0 };
+        const cOffX = mmToPt(cellOff.x);
+        const cOffY = mmToPt(cellOff.y);
+        const csStack = opts.csStackSize || Math.max(1, embeddedPages.length);
+        const stackNum = opts.csGetStackNum ? opts.csGetStackNum(posIdx, impo.ups) : defaultStackNumFn(posIdx, impo.ups);
+        const pageIdx = (stackNum * csStack + s) % Math.max(1, embeddedPages.length);
+        if (embeddedPages.length > 0) {
+          const ep = embeddedPages[pageIdx];
+          const epPage = ep.page;
+          const cellX = cenX + col * (pieceW + gutterPt) + cOffX;
+          const cellY = cenY + (impo.rows - 1 - row) * (pieceH + gutterPt) - cOffY;
+          const epW = epPage.width || pieceW;
+          const epH = epPage.height || pieceH;
+          page.drawPage(epPage, { x: cellX, y: cellY, xScale: pieceW / epW, yScale: pieceH / epH });
+        }
+
+        // Numbering overlay (front only)
+        if (opts.numberingEnabled) {
+          const numPos = opts.numberPositions?.[posIdx] || opts.numberGlobalPos || { x: 0.5, y: 0.5 };
+          const csStack2 = opts.csStackSize || Math.max(1, embeddedPages.length);
+          const seqNumber = startNum + stackNum * csStack2 + s;
+          const numStr = formatNumber(opts.numberPrefix || '', seqNumber, opts.numberDigits || 4);
+          const cellXn = cenX + col * (pieceW + gutterPt) + cOffX;
+          const cellYn = cenY + (impo.rows - 1 - row) * (pieceH + gutterPt) - cOffY;
+          const pdfNumFS = Math.max(6, Math.min((opts.numberFontSize || 12) * pieceW / 150, pieceW * 0.15, pieceH * 0.12));
+          const numXpt = cellXn + numPos.x * pieceW;
+          const numYpt = cellYn + (1 - numPos.y) * pieceH;
+          const textW = numFont.widthOfTextAtSize(numStr, pdfNumFS);
+          const drawOpts: Parameters<PDFPage['drawText']>[1] = {
+            x: numXpt - textW / 2, y: numYpt - pdfNumFS * 0.35,
+            size: pdfNumFS, font: numFont, color: numPdfColor,
+          };
+          if (opts.numberRotation) drawOpts.rotate = degrees(opts.numberRotation);
+          page.drawText(numStr, drawOpts);
+        }
+      }
+    }
+
+    csMask(page, false);
+    const marksImpo = {
+      marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
+      marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
+      pieceW: impo.pieceW, pieceH: impo.pieceH,
+      cols: impo.cols, rows: impo.rows,
+      gutterMM: opts.gutter || 0,
+      bleedMM: opts.bleed || 0,
+      offsetX: impo.offsetX, offsetY: impo.offsetY,
+      cropMarks: opts.showCropMarks,
+    };
+    drawPDFMarks(page, paperWpt, paperHpt, marksImpo, {
+      font,
+      jobName: ascii((opts.jobDescription || 'Job') + ' S' + (s + 1) + (isDuplex ? ' Front' : '')),
+      colorBarPage: cbEmbed,
+      machineCat: opts.machineCat,
+      showPlateSlug: opts.showPlateSlug,
+      plateSlugEdge: opts.plateSlugEdge,
+      colorBarEdge: opts.colorBarEdge,
+      colorBarOffsetY: opts.colorBarOffsetY,
+    });
+
+    // BACK PAGE (fixed — same content in every cell, mirrored)
+    if (isDuplex) {
+      const backPage = doc.addPage([paperWpt, paperHpt]);
+      const bEp = backEmbedded ? (backEmbedded[0] || backEmbedded[fixedBackIdx]) : embeddedPages[fixedBackIdx];
+      if (bEp) {
+        const bEpPage = bEp.page;
+        const bEpW = bEpPage.width || pieceW;
+        const bEpH = bEpPage.height || pieceH;
+
+        for (let bRow = 0; bRow < impo.rows; bRow++) {
+          for (let bCol = 0; bCol < impo.cols; bCol++) {
+            const frontCellX = cenX + bCol * (pieceW + gutterPt);
+            const fCellY = cenY + (impo.rows - 1 - bRow) * (pieceH + gutterPt);
+            const bCellX = isH2H ? (paperWpt - frontCellX - pieceW) : frontCellX;
+            const bCellY = isH2H ? fCellY : (paperHpt - fCellY - pieceH);
+            backPage.drawPage(bEpPage, { x: bCellX, y: bCellY, xScale: pieceW / bEpW, yScale: pieceH / bEpH });
+          }
+        }
+      }
+
+      csMask(backPage, isH2H);
+      drawPDFMarks(backPage, paperWpt, paperHpt, marksImpo, {
+        font,
+        jobName: ascii((opts.jobDescription || 'Job') + ' S' + (s + 1) + ' Back'),
+        colorBarPage: cbEmbed,
+        machineCat: opts.machineCat,
+        showPlateSlug: opts.showPlateSlug,
+        plateSlugEdge: opts.plateSlugEdge,
+        colorBarEdge: opts.colorBarEdge,
+        colorBarOffsetY: opts.colorBarOffsetY,
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Work & Turn Export
+// ═══════════════════════════════════════════════════════════
+
+async function exportWorkTurn(
+  doc: PDFDocument,
+  opts: ExportOptions,
+  embeddedPages: EmbeddedPageInfo[],
+  font: PDFFont,
+  cbEmbed: PDFEmbeddedPage | null,
+): Promise<void> {
+  const impo = opts.imposition;
+  const paperWpt = mmToPt(impo.paperW);
+  const paperHpt = mmToPt(impo.paperH);
+  const mL = mmToPt(impo.marginL ?? 0), mR = mmToPt(impo.marginR ?? 0);
+  const mT = mmToPt(impo.marginT ?? 0), mB = mmToPt(impo.marginB ?? 0);
+  const pieceW = mmToPt(impo.pieceW), pieceH = mmToPt(impo.pieceH);
+  const gutterPt = mmToPt(opts.gutter || 0);
+  const isTumble = (opts.turnType || impo.turnType) === 'tumble';
+  const printableW = paperWpt - mL - mR;
+  const printableH = paperHpt - mT - mB;
+  const halfW = isTumble ? printableW : printableW / 2;
+  const halfH = isTumble ? printableH / 2 : printableH;
+
+  const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
+  const totalGridH = impo.rows * pieceH + Math.max(0, impo.rows - 1) * gutterPt;
+
+  const pdfPageCount = embeddedPages.length;
+  const maxSheets = 50;
+  const is2Sided = pdfPageCount >= 2;
+  const sheetCount = is2Sided ? Math.ceil(pdfPageCount / 2) : pdfPageCount;
+
+  for (let s = 0; s < Math.min(sheetCount, maxSheets); s++) {
+    const frontIdx = is2Sided ? s * 2 : s;
+    const backIdx = is2Sided ? Math.min(s * 2 + 1, pdfPageCount - 1) : s;
+    const page = doc.addPage([paperWpt, paperHpt]);
+    const epFront = embeddedPages[frontIdx];
+    const epFrontPg = epFront.page;
+    const epBack = embeddedPages[backIdx];
+    const epBackPg = epBack.page;
+
+    // Front half
+    const cenFX = mL + (halfW - totalGridW) / 2;
+    const cenFY = mB + (halfH - totalGridH) / 2;
+    const wtBleedPt = mmToPt(opts.bleed || 0);
+
+    // Detect rotation
+    const cellPortrait = pieceW <= pieceH;
+    const pdfPgInfo = opts.pdfPageSizes?.[0];
+    const pdfPortrait = pdfPgInfo ? (pdfPgInfo.trimW <= pdfPgInfo.trimH) : true;
+    const wtNeedsRot = cellPortrait !== pdfPortrait;
+    const userExtraRot = (opts.rotation === 180 || opts.rotation === 270) ? 180 : 0;
+
+    // Helper: draw page in cell with rotation + clipping
+    const wtDrawCell = (pg: PDFPage, cx: number, cy: number, epObj: EmbeddedPageInfo, epPg: PDFEmbeddedPage, extraRotArg?: number) => {
+      pg.pushOperators(pushGraphicsState(), rectangle(cx, cy, pieceW, pieceH), clip(), endPath());
+      const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
+      const gridRot = wtNeedsRot ? 270 : 0;
+      const totalRot = (epSrcRot + gridRot + userExtraRot + (extraRotArg || 0)) % 360;
+      const epRawW = epPg.width || pieceW;
+      const epRawH = epPg.height || pieceH;
+      const needsSwap = (totalRot === 90 || totalRot === 270);
+      const scX = needsSwap ? (pieceH / epRawW) : (pieceW / epRawW);
+      const scY = needsSwap ? (pieceW / epRawH) : (pieceH / epRawH);
+      let drawX = cx, drawY = cy;
+      if (totalRot === 90) { drawX = cx + pieceW; }
+      else if (totalRot === 270) { drawY = cy + pieceH; }
+      else if (totalRot === 180) { drawX = cx + pieceW; drawY = cy + pieceH; }
+      const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: scX, yScale: scY };
+      if (totalRot) drawOpts.rotate = degrees(totalRot);
+      pg.drawPage(epPg, drawOpts);
+      pg.pushOperators(popGraphicsState());
+    }
+
+    for (let row = 0; row < impo.rows; row++) {
+      for (let col = 0; col < impo.cols; col++) {
+        const cellX = cenFX + col * (pieceW + gutterPt);
+        const cellY = cenFY + (impo.rows - 1 - row) * (pieceH + gutterPt);
+        wtDrawCell(page, cellX, cellY, epFront, epFrontPg, 0);
+      }
+    }
+
+    // Back half — mirrored
+    const backHalfX = isTumble ? cenFX : mL + halfW + (halfW - totalGridW) / 2;
+    const backHalfY = isTumble ? mB + halfH + (halfH - totalGridH) / 2 : cenFY;
+    for (let row2 = 0; row2 < impo.rows; row2++) {
+      for (let col2 = 0; col2 < impo.cols; col2++) {
+        let cellX2: number, cellY2: number;
+        if (isTumble) {
+          cellX2 = backHalfX + col2 * (pieceW + gutterPt);
+          cellY2 = backHalfY + row2 * (pieceH + gutterPt);
+        } else {
+          cellX2 = backHalfX + (impo.cols - 1 - col2) * (pieceW + gutterPt);
+          cellY2 = backHalfY + (impo.rows - 1 - row2) * (pieceH + gutterPt);
+        }
+        const tumbleRot = isTumble ? 180 : 0;
+        wtDrawCell(page, cellX2, cellY2, epBack, epBackPg, tumbleRot);
+      }
+    }
+
+    // White masks
+    const white = rgb(1, 1, 1);
+
+    // Front half grid bounds
+    const fGridL = cenFX;
+    const fGridR = cenFX + totalGridW;
+    const fGridB = cenFY;
+    const fGridT = cenFY + totalGridH;
+
+    // Back half grid bounds
+    const bGridL = backHalfX;
+    const bGridR = backHalfX + totalGridW;
+    const bGridB = backHalfY;
+    const bGridT = backHalfY + totalGridH;
+
+    // Margin masks
+    const allL = Math.min(fGridL, bGridL);
+    const allR = Math.max(fGridR, bGridR);
+    const allB = Math.min(fGridB, bGridB);
+    const allT = Math.max(fGridT, bGridT);
+    drawMarginalMasks(page, paperWpt, paperHpt, allL, allR, allB, allT);
+
+    // Fold axis mask
+    if (!isTumble && fGridR < bGridL - 0.5) {
+      page.drawRectangle({ x: fGridR, y: 0, width: bGridL - fGridR, height: paperHpt, color: white });
+    }
+    if (isTumble && fGridT < bGridB - 0.5) {
+      page.drawRectangle({ x: 0, y: fGridT, width: paperWpt, height: bGridB - fGridT, color: white });
+    }
+
+    // Gutter masks
+    if (gutterPt > 0.5) {
+      for (let gc = 0; gc < impo.cols - 1; gc++) {
+        const fgx = fGridL + gc * (pieceW + gutterPt) + pieceW;
+        const fgxL = fgx + Math.min(wtBleedPt, gutterPt / 2);
+        const fgxR = fgx + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
+        if (fgxR > fgxL + 0.5) page.drawRectangle({ x: fgxL, y: fGridB, width: fgxR - fgxL, height: totalGridH, color: white });
+        const bgx = bGridL + gc * (pieceW + gutterPt) + pieceW;
+        const bgxL = bgx + Math.min(wtBleedPt, gutterPt / 2);
+        const bgxR = bgx + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
+        if (bgxR > bgxL + 0.5) page.drawRectangle({ x: bgxL, y: bGridB, width: bgxR - bgxL, height: totalGridH, color: white });
+      }
+      for (let gr = 0; gr < impo.rows - 1; gr++) {
+        const gy = fGridB + gr * (pieceH + gutterPt) + pieceH;
+        const gyB = gy + Math.min(wtBleedPt, gutterPt / 2);
+        const gyT = gy + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
+        if (gyT > gyB + 0.5) page.drawRectangle({ x: 0, y: gyB, width: paperWpt, height: gyT - gyB, color: white });
+      }
+    }
+
+    // Crop marks per half
+    const sheetLabel = is2Sided
+      ? ascii((opts.jobDescription || 'Job') + ' W&T ' + (s + 1) + ' (P' + (frontIdx + 1) + '+P' + (backIdx + 1) + ')')
+      : ascii((opts.jobDescription || 'Job') + ' W&T ' + (s + 1));
+
+    const halfMM = (isTumble ? (impo as any).printableH : (impo as any).printableW) / 2;
+    const baseMarks = {
+      marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
+      marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
+      pieceW: impo.pieceW, pieceH: impo.pieceH,
+      cols: impo.cols, rows: impo.rows,
+      gutterMM: opts.gutter || 0, bleedMM: opts.bleed || 0,
+      offsetX: impo.offsetX, offsetY: impo.offsetY,
+      cropMarks: opts.showCropMarks,
+    };
+
+    const baseMarksOpts: DrawMarksOptions = {
+      font,
+      machineCat: opts.machineCat,
+      showPlateSlug: opts.showPlateSlug,
+      plateSlugEdge: opts.plateSlugEdge,
+      colorBarEdge: opts.colorBarEdge,
+      colorBarOffsetY: opts.colorBarOffsetY,
+    };
+
+    if (isTumble) {
+      const topMarks = { ...baseMarks, marginB: (impo.marginB ?? 0) + halfMM };
+      const botMarks = { ...baseMarks, marginT: (impo.marginT ?? 0) + halfMM };
+      drawPDFMarks(page, paperWpt, paperHpt, topMarks, { ...baseMarksOpts, jobName: sheetLabel + ' Front', colorBarPage: cbEmbed });
+      drawPDFMarks(page, paperWpt, paperHpt, botMarks, { ...baseMarksOpts, jobName: '', foldLine: false });
+    } else {
+      const leftMarks = { ...baseMarks, marginR: (impo.marginR ?? 0) + halfMM };
+      const rightMarks = { ...baseMarks, marginL: (impo.marginL ?? 0) + halfMM };
+      drawPDFMarks(page, paperWpt, paperHpt, leftMarks, { ...baseMarksOpts, jobName: sheetLabel, colorBarPage: cbEmbed });
+      drawPDFMarks(page, paperWpt, paperHpt, rightMarks, { ...baseMarksOpts, jobName: '', foldLine: false });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Gang Run Export
+// ═══════════════════════════════════════════════════════════
+
+async function exportGangRun(
+  doc: PDFDocument,
+  opts: ExportOptions,
+  embeddedPages: EmbeddedPageInfo[],
+  font: PDFFont,
+  cbEmbed: PDFEmbeddedPage | null,
+): Promise<void> {
+  const impo = opts.imposition;
+  const gangData = opts.gangData || impo.gangData;
+
+  const paperWpt = mmToPt(impo.paperW);
+  const paperHpt = mmToPt(impo.paperH);
+  const mL = mmToPt(impo.marginL ?? 0);
+  const mT = mmToPt(impo.marginT ?? 0);
+  const pieceW = mmToPt(impo.pieceW);
+  const pieceH = mmToPt(impo.pieceH);
+  const gutterPt = mmToPt(opts.gutter || 0);
+  const printableW = paperWpt - mL - mmToPt(impo.marginR ?? 0);
+  const printableH = paperHpt - mT - mmToPt(impo.marginB ?? 0);
+  const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
+  const totalGridH = impo.rows * pieceH + Math.max(0, impo.rows - 1) * gutterPt;
+  const offXpt = mmToPt(impo.offsetX || 0);
+  const offYpt = mmToPt(impo.offsetY || 0);
+  const cenX = mL + (printableW - totalGridW) / 2 + offXpt;
+  const cenY = mmToPt(impo.marginB ?? 0) + (printableH - totalGridH) / 2 - offYpt;
+
+  const page = doc.addPage([paperWpt, paperHpt]);
+
+  const grBleedPt = mmToPt(opts.bleed || 0);
+  const grUserRot = opts.rotation || 0;
+  const grBaseRot = (grUserRot === 180 || grUserRot === 270) ? 180 : 0;
+
+  for (let row = 0; row < impo.rows; row++) {
+    for (let col = 0; col < impo.cols; col++) {
+      const posIdx = row * impo.cols + col;
+      const pageNum = gangData?.cellAssign?.[posIdx] || 1;
+      const pageIdx = pageNum - 1;
+      if (pageIdx >= 0 && pageIdx < embeddedPages.length) {
+        const epObj = embeddedPages[pageIdx];
+        const epPage = epObj.page;
+        const cellX = cenX + col * (pieceW + gutterPt);
+        const cellY = cenY + (impo.rows - 1 - row) * (pieceH + gutterPt);
+        let grExtraRot = grBaseRot;
+        if (opts.duplexOrient === 'h2f' && (row % 2 === 1)) grExtraRot = (grExtraRot + 180) % 360;
+        drawEmbeddedPage(page, epObj, cellX + grBleedPt - epObj.trimOffsetX, cellY + grBleedPt - epObj.trimOffsetY, epPage.width, epPage.height, grExtraRot);
+      }
+    }
+  }
+
+  // Masking
+  const bleedPt = mmToPt(opts.bleed || 0);
+  drawGutterMasks(page, paperWpt, paperHpt, cenX, cenY, impo.cols, impo.rows, pieceW, pieceH, gutterPt, bleedPt, totalGridH);
+
+  const gridL = cenX - bleedPt, gridB = cenY - bleedPt;
+  const gridR = cenX + totalGridW + bleedPt, gridT = cenY + totalGridH + bleedPt;
+  drawMarginalMasks(page, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
+
+  drawPDFMarks(page, paperWpt, paperHpt, {
+    marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
+    marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
+    pieceW: impo.pieceW, pieceH: impo.pieceH,
+    cols: impo.cols, rows: impo.rows,
+    gutterMM: opts.gutter || 0, bleedMM: opts.bleed || 0,
+    offsetX: impo.offsetX, offsetY: impo.offsetY,
+    cropMarks: opts.showCropMarks,
+  }, {
+    font,
+    jobName: ascii((opts.jobDescription || 'Job') + ' Gang Run'),
+    colorBarPage: cbEmbed,
+    machineCat: opts.machineCat,
+    showPlateSlug: opts.showPlateSlug,
+    plateSlugEdge: opts.plateSlugEdge,
+    colorBarEdge: opts.colorBarEdge,
+    colorBarOffsetY: opts.colorBarOffsetY,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Step Multi: per-block crop marks
+// ═══════════════════════════════════════════════════════════
+
+function drawStepMultiMarks(
+  page: PDFPage,
+  paperWpt: number,
+  paperHpt: number,
+  impo: { cropMarks?: boolean; gutterMM?: number; bleedMM?: number },
+  blocks: StepBlock[],
+  mLpt: number,
+  mBpt: number,
+  printWpt: number,
+  printHpt: number,
+  blPt: number,
+) {
+  if (impo.cropMarks === false) return;
+  const black = rgb(0, 0, 0);
+  const markLen = mmToPt(4);
+  const markOff = mmToPt(1);
+  const gutterPt = mmToPt(impo.gutterMM || 0);
+
+  for (let bi = 0; bi < blocks.length; bi++) {
+    const block = blocks[bi];
+    if (block.cols === 0) continue;
+    const rot = block.rotation || 0;
+    let tw = block.trimW, th = block.trimH;
+    if (rot === 90 || rot === 270) { const tmp = tw; tw = th; th = tmp; }
+    const cellWpt = mmToPt(tw + (impo.bleedMM || 0) * 2);
+    const cellHpt = mmToPt(th + (impo.bleedMM || 0) * 2);
+
+    const bxPt = mLpt + mmToPt(block.x);
+    const byPt = mBpt + printHpt - mmToPt(block.y) - mmToPt(block.blockH);
+
+    // Collect trim cut positions
+    const vCuts: number[] = [], hCuts: number[] = [];
+    for (let c = 0; c < block.cols; c++) {
+      const cx = bxPt + c * (cellWpt + gutterPt);
+      vCuts.push(cx + blPt);
+      vCuts.push(cx + cellWpt - blPt);
+    }
+    for (let r = 0; r < block.rows; r++) {
+      const cy = byPt + mmToPt(block.blockH) - r * (cellHpt + gutterPt);
+      hCuts.push(cy - blPt);
+      hCuts.push(cy - cellHpt + blPt);
+    }
+
+    // Deduplicate
+    vCuts.sort((a, b) => a - b);
+    hCuts.sort((a, b) => a - b);
+    const uV = [vCuts[0]];
+    for (let vi = 1; vi < vCuts.length; vi++) { if (vCuts[vi] - uV[uV.length - 1] > 0.1) uV.push(vCuts[vi]); }
+    const uH = [hCuts[0]];
+    for (let hi = 1; hi < hCuts.length; hi++) { if (hCuts[hi] - uH[uH.length - 1] > 0.1) uH.push(hCuts[hi]); }
+
+    const gL = uV[0], gR = uV[uV.length - 1], gB = uH[0], gT = uH[uH.length - 1];
+
+    // Perimeter marks
+    for (let vmi = 0; vmi < uV.length; vmi++) {
+      const vx = uV[vmi];
+      page.drawLine({ start: { x: vx, y: gT + markOff }, end: { x: vx, y: gT + markOff + markLen }, thickness: 0.5, color: black });
+      page.drawLine({ start: { x: vx, y: gB - markOff }, end: { x: vx, y: gB - markOff - markLen }, thickness: 0.5, color: black });
+    }
+    for (let hmi = 0; hmi < uH.length; hmi++) {
+      const hy = uH[hmi];
+      page.drawLine({ start: { x: gL - markOff, y: hy }, end: { x: gL - markOff - markLen, y: hy }, thickness: 0.5, color: black });
+      page.drawLine({ start: { x: gR + markOff, y: hy }, end: { x: gR + markOff + markLen, y: hy }, thickness: 0.5, color: black });
+    }
+
+    // Gutter marks inside block
+    if (gutterPt > mmToPt(0.5)) {
+      const gutML = Math.min(markLen, gutterPt / 2 - markOff);
+      if (gutML > mmToPt(0.3)) {
+        for (let vg = 0; vg < block.cols - 1; vg++) {
+          const gvX = bxPt + (vg + 1) * cellWpt + vg * gutterPt;
+          for (let hci = 0; hci < uH.length; hci++) {
+            page.drawLine({ start: { x: gvX + markOff, y: uH[hci] }, end: { x: gvX + markOff + gutML, y: uH[hci] }, thickness: 0.5, color: black });
+            page.drawLine({ start: { x: gvX + gutterPt - markOff, y: uH[hci] }, end: { x: gvX + gutterPt - markOff - gutML, y: uH[hci] }, thickness: 0.5, color: black });
+          }
+        }
+        for (let hg = 0; hg < block.rows - 1; hg++) {
+          const ghY = byPt + mmToPt(block.blockH) - (hg + 1) * cellHpt - hg * gutterPt;
+          for (let vci = 0; vci < uV.length; vci++) {
+            page.drawLine({ start: { x: uV[vci], y: ghY - markOff }, end: { x: uV[vci], y: ghY - markOff - gutML }, thickness: 0.5, color: black });
+            page.drawLine({ start: { x: uV[vci], y: ghY - gutterPt + markOff }, end: { x: uV[vci], y: ghY - gutterPt + markOff + gutML }, thickness: 0.5, color: black });
+          }
+        }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Step Multi Export
+// ═══════════════════════════════════════════════════════════
+
+async function exportStepMulti(
+  doc: PDFDocument,
+  opts: ExportOptions,
+  embeddedPages: EmbeddedPageInfo[],
+  font: PDFFont,
+  cbEmbed: PDFEmbeddedPage | null,
+): Promise<void> {
+  const impo = opts.imposition;
+  const blocks = opts.blocks || impo.blocks || [];
+  if (blocks.length === 0) return;
+
+  const paperWpt = mmToPt(impo.paperW);
+  const paperHpt = mmToPt(impo.paperH);
+  const mLpt = mmToPt(impo.marginL ?? 0), mBpt = mmToPt(impo.marginB ?? 0);
+  const printWpt = paperWpt - mLpt - mmToPt(impo.marginR ?? 0);
+  const printHpt = paperHpt - mmToPt(impo.marginT ?? 0) - mBpt;
+  const bl = opts.bleed || 0;
+  const blPt = mmToPt(bl);
+  const gutMM = opts.gutter || 0;
+  const gutPt = mmToPt(gutMM);
+
+  // Front side
+  const frontPage = doc.addPage([paperWpt, paperHpt]);
+  for (let bi = 0; bi < blocks.length; bi++) {
+    const block = blocks[bi];
+    if (block.cols === 0) continue;
+    const rot = block.rotation || 0;
+    let tw = block.trimW, th = block.trimH;
+    if (rot === 90 || rot === 270) { const tmp = tw; tw = th; th = tmp; }
+    const cellWpt = mmToPt(tw + bl * 2);
+    const cellHpt = mmToPt(th + bl * 2);
+
+    const bxPt = mLpt + mmToPt(block.x);
+    const byPt = mBpt + printHpt - mmToPt(block.y) - mmToPt(block.blockH);
+
+    const pageIdx = block.pageNum - 1;
+    if (pageIdx < 0 || pageIdx >= embeddedPages.length) continue;
+    const epObj = embeddedPages[pageIdx];
+    const epPage = epObj.page;
+
+    for (let row = 0; row < block.rows; row++) {
+      for (let col = 0; col < block.cols; col++) {
+        const cx = bxPt + col * (cellWpt + gutPt);
+        const cy = byPt + mmToPt(block.blockH) - (row + 1) * cellHpt - row * gutPt;
+        const teX = cx + blPt;
+        const teY = cy + blPt;
+
+        if (rot) {
+          const mcx = cx + cellWpt / 2, mcy = cy + cellHpt / 2;
+          if (rot === 180) {
+            drawEmbeddedPage(frontPage, epObj, mcx + epObj.trimOffsetX, mcy + epObj.trimOffsetY, epPage.width, epPage.height, 180);
+          } else if (rot === 90) {
+            drawEmbeddedPage(frontPage, epObj, teX, teY + (cellHpt - 2 * blPt), epPage.width, epPage.height, 90);
+          } else if (rot === 270) {
+            drawEmbeddedPage(frontPage, epObj, teX + (cellWpt - 2 * blPt), teY, epPage.width, epPage.height, 270);
+          }
+        } else {
+          drawEmbeddedPage(frontPage, epObj, teX - epObj.trimOffsetX, teY - epObj.trimOffsetY, epPage.width, epPage.height);
+        }
+      }
+    }
+  }
+
+  // White masking outside all blocks
+  const white = rgb(1, 1, 1);
+  if (mLpt > 0.5) frontPage.drawRectangle({ x: 0, y: 0, width: mLpt, height: paperHpt, color: white });
+  const mRpt = mmToPt(impo.marginR ?? 0);
+  if (mRpt > 0.5) frontPage.drawRectangle({ x: paperWpt - mRpt, y: 0, width: mRpt, height: paperHpt, color: white });
+  if (mBpt > 0.5) frontPage.drawRectangle({ x: mLpt, y: 0, width: printWpt, height: mBpt, color: white });
+  const mTpt = mmToPt(impo.marginT ?? 0);
+  if (mTpt > 0.5) frontPage.drawRectangle({ x: mLpt, y: paperHpt - mTpt, width: printWpt, height: mTpt, color: white });
+
+  // Per-block gutter masking
+  for (let gbi = 0; gbi < blocks.length; gbi++) {
+    const gb = blocks[gbi];
+    if (gb.cols === 0 || gutPt < 0.5) continue;
+    const gRot = gb.rotation || 0;
+    let gtw = gb.trimW, gth = gb.trimH;
+    if (gRot === 90 || gRot === 270) { const tmp = gtw; gtw = gth; gth = tmp; }
+    const gcWpt = mmToPt(gtw + bl * 2);
+    const gcHpt = mmToPt(gth + bl * 2);
+    const gbxPt = mLpt + mmToPt(gb.x);
+    const gbyPt = mBpt + printHpt - mmToPt(gb.y) - mmToPt(gb.blockH);
+
+    // Vertical gutters
+    for (let vg2 = 0; vg2 < gb.cols - 1; vg2++) {
+      const gvx = gbxPt + (vg2 + 1) * gcWpt + vg2 * gutPt;
+      const gutL2 = gvx + Math.min(blPt, gutPt / 2);
+      const gutR2 = gvx + gutPt - Math.min(blPt, gutPt / 2);
+      if (gutR2 > gutL2 + 0.5) frontPage.drawRectangle({ x: gutL2, y: gbyPt, width: gutR2 - gutL2, height: mmToPt(gb.blockH), color: white });
+    }
+    // Horizontal gutters
+    for (let hg2 = 0; hg2 < gb.rows - 1; hg2++) {
+      const ghy = gbyPt + mmToPt(gb.blockH) - (hg2 + 1) * gcHpt - hg2 * gutPt;
+      const gutB2 = ghy - gutPt + Math.min(blPt, gutPt / 2);
+      const gutT2 = ghy - Math.min(blPt, gutPt / 2);
+      if (gutT2 > gutB2 + 0.5) frontPage.drawRectangle({ x: gbxPt, y: gutB2, width: mmToPt(gb.blockW), height: gutT2 - gutB2, color: white });
+    }
+  }
+
+  // Crop marks
+  drawStepMultiMarks(frontPage, paperWpt, paperHpt, { cropMarks: opts.showCropMarks, gutterMM: gutMM, bleedMM: bl }, blocks, mLpt, mBpt, printWpt, printHpt, blPt);
+
+  const smJobName = ascii(opts.jobDescription || 'Step Multi');
+  drawPDFMarks(frontPage, paperWpt, paperHpt, {
+    marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
+    marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
+    pieceW: impo.pieceW, pieceH: impo.pieceH,
+    cols: impo.cols, rows: impo.rows,
+    gutterMM: gutMM, bleedMM: bl,
+    offsetX: impo.offsetX, offsetY: impo.offsetY,
+    cropMarks: opts.showCropMarks,
+  }, {
+    font, jobName: smJobName, colorBarPage: cbEmbed, skipCropMarks: true,
+    machineCat: opts.machineCat,
+    showPlateSlug: opts.showPlateSlug,
+    plateSlugEdge: opts.plateSlugEdge,
+    colorBarEdge: opts.colorBarEdge,
+    colorBarOffsetY: opts.colorBarOffsetY,
   });
 
-  // ─── TITLE (top) ───
-  if (jobDescription) {
-    page.drawText(jobDescription, {
-      x: 10, y: pageH - 14, size: 8, font: fontBold, color: rgb(0.2, 0.2, 0.2),
+  // Back side (if any block has backPageNum)
+  const hasBack = blocks.some(b => b.backPageNum && b.backPageNum > 0);
+  if (hasBack) {
+    const backPage = doc.addPage([paperWpt, paperHpt]);
+    for (let bbi = 0; bbi < blocks.length; bbi++) {
+      const bb = blocks[bbi];
+      if (bb.cols === 0 || !bb.backPageNum || bb.backPageNum < 1) continue;
+      const bRot = bb.rotation || 0;
+      let btw = bb.trimW, bth = bb.trimH;
+      if (bRot === 90 || bRot === 270) { const tmp = btw; btw = bth; bth = tmp; }
+      const bcWpt = mmToPt(btw + bl * 2);
+      const bcHpt = mmToPt(bth + bl * 2);
+      const bbxPt = mLpt + mmToPt(bb.x);
+      const bbyPt = mBpt + printHpt - mmToPt(bb.y) - mmToPt(bb.blockH);
+
+      const bpIdx = bb.backPageNum - 1;
+      if (bpIdx < 0 || bpIdx >= embeddedPages.length) continue;
+      const bepObj = embeddedPages[bpIdx];
+      const bepPage = bepObj.page;
+
+      // Mirror X for back side
+      for (let brow = 0; brow < bb.rows; brow++) {
+        for (let bcol = 0; bcol < bb.cols; bcol++) {
+          const mirCol = bb.cols - 1 - bcol;
+          const bcx = bbxPt + mirCol * (bcWpt + gutPt);
+          const bcy = bbyPt + mmToPt(bb.blockH) - (brow + 1) * bcHpt - brow * gutPt;
+          const bteX = bcx + blPt;
+          const bteY = bcy + blPt;
+          drawEmbeddedPage(backPage, bepObj, bteX - bepObj.trimOffsetX, bteY - bepObj.trimOffsetY, bepPage.width, bepPage.height);
+        }
+      }
+    }
+
+    // Margin masking on back
+    if (mLpt > 0.5) backPage.drawRectangle({ x: 0, y: 0, width: mLpt, height: paperHpt, color: white });
+    if (mRpt > 0.5) backPage.drawRectangle({ x: paperWpt - mRpt, y: 0, width: mRpt, height: paperHpt, color: white });
+    if (mBpt > 0.5) backPage.drawRectangle({ x: mLpt, y: 0, width: printWpt, height: mBpt, color: white });
+    if (mTpt > 0.5) backPage.drawRectangle({ x: mLpt, y: paperHpt - mTpt, width: printWpt, height: mTpt, color: white });
+
+    drawStepMultiMarks(backPage, paperWpt, paperHpt, { cropMarks: opts.showCropMarks, gutterMM: gutMM, bleedMM: bl }, blocks, mLpt, mBpt, printWpt, printHpt, blPt);
+    drawPDFMarks(backPage, paperWpt, paperHpt, {
+      marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
+      marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
+      pieceW: impo.pieceW, pieceH: impo.pieceH,
+      cols: impo.cols, rows: impo.rows,
+      gutterMM: gutMM, bleedMM: bl,
+      offsetX: impo.offsetX, offsetY: impo.offsetY,
+      cropMarks: opts.showCropMarks,
+    }, {
+      font, jobName: smJobName + ' (back)', colorBarPage: cbEmbed, skipCropMarks: true,
+      machineCat: opts.machineCat,
+      showPlateSlug: opts.showPlateSlug,
+      plateSlugEdge: opts.plateSlugEdge,
+      colorBarEdge: opts.colorBarEdge,
+      colorBarOffsetY: opts.colorBarOffsetY,
     });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Main Dispatcher
+// ═══════════════════════════════════════════════════════════
+
+export async function exportImpositionPDF(options: ExportOptions): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+
+  // Prepare color bar
+  const cbEmbed = options.showColorBar
+    ? await prepareColorBar(doc, options.colorBarPdfBytes, options.colorBarType)
+    : null;
+
+  // Embed source PDF pages
+  let embeddedPages: EmbeddedPageInfo[] = [];
+  if (options.pdfBytes && options.pdfBytes.length > 0) {
+    const embedMode = (options.imposition.mode === 'booklet' || options.imposition.mode === 'perfect_bound')
+      ? 'trim'
+      : 'nup';
+    embeddedPages = await embedSourcePages(doc, options.pdfBytes, embedMode, options.bleed || 0, options.keepSourceMarks);
+  }
+
+  const mode = options.imposition.mode;
+
+  if (mode === 'booklet') {
+    await exportBooklet(doc, options, embeddedPages, font, cbEmbed);
+  } else if (mode === 'perfect_bound') {
+    await exportPerfectBound(doc, options, embeddedPages, font, cbEmbed);
+  } else if (mode === 'cutstack') {
+    await exportCutStack(doc, options, embeddedPages, font, cbEmbed);
+  } else if (mode === 'workturn') {
+    await exportWorkTurn(doc, options, embeddedPages, font, cbEmbed);
+  } else if (mode === 'gangrun') {
+    await exportGangRun(doc, options, embeddedPages, font, cbEmbed);
+  } else if (mode === 'stepmulti') {
+    await exportStepMulti(doc, options, embeddedPages, font, cbEmbed);
+  } else {
+    // Default: N-Up
+    await exportNUp(doc, options, embeddedPages, font, cbEmbed);
   }
 
   return doc.save();
 }
 
-/** Trigger browser download of the PDF */
-export async function downloadImpositionPDF(options: ExportOptions, filename?: string) {
-  const bytes = await exportImpositionPDF(options);
-  const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+// ═══════════════════════════════════════════════════════════
+//  Browser Download Trigger
+// ═══════════════════════════════════════════════════════════
+
+export async function downloadImpositionPDF(options: ExportOptions, filename?: string): Promise<void> {
+  const pdfBytes = await exportImpositionPDF(options);
+  const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename || `imposition-${options.imposition.mode}-${Date.now()}.pdf`;
+
+  // Generate filename from options if not provided
+  if (!filename) {
+    const impo = options.imposition;
+    const jobSize = Math.round(options.jobW || 0) + 'x' + Math.round(options.jobH || 0);
+    const paperSize = Math.round(impo.paperW) + 'x' + Math.round(impo.paperH);
+    const modeLabel = impo.mode === 'nup' ? 'nup_' + impo.ups + 'UP'
+      : impo.mode === 'booklet' ? 'booklet'
+      : impo.mode === 'perfect_bound' ? 'pb'
+      : impo.mode === 'cutstack' ? 'cutstack_' + impo.ups + 'UP'
+      : impo.mode === 'workturn' ? 'workturn_' + impo.ups + 'UP'
+      : impo.mode === 'gangrun' ? 'gangrun_' + impo.ups + 'pos'
+      : impo.mode === 'stepmulti' ? 'step_' + (impo.blocks?.length || 0) + 'blk'
+      : impo.mode;
+    filename = `imposed_${jobSize}_${paperSize}_${modeLabel}.pdf`;
+  }
+
+  a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }

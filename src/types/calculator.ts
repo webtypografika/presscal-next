@@ -163,9 +163,42 @@ export interface ImpositionResult {
   totalSheets?: number;
   signatures?: number;
 
+  // Margins (mm)
+  marginL?: number;
+  marginR?: number;
+  marginT?: number;
+  marginB?: number;
+
+  // Offset (mm)
+  offsetX?: number;
+  offsetY?: number;
+
+  // Printable area (mm)
+  printableW?: number;
+  printableH?: number;
+
   // Booklet-specific
   signatureMap?: BookletSignatureMap;
   creepPerSheet?: number[];
+  spreadsAcross?: number;
+  sigsPerSheet?: number;
+  spineOffset?: number;
+  rowGap?: number;
+  pageRotation?: number;
+  headToHead?: boolean;
+  pageCount?: number;
+
+  // Perfect Bound-specific
+  gapVmm?: number;
+  gapHmm?: number;
+  sigsAcross?: number;
+  sigsDown?: number;
+  blockGapH?: number;
+  blockGapV?: number;
+  numSigs?: number;
+  canRepeat?: boolean;
+  totalPressSheets?: number;
+  bodyPages?: number;
 
   // Cut & Stack-specific
   stackPositions?: CutStackPosition[];
