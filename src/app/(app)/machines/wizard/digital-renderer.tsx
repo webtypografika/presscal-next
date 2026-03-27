@@ -193,6 +193,7 @@ function StepMedia({ data, onChange }: { data: Data; onChange: OnChange }) {
       <WizSection title="Τροφοδοσία" sub="Feed direction" accent="var(--blue)" border>
         <PillToggle value={data.feed_direction} options={[{ v: 'sef', l: 'SEF' }, { v: 'lef', l: 'LEF' }, { v: 'both', l: 'Both' }]} onChange={(v) => onChange('feed_direction', v)} />
       </WizSection>
+
     </div>
   );
 }
@@ -804,8 +805,7 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
     <div className="space-y-6">
       <WizSection title="Setup" sub="Φύρα & Χρόνοι" accent="var(--success)">
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Φύρα Setup (φύλλα)"><NumInput value={data.setup_sheets_waste} onChange={(v) => onChange('setup_sheets_waste', v)} /></Field>
-          <Field label="Φύρα Εκτύπωσης (%)"><NumInput value={data.registration_spoilage_pct} onChange={(v) => onChange('registration_spoilage_pct', v)} /></Field>
+          <Field label="Φύρα (φύλλα μοντάζ)"><NumInput value={data.setup_sheets_waste} onChange={(v) => onChange('setup_sheets_waste', v)} /></Field>
           <Field label="Warmup (λεπτά)"><NumInput value={data.warmup_minutes} onChange={(v) => onChange('warmup_minutes', v)} /></Field>
         </div>
       </WizSection>

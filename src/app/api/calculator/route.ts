@@ -113,21 +113,6 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Χαρτί δεν βρέθηκε' }, { status: 404 });
     }
 
-    // ─── FETCH PROFILE ───
-    const profile = await prisma.profile.findFirst({
-      where: { orgId: ORG_ID, isDefault: true, deletedAt: null },
-    }) || {
-      paperMarkup: 50,
-      printMarkup: 100,
-      guillotineMarkup: 100,
-      lamMarkup: 100,
-      bindingMarkup: 100,
-      minChargePrint: null,
-      minChargeGuillotine: null,
-      minChargeLam: null,
-      minChargeBinding: null,
-    };
-
     // ─── FETCH FINISHING MACHINES ───
     let guillotineData: CostInput['guillotine'] | undefined;
     if (body.guillotineId) {
@@ -243,6 +228,7 @@ export async function POST(req: NextRequest) {
       qty: body.qty,
       sides: body.sides,
       colorMode: body.colorMode,
+      wasteFixed: body.wasteFixed ?? 0,
       coverageLevel: body.coverageLevel,
       coveragePdf: body.coveragePdf,
 
@@ -252,15 +238,15 @@ export async function POST(req: NextRequest) {
       lamination: lamData,
       binding: bindData,
 
-      paperMarkup: profile.paperMarkup,
-      printMarkup: profile.printMarkup,
-      guillotineMarkup: profile.guillotineMarkup,
-      lamMarkup: profile.lamMarkup,
-      bindingMarkup: profile.bindingMarkup,
-      minChargePrint: profile.minChargePrint || undefined,
-      minChargeGuillotine: profile.minChargeGuillotine || undefined,
-      minChargeLam: profile.minChargeLam || undefined,
-      minChargeBinding: profile.minChargeBinding || undefined,
+      paperMarkup: paper.markup ?? 0,       // from material (αποθήκη)
+      printMarkup: 0,                       // pricing via products only
+      guillotineMarkup: 0,
+      lamMarkup: 0,
+      bindingMarkup: 0,
+      minChargePrint: undefined,
+      minChargeGuillotine: undefined,
+      minChargeLam: undefined,
+      minChargeBinding: undefined,
 
       offsetFrontCmyk: body.offsetFrontCmyk,
       offsetBackCmyk: body.offsetBackCmyk,
@@ -296,7 +282,7 @@ export async function POST(req: NextRequest) {
 
 // ─── MACHINES LIST ───
 export async function GET() {
-  const [machines, materials, postpress, profiles, products] = await Promise.all([
+  const [machines, materials, postpress, , products] = await Promise.all([
     prisma.machine.findMany({
       where: { orgId: ORG_ID, deletedAt: null },
       select: {
@@ -344,5 +330,31 @@ export async function GET() {
     }),
   ]);
 
-  return Response.json({ machines, materials, postpress, profiles, products });
+  return Response.json({ machines, materials, postpress, products });
+}
+
+// ─── PATCH: update machine custom_papers ───
+export async function PATCH(req: NextRequest) {
+  try {
+    const { machineId, custom_papers } = await req.json();
+    if (!machineId) return Response.json({ error: 'Missing machineId' }, { status: 400 });
+
+    const machine = await prisma.machine.findFirst({
+      where: { id: machineId, orgId: ORG_ID, deletedAt: null },
+    });
+    if (!machine) return Response.json({ error: 'Machine not found' }, { status: 404 });
+
+    const specs = (machine.specs as Record<string, unknown>) || {};
+    specs.custom_papers = custom_papers;
+
+    await prisma.machine.update({
+      where: { id: machineId },
+      data: { specs: specs as never },
+    });
+
+    return Response.json({ ok: true });
+  } catch (err) {
+    console.error('Calculator PATCH error:', err);
+    return Response.json({ error: 'Update failed' }, { status: 500 });
+  }
 }

@@ -96,6 +96,7 @@ function StepPaper({ data, onChange }: { data: Data; onChange: OnChange }) {
           </p>
         )}
       </WizSection>
+
     </div>
   );
 }
@@ -203,7 +204,7 @@ function StepProduction({ data, onChange }: { data: Data; onChange: OnChange }) 
     <div className="space-y-6">
       <WizSection title="Setup" sub="Φύρα & Χρόνοι" accent="var(--success)">
         <div className="grid grid-cols-3 gap-3">
-          <Field label="Φύρα (φύλλα)"><NumInput value={data.off_default_waste} onChange={(v) => onChange('off_default_waste', v)} /></Field>
+          <Field label="Φύρα (φύλλα μοντάζ)"><NumInput value={data.off_default_waste} onChange={(v) => onChange('off_default_waste', v)} /></Field>
           <Field label="Setup (λεπτά)"><NumInput value={data.off_setup_min} onChange={(v) => onChange('off_setup_min', v)} /></Field>
           <Field label="Wash (λεπτά)"><NumInput value={data.off_wash_min} onChange={(v) => onChange('off_wash_min', v)} /></Field>
         </div>

@@ -29,6 +29,7 @@ export interface CostInput {
   qty: number;
   sides: 1 | 2;
   colorMode: 'color' | 'bw';
+  wasteFixed: number;       // extra machine sheets (φύλλα μοντάζ)
   coverageLevel: 'low' | 'mid' | 'high' | 'pdf';
   coveragePdf?: { c: number; m: number; y: number; k: number };
 
@@ -106,17 +107,27 @@ const COVERAGE: Record<string, number> = {
 /** A4 area in mm² */
 const A4_AREA = 210 * 297;
 
-/** Continuous area multiplier: ratio of sheet area to A4 */
-function areaMult(sheetW: number, sheetH: number): number {
+/** Stepped wear multiplier: manufacturer yields rated at A4.
+ *  A4=1×, A3/SRA3=2×, banner=4× — matches industry convention */
+const SRA3_MAX = 340 * 500;  // 170,000 mm² — covers all SRA3 variants
+function wearMult(sheetW: number, sheetH: number): number {
   const area = sheetW * sheetH;
-  return Math.max(1, area / A4_AREA);
+  if (area <= A4_AREA * 1.15) return 1;
+  if (area <= SRA3_MAX) return 2;
+  return 4;
+}
+
+/** Print area ratio to A4 for toner/ink — based on actual piece area,
+ *  not full machine sheet */
+function inkAreaMult(impo: { ups: number; pieceW: number; pieceH: number }): number {
+  return (impo.ups * impo.pieceW * impo.pieceH) / A4_AREA;
 }
 
 /** Discrete size category (for CPC models that use tiered pricing) */
 function sheetSizeCategory(w: number, h: number): 'a4' | 'a3' | 'banner' {
   const area = w * h;
-  if (area <= A4_AREA * 1.1) return 'a4';
-  if (area <= 297 * 420 * 1.1) return 'a3';
+  if (area <= A4_AREA * 1.15) return 'a4';
+  if (area <= SRA3_MAX) return 'a3';
   return 'banner';
 }
 
@@ -173,10 +184,10 @@ function digitalSimpleOut(
   sheetH: number,
   colorMode: 'color' | 'bw',
   coverageLevel: string,
+  inkMult: number,
   coveragePdf?: { c: number; m: number; y: number; k: number },
 ): { total: number; tonerOnly: number } {
   const { total: cpcCost } = digitalSimpleIn(specs, totalSheets, sides, sheetW, sheetH, colorMode);
-  const sizeMult = areaMult(sheetW, sheetH);
   const faces = sides === 2 ? totalSheets * 2 : totalSheets;
 
   let tonerPerFace = 0;
@@ -200,7 +211,7 @@ function digitalSimpleOut(
     }
   }
 
-  const tonerTotal = faces * tonerPerFace * sizeMult;
+  const tonerTotal = faces * tonerPerFace * inkMult;
   return { total: cpcCost + tonerTotal, tonerOnly: tonerTotal };
 }
 
@@ -213,13 +224,12 @@ function digitalPrecision(
   specs: DigitalSpecs,
   totalSheets: number,
   sides: 1 | 2,
-  sheetW: number,
-  sheetH: number,
   colorMode: 'color' | 'bw',
   coverageLevel: string,
+  inkMult: number,
+  wMult: number,
   coveragePdf?: { c: number; m: number; y: number; k: number },
 ): { total: number; tonerOnly: number } {
-  const sizeMult = areaMult(sheetW, sheetH);
   const faces = sides === 2 ? totalSheets * 2 : totalSheets;
 
   // ── Toner cost (coverage-dependent) ──
@@ -253,7 +263,7 @@ function digitalPrecision(
     }
   }
 
-  const tonerTotal = faces * tonerPerFace * sizeMult;
+  const tonerTotal = faces * tonerPerFace * inkMult;
 
   // ── Drums (non-coverage, per face) ──
   let drumPerFace = 0;
@@ -309,7 +319,7 @@ function digitalPrecision(
   }
 
   const nonTonerPerFace = drumPerFace + devPerFace + coronaPerFace + sharedPerFace;
-  const nonTonerTotal = faces * nonTonerPerFace * sizeMult;
+  const nonTonerTotal = faces * nonTonerPerFace * wMult;
 
   return { total: tonerTotal + nonTonerTotal, tonerOnly: tonerTotal };
 }
@@ -321,13 +331,12 @@ function digitalIndigo(
   specs: DigitalSpecs,
   totalSheets: number,
   sides: 1 | 2,
-  sheetW: number,
-  sheetH: number,
   colorMode: 'color' | 'bw',
   coverageLevel: string,
+  inkMult: number,
+  wMult: number,
   coveragePdf?: { c: number; m: number; y: number; k: number },
 ): { total: number; tonerOnly: number } {
-  const sizeMult = areaMult(sheetW, sheetH);
   const faces = sides === 2 ? totalSheets * 2 : totalSheets;
 
   // Impressions per side based on color mode
@@ -338,7 +347,7 @@ function digitalIndigo(
   const avgCov = coverageLevel === 'pdf' && coveragePdf
     ? (coveragePdf.c + coveragePdf.m + coveragePdf.y + coveragePdf.k) / 4
     : COVERAGE[coverageLevel] || 0.15;
-  const inkPerFace = (specs.inkCostPerMl || 0) * avgCov * sizeMult;
+  const inkPerFace = (specs.inkCostPerMl || 0) * avgCov * inkMult;
   const inkTotal = faces * inkPerFace;
 
   // Impression charge (flat per impression)
@@ -347,13 +356,13 @@ function digitalIndigo(
   // Blanket wear
   let blanketCost = 0;
   if (specs.blanketCostIndigo && specs.blanketLifeIndigo && specs.blanketLifeIndigo > 0) {
-    blanketCost = faces * impsPerSide * (specs.blanketCostIndigo / specs.blanketLifeIndigo);
+    blanketCost = faces * impsPerSide * (specs.blanketCostIndigo / specs.blanketLifeIndigo) * wMult;
   }
 
   // PIP (Photo Imaging Plate)
   let pipCost = 0;
   if (specs.pipCost && specs.pipLife && specs.pipLife > 0) {
-    pipCost = faces * impsPerSide * (specs.pipCost / specs.pipLife);
+    pipCost = faces * impsPerSide * (specs.pipCost / specs.pipLife) * wMult;
   }
 
   const total = inkTotal + impCharge + blanketCost + pipCost;
@@ -369,6 +378,7 @@ function digitalRiso(
   sides: 1 | 2,
   colorMode: 'color' | 'bw',
   coverageLevel: string,
+  inkMult: number,
   coveragePdf?: { c: number; m: number; y: number; k: number },
 ): { total: number; tonerOnly: number } {
   const faces = sides === 2 ? totalSheets * 2 : totalSheets;
@@ -398,7 +408,7 @@ function digitalRiso(
     }
   }
 
-  const total = faces * costPerFace;
+  const total = faces * costPerFace * inkMult;
   return { total, tonerOnly: total }; // all ink-based
 }
 
@@ -406,23 +416,29 @@ function digitalRiso(
 
 function calcDigitalCost(input: CostInput, totalSheets: number): number {
   const specs = input.specs as DigitalSpecs;
+  const impo = input.imposition;
   let result: { total: number; tonerOnly: number };
+
+  // Stepped wear mult: A4=1, A3=2, banner=4 (manufacturer yields in A4 passes)
+  const wMult = wearMult(input.machineMaxW, input.machineMaxH);
+  // Ink/toner area mult: actual print area vs A4
+  const iMult = inkAreaMult(impo);
 
   switch (specs.costMode) {
     case 'simple_in':
       result = digitalSimpleIn(specs, totalSheets, input.sides, input.machineMaxW, input.machineMaxH, input.colorMode);
       break;
     case 'simple_out':
-      result = digitalSimpleOut(specs, totalSheets, input.sides, input.machineMaxW, input.machineMaxH, input.colorMode, input.coverageLevel, input.coveragePdf);
+      result = digitalSimpleOut(specs, totalSheets, input.sides, input.machineMaxW, input.machineMaxH, input.colorMode, input.coverageLevel, iMult, input.coveragePdf);
       break;
     case 'precision':
-      result = digitalPrecision(specs, totalSheets, input.sides, input.machineMaxW, input.machineMaxH, input.colorMode, input.coverageLevel, input.coveragePdf);
+      result = digitalPrecision(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, wMult, input.coveragePdf);
       break;
     case 'indigo':
-      result = digitalIndigo(specs, totalSheets, input.sides, input.machineMaxW, input.machineMaxH, input.colorMode, input.coverageLevel, input.coveragePdf);
+      result = digitalIndigo(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, wMult, input.coveragePdf);
       break;
     case 'riso':
-      result = digitalRiso(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, input.coveragePdf);
+      result = digitalRiso(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, input.coveragePdf);
       break;
     default:
       result = digitalSimpleIn(specs, totalSheets, input.sides, input.machineMaxW, input.machineMaxH, input.colorMode);
@@ -454,9 +470,12 @@ function calcDigitalCost(input: CostInput, totalSheets: number): number {
 function calcOffsetCost(input: CostInput, totalSheets: number): number {
   const specs = input.specs as OffsetSpecs;
 
-  const frontColors = (input.offsetFrontCmyk || 4) + (input.offsetFrontPms || 0);
-  const backColors = input.sides === 2 ? (input.offsetBackCmyk || 4) + (input.offsetBackPms || 0) : 0;
+  const frontColors = (input.offsetFrontCmyk ?? 4) + (input.offsetFrontPms ?? 0);
+  const backColors = input.sides === 2 ? (input.offsetBackCmyk ?? 4) + (input.offsetBackPms ?? 0) : 0;
   const totalColors = frontColors + backColors;
+
+  // No colors = no printing
+  if (totalColors === 0) return 0;
 
   // Passes calculation
   const passesPerSide = Math.ceil(frontColors / specs.towers);
@@ -475,7 +494,8 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
     ? totalSheets * totalPasses * (specs.blanketCost / specs.blanketLife)
     : 0;
 
-  // ── Ink cost (per-channel, area-based) ──
+  // ── Ink cost (per-channel, area-based — actual print area, not full sheet) ──
+  const printAreaM2 = (input.imposition.ups * input.imposition.pieceW * input.imposition.pieceH) / 1_000_000;
   const sheetAreaM2 = (input.machineMaxW * input.machineMaxH) / 1_000_000;
   const inkGm2 = specs.inkGm2 || 1.5;
   const inkPricePerKg = specs.inkPricePerKg || 25;
@@ -486,7 +506,7 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
     const { c, m, y, k } = input.coveragePdf;
     const channelCoverages = [c, m, y, k];
     const frontInkPerSheet = channelCoverages.reduce((sum, cov) => {
-      return sum + sheetAreaM2 * inkGm2 * cov * (inkPricePerKg / 1000);
+      return sum + printAreaM2 * inkGm2 * cov * (inkPricePerKg / 1000);
     }, 0);
     // Simplified: same ink for back if duplex
     const backInkPerSheet = input.sides === 2 ? frontInkPerSheet : 0;
@@ -494,7 +514,7 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
   } else {
     // Preset coverage
     const coverageMult = COVERAGE[input.coverageLevel] || 0.15;
-    const inkPerSheet = sheetAreaM2 * inkGm2 * coverageMult * totalColors * (inkPricePerKg / 1000);
+    const inkPerSheet = printAreaM2 * inkGm2 * coverageMult * totalColors * (inkPricePerKg / 1000);
     inkCost = totalSheets * inkPerSheet;
   }
 
@@ -597,15 +617,8 @@ function calcBindingCost(input: CostInput): number {
 
 // ─── WASTE ───
 
-function calcWasteSheets(totalSheets: number, machineCat: 'digital' | 'offset', specs: DigitalSpecs | OffsetSpecs): number {
-  if (machineCat === 'offset') {
-    const oSpecs = specs as OffsetSpecs;
-    const fixed = oSpecs.defaultWaste || 50;
-    const pct = oSpecs.wastePercent || 2;
-    return fixed + Math.ceil(totalSheets * (pct / 100));
-  }
-  // Digital: minimal waste
-  return Math.ceil(totalSheets * 0.01);
+function calcWasteSheets(wasteFixed: number): number {
+  return wasteFixed;
 }
 
 // ─── MAIN CALCULATOR ───
@@ -615,7 +628,7 @@ export function calculateCost(input: CostInput): CalculatorResult {
   const rawMachineSheets = impo.totalSheets || Math.ceil(input.qty / Math.max(impo.ups, 1));
 
   // Waste
-  const wasteSheets = calcWasteSheets(rawMachineSheets, input.machineCat, input.specs);
+  const wasteSheets = calcWasteSheets(input.wasteFixed);
   const totalMachineSheets = rawMachineSheets + wasteSheets;
 
   // Paper
@@ -653,55 +666,68 @@ export function calculateCost(input: CostInput): CalculatorResult {
   let chargePrint: number;
   let productPricingApplied = false;
   const pp = input.productPricing;
+  const productDetail: Array<{ label: string; value: number }> = [];
 
   if (pp && input.machineCat === 'digital' && (pp.price_color || pp.price_bw)) {
-    // Digital product: per-page pricing
+    // Digital product: per-page pricing (price defined per A4, scaled by sheet size)
     const totalFaces = input.sides === 2 ? totalMachineSheets * 2 : totalMachineSheets;
     const pricePerPage = input.colorMode === 'color' ? (pp.price_color || 0) : (pp.price_bw || 0);
-    let productRevenue = totalFaces * pricePerPage;
+    const sheetMult = wearMult(input.machineMaxW, input.machineMaxH);
+    const baseRevenue = totalFaces * pricePerPage * sheetMult;
+    let productRevenue = baseRevenue;
+    productDetail.push({ label: `${totalFaces} όψεις × €${pricePerPage} × ${sheetMult}`, value: baseRevenue });
 
     // Quantity discount
     if (pp.discount_step_qty && pp.discount_step_pct && input.qty > pp.discount_step_qty) {
       const steps = Math.floor(input.qty / pp.discount_step_qty) - 1;
       const discountPct = Math.min(steps * pp.discount_step_pct, pp.discount_max || 50);
-      productRevenue *= (1 - discountPct / 100);
+      const discountAmt = productRevenue * (discountPct / 100);
+      productRevenue -= discountAmt;
+      productDetail.push({ label: `Έκπτωση ${discountPct}%`, value: -discountAmt });
     }
 
     // Hourly profit
     if (pp.hourly_enabled && pp.hourly_rate) {
       const speedPpm = (input.specs as DigitalSpecs).speedPpmColor || 60;
       const runMinutes = totalFaces / speedPpm;
-      productRevenue += (runMinutes / 60) * pp.hourly_rate;
+      const hourlyAmt = (runMinutes / 60) * pp.hourly_rate;
+      productRevenue += hourlyAmt;
+      productDetail.push({ label: `Hourly (${Math.round(runMinutes)}')`, value: hourlyAmt });
     }
 
     chargePrint = Math.max(productRevenue, costPrint);
     productPricingApplied = true;
   } else if (pp && input.machineCat === 'offset' && pp.charge_per_color) {
     // Offset product: per-color charge + extras
-    const frontColors = (input.offsetFrontCmyk || 4) + (input.offsetFrontPms || 0);
-    const backColors = input.sides === 2 ? (input.offsetBackCmyk || 0) + (input.offsetBackPms || 0) : 0;
-    let productRevenue = (frontColors + backColors) * pp.charge_per_color;
+    const frontColors = (input.offsetFrontCmyk ?? 4) + (input.offsetFrontPms ?? 0);
+    const backColors = input.sides === 2 ? (input.offsetBackCmyk ?? 0) + (input.offsetBackPms ?? 0) : 0;
+    const colorRevenue = (frontColors + backColors) * pp.charge_per_color;
+    let productRevenue = colorRevenue;
+    productDetail.push({ label: `${frontColors + backColors} πλάκες × €${pp.charge_per_color}`, value: colorRevenue });
 
     // PMS surcharge
     if (pp.extra_pantone) {
-      productRevenue += ((input.offsetFrontPms || 0) + (input.offsetBackPms || 0)) * pp.extra_pantone;
+      const pmsCount = (input.offsetFrontPms ?? 0) + (input.offsetBackPms ?? 0);
+      if (pmsCount > 0) {
+        const pmsAmt = pmsCount * pp.extra_pantone;
+        productRevenue += pmsAmt;
+        productDetail.push({ label: `${pmsCount} PMS × €${pp.extra_pantone}`, value: pmsAmt });
+      }
     }
     // Varnish surcharge
     if (pp.extra_varnish && input.offsetOilVarnish) {
       productRevenue += pp.extra_varnish;
+      productDetail.push({ label: 'Βερνίκι', value: pp.extra_varnish });
     }
     // Hourly profit
     if (pp.hourly_enabled && pp.hourly_rate) {
       const oSpecs = input.specs as OffsetSpecs;
       const runHours = totalMachineSheets / (oSpecs.speed || 5000);
       const setupHours = (oSpecs.setupMin || 15) / 60;
-      productRevenue += (runHours + setupHours) * pp.hourly_rate;
+      const hourlyAmt = (runHours + setupHours) * pp.hourly_rate;
+      productRevenue += hourlyAmt;
+      productDetail.push({ label: `Hourly (${Math.round((runHours + setupHours) * 60)}')`, value: hourlyAmt });
     }
-    // Minimum charge
-    if (pp.min_charge) {
-      productRevenue = Math.max(productRevenue, pp.min_charge);
-    }
-
     chargePrint = Math.max(productRevenue + costPrint, costPrint);
     productPricingApplied = true;
   } else {
@@ -757,6 +783,10 @@ export function calculateCost(input: CostInput): CalculatorResult {
         printCostRaw: costPrint,
         printMarkup: input.printMarkup,
         paperMarkup: input.paperMarkup,
+        chargePaper,
+        chargePrint,
+        chargeBinding,
+        productDetail,
       },
     },
   };

@@ -77,6 +77,11 @@ export const OFFSET_DEFAULTS: Record<string, unknown> = {
   off_min_ls: 400,
   off_min_ss: 300,
 
+  custom_papers: [
+    { name: '50×70', ss: 500, ls: 700 },
+    { name: '70×100', ss: 700, ls: 1000 },
+  ],
+
   // Margins
   off_gripper: 10,
   off_side_margin: 5,

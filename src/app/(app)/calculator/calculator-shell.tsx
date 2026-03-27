@@ -34,9 +34,9 @@ interface JobData {
 interface ColorData {
   model: 'cmyk' | 'bw';
   coverage: 'low' | 'mid' | 'high' | 'pdf';
-  // Offset CMYK: front/back active colors
-  offFrontC: boolean; offFrontM: boolean; offFrontY: boolean; offFrontK: boolean;
-  offBackC: boolean; offBackM: boolean; offBackY: boolean; offBackK: boolean;
+  // Offset plates per side
+  platesFront: number;
+  platesBack: number;
   pmsFront: number;
   pmsBack: number;
   varnish: 'none' | 'oil' | 'coating';
@@ -204,6 +204,96 @@ function ToggleBar({ options, value, onChange }: { options: { v: string; l: stri
   );
 }
 
+/* ═══ DEV PANEL COMPONENTS ═══ */
+
+function DevPanel({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: 'rgba(0,0,0,0.25)', borderRadius: 8, border: '1px solid var(--border)',
+      padding: '8px 10px', fontSize: '0.62rem', fontFamily: 'monospace',
+    }}>
+      <div style={{ fontSize: '0.55rem', fontWeight: 700, color, letterSpacing: '0.1em', marginBottom: 6, textTransform: 'uppercase' }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function DevRow({ label, sub, value, bold, color, indent }: { label: string; sub?: string; value: number; bold?: boolean; color?: string; indent?: boolean }) {
+  const dimmed = !bold && value === 0;
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '1px 0', opacity: dimmed ? 0.35 : 1, paddingLeft: indent ? 10 : 0 }}>
+      <div style={{ minWidth: 0, overflow: 'hidden' }}>
+        <div style={{ color: bold ? (color || 'var(--text)') : indent ? '#64748b' : '#94a3b8', fontWeight: bold ? 700 : 400, fontSize: indent ? '0.55rem' : undefined }}>{label}</div>
+        {sub && <div style={{ color: '#64748b', fontSize: '0.5rem' }}>{sub}</div>}
+      </div>
+      <span style={{ color: color || (bold ? 'var(--text)' : '#cbd5e1'), fontWeight: bold ? 700 : 400, flexShrink: 0, marginLeft: 8 }}>€{value.toFixed(2)}</span>
+    </div>
+  );
+}
+
+function DevDivider() {
+  return <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '4px 0' }} />;
+}
+
+/* ═══ MACHINE PAPER PRESETS ═══ */
+
+type CustomPaper = { name: string; ss: number; ls: number };
+
+function MachinePaperPresets({ machine, sheetW, sheetH, onSelect, onUpdate }: {
+  machine: DbMachine;
+  sheetW: number;
+  sheetH: number;
+  onSelect: (ls: number, ss: number) => void;
+  onUpdate: (papers: CustomPaper[]) => void;
+}) {
+  const papers: CustomPaper[] = (machine?.specs?.custom_papers as CustomPaper[]) ?? [];
+
+  function save(updated: CustomPaper[]) {
+    onUpdate(updated);
+    fetch('/api/calculator', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ machineId: machine.id, custom_papers: updated }),
+    });
+  }
+
+  function addCurrent() {
+    if (papers.some(p => p.ss === sheetH && p.ls === sheetW)) return;
+    save([...papers, { name: `${sheetH}×${sheetW}`, ss: sheetH, ls: sheetW }]);
+  }
+
+  function del(i: number, e: React.MouseEvent) {
+    e.stopPropagation();
+    save(papers.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+      {papers.map((p, i) => {
+        const active = sheetW === p.ls && sheetH === p.ss;
+        return (
+          <button key={i} onClick={() => onSelect(p.ls, p.ss)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '2px 4px 2px 8px', fontSize: '0.6rem', borderRadius: 4, cursor: 'pointer',
+              border: active ? '1px solid var(--blue)' : '1px solid var(--border)',
+              background: active ? 'var(--blue)' : 'transparent',
+              color: active ? '#fff' : 'var(--text-dim)',
+            }}>
+            {p.name}
+            <span onClick={(e) => del(i, e)}
+              style={{ fontSize: '0.5rem', opacity: 0.5, padding: '0 2px', cursor: 'pointer' }}>✕</span>
+          </button>
+        );
+      })}
+      <button onClick={addCurrent}
+        style={{ padding: '2px 8px', fontSize: '0.6rem', borderRadius: 4, cursor: 'pointer', border: '1px dashed var(--border)', background: 'none', color: 'var(--text-dim)' }}>
+        +
+      </button>
+    </div>
+  );
+}
+
 /* ═══ CALCULATOR COMPONENT ═══ */
 export default function CalculatorShell() {
   // ─── DB DATA ───
@@ -229,8 +319,7 @@ export default function CalculatorShell() {
   const [job, setJob] = useState<JobData>({ archetype: 'single_leaf', width: 210, height: 297, bleed: 3, bleedOn: true, qty: 500, sides: 2, rotation: false, pages: 8, sheetsPerPad: 50, bodyPages: 64, customMult: 1 });
   const [color, setColor] = useState<ColorData>({
     model: 'cmyk', coverage: 'mid',
-    offFrontC: true, offFrontM: true, offFrontY: true, offFrontK: true,
-    offBackC: false, offBackM: false, offBackY: false, offBackK: false,
+    platesFront: 4, platesBack: 0,
     pmsFront: 0, pmsBack: 0,
     varnish: 'none', varnishTiming: 'inline', perfecting: false, printMethod: 'sheetwise',
   });
@@ -258,8 +347,9 @@ export default function CalculatorShell() {
   // Machine sheet override (null = use machine default)
   const [machineSheetW, setMachineSheetW] = useState<number | null>(null);
   const [machineSheetH, setMachineSheetH] = useState<number | null>(null);
-  // Waste
-  const [wastePercent, setWastePercent] = useState(2);
+  // Speed override (null = use machine default)
+  const [speedOverride, setSpeedOverride] = useState<number | null>(null);
+  // Waste (φύλλα μοντάζ)
   const [wasteFixed, setWasteFixed] = useState(0);
 
   // PDF
@@ -375,10 +465,28 @@ export default function CalculatorShell() {
   const impo: ImpositionResult = calcImposition(impoInput);
   const ups = Math.max(impo.ups, 1);
   const rawSheets = impo.totalSheets || Math.ceil(job.qty / ups);
-  const wasteSheets = wasteFixed + Math.ceil(rawSheets * wastePercent / 100);
+  const wasteSheets = wasteFixed;
   const sheets = rawSheets + wasteSheets;
   const printSheets = job.sides === 2 ? sheets * 2 : sheets;
-  const timeMin = Math.ceil(printSheets * 0.06);
+  // Estimated time from machine speed (with optional override)
+  const specs = (machine?.specs ?? {}) as Record<string, unknown>;
+  const maxSpeed = machine?.cat === 'offset'
+    ? (specs.off_speed as number) || 5000
+    : (specs.speed_ppm_color as number) || 60;
+  // Optimal speed: offset = common speed, digital = speed zone by GSM
+  const paperGsm = paper?.thickness || 80;
+  const speedZones = (specs.speed_zones as Array<{ gsm_from: number; gsm_to: number; ppm: number }>) ?? [];
+  const matchedZone = speedZones.find(z => paperGsm >= z.gsm_from && paperGsm <= z.gsm_to);
+  const defaultSpeed = machine?.cat === 'offset'
+    ? (specs.off_common_speed as number) || maxSpeed
+    : (matchedZone?.ppm || maxSpeed);
+  const runSpeed = speedOverride || defaultSpeed;
+  const machineSetupMin = machine?.cat === 'offset'
+    ? (specs.off_setup_min as number) || 15
+    : (specs.warmup_minutes as number) || 5;
+  const timeMin = machine?.cat === 'offset'
+    ? Math.ceil((sheets / runSpeed) * 60 + machineSetupMin)
+    : Math.ceil(printSheets / runSpeed + machineSetupMin);
 
   // ─── AUTO-CALCULATE ON CHANGES (debounced) ───
   useEffect(() => {
@@ -405,7 +513,13 @@ export default function CalculatorShell() {
           impoBleed: effectiveBleed,
           impoForceUps: impoForceUps || undefined,
           impoCropMarks: impoCropMarks,
+          wasteFixed,
           coverageLevel: color.coverage || 'mid',
+          offsetFrontCmyk: color.platesFront,
+          offsetBackCmyk: color.platesBack,
+          offsetFrontPms: color.pmsFront,
+          offsetBackPms: color.pmsBack,
+          offsetOilVarnish: color.varnish === 'oil',
           guillotineId: finish.guillotineId || undefined,
           lamMachineId: finish.lamMachineId || undefined,
           lamFilmId: finish.lamFilmId || undefined,
@@ -425,7 +539,7 @@ export default function CalculatorShell() {
         .finally(() => setCalculating(false));
     }, 300);
     return () => { if (calcTimer.current) clearTimeout(calcTimer.current); };
-  }, [machine.id, activePaperId, job, color.model, color.coverage, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish]);
+  }, [machine.id, activePaperId, job, color, wasteFixed, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish]);
 
   // ─── DISPLAY VALUES ───
   const r = calcResult;
@@ -510,7 +624,7 @@ export default function CalculatorShell() {
             <i className="fas fa-copy" style={{ fontSize: '0.55rem' }} /><strong style={{ color: 'var(--text)' }}>{sheets}</strong> φύλ
           </span>
           <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            <i className="fas fa-clock" style={{ fontSize: '0.55rem' }} /><strong style={{ color: 'var(--text)' }}>~{timeMin}&apos;</strong>
+            <i className="fas fa-clock" style={{ fontSize: '0.55rem' }} /><strong style={{ color: 'var(--text)' }}>~{timeMin >= 60 ? `${(timeMin / 60).toFixed(1)}h` : `${timeMin}'`}</strong>
           </span>
 
           <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0 }} />
@@ -690,10 +804,25 @@ export default function CalculatorShell() {
               {/* ── Ρυθμίσεις μηχανής ── */}
               <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
                 <MfLabel>ΦΥΛΛΟ ΜΗΧΑΝΗΣ (MM)</MfLabel>
+                <MachinePaperPresets
+                  machine={machine}
+                  sheetW={sheetW}
+                  sheetH={sheetH}
+                  onSelect={(ls, ss) => { setMachineSheetW(ls); setMachineSheetH(ss); }}
+                  onUpdate={(updated) => {
+                    // update local state so pills reflect immediately
+                    const idx = machines.findIndex(m => m.id === machine.id);
+                    if (idx >= 0) {
+                      const copy = [...machines];
+                      copy[idx] = { ...copy[idx], specs: { ...(copy[idx].specs as object), custom_papers: updated } };
+                      setMachines(copy);
+                    }
+                  }}
+                />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
-                  <MfInput value={sheetW} onChange={v => setMachineSheetW(Number(v) || null)} style={{ width: 70, textAlign: 'center' }} />
-                  <span style={{ color: '#475569', fontWeight: 600 }}>×</span>
                   <MfInput value={sheetH} onChange={v => setMachineSheetH(Number(v) || null)} style={{ width: 70, textAlign: 'center' }} />
+                  <span style={{ color: '#475569', fontWeight: 600 }}>×</span>
+                  <MfInput value={sheetW} onChange={v => setMachineSheetW(Number(v) || null)} style={{ width: 70, textAlign: 'center' }} />
                   {(machineSheetW || machineSheetH) && (
                     <button onClick={() => { setMachineSheetW(null); setMachineSheetH(null); }}
                       style={{ border: 'none', background: 'none', color: '#475569', cursor: 'pointer', fontSize: '0.65rem', padding: '0 4px' }}
@@ -703,24 +832,22 @@ export default function CalculatorShell() {
                   )}
                 </div>
 
-                <MfLabel>ΦΥΡΑ</MfLabel>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <MfInput value={wastePercent} onChange={v => setWastePercent(Math.max(0, Number(v) || 0))} style={{ width: '100%', textAlign: 'center' }} />
-                      <span style={{ fontSize: '0.65rem', color: '#64748b' }}>%</span>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: '0.65rem', color: '#475569' }}>+</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <MfInput value={wasteFixed} onChange={v => setWasteFixed(Math.max(0, Number(v) || 0))} style={{ width: '100%', textAlign: 'center' }} />
-                      <span style={{ fontSize: '0.65rem', color: '#64748b' }}>φύλ</span>
-                    </div>
-                  </div>
-                  {wasteSheets > 0 && (
-                    <span style={{ fontSize: '0.68rem', color: 'var(--danger)', fontWeight: 600, flexShrink: 0 }}>={wasteSheets}</span>
+                <MfLabel>ΦΥΡΑ (φύλλα μοντάζ)</MfLabel>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
+                  <MfInput value={wasteFixed} onChange={v => setWasteFixed(Math.max(0, Number(v) || 0))} style={{ width: '100%', textAlign: 'center' }} />
+                </div>
+
+                <MfLabel>ΤΑΧΥΤΗΤΑ ({machine?.cat === 'offset' ? 'φύλ/ώρα' : 'σελ/λεπτό'})</MfLabel>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <MfInput value={speedOverride || defaultSpeed} onChange={v => setSpeedOverride(Number(v) || null)} style={{ width: 90, textAlign: 'center' }} />
+                  {speedOverride && (
+                    <button onClick={() => setSpeedOverride(null)}
+                      style={{ border: 'none', background: 'none', color: '#475569', cursor: 'pointer', fontSize: '0.65rem', padding: '0 4px' }}
+                      title="Reset">
+                      <i className="fas fa-undo" />
+                    </button>
                   )}
+                  <span style={{ fontSize: '0.55rem', color: '#64748b' }}>{matchedZone ? `${matchedZone.gsm_from}-${matchedZone.gsm_to}gr` : (specs.off_common_speed ? 'συνήθης' : 'max')}: {defaultSpeed}</span>
                 </div>
               </div>
             </>)}
@@ -947,62 +1074,44 @@ export default function CalculatorShell() {
             {activePanel === 'color' && (<>
               {machine?.cat === 'offset' ? (<>
                 {/* ═══ OFFSET COLOR ═══ */}
-                <MfLabel>CMYK ΤΣΙΓΚΟΙ</MfLabel>
+                <MfLabel>ΠΛΑΚΕΣ</MfLabel>
                 {/* Presets */}
                 <div style={{ display: 'flex', gap: 3, marginBottom: 8, flexWrap: 'wrap' }}>
                   {[
-                    { l: '4/0', f: [true,true,true,true], b: [false,false,false,false] },
-                    { l: '4/4', f: [true,true,true,true], b: [true,true,true,true] },
-                    { l: '1/0', f: [false,false,false,true], b: [false,false,false,false] },
-                    { l: '1/1', f: [false,false,false,true], b: [false,false,false,true] },
-                    { l: '2/0', f: [true,false,false,true], b: [false,false,false,false] },
-                  ].map(p => (
-                    <Pill key={p.l} onClick={() => setColor({ ...color,
-                      offFrontC: p.f[0], offFrontM: p.f[1], offFrontY: p.f[2], offFrontK: p.f[3],
-                      offBackC: p.b[0], offBackM: p.b[1], offBackY: p.b[2], offBackK: p.b[3],
-                    })}>{p.l}</Pill>
-                  ))}
+                    { l: '1/0', f: 1, b: 0 },
+                    { l: '1/1', f: 1, b: 1 },
+                    { l: '2/0', f: 2, b: 0 },
+                    { l: '2/2', f: 2, b: 2 },
+                    { l: '4/0', f: 4, b: 0 },
+                    { l: '4/4', f: 4, b: 4 },
+                  ].map(p => {
+                    const active = color.platesFront === p.f && color.platesBack === p.b;
+                    return (
+                      <Pill key={p.l} active={active} onClick={() => setColor({ ...color, platesFront: p.f, platesBack: p.b })}>{p.l}</Pill>
+                    );
+                  })}
                 </div>
-                {/* Front CMYK dots */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: '0.62rem', color: '#64748b', width: 44, flexShrink: 0 }}>Εμπρός</span>
-                  {([
-                    { k: 'offFrontC' as const, c: '#00aeef', l: 'C' },
-                    { k: 'offFrontM' as const, c: '#e91e90', l: 'M' },
-                    { k: 'offFrontY' as const, c: '#f0b400', l: 'Y' },
-                    { k: 'offFrontK' as const, c: '#333', l: 'K' },
-                  ]).map(d => (
-                    <button key={d.k} onClick={() => setColor({ ...color, [d.k]: !color[d.k] })} style={{
-                      width: 28, height: 28, borderRadius: '50%', border: `2px solid ${color[d.k] ? d.c : 'var(--border)'}`,
-                      background: color[d.k] ? d.c : 'transparent', color: color[d.k] ? '#fff' : '#475569',
-                      fontSize: '0.6rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>{d.l}</button>
-                  ))}
-                  <span style={{ fontSize: '0.65rem', color: 'var(--accent)', fontWeight: 600, marginLeft: 'auto' }}>
-                    {[color.offFrontC, color.offFrontM, color.offFrontY, color.offFrontK].filter(Boolean).length}
-                  </span>
-                </div>
-                {/* Back CMYK dots */}
-                {job.sides === 2 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <span style={{ fontSize: '0.62rem', color: '#64748b', width: 44, flexShrink: 0 }}>Πίσω</span>
-                    {([
-                      { k: 'offBackC' as const, c: '#00aeef', l: 'C' },
-                      { k: 'offBackM' as const, c: '#e91e90', l: 'M' },
-                      { k: 'offBackY' as const, c: '#f0b400', l: 'Y' },
-                      { k: 'offBackK' as const, c: '#333', l: 'K' },
-                    ]).map(d => (
-                      <button key={d.k} onClick={() => setColor({ ...color, [d.k]: !color[d.k] })} style={{
-                        width: 28, height: 28, borderRadius: '50%', border: `2px solid ${color[d.k] ? d.c : 'var(--border)'}`,
-                        background: color[d.k] ? d.c : 'transparent', color: color[d.k] ? '#fff' : '#475569',
-                        fontSize: '0.6rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>{d.l}</button>
-                    ))}
-                    <span style={{ fontSize: '0.65rem', color: 'var(--accent)', fontWeight: 600, marginLeft: 'auto' }}>
-                      {[color.offBackC, color.offBackM, color.offBackY, color.offBackK].filter(Boolean).length}
-                    </span>
+                {/* Plates per side */}
+                <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '0.58rem', color: '#64748b', marginBottom: 3 }}>Εμπρός</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button onClick={() => setColor({ ...color, platesFront: Math.max(0, color.platesFront - 1) })} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}>−</button>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)', width: 20, textAlign: 'center' }}>{color.platesFront}</span>
+                      <button onClick={() => setColor({ ...color, platesFront: color.platesFront + 1 })} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}>+</button>
+                    </div>
                   </div>
-                )}
+                  {job.sides === 2 && (
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.58rem', color: '#64748b', marginBottom: 3 }}>Πίσω</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <button onClick={() => setColor({ ...color, platesBack: Math.max(0, color.platesBack - 1) })} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}>−</button>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)', width: 20, textAlign: 'center' }}>{color.platesBack}</span>
+                        <button onClick={() => setColor({ ...color, platesBack: color.platesBack + 1 })} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}>+</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* PMS */}
                 <MfLabel>PANTONE / PMS</MfLabel>
@@ -1376,7 +1485,9 @@ export default function CalculatorShell() {
             })}
           </div>
 
-          {/* Canvas — fills remaining space */}
+          {/* Canvas + Dev panels */}
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 0 }}>
+          {/* Canvas */}
           <div style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ width: '100%', height: '100%', maxWidth: 900, position: 'relative' }}>
               <ImpositionCanvas
@@ -1429,13 +1540,63 @@ export default function CalculatorShell() {
               <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4, pointerEvents: 'none', zIndex: 2 }}>
                 <ImpoChip><strong>{ups}</strong>-up</ImpoChip>
                 <ImpoChip><strong>{sheets}</strong> φύλ</ImpoChip>
-                <ImpoChip><i className="fas fa-clock" /><strong>~{timeMin}&apos;</strong></ImpoChip>
+                <ImpoChip><i className="fas fa-clock" /><strong>~{timeMin >= 60 ? `${(timeMin / 60).toFixed(1)}h` : `${timeMin}'`}</strong></ImpoChip>
                 {calculating && <ImpoChip><i className="fas fa-spinner fa-spin" /></ImpoChip>}
               </div>
             </div>
             <input ref={pdfInputRef} type="file" accept=".pdf" style={{ display: 'none' }}
               onChange={e => { if (e.target.files?.length) handlePdfFiles(e.target.files); e.target.value = ''; }}
             />
+          </div>
+
+          {/* ═══ DEV PANELS (right of canvas) ═══ */}
+          {calcResult && (() => {
+            const bd = (calcResult.printDetail?.costBreakdown ?? {}) as Record<string, unknown>;
+            const chargePaper = Number(bd.chargePaper) || 0;
+            const chargePrint = Number(bd.chargePrint) || 0;
+            const paperProfit = chargePaper - calcResult.costPaper;
+            const printProfit = chargePrint - calcResult.costPrint;
+            const guillProfit = calcResult.chargeGuillotine - calcResult.costGuillotine;
+            const lamProfit = calcResult.chargeLamination - calcResult.costLamination;
+            const bindProfit = (Number(bd.chargeBinding) || 0) - calcResult.costBinding;
+            return (
+            <div style={{ width: 280, flexShrink: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 8px 8px 0' }}>
+              {/* COST BREAKDOWN */}
+              <DevPanel title="ΚΟΣΤΟΣ" color="#f87171">
+                <DevRow label="Χαρτί" sub={`${calcResult.totalStockSheets} φύλ × €${Number(bd.paperCostPerUnit ?? 0).toFixed(3)}`} value={calcResult.costPaper} />
+                <DevRow label="Εκτύπωση" sub={calcResult.printModel} value={calcResult.costPrint} />
+                {calcResult.costGuillotine > 0 && <DevRow label="Γκιλοτίνα" value={calcResult.costGuillotine} />}
+                {calcResult.costLamination > 0 && <DevRow label="Πλαστικοποίηση" value={calcResult.costLamination} />}
+                {calcResult.costBinding > 0 && <DevRow label="Βιβλιοδεσία" value={calcResult.costBinding} />}
+                <DevDivider />
+                <DevRow label="Σύνολο Κόστους" value={calcResult.totalCost} bold color="#f87171" />
+              </DevPanel>
+
+              {/* PROFIT BREAKDOWN */}
+              <DevPanel title="ΚΕΡΔΟΣ" color="var(--accent)">
+                {paperProfit !== 0 && <DevRow label="Χαρτί" sub={`markup ${bd.paperMarkup ?? 0}%`} value={paperProfit} />}
+
+                {Boolean(calcResult.printDetail?.productPricingApplied) ? (<>
+                  <DevRow label="Εκτύπωση (Product)" value={printProfit} />
+                  {((bd.productDetail as Array<{ label: string; value: number }> | undefined) ?? []).map((d, i) => (
+                    <DevRow key={i} label={d.label} value={d.value} indent />
+                  ))}
+                </>) : (
+                  <DevRow label="Εκτύπωση" value={printProfit} />
+                )}
+
+                {guillProfit !== 0 && <DevRow label="Γκιλοτίνα" value={guillProfit} />}
+                {lamProfit !== 0 && <DevRow label="Πλαστικοποίηση" value={lamProfit} />}
+                {bindProfit !== 0 && <DevRow label="Βιβλιοδεσία" value={bindProfit} />}
+                <DevDivider />
+                <DevRow label="Κέρδος" value={calcResult.profitAmount} bold color="var(--accent)" />
+                <DevRow label="Τιμή Πώλησης" value={calcResult.sellPrice} bold color="var(--success)" />
+                <DevDivider />
+                <DevRow label="Ανά τεμάχιο" value={calcResult.pricePerPiece} sub={`${calcResult.ups}-up · ${calcResult.totalMachineSheets} φύλ`} bold />
+              </DevPanel>
+            </div>
+            );
+          })()}
           </div>
 
         </div>

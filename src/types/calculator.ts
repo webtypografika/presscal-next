@@ -20,6 +20,7 @@ export interface CalculatorInput {
   sides: 1 | 2;
   colorMode: 'color' | 'bw';
   bleed: number;          // mm
+  wasteFixed?: number;    // extra machine sheets (φύλλα μοντάζ)
 
   // Imposition
   impositionMode: ImpositionMode;
