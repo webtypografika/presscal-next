@@ -350,6 +350,7 @@ export default function CalculatorShell() {
   const [impoOffsetY, setImpoOffsetY] = useState(0);
   const [impoRotation, setImpoRotation] = useState<number>(0);
   const [impoDuplexOrient, setImpoDuplexOrient] = useState<'h2h' | 'h2f'>('h2h');
+  const [impoTurnType, setImpoTurnType] = useState<'turn' | 'tumble'>('turn');
   const [impoColorBar, setImpoColorBar] = useState(false);
   const [impoColorBarType, setImpoColorBarType] = useState<'cmyk' | 'cmyk_tint50'>('cmyk');
   const [impoColorBarEdge, setImpoColorBarEdge] = useState<'tail' | 'gripper'>('tail');
@@ -447,6 +448,9 @@ export default function CalculatorShell() {
   const paper = papers.find(p => p.id === activePaperId) || papers[0];
   const sheetW = machineSheetW || machine?.maxLS || 330;
   const sheetH = machineSheetH || machine?.maxSS || 487;
+  // Visual dimensions: SEF = portrait (short edge at top), LEF = landscape (long edge at top)
+  const vizW = feedEdge === 'sef' ? sheetH : sheetW;
+  const vizH = feedEdge === 'sef' ? sheetW : sheetH;
 
   const guillotines = postpress.filter(p => p.subtype === 'guillotine');
   const laminators = postpress.filter(p => p.subtype === 'lam_roll' || p.subtype === 'lam_sheet');
@@ -481,8 +485,8 @@ export default function CalculatorShell() {
     sides: job.sides,
     gutter: impoGutter,
     area: {
-      paperW: sheetW,
-      paperH: sheetH,
+      paperW: vizW,
+      paperH: vizH,
       marginTop: machine?.marginTop || 0,
       marginBottom: machine?.marginBottom || 0,
       marginLeft: machine?.marginLeft || 0,
@@ -493,6 +497,7 @@ export default function CalculatorShell() {
     forceRows: impoForceRows || undefined,
     rotation: impoRotation || (job.rotation ? 90 : 0),
     pages: job.archetype === 'booklet' ? job.pages : job.archetype === 'perfect_bound' ? job.bodyPages : undefined,
+    turnType: impoTurnType,
   };
 
   const impo: ImpositionResult = calcImposition(impoInput);
@@ -856,26 +861,16 @@ export default function CalculatorShell() {
                     }
                   }}
                 />
-                <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.45rem', color: feedEdge === 'sef' ? 'var(--blue)' : '#64748b', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' }}>
-                      {feedEdge === 'sef' ? 'Short' : 'Long'}
-                    </div>
-                    <MfInput value={feedEdge === 'sef' ? sheetH : sheetW}
-                      onChange={v => feedEdge === 'sef' ? setMachineSheetH(Number(v) || null) : setMachineSheetW(Number(v) || null)}
-                      style={{ width: 70, textAlign: 'center' }} />
-                  </div>
-                  <span style={{ color: '#475569', fontWeight: 600, alignSelf: 'flex-end', paddingBottom: 6 }}>×</span>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.45rem', color: '#64748b', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' }}>
-                      {feedEdge === 'sef' ? 'Long' : 'Short'}
-                    </div>
-                    <MfInput value={feedEdge === 'sef' ? sheetW : sheetH}
-                      onChange={v => feedEdge === 'sef' ? setMachineSheetW(Number(v) || null) : setMachineSheetH(Number(v) || null)}
-                      style={{ width: 70, textAlign: 'center' }} />
-                  </div>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 12 }}>
+                  <MfInput value={sheetH}
+                    onChange={v => setMachineSheetH(Number(v) || null)}
+                    style={{ width: 70, textAlign: 'center' }} />
+                  <span style={{ color: '#475569', fontWeight: 600 }}>×</span>
+                  <MfInput value={sheetW}
+                    onChange={v => setMachineSheetW(Number(v) || null)}
+                    style={{ width: 70, textAlign: 'center' }} />
                   <button onClick={() => setFeedEdge(f => f === 'sef' ? 'lef' : 'sef')}
-                    style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.5rem', fontWeight: 700, padding: '4px 6px', borderRadius: 4, alignSelf: 'flex-end', marginBottom: 2, fontFamily: 'inherit' }}
+                    style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.5rem', fontWeight: 700, padding: '4px 6px', borderRadius: 4, fontFamily: 'inherit' }}
                     title={feedEdge === 'sef' ? 'Short Edge First → Long Edge First' : 'Long Edge First → Short Edge First'}>
                     {feedEdge === 'sef' ? 'SEF' : 'LEF'}
                   </button>
@@ -1283,16 +1278,6 @@ export default function CalculatorShell() {
                       Perfecting {color.perfecting ? 'ON' : 'OFF'}
                     </button>
                   </div>
-                  <MfLabel>ΜΕΘΟΔΟΣ 2 ΟΨΕΩΝ</MfLabel>
-                  <div style={{ display: 'flex', gap: 3 }}>
-                    {([
-                      { v: 'sheetwise' as const, l: 'Sheetwise' },
-                      { v: 'turn' as const, l: 'Τούμπα Γων.' },
-                      { v: 'tumble' as const, l: 'Τούμπα Δόντ.' },
-                    ]).map(m => (
-                      <Pill key={m.v} active={color.printMethod === m.v} onClick={() => setColor({ ...color, printMethod: m.v })}>{m.l}</Pill>
-                    ))}
-                  </div>
                 </>)}
               </>) : (<>
                 {/* ═══ DIGITAL COLOR ═══ */}
@@ -1447,7 +1432,7 @@ export default function CalculatorShell() {
                 {impoMode === 'workturn' && (
                   <div style={{ marginBottom: 10 }}>
                     <MfLabel>ΤΡΟΠΟΣ ΑΝΑΣΤΡΟΦΗΣ</MfLabel>
-                    <ToggleBar value="turn" onChange={() => {}} options={[{ v: 'turn', l: 'Work & Turn' }, { v: 'tumble', l: 'Work & Tumble' }]} />
+                    <ToggleBar value={impoTurnType} onChange={v => setImpoTurnType(v as 'turn' | 'tumble')} options={[{ v: 'turn', l: 'Work & Turn' }, { v: 'tumble', l: 'Work & Tumble' }]} />
                   </div>
                 )}
               </>)}
@@ -1485,7 +1470,7 @@ export default function CalculatorShell() {
                   <i className="fas fa-info-circle" style={{ marginRight: 3 }} />0-359° ελεύθερη περιστροφή
                 </div>
 
-                {job.sides === 2 && (<>
+                {job.sides === 2 && impoMode !== 'workturn' && (<>
                   <MfLabel>DUPLEX ORIENTATION</MfLabel>
                   <ToggleBar value={impoDuplexOrient} onChange={v => setImpoDuplexOrient(v as 'h2h' | 'h2f')}
                     options={[{ v: 'h2h', l: 'Head-Head' }, { v: 'h2f', l: 'Head-Foot' }]} />
@@ -1610,8 +1595,8 @@ export default function CalculatorShell() {
             <div style={{ width: '100%', height: '100%', maxWidth: 900, position: 'relative' }}>
               <ImpositionCanvas
                 impo={impo}
-                sheetW={sheetW}
-                sheetH={sheetH}
+                sheetW={vizW}
+                sheetH={vizH}
                 marginTop={machine?.marginTop || 0}
                 marginBottom={machine?.marginBottom || 0}
                 marginLeft={machine?.marginLeft || 0}

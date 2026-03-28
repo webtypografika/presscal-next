@@ -162,8 +162,10 @@ function drawSheet(
       if (idx >= impo.cells.length) continue;
       const cell = impo.cells[idx];
 
-      const x = cenX + col * (pw + gutterPx);
-      const y = cenY + row * (ph + gutterPx);
+      // W&T: use actual cell coordinates (includes fold gap), others: uniform grid
+      const isWT = impo.mode === 'workturn';
+      const x = isWT ? offX + cell.x * scale : cenX + col * (pw + gutterPx);
+      const y = isWT ? offY + cell.y * scale : cenY + row * (ph + gutterPx);
       const isRotated = cell.rotation && cell.rotation !== 0;
 
       // Bleed zone
@@ -382,7 +384,8 @@ export default function ImpositionCanvas({
   const dragLastRef = useRef({ x: 0, y: 0 });
 
   // View controls
-  const isDuplex = (sides ?? 1) === 2 && (pdf?.thumbnails?.length ?? 0) >= 2;
+  // W&T shows both pages on same sheet (signature) — no separate duplex view
+  const isDuplex = (sides ?? 1) === 2 && (pdf?.thumbnails?.length ?? 0) >= 2 && impo.mode !== 'workturn';
   const totalPages = isDuplex ? (pdf?.thumbnails?.length ?? 1) : 1;
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [activePage, setActivePage] = useState(0); // 0=front, 1=back, 2+=booklet pages
@@ -463,11 +466,9 @@ export default function ImpositionCanvas({
         machCat, pdf, pageIdx, isBack);
     }
 
-    // Feed direction arrow — indicates which edge enters machine first
-    if (feedEdge) {
-      const isSef = feedEdge === 'sef';
-      const label = isSef ? 'Short edge' : 'Long edge';
-      // Calculate sheet position
+    // Feed direction arrow — LEFT edge, digital only
+    if (feedEdge && machCat !== 'offset') {
+      const label = feedEdge === 'sef' ? 'Short side first' : 'Long side first';
       const scX = (cW - 24) / sheetW;
       const scY = (cH - reserveTop - reserveBot) / sheetH;
       const sc = Math.min(scX, scY);
@@ -483,27 +484,18 @@ export default function ImpositionCanvas({
       ctx.lineWidth = 1.5;
       ctx.font = '600 7.5px Inter, DM Sans, sans-serif';
 
-      if (isSef) {
-        // SEF: arrow on TOP edge (short edge enters), pointing down
-        const ax = sx + dW / 2;
-        const ay = sy - 2;
-        ctx.beginPath(); ctx.moveTo(ax, ay - arrowLen); ctx.lineTo(ax, ay); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(ax, ay + 1); ctx.lineTo(ax - 3.5, ay - 4); ctx.lineTo(ax + 3.5, ay - 4); ctx.closePath(); ctx.fill();
-        ctx.textAlign = 'center';
-        ctx.fillText(label, ax, ay - arrowLen - 4);
-      } else {
-        // LEF: arrow on LEFT edge (long edge enters), pointing right
-        const ax = sx - 2;
-        const ay = sy + dH / 2;
-        ctx.beginPath(); ctx.moveTo(ax - arrowLen, ay); ctx.lineTo(ax, ay); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(ax + 1, ay); ctx.lineTo(ax - 4, ay - 3.5); ctx.lineTo(ax - 4, ay + 3.5); ctx.closePath(); ctx.fill();
-        ctx.save();
-        ctx.translate(ax - arrowLen - 4, ay);
-        ctx.rotate(-Math.PI / 2);
-        ctx.textAlign = 'center';
-        ctx.fillText(label, 0, 0);
-        ctx.restore();
-      }
+      // Arrow on LEFT edge, pointing right
+      const ax = sx - 2;
+      const ay = sy + dH / 2;
+      ctx.beginPath(); ctx.moveTo(ax - arrowLen, ay); ctx.lineTo(ax, ay); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(ax + 1, ay); ctx.lineTo(ax - 4, ay - 3.5); ctx.lineTo(ax - 4, ay + 3.5); ctx.closePath(); ctx.fill();
+      // Label rotated vertically along left edge
+      ctx.save();
+      ctx.translate(ax - arrowLen - 6, ay);
+      ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
+      ctx.fillText(label, 0, 0);
+      ctx.restore();
 
       ctx.restore();
     }

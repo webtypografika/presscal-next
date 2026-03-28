@@ -1231,8 +1231,11 @@ async function exportWorkTurn(
   const halfW = isTumble ? printableW : printableW / 2;
   const halfH = isTumble ? printableH / 2 : printableH;
 
-  const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
-  const totalGridH = impo.rows * pieceH + Math.max(0, impo.rows - 1) * gutterPt;
+  // Per-half grid dimensions (not total cols/rows which are doubled for W&T)
+  const hCols = impo.halfCols ?? (isTumble ? impo.cols : Math.ceil(impo.cols / 2));
+  const hRows = impo.halfRows ?? (isTumble ? Math.ceil(impo.rows / 2) : impo.rows);
+  const totalGridW = hCols * pieceW + Math.max(0, hCols - 1) * gutterPt;
+  const totalGridH = hRows * pieceH + Math.max(0, hRows - 1) * gutterPt;
 
   const pdfPageCount = embeddedPages.length;
   const maxSheets = 50;
@@ -1281,26 +1284,26 @@ async function exportWorkTurn(
       pg.pushOperators(popGraphicsState());
     }
 
-    for (let row = 0; row < impo.rows; row++) {
-      for (let col = 0; col < impo.cols; col++) {
+    for (let row = 0; row < hRows; row++) {
+      for (let col = 0; col < hCols; col++) {
         const cellX = cenFX + col * (pieceW + gutterPt);
-        const cellY = cenFY + (impo.rows - 1 - row) * (pieceH + gutterPt);
+        const cellY = cenFY + (hRows - 1 - row) * (pieceH + gutterPt);
         wtDrawCell(page, cellX, cellY, epFront, epFrontPg, 0);
       }
     }
 
-    // Back half — mirrored
+    // Back half — αντικριστά (180°)
     const backHalfX = isTumble ? cenFX : mL + halfW + (halfW - totalGridW) / 2;
     const backHalfY = isTumble ? mB + halfH + (halfH - totalGridH) / 2 : cenFY;
-    for (let row2 = 0; row2 < impo.rows; row2++) {
-      for (let col2 = 0; col2 < impo.cols; col2++) {
+    for (let row2 = 0; row2 < hRows; row2++) {
+      for (let col2 = 0; col2 < hCols; col2++) {
         let cellX2: number, cellY2: number;
         if (isTumble) {
           cellX2 = backHalfX + col2 * (pieceW + gutterPt);
           cellY2 = backHalfY + row2 * (pieceH + gutterPt);
         } else {
-          cellX2 = backHalfX + (impo.cols - 1 - col2) * (pieceW + gutterPt);
-          cellY2 = backHalfY + (impo.rows - 1 - row2) * (pieceH + gutterPt);
+          cellX2 = backHalfX + (hCols - 1 - col2) * (pieceW + gutterPt);
+          cellY2 = backHalfY + (hRows - 1 - row2) * (pieceH + gutterPt);
         }
         const tumbleRot = isTumble ? 180 : 0;
         wtDrawCell(page, cellX2, cellY2, epBack, epBackPg, tumbleRot);
@@ -1310,13 +1313,13 @@ async function exportWorkTurn(
     // White masks
     const white = rgb(1, 1, 1);
 
-    // Front half grid bounds
+    // Front half grid bounds (using per-half grid size)
     const fGridL = cenFX;
     const fGridR = cenFX + totalGridW;
     const fGridB = cenFY;
     const fGridT = cenFY + totalGridH;
 
-    // Back half grid bounds
+    // Back half grid bounds (using per-half grid size)
     const bGridL = backHalfX;
     const bGridR = backHalfX + totalGridW;
     const bGridB = backHalfY;

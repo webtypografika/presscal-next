@@ -218,4 +218,6 @@ export interface ImpositionResult {
   // Work & Turn-specific
   turnType?: WorkTurnType;
   fitsPerHalf?: number;
+  halfCols?: number;
+  halfRows?: number;
 }

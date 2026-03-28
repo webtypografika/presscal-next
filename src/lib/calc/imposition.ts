@@ -153,12 +153,12 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   // Normalize rotation to 0-359
   const rot = ((rotation || 0) % 360 + 360) % 360;
   // 90°-ish or 270°-ish: cells are placed rotated (swap W↔H)
-  const isSwapped = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
+  let isSwapped = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
   // Cell dimensions after rotation swap
-  const cellW = isSwapped ? rawCellH : rawCellW;
-  const cellH = isSwapped ? rawCellW : rawCellH;
+  let cellW = isSwapped ? rawCellH : rawCellW;
+  let cellH = isSwapped ? rawCellW : rawCellH;
   // Content rotation applied to rendering
-  const contentRotation = rot;
+  let contentRotation = rot;
 
   let cols: number, rows: number;
 
@@ -177,8 +177,17 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     while (cols * rows > forceUps && cols > 1) cols--;
     while (cols * rows > forceUps && rows > 1) rows--;
   } else {
-    cols = fitCount(pw, cellW, gutter);
-    rows = fitCount(ph, cellH, gutter);
+    // Try both orientations, pick the one with more ups
+    const best = bestOrientation(pw, ph, cellW, cellH, gutter);
+    cols = best.cols;
+    rows = best.rows;
+    if (best.rotated) {
+      // Rotated orientation gives more ups — swap cell dims
+      isSwapped = !isSwapped;
+      cellW = isSwapped ? rawCellH : rawCellW;
+      cellH = isSwapped ? rawCellW : rawCellH;
+      contentRotation = (rot + 90) % 360;
+    }
   }
 
   const ups = Math.max(cols * rows, 1);
@@ -529,10 +538,16 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
 export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, gutter, area, rotation, turnType = 'turn' } = input;
 
-  const cellW = trimW + bleed * 2;
-  const cellH = trimH + bleed * 2;
+  const rawCellW = trimW + bleed * 2;
+  const rawCellH = trimH + bleed * 2;
   const { w: pw, h: ph } = printable(area);
-  const toggleRotation = rotation === 90 || rotation === 270;
+  const rot = ((rotation || 0) % 360 + 360) % 360;
+  // 90°/270° swap cell dimensions (piece changes orientation)
+  const isSwapped = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
+  const cellW = isSwapped ? rawCellH : rawCellW;
+  const cellH = isSwapped ? rawCellW : rawCellH;
+  const frontRot = rot;
+  const backRot = (rot + 180) % 360;
 
   const isTumble = turnType === 'tumble';
   // Turn: split width (left/right), Tumble: split height (top/bottom)
@@ -560,13 +575,10 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
     };
   }
 
-  // Choose best orientation with toggle support
-  let autoRotated = fit2 > fit1;
-  let rotated = toggleRotation ? !autoRotated : autoRotated;
-  if (!toggleRotation) {
-    if (rotated && fit2 === 0) rotated = false;
-    if (!rotated && fit1 === 0) rotated = true;
-  }
+  // Always pick best orientation for max fit (content rotation is separate)
+  let rotated = fit2 > fit1;
+  if (rotated && fit2 === 0) rotated = false;
+  if (!rotated && fit1 === 0) rotated = true;
 
   const cols = rotated ? cols2 : cols1;
   const rows = rotated ? rows2 : rows1;
@@ -583,55 +595,61 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   // Build cells for both halves
   const cells: ImpositionCell[] = [];
 
+  // Center grids within each half
+  const gridOffX = (halfW - usedW) / 2;
+  const gridOffY = (halfH - usedH) / 2;
+
+  // Signature: same grid in both halves, back content rotated 180° (αντικριστά)
   if (isTumble) {
-    // Top half
+    // Top half — front (page 1)
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         cells.push({
           col: c, row: r,
-          x: area.marginLeft + c * (actualCellW + gutter),
-          y: area.marginTop + r * (actualCellH + gutter),
+          x: area.marginLeft + gridOffX + c * (actualCellW + gutter),
+          y: area.marginTop + gridOffY + r * (actualCellH + gutter),
           w: actualCellW, h: actualCellH,
-          pageNum: r * cols + c + 1,
+          pageNum: 1,
+          rotation: frontRot || undefined,
         });
       }
     }
-    // Bottom half (tumble = flip top-bottom → 180° rotation)
+    // Bottom half — back (page 2), same positions + 180° content
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         cells.push({
           col: c, row: rows + r,
-          x: area.marginLeft + c * (actualCellW + gutter),
-          y: area.marginTop + halfH + gutter + r * (actualCellH + gutter),
+          x: area.marginLeft + gridOffX + c * (actualCellW + gutter),
+          y: area.marginTop + halfH + gridOffY + r * (actualCellH + gutter),
           w: actualCellW, h: actualCellH,
-          pageNum: r * cols + c + 1,
-          rotation: 180,
+          pageNum: 2,
+          rotation: backRot,
         });
       }
     }
   } else {
-    // Left half
+    // Interleave left + right per row (canvas reads row-major)
     for (let r = 0; r < rows; r++) {
+      // Left half — front (page 1)
       for (let c = 0; c < cols; c++) {
         cells.push({
           col: c, row: r,
-          x: area.marginLeft + c * (actualCellW + gutter),
-          y: area.marginTop + r * (actualCellH + gutter),
+          x: area.marginLeft + gridOffX + c * (actualCellW + gutter),
+          y: area.marginTop + gridOffY + r * (actualCellH + gutter),
           w: actualCellW, h: actualCellH,
-          pageNum: r * cols + c + 1,
+          pageNum: 1,
+          rotation: frontRot || undefined,
         });
       }
-    }
-    // Right half (turn = flip left-right → 180° rotation)
-    for (let r = 0; r < rows; r++) {
+      // Right half — back (page 2), same positions shifted right + 180° content
       for (let c = 0; c < cols; c++) {
         cells.push({
           col: cols + c, row: r,
-          x: area.marginLeft + halfW + gutter + c * (actualCellW + gutter),
-          y: area.marginTop + r * (actualCellH + gutter),
+          x: area.marginLeft + halfW + gridOffX + c * (actualCellW + gutter),
+          y: area.marginTop + gridOffY + r * (actualCellH + gutter),
           w: actualCellW, h: actualCellH,
-          pageNum: r * cols + c + 1,
-          rotation: 180,
+          pageNum: 2,
+          rotation: backRot,
         });
       }
     }
@@ -657,6 +675,8 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
     totalSheets: rawSheets,
     turnType,
     fitsPerHalf,
+    halfCols: cols,
+    halfRows: rows,
     ...marginInfo(area),
   };
 }
