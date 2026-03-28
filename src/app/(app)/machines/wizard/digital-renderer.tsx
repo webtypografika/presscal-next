@@ -469,14 +469,16 @@ function calcCostPreview(data: Data) {
   const coronaBw = coronaPer;
   const shared = fuser + belt + waste;
 
-  const totalColor = tonerColor + drumColor + devColor + extraToner + extraDrum + extraDev + shared + corona;
-  const totalBw = tonerBw + drumBw + devBw + shared + coronaBw;
+  const wearColor = drumColor + devColor + extraDrum + extraDev + shared + corona;
+  const wearBw = drumBw + devBw + shared + coronaBw;
+  const totalColor = tonerColor + extraToner + wearColor;
+  const totalBw = tonerBw + wearBw;
 
   return {
-    a4_color: totalColor,
-    a4_bw: totalBw,
-    a3_color: totalColor * 2,
-    a3_bw: totalBw * 2,
+    a4_color: wearColor,
+    a4_bw: wearBw,
+    a3_color: wearColor * 2,
+    a3_bw: wearBw * 2,
     cons_a4_color: totalColor, cons_a4_bw: totalBw,
     breakdown: { toner_color: tonerColor, drums: drumColor, dev: devColor, shared, corona },
   };
