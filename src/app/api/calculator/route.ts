@@ -336,7 +336,7 @@ export async function GET() {
 // ─── PATCH: update machine custom_papers ───
 export async function PATCH(req: NextRequest) {
   try {
-    const { machineId, custom_papers } = await req.json();
+    const { machineId, custom_papers, fav_papers } = await req.json();
     if (!machineId) return Response.json({ error: 'Missing machineId' }, { status: 400 });
 
     const machine = await prisma.machine.findFirst({
@@ -345,7 +345,8 @@ export async function PATCH(req: NextRequest) {
     if (!machine) return Response.json({ error: 'Machine not found' }, { status: 404 });
 
     const specs = (machine.specs as Record<string, unknown>) || {};
-    specs.custom_papers = custom_papers;
+    if (custom_papers !== undefined) specs.custom_papers = custom_papers;
+    if (fav_papers !== undefined) specs.fav_papers = fav_papers;
 
     await prisma.machine.update({
       where: { id: machineId },

@@ -134,6 +134,18 @@ const ARCHETYPES = [
   { id: 'custom', label: 'Custom', icon: 'fas fa-cog' },
 ];
 
+// ─── ARCHETYPE ↔ MODE VALIDATION ───
+const ARCHETYPE_MODES: Record<string, ImpositionMode[]> = {
+  single_leaf: ['nup', 'cutstack', 'workturn', 'gangrun', 'stepmulti'],
+  pad: ['nup'],
+  booklet: ['booklet'],
+  perfect_bound: ['perfect_bound'],
+  die_cut: ['nup', 'stepmulti'],
+  custom: ['nup', 'cutstack', 'gangrun', 'stepmulti'],
+};
+const FORCE_DUPLEX: Set<ImpositionMode> = new Set(['booklet', 'perfect_bound', 'workturn']);
+const HIDE_BACK_PLATES: Set<ImpositionMode> = new Set(['workturn']);
+
 
 /* ═══ MODAL PORTAL ═══ */
 function ModalPortal({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
@@ -315,6 +327,7 @@ export default function CalculatorShell() {
   const [supplier, setSupplier] = useState('');
   const [paperCat, setPaperCat] = useState('');
   const [paperSearch, setPaperSearch] = useState('');
+  const [showFavPapers, setShowFavPapers] = useState(false);
 
   const [job, setJob] = useState<JobData>({ archetype: 'single_leaf', width: 210, height: 297, bleed: 3, bleedOn: true, qty: 500, sides: 2, rotation: false, pages: 8, sheetsPerPad: 50, bodyPages: 64, customMult: 1 });
   const [color, setColor] = useState<ColorData>({
@@ -408,6 +421,20 @@ export default function CalculatorShell() {
       })
       .catch(() => setDataLoaded(true)); // use demo data on failure
   }, []);
+
+  // ─── ARCHETYPE ↔ MODE ↔ SIDES VALIDATION ───
+  // Auto-correct mode when archetype changes
+  useEffect(() => {
+    const valid = ARCHETYPE_MODES[job.archetype] || ARCHETYPE_MODES.single_leaf;
+    if (!valid.includes(impoMode)) setImpoMode(valid[0]);
+  }, [job.archetype]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-correct sides when mode forces duplex
+  useEffect(() => {
+    if (FORCE_DUPLEX.has(impoMode) && job.sides !== 2) {
+      setJob(prev => ({ ...prev, sides: 2 }));
+    }
+  }, [impoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── DERIVED ───
   const machine = machines[activeMachine] || machines[0];
@@ -867,7 +894,20 @@ export default function CalculatorShell() {
                 />
                 {paperSearch && <button onClick={() => setPaperSearch('')} style={{ border: 'none', background: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.7rem', padding: 0 }}>&times;</button>}
               </div>
-              {/* Filters — 2 column row */}
+              {/* Fav toggle + Filters */}
+              {((machine?.specs?.fav_papers as string[]) ?? []).length > 0 && (
+                <div style={{ marginBottom: 6 }}>
+                  <button onClick={() => setShowFavPapers(f => !f)}
+                    style={{
+                      padding: '4px 12px', fontSize: '0.62rem', fontWeight: 600, borderRadius: 6, cursor: 'pointer',
+                      border: showFavPapers ? '1px solid #f59e0b' : '1px solid var(--border)',
+                      background: showFavPapers ? 'rgba(245,158,11,0.12)' : 'transparent',
+                      color: showFavPapers ? '#f59e0b' : 'var(--text-dim)',
+                    }}>
+                    <i className="fas fa-star" style={{ marginRight: 4, fontSize: '0.55rem' }} />Αγαπημένα
+                  </button>
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
                 {suppliers.length > 0
                   ? <FilterDrop icon="fas fa-truck" label="Προμηθευτής" value={supplier} options={suppliers} onChange={setSupplier} color="var(--teal)" />
@@ -890,8 +930,10 @@ export default function CalculatorShell() {
                     .filter(p => !supplier || p.supplier === supplier)
                     .filter(p => !paperCat || paperCategory(p) === paperCat);
                   if (fp.length === 0) return <div style={{ padding: 20, textAlign: 'center', color: '#64748b', fontSize: '0.78rem' }}><i className="fas fa-inbox" style={{ display: 'block', fontSize: '1.2rem', marginBottom: 6 }} />Δεν βρέθηκαν</div>;
+                  const favIds: string[] = (machine?.specs?.fav_papers as string[]) ?? [];
+                  const filtered = showFavPapers ? fp.filter(p => favIds.includes(p.id)) : fp;
                   const grouped = new Map<string, typeof fp>();
-                  for (const p of fp) { const cat = paperCategory(p) || 'Λοιπά'; if (!grouped.has(cat)) grouped.set(cat, []); grouped.get(cat)!.push(p); }
+                  for (const p of filtered) { const cat = paperCategory(p) || 'Λοιπά'; if (!grouped.has(cat)) grouped.set(cat, []); grouped.get(cat)!.push(p); }
                   return [...grouped.entries()].map(([cat, items]) => (
                     <div key={cat}>
                       <div style={{ fontSize: '0.58rem', fontWeight: 600, color: 'var(--teal)', letterSpacing: '0.05em', textTransform: 'uppercase', padding: '6px 0 3px', position: 'sticky', top: 0, background: 'rgba(0,0,0,0.2)', zIndex: 1 }}>{cat} ({items.length})</div>
@@ -918,6 +960,20 @@ export default function CalculatorShell() {
                                 <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--teal)', marginLeft: 'auto' }}>€{(p.costPerUnit || 0).toFixed(3)}</span>
                               </div>
                             </div>
+                            <button onClick={(e) => {
+                              e.stopPropagation();
+                              const favIds: string[] = ((machine?.specs?.fav_papers as string[]) ?? []);
+                              const updated = favIds.includes(p.id) ? favIds.filter(id => id !== p.id) : [...favIds, p.id];
+                              const idx = machines.findIndex(m => m.id === machine.id);
+                              if (idx >= 0) {
+                                const copy = [...machines];
+                                copy[idx] = { ...copy[idx], specs: { ...(copy[idx].specs as object), fav_papers: updated } };
+                                setMachines(copy);
+                              }
+                              fetch('/api/calculator', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ machineId: machine.id, fav_papers: updated }) });
+                            }} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', fontSize: '0.65rem', color: ((machine?.specs?.fav_papers as string[]) ?? []).includes(p.id) ? '#f59e0b' : '#475569', flexShrink: 0 }}>
+                              <i className={((machine?.specs?.fav_papers as string[]) ?? []).includes(p.id) ? 'fas fa-star' : 'far fa-star'} />
+                            </button>
                           </div>
                         );
                       })}
@@ -971,7 +1027,13 @@ export default function CalculatorShell() {
               {/* Sides */}
               <MfLabel>ΟΨΕΙΣ</MfLabel>
               <div style={{ marginBottom: 12 }}>
-                <ToggleBar value={String(job.sides)} onChange={(v) => setJob({ ...job, sides: Number(v) as 1 | 2 })} options={[{ v: '1', l: 'Μονή' }, { v: '2', l: 'Διπλή' }]} />
+                {FORCE_DUPLEX.has(impoMode) ? (
+                  <div style={{ fontSize: '0.62rem', color: '#64748b', padding: '6px 0' }}>
+                    <i className="fas fa-lock" style={{ marginRight: 4, fontSize: '0.5rem' }} />Διπλή όψη ({impoMode === 'workturn' ? 'Work&Turn' : impoMode === 'booklet' ? 'Booklet' : 'Perfect Bound'})
+                  </div>
+                ) : (
+                  <ToggleBar value={String(job.sides)} onChange={(v) => setJob({ ...job, sides: Number(v) as 1 | 2 })} options={[{ v: '1', l: 'Μονή' }, { v: '2', l: 'Διπλή' }]} />
+                )}
               </div>
 
               {/* Force UPs */}
@@ -1101,7 +1163,7 @@ export default function CalculatorShell() {
                       <button onClick={() => setColor({ ...color, platesFront: color.platesFront + 1 })} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}>+</button>
                     </div>
                   </div>
-                  {job.sides === 2 && (
+                  {job.sides === 2 && !HIDE_BACK_PLATES.has(impoMode) && (
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '0.58rem', color: '#64748b', marginBottom: 3 }}>Πίσω</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1109,6 +1171,11 @@ export default function CalculatorShell() {
                         <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)', width: 20, textAlign: 'center' }}>{color.platesBack}</span>
                         <button onClick={() => setColor({ ...color, platesBack: color.platesBack + 1 })} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}>+</button>
                       </div>
+                    </div>
+                  )}
+                  {HIDE_BACK_PLATES.has(impoMode) && (
+                    <div style={{ flex: 1, fontSize: '0.55rem', color: '#64748b', alignSelf: 'flex-end', paddingBottom: 4 }}>
+                      <i className="fas fa-lock" style={{ fontSize: '0.45rem', marginRight: 3 }} />Πίσω = Εμπρός
                     </div>
                   )}
                 </div>
@@ -1124,7 +1191,7 @@ export default function CalculatorShell() {
                       <button onClick={() => setColor({ ...color, pmsFront: color.pmsFront + 1 })} style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.8rem' }}>+</button>
                     </div>
                   </div>
-                  {job.sides === 2 && (
+                  {job.sides === 2 && !HIDE_BACK_PLATES.has(impoMode) && (
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: '0.58rem', color: '#64748b', marginBottom: 3 }}>Πίσω</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1155,8 +1222,8 @@ export default function CalculatorShell() {
                   </div>
                 )}
 
-                {/* Perfecting + Method */}
-                {job.sides === 2 && (<>
+                {/* Perfecting + Method (hidden in Work&Turn — mode handles it) */}
+                {job.sides === 2 && !HIDE_BACK_PLATES.has(impoMode) && (<>
                   <div style={{ borderTop: '1px solid var(--border)', margin: '8px 0 10px' }} />
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                     <button onClick={() => setColor({ ...color, perfecting: !color.perfecting })} style={{
@@ -1456,7 +1523,7 @@ export default function CalculatorShell() {
 
           {/* Imposition mode buttons + gear — TOP */}
           <div style={{ display: 'flex', gap: 3, marginBottom: 6, flexShrink: 0, alignItems: 'center', justifyContent: 'center' }}>
-            {IMPO_MODES.map((m) => {
+            {IMPO_MODES.filter(m => (ARCHETYPE_MODES[job.archetype] || ARCHETYPE_MODES.single_leaf).includes(m.key)).map((m) => {
               const active = m.key === impoMode;
               return (
                 <div key={m.key} style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
