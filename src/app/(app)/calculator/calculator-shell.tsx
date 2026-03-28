@@ -1136,6 +1136,17 @@ export default function CalculatorShell() {
             {activePanel === 'color' && (<>
               {machine?.cat === 'offset' ? (<>
                 {/* ═══ OFFSET COLOR ═══ */}
+                <MfLabel>ΕΠΙΚΑΛΥΨΗ</MfLabel>
+                <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
+                  {([
+                    { v: 'low' as const, l: '25%' },
+                    { v: 'mid' as const, l: '50%' },
+                    { v: 'high' as const, l: '100%' },
+                  ]).map(o => (
+                    <Pill key={o.v} active={color.coverage === o.v} onClick={() => setColor({ ...color, coverage: o.v })} color="var(--blue)">{o.l}</Pill>
+                  ))}
+                </div>
+
                 <MfLabel>ΠΛΑΚΕΣ</MfLabel>
                 {/* Presets */}
                 <div style={{ display: 'flex', gap: 3, marginBottom: 8, flexWrap: 'wrap' }}>
@@ -1256,23 +1267,15 @@ export default function CalculatorShell() {
                 </div>
 
                 {/* Coverage */}
-                <MfLabel>ΚΑΛΥΨΗ</MfLabel>
-                <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap' }}>
+                <MfLabel>ΕΠΙΚΑΛΥΨΗ</MfLabel>
+                <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
                   {([
-                    { v: 'low' as const, l: 'Χαμηλή', c: 'var(--success)', desc: '5% — Κείμενο' },
-                    { v: 'mid' as const, l: 'Μεσαία', c: 'var(--accent)', desc: '20% — Κείμενο + εικόνες' },
-                    { v: 'high' as const, l: 'Υψηλή', c: 'var(--danger)', desc: '60% — Φωτογραφίες' },
-                  ]).map(cv => (
-                    <Pill key={cv.v} active={color.coverage === cv.v} onClick={() => setColor({ ...color, coverage: cv.v })} color={cv.c}>
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: cv.c, flexShrink: 0 }} />
-                      {cv.l}
-                    </Pill>
+                    { v: 'low' as const, l: '5%' },
+                    { v: 'mid' as const, l: '50%' },
+                    { v: 'high' as const, l: '100%' },
+                  ]).map(o => (
+                    <Pill key={o.v} active={color.coverage === o.v} onClick={() => setColor({ ...color, coverage: o.v })} color="var(--blue)">{o.l}</Pill>
                   ))}
-                </div>
-                <div style={{ fontSize: '0.6rem', color: '#64748b', marginBottom: 12 }}>
-                  {color.coverage === 'low' && 'Κείμενο, φόρμες'}
-                  {color.coverage === 'mid' && 'Κείμενο με εικόνες, γραφήματα'}
-                  {color.coverage === 'high' && 'Φωτογραφίες, full-page γραφικά'}
                 </div>
               </>)}
             </>)}
@@ -1631,8 +1634,42 @@ export default function CalculatorShell() {
               {/* COST BREAKDOWN */}
               <DevPanel title="ΚΟΣΤΟΣ" color="#f87171">
                 <DevRow label="Χαρτί" sub={`${calcResult.totalStockSheets} φύλ × €${Number(bd.paperCostPerUnit ?? 0).toFixed(3)}`} value={calcResult.costPaper} />
+                <DevDivider />
                 <DevRow label="Εκτύπωση" sub={calcResult.printModel} value={calcResult.costPrint} />
-                {calcResult.costGuillotine > 0 && <DevRow label="Γκιλοτίνα" value={calcResult.costGuillotine} />}
+                {(() => {
+                  const pb = bd.printBreakdown as Record<string, unknown> | null;
+                  if (!pb) return null;
+                  if (calcResult.printModel === 'offset') {
+                    const p = pb as Record<string, Record<string, number>>;
+                    return (<>
+                      {p.plates?.total > 0 && <DevRow label={`Πλάκες (${p.plates.colors} × €${p.plates.cost?.toFixed(2)})`} value={p.plates.total} indent />}
+                      {p.ink?.total > 0 && <DevRow label={`Μελάνι (€${p.ink.priceKg}/kg · ${p.ink.coverage})`} value={p.ink.total} indent />}
+                      {p.blanket?.total > 0 && <DevRow label={`Τσόχα (${p.blanket.passes} passes × ${p.blanket.life} life)`} value={p.blanket.total} indent />}
+                      {p.rollers?.total > 0 && <DevRow label="Ράουλα" value={p.rollers.total} indent />}
+                      {p.chemicals?.total > 0 && (<>
+                        <DevRow label="Χημικά" value={p.chemicals.total} indent />
+                        {p.chemicals.wash > 0 && <DevRow label={`  Wash (${p.chemicals.washPasses}× · ink €${p.chemicals.inkCleanerCpl}/lt + water €${p.chemicals.waterCleanerCpl}/lt · ${p.chemicals.washMl}ml)`} value={p.chemicals.wash} indent />}
+                        {p.chemicals.ipa > 0 && <DevRow label={`  IPA (${p.chemicals.ipaMlH}ml/h · €${p.chemicals.ipaCpl}/lt · ${(p.chemicals.runHours * 60).toFixed(0)}')`} value={p.chemicals.ipa} indent />}
+                      </>)}
+                      {p.varnish?.total > 0 && <DevRow label="Βερνίκι" value={p.varnish.total} indent />}
+                      {p.coating?.total > 0 && <DevRow label="Coating" value={p.coating.total} indent />}
+                      {p.hourly?.total > 0 && <DevRow label={`Ωριαίο (${p.hourly.setupMin}' setup + ${(p.hourly.runHours * 60).toFixed(0)}' run)`} value={p.hourly.total} indent />}
+                    </>);
+                  } else {
+                    // Digital
+                    const toner = Number(pb.toner) || 0;
+                    const consumables = Number(pb.consumables) || 0;
+                    const dep = Number(pb.depreciation) || 0;
+                    const zone = Number(pb.zoneMarkup) || 0;
+                    return (<>
+                      {toner > 0 && <DevRow label={`Τόνερ (inkArea ×${Number(pb.inkAreaMult).toFixed(2)})`} value={toner} indent />}
+                      {consumables > 0 && <DevRow label={`Αναλώσιμα (wear ×${pb.wearMult})`} value={consumables} indent />}
+                      {dep > 0 && <DevRow label="Απόσβεση" value={dep} indent />}
+                      {zone > 0 && <DevRow label={`Zone markup +${zone}%`} value={calcResult.costPrint - (toner + consumables + dep)} indent />}
+                    </>);
+                  }
+                })()}
+                {calcResult.costGuillotine > 0 && (<><DevDivider /><DevRow label="Γκιλοτίνα" value={calcResult.costGuillotine} /></>)}
                 {calcResult.costLamination > 0 && <DevRow label="Πλαστικοποίηση" value={calcResult.costLamination} />}
                 {calcResult.costBinding > 0 && <DevRow label="Βιβλιοδεσία" value={calcResult.costBinding} />}
                 <DevDivider />

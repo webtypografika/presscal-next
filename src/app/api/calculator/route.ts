@@ -74,7 +74,7 @@ function mapOffsetSpecs(raw: Record<string, unknown>): OffsetSpecs {
     blanketCost: (raw.off_blanket_c as number) || 0,
     blanketLife: (raw.off_blanket_life as number) || 50000,
     inkGm2: (raw.off_ink_gm2 as number) || 1.5,
-    inkPricePerKg: (raw.off_ink_weight as number) ? undefined : undefined, // comes from consumables
+    inkPricePerKg: undefined, // set after from consumables
     rollerCount: (raw.off_roller_count as number) || undefined,
     rollerCost: (raw.off_roller_recover_c as number) || undefined,
     rollerLife: (raw.off_roller_recover_life as number) || undefined,
@@ -267,6 +267,34 @@ export async function POST(req: NextRequest) {
         discount_max: productPricing.discount_max as number,
       } : undefined,
     };
+
+    // Resolve offset consumable prices from linked consumables (warehouse)
+    if (machineCat === 'offset' && machine.consumables?.length) {
+      const oSpecs = costInput.specs as unknown as Record<string, unknown>;
+      const cons = machine.consumables;
+
+      // Ink: average €/kg from linked ink consumables
+      const inks = cons.filter(c => c.conType === 'ink' && c.conModule === 'offset');
+      if (inks.length > 0) {
+        const prices = inks.map(c => (c.costPerBase || c.costPerUnit || 0) as number).filter(p => p > 0);
+        if (prices.length > 0) oSpecs.inkPricePerKg = prices.reduce((a, b) => a + b, 0) / prices.length;
+      }
+
+      // Chemicals: resolve €/lt from consumables instead of wizard raw values
+      const chems = cons.filter(c => c.conType === 'chemical' && c.conModule === 'offset');
+      for (const c of chems) {
+        const cpl = ((c.costPerBase || 0) as number) || (c.unitSize ? ((c.costPerUnit || 0) as number) / (c.unitSize as number) : 0);
+        if (cpl <= 0) continue;
+        const name = (c.name as string || '').toLowerCase();
+        if (name.includes('wash') && name.includes('ink') || name.includes('mrc')) {
+          oSpecs.inkCleanerCpl = cpl;
+        } else if (name.includes('wash') && name.includes('water') || name.includes('hpl')) {
+          oSpecs.waterCleanerCpl = cpl;
+        } else if (name.includes('alcohol') || name.includes('ipa') || name.includes('isopropyl')) {
+          oSpecs.ipaCpl = cpl;
+        }
+      }
+    }
 
     const result = calculateCost(costInput);
 

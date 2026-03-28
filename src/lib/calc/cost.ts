@@ -94,13 +94,11 @@ export interface CostInput {
 }
 
 // ─── COVERAGE MULTIPLIERS ───
+// Digital: 5% (industry yield standard), 50%, 100%
+// Offset: 25%, 50%, 100%
 
-const COVERAGE: Record<string, number> = {
-  low: 0.05,
-  mid: 0.15,
-  high: 0.30,
-  pdf: 1.0,
-};
+const COVERAGE_DIGITAL: Record<string, number> = { low: 0.05, mid: 0.50, high: 1.0, pdf: 1.0 };
+const COVERAGE_OFFSET: Record<string, number> = { low: 0.25, mid: 0.50, high: 1.0, pdf: 1.0 };
 
 // ─── AREA HELPERS ───
 
@@ -153,7 +151,7 @@ function channelCoverage(
   if (coverageLevel === 'pdf' && coveragePdf) {
     return coveragePdf[channel];
   }
-  return COVERAGE[coverageLevel] || 0.15;
+  return COVERAGE_DIGITAL[coverageLevel] || 0.50;
 }
 
 // ─── MODEL 1: SIMPLE_IN — CPC only ───
@@ -346,7 +344,7 @@ function digitalIndigo(
   // Ink cost (coverage-dependent)
   const avgCov = coverageLevel === 'pdf' && coveragePdf
     ? (coveragePdf.c + coveragePdf.m + coveragePdf.y + coveragePdf.k) / 4
-    : COVERAGE[coverageLevel] || 0.15;
+    : COVERAGE_DIGITAL[coverageLevel] || 0.50;
   const inkPerFace = (specs.inkCostPerMl || 0) * avgCov * inkMult;
   const inkTotal = faces * inkPerFace;
 
@@ -445,21 +443,39 @@ function calcDigitalCost(input: CostInput, totalSheets: number): number {
   }
 
   let printCost = result.total;
+  let depCost = 0;
+  let zoneMarkupPct = 0;
 
   // Depreciation
   if (input.includeDepreciation && input.machineCost && input.machineLifetimePasses) {
     const totalFaces = input.sides === 2 ? totalSheets * 2 : totalSheets;
     const depPerFace = input.machineCost / input.machineLifetimePasses;
-    printCost += totalFaces * depPerFace;
+    depCost = totalFaces * depPerFace;
+    printCost += depCost;
   }
 
   // Speed zone markup (heavier paper = slower = more expensive)
   if (specs.speedZones && input.paperGsm) {
     const zone = specs.speedZones.find(z => input.paperGsm >= z.gsmFrom && input.paperGsm <= z.gsmTo);
     if (zone && zone.markup > 0) {
+      zoneMarkupPct = zone.markup;
       printCost *= (1 + zone.markup / 100);
     }
   }
+
+  // Store breakdown for dev panel
+  const totalFaces = input.sides === 2 ? totalSheets * 2 : totalSheets;
+  (input as unknown as Record<string, unknown>)._digitalBreakdown = {
+    model: specs.costMode,
+    faces: totalFaces,
+    wearMult: wMult,
+    inkAreaMult: iMult,
+    toner: result.tonerOnly,
+    consumables: result.total - result.tonerOnly,
+    depreciation: depCost,
+    zoneMarkup: zoneMarkupPct,
+    total: printCost,
+  };
 
   return printCost;
 }
@@ -513,7 +529,7 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
     inkCost = totalSheets * (frontInkPerSheet + backInkPerSheet);
   } else {
     // Preset coverage
-    const coverageMult = COVERAGE[input.coverageLevel] || 0.15;
+    const coverageMult = COVERAGE_OFFSET[input.coverageLevel] || 0.50;
     const inkPerSheet = printAreaM2 * inkGm2 * coverageMult * totalColors * (inkPricePerKg / 1000);
     inkCost = totalSheets * inkPerSheet;
   }
@@ -526,17 +542,21 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
 
   // ── Chemicals: wash + IPA ──
   let chemicalCost = 0;
+  let washCost = 0;
+  let ipaCost = 0;
   const washPasses = specs.washPassesPerRun || 0;
   if (washPasses > 0) {
     const inkCleaner = specs.inkCleanerCpl || 0;
     const waterCleaner = specs.waterCleanerCpl || 0;
     const washMl = specs.washMlPerLiter || 100;
-    chemicalCost += washPasses * (washMl / 1000) * (inkCleaner + waterCleaner);
+    washCost = washPasses * (washMl / 1000) * (inkCleaner + waterCleaner);
+    chemicalCost += washCost;
   }
   // IPA (alcohol for dampening)
   const runHours = totalSheets * totalPasses / (specs.speed || 5000);
   if (specs.ipaMlPerHour && specs.ipaCpl) {
-    chemicalCost += runHours * (specs.ipaMlPerHour / 1000) * specs.ipaCpl;
+    ipaCost = runHours * (specs.ipaMlPerHour / 1000) * specs.ipaCpl;
+    chemicalCost += ipaCost;
   }
 
   // ── Varnish ──
@@ -559,7 +579,32 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
   const totalHours = (setupMin / 60) + runHours;
   const hourlyCost = totalHours * specs.hourCost;
 
-  return plateCost + blanketCost + inkCost + rollerCost + chemicalCost + varnishCost + coatingCost + hourlyCost;
+  const total = plateCost + blanketCost + inkCost + rollerCost + chemicalCost + varnishCost + coatingCost + hourlyCost;
+
+  // Store breakdown for dev panel
+  (input as unknown as Record<string, unknown>)._offsetBreakdown = {
+    plates: { colors: totalColors, cost: specs.plateCost, total: plateCost },
+    blanket: { sheets: totalSheets, passes: totalPasses, life: specs.blanketLife, total: blanketCost },
+    ink: { printAreaM2, coverage: input.coverageLevel, gm2: inkGm2, priceKg: inkPricePerKg, total: inkCost, source: specs.inkPricePerKg ? 'αποθήκη' : 'default €25' },
+    rollers: { total: rollerCost },
+    chemicals: {
+      wash: washCost,
+      washPasses,
+      inkCleanerCpl: specs.inkCleanerCpl,
+      waterCleanerCpl: specs.waterCleanerCpl,
+      washMl: specs.washMlPerLiter,
+      ipa: ipaCost,
+      ipaMlH: specs.ipaMlPerHour,
+      ipaCpl: specs.ipaCpl,
+      runHours,
+      total: chemicalCost,
+    },
+    varnish: { total: varnishCost },
+    coating: { total: coatingCost },
+    hourly: { setupMin, runHours, hourRate: specs.hourCost, total: hourlyCost },
+  };
+
+  return total;
 }
 
 // ─── PAPER COST ───
@@ -787,6 +832,9 @@ export function calculateCost(input: CostInput): CalculatorResult {
         chargePrint,
         chargeBinding,
         productDetail,
+        printBreakdown: (input as unknown as Record<string, unknown>)._offsetBreakdown
+          || (input as unknown as Record<string, unknown>)._digitalBreakdown
+          || null,
       },
     },
   };
