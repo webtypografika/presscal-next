@@ -360,6 +360,8 @@ export default function CalculatorShell() {
   // Machine sheet override (null = use machine default)
   const [machineSheetW, setMachineSheetW] = useState<number | null>(null);
   const [machineSheetH, setMachineSheetH] = useState<number | null>(null);
+  // Feed direction: sef = short edge first, lef = long edge first
+  const [feedEdge, setFeedEdge] = useState<'sef' | 'lef'>('sef');
   // Speed override (null = use machine default)
   const [speedOverride, setSpeedOverride] = useState<number | null>(null);
   // Waste (φύλλα μοντάζ)
@@ -531,6 +533,7 @@ export default function CalculatorShell() {
           machineId: machine.id,
           machineSheetW: sheetW,
           machineSheetH: sheetH,
+          feedEdge,
           paperId: activePaperId,
           productId: job.productId || undefined,
           jobW: job.width,
@@ -573,7 +576,7 @@ export default function CalculatorShell() {
         .finally(() => setCalculating(false));
     }, 300);
     return () => { if (calcTimer.current) clearTimeout(calcTimer.current); };
-  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage]);
+  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, feedEdge, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage]);
 
   // ─── DISPLAY VALUES ───
   const r = calcResult;
@@ -853,17 +856,29 @@ export default function CalculatorShell() {
                     }
                   }}
                 />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
-                  <MfInput value={sheetH} onChange={v => setMachineSheetH(Number(v) || null)} style={{ width: 70, textAlign: 'center' }} />
-                  <span style={{ color: '#475569', fontWeight: 600 }}>×</span>
-                  <MfInput value={sheetW} onChange={v => setMachineSheetW(Number(v) || null)} style={{ width: 70, textAlign: 'center' }} />
-                  {(machineSheetW || machineSheetH) && (
-                    <button onClick={() => { setMachineSheetW(null); setMachineSheetH(null); }}
-                      style={{ border: 'none', background: 'none', color: '#475569', cursor: 'pointer', fontSize: '0.65rem', padding: '0 4px' }}
-                      title="Reset">
-                      <i className="fas fa-undo" />
-                    </button>
-                  )}
+                <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.45rem', color: feedEdge === 'sef' ? 'var(--blue)' : '#64748b', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' }}>
+                      {feedEdge === 'sef' ? 'Short' : 'Long'}
+                    </div>
+                    <MfInput value={feedEdge === 'sef' ? sheetH : sheetW}
+                      onChange={v => feedEdge === 'sef' ? setMachineSheetH(Number(v) || null) : setMachineSheetW(Number(v) || null)}
+                      style={{ width: 70, textAlign: 'center' }} />
+                  </div>
+                  <span style={{ color: '#475569', fontWeight: 600, alignSelf: 'flex-end', paddingBottom: 6 }}>×</span>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.45rem', color: '#64748b', fontWeight: 600, marginBottom: 2, textTransform: 'uppercase' }}>
+                      {feedEdge === 'sef' ? 'Long' : 'Short'}
+                    </div>
+                    <MfInput value={feedEdge === 'sef' ? sheetW : sheetH}
+                      onChange={v => feedEdge === 'sef' ? setMachineSheetW(Number(v) || null) : setMachineSheetH(Number(v) || null)}
+                      style={{ width: 70, textAlign: 'center' }} />
+                  </div>
+                  <button onClick={() => setFeedEdge(f => f === 'sef' ? 'lef' : 'sef')}
+                    style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.5rem', fontWeight: 700, padding: '4px 6px', borderRadius: 4, alignSelf: 'flex-end', marginBottom: 2, fontFamily: 'inherit' }}
+                    title={feedEdge === 'sef' ? 'Short Edge First → Long Edge First' : 'Long Edge First → Short Edge First'}>
+                    {feedEdge === 'sef' ? 'SEF' : 'LEF'}
+                  </button>
                 </div>
 
                 <MfLabel>ΦΥΡΑ (φύλλα μοντάζ)</MfLabel>
@@ -1615,6 +1630,7 @@ export default function CalculatorShell() {
                 plateSlugEdge={impoPlateSlugEdge}
                 pdf={pdf}
                 onDrop={handlePdfFiles}
+                feedEdge={feedEdge}
               />
               {/* PDF upload overlay (top-left) */}
               <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>
@@ -1641,6 +1657,7 @@ export default function CalculatorShell() {
               </div>
               {/* Info chips overlay (bottom-right) */}
               <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4, pointerEvents: 'none', zIndex: 2 }}>
+                <ImpoChip><i className={feedEdge === 'sef' ? 'fas fa-arrows-alt-v' : 'fas fa-arrows-alt-h'} style={{ fontSize: '0.5rem' }} /> {feedEdge === 'sef' ? 'SEF' : 'LEF'}</ImpoChip>
                 <ImpoChip><strong>{ups}</strong>-up</ImpoChip>
                 <ImpoChip><strong>{sheets}</strong> φύλ</ImpoChip>
                 <ImpoChip><i className="fas fa-clock" /><strong>~{timeMin >= 60 ? `${(timeMin / 60).toFixed(1)}h` : `${timeMin}'`}</strong></ImpoChip>

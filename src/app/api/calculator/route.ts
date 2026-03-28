@@ -284,6 +284,7 @@ export async function POST(req: NextRequest) {
       machineMaxH: area.paperH,
       specs: machineSpecs,
       tacLimit: ((rawSpecs.tac_limit as number) || 280) / 100,  // convert % to fraction
+      feedEdge: (body.feedEdge as 'sef' | 'lef' | undefined) ?? ((rawSpecs.feed_direction as string) === 'lef' ? 'lef' : 'sef'),
       includeDepreciation: !!rawSpecs.include_depreciation,
       machineCost: (rawSpecs.machine_cost as number) || undefined,
       machineLifetimePasses: (rawSpecs.machine_lifetime_passes as number) || undefined,

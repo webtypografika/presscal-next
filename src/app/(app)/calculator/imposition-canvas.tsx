@@ -31,6 +31,7 @@ interface ImpositionCanvasProps {
   plateSlugEdge?: 'tail' | 'gripper';
   pdf?: ParsedPDF | null;
   onDrop?: (files: FileList) => void;
+  feedEdge?: 'sef' | 'lef';
 }
 
 type ViewMode = 'single' | 'dual';
@@ -370,7 +371,7 @@ export default function ImpositionCanvas({
   impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
   bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
   showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge,
-  pdf, onDrop,
+  pdf, onDrop, feedEdge,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -462,6 +463,48 @@ export default function ImpositionCanvas({
         machCat, pdf, pageIdx, isBack);
     }
 
+    // Feed direction arrow (left side of sheet)
+    if (feedEdge) {
+      const arrowLabel = feedEdge === 'sef' ? 'Short edge' : 'Long edge';
+      // Calculate sheet position for arrow placement
+      const scX = (cW - 24) / sheetW;
+      const scY = (cH - reserveTop - reserveBot) / sheetH;
+      const sc = Math.min(scX, scY);
+      const dW = sheetW * sc;
+      const dH = sheetH * sc;
+      const sx = (cW - dW) / 2;
+      const sy = reserveTop + (cH - reserveTop - reserveBot - dH) / 2;
+
+      // Arrow on top edge pointing down (feed direction into machine)
+      const arrowX = sx + dW / 2;
+      const arrowY = sy - 2;
+      const arrowLen = 14;
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(59,130,246,0.6)';
+      ctx.fillStyle = 'rgba(59,130,246,0.6)';
+      ctx.lineWidth = 1.5;
+
+      // Arrow line
+      ctx.beginPath();
+      ctx.moveTo(arrowX, arrowY - arrowLen);
+      ctx.lineTo(arrowX, arrowY);
+      ctx.stroke();
+      // Arrowhead
+      ctx.beginPath();
+      ctx.moveTo(arrowX, arrowY + 1);
+      ctx.lineTo(arrowX - 3.5, arrowY - 4);
+      ctx.lineTo(arrowX + 3.5, arrowY - 4);
+      ctx.closePath();
+      ctx.fill();
+
+      // Label
+      ctx.font = '600 7.5px Inter, DM Sans, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(arrowLabel, arrowX, arrowY - arrowLen - 4);
+      ctx.restore();
+    }
+
     // Bottom info strip
     const modeLabels: Record<string, string> = {
       nup: 'N-Up', booklet: 'Booklet', perfect_bound: 'Perfect Bound',
@@ -480,7 +523,7 @@ export default function ImpositionCanvas({
     ctx.textAlign = 'center';
     ctx.fillText(parts.join(' · '), cW / 2, cH - 5);
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge, pdf, viewMode, activePage, isDuplex]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge, pdf, viewMode, activePage, isDuplex, feedEdge]);
 
   useEffect(() => { draw(); }, [draw]);
 

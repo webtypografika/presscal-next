@@ -16,6 +16,7 @@ export interface CostInput {
   machineMaxH: number;
   specs: DigitalSpecs | OffsetSpecs;
   tacLimit?: number;           // TAC limit % (default 280)
+  feedEdge?: 'sef' | 'lef';    // feed direction
   includeDepreciation: boolean;
   machineCost?: number;
   machineLifetimePasses?: number;
@@ -108,13 +109,17 @@ const DEFAULT_TAC_LIMIT = 2.80; // 280%
 /** A4 area in mm² */
 const A4_AREA = 210 * 297;
 
-/** Stepped wear multiplier: manufacturer yields rated at A4.
- *  A4=1×, A3/SRA3=2×, banner=4× — matches industry convention */
-const SRA3_MAX = 340 * 500;  // 170,000 mm² — covers all SRA3 variants
-function wearMult(sheetW: number, sheetH: number): number {
-  const area = sheetW * sheetH;
-  if (area <= A4_AREA * 1.15) return 1;
-  if (area <= SRA3_MAX) return 2;
+/** Stepped wear multiplier based on feed length (how far drum rotates).
+ *  A4 feed ≤ 297mm → 1×, A3 feed ≤ 450mm → 2×, banner → 4× */
+const A4_FEED = 297;   // mm — A4 long side
+const A3_FEED = 450;   // mm — SRA3 long side (covers all A3 variants)
+function wearMult(sheetW: number, sheetH: number, feedEdge?: 'sef' | 'lef'): number {
+  const ss = Math.min(sheetW, sheetH);
+  const ls = Math.max(sheetW, sheetH);
+  // Feed length = the side that travels through the machine
+  const feedLength = feedEdge === 'lef' ? ss : ls; // SEF: short enters, travels long side. LEF: long enters, travels short side
+  if (feedLength <= A4_FEED * 1.1) return 1;
+  if (feedLength <= A3_FEED * 1.1) return 2;
   return 4;
 }
 
@@ -125,10 +130,12 @@ function inkAreaMult(impo: { ups: number; pieceW: number; pieceH: number }): num
 }
 
 /** Discrete size category (for CPC models that use tiered pricing) */
-function sheetSizeCategory(w: number, h: number): 'a4' | 'a3' | 'banner' {
-  const area = w * h;
-  if (area <= A4_AREA * 1.15) return 'a4';
-  if (area <= SRA3_MAX) return 'a3';
+function sheetSizeCategory(w: number, h: number, feedEdge?: 'sef' | 'lef'): 'a4' | 'a3' | 'banner' {
+  const ss = Math.min(w, h);
+  const ls = Math.max(w, h);
+  const feedLength = feedEdge === 'lef' ? ss : ls;
+  if (feedLength <= A4_FEED * 1.1) return 'a4';
+  if (feedLength <= A3_FEED * 1.1) return 'a3';
   return 'banner';
 }
 
@@ -461,7 +468,7 @@ function calcDigitalCost(input: CostInput, totalSheets: number): number {
   let result: { total: number; tonerOnly: number };
 
   // Stepped wear mult: A4=1, A3=2, banner=4 (manufacturer yields in A4 passes)
-  const wMult = wearMult(input.machineMaxW, input.machineMaxH);
+  const wMult = wearMult(input.machineMaxW, input.machineMaxH, input.feedEdge);
   // Ink/toner area mult: actual print area vs A4
   const iMult = inkAreaMult(impo);
 

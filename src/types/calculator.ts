@@ -14,6 +14,7 @@ export interface CalculatorInput {
   machineId: UUID;
   machineSheetW?: number;   // override machine sheet LS (mm)
   machineSheetH?: number;   // override machine sheet SS (mm)
+  feedEdge?: 'sef' | 'lef'; // feed direction
   paperId: UUID;
   productId?: UUID;
   jobW: number;           // trim width mm
