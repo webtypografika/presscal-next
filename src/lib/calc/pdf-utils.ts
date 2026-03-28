@@ -20,12 +20,21 @@ export interface PDFPageSize {
   rotation: number;
 }
 
+export interface PDFCoverage {
+  c: number;  // 0-1 fraction per channel
+  m: number;
+  y: number;
+  k: number;
+  tac: number; // sum of all channels (0-4)
+}
+
 export interface ParsedPDF {
   bytes: Uint8Array;
   pageCount: number;
   pageSizes: PDFPageSize[];
   fileName: string;
   thumbnails: (HTMLCanvasElement | null)[];
+  coverage?: PDFCoverage;  // average coverage across all pages
   fileMap?: { name: string; startPage: number; endPage: number }[];
 }
 
@@ -88,6 +97,54 @@ async function generateThumbnails(pdfDoc: any, pageCount: number): Promise<(HTML
   }
   await Promise.all(promises);
   return thumbs;
+}
+
+// ─── COVERAGE ANALYSIS ───
+// RGB → CMYK approximation + coverage measurement from rendered canvas
+
+function analyzeCoverage(canvases: (HTMLCanvasElement | null)[]): PDFCoverage | undefined {
+  let totalC = 0, totalM = 0, totalY = 0, totalK = 0;
+  let totalPixels = 0;
+
+  for (const canvas of canvases) {
+    if (!canvas) continue;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+
+    const { width, height } = canvas;
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data; // RGBA
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i] / 255;
+      const g = data[i + 1] / 255;
+      const b = data[i + 2] / 255;
+      // a = data[i + 3] — ignore alpha, white bg assumed
+
+      // RGB → CMYK (simple conversion)
+      const k = 1 - Math.max(r, g, b);
+      if (k >= 1) {
+        // Pure black
+        totalK += 1;
+      } else {
+        totalC += (1 - r - k) / (1 - k);
+        totalM += (1 - g - k) / (1 - k);
+        totalY += (1 - b - k) / (1 - k);
+        totalK += k;
+      }
+      totalPixels++;
+    }
+  }
+
+  if (totalPixels === 0) return undefined;
+
+  return {
+    c: totalC / totalPixels,
+    m: totalM / totalPixels,
+    y: totalY / totalPixels,
+    k: totalK / totalPixels,
+    tac: (totalC + totalM + totalY + totalK) / totalPixels,
+  };
 }
 
 // ─── PARSE PDF ───
@@ -204,11 +261,15 @@ export async function parsePDF(file: File): Promise<ParsedPDF> {
   // Generate thumbnails
   const thumbnails = await generateThumbnails(pdfDoc, pageCount);
 
+  // Analyze coverage from rendered thumbnails
+  const coverage = analyzeCoverage(thumbnails);
+
   return {
     bytes: bytesForStorage,
     pageCount,
     pageSizes,
     fileName: file.name,
     thumbnails,
+    coverage,
   };
 }

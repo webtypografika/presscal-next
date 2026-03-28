@@ -331,9 +331,38 @@ function digitalPrecision(
   }
 
   const nonTonerPerFace = drumPerFace + devPerFace + coronaPerFace + sharedPerFace;
+
+  // Store per-item breakdown for dev panel
+  const _precisionItems: Array<{ label: string; perA4: number }> = [];
+  const addItem = (label: string, cy: ConsumableYield | undefined) => {
+    if (cy && cy.yield > 0) _precisionItems.push({ label, perA4: cy.cost / cy.yield });
+  };
+  if (colorMode === 'color') {
+    addItem('Drum C', specs.drumC); addItem('Drum M', specs.drumM);
+    addItem('Drum Y', specs.drumY); addItem('Drum K', specs.drumK);
+  } else {
+    addItem('Drum K', specs.drumK);
+  }
+  if (specs.developerType !== 'integrated') {
+    if (colorMode === 'color') {
+      addItem('Dev C', specs.developerC); addItem('Dev M', specs.developerM);
+      addItem('Dev Y', specs.developerY); addItem('Dev K', specs.developerK);
+    } else {
+      addItem('Dev K', specs.developerK);
+    }
+  }
+  if (specs.hasChargeCoronas && coronaPerFace > 0) _precisionItems.push({ label: `Corona ×${colorMode === 'color' ? specs.colorStations : 1}`, perA4: coronaPerFace });
+  if (specs.fuserCost && specs.fuserLife && specs.fuserLife > 0) _precisionItems.push({ label: 'Fuser', perA4: specs.fuserCost / specs.fuserLife });
+  if (specs.beltCost && specs.beltLife && specs.beltLife > 0) _precisionItems.push({ label: 'Belt', perA4: specs.beltCost / specs.beltLife });
+  if (specs.wasteCost && specs.wasteLife && specs.wasteLife > 0) _precisionItems.push({ label: 'Waste', perA4: specs.wasteCost / specs.wasteLife });
   const nonTonerTotal = faces * nonTonerPerFace * wMult;
 
-  return { total: tonerTotal + nonTonerTotal, tonerOnly: tonerTotal };
+  return {
+    total: tonerTotal + nonTonerTotal,
+    tonerOnly: tonerTotal,
+    precisionItems: _precisionItems as unknown,
+    nonTonerPerA4: nonTonerPerFace as unknown,
+  } as { total: number; tonerOnly: number };
 }
 
 // ─── MODEL 4: INDIGO — Liquid ink ───
@@ -489,6 +518,8 @@ function calcDigitalCost(input: CostInput, totalSheets: number): number {
     depreciation: depCost,
     zoneMarkup: zoneMarkupPct,
     total: printCost,
+    precisionItems: (result as Record<string, unknown>).precisionItems || [],
+    nonTonerPerA4: (result as Record<string, unknown>).nonTonerPerA4 || 0,
   };
 
   return printCost;

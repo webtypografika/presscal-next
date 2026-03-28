@@ -185,10 +185,77 @@ export async function POST(req: NextRequest) {
       ? mapOffsetSpecs(rawSpecs)
       : mapDigitalSpecs(rawSpecs);
 
+    // ─── SYNC CONSUMABLE PRICES FROM WAREHOUSE (live, not cached specs) ───
+    if (machine.consumables?.length) {
+      const cons = machine.consumables;
+      const findCon = (type: string, color?: string) => {
+        return cons.find(c => c.conType === type && (!color || c.color === color));
+      };
+      const cy = (c: typeof cons[0] | undefined): { cost: number; yield: number } | undefined => {
+        if (!c) return undefined;
+        const cost = (c.costPerBase || c.costPerUnit || 0) as number;
+        const yld = (c.yieldPages || 0) as number;
+        return cost > 0 && yld > 0 ? { cost, yield: yld } : undefined;
+      };
+
+      if (machineCat === 'digital') {
+        const ds = machineSpecs as unknown as Record<string, unknown>;
+        // Toner
+        const tc = cy(findCon('toner', 'cyan')); if (tc) { ds.tonerC = tc; }
+        const tm = cy(findCon('toner', 'magenta')); if (tm) { ds.tonerM = tm; }
+        const ty = cy(findCon('toner', 'yellow')); if (ty) { ds.tonerY = ty; }
+        const tk = cy(findCon('toner', 'black')); if (tk) { ds.tonerK = tk; }
+        // Drums
+        const dc = cy(findCon('drum', 'cyan')); if (dc) { ds.drumC = dc; }
+        const dm = cy(findCon('drum', 'magenta')); if (dm) { ds.drumM = dm; }
+        const dmy = cy(findCon('drum', 'yellow')); if (dmy) { ds.drumY = dmy; }
+        const dk = cy(findCon('drum', 'black')); if (dk) { ds.drumK = dk; }
+        // Developer
+        const devc = cy(findCon('developer', 'cyan')); if (devc) { ds.developerC = devc; }
+        const devm = cy(findCon('developer', 'magenta')); if (devm) { ds.developerM = devm; }
+        const devy = cy(findCon('developer', 'yellow')); if (devy) { ds.developerY = devy; }
+        const devk = cy(findCon('developer', 'black')); if (devk) { ds.developerK = devk; }
+        // Shared consumables
+        const fuser = cy(findCon('fuser')); if (fuser) { ds.fuserCost = fuser.cost; ds.fuserLife = fuser.yield; }
+        const belt = cy(findCon('belt')); if (belt) { ds.beltCost = belt.cost; ds.beltLife = belt.yield; }
+        const waste = cy(findCon('waste')); if (waste) { ds.wasteCost = waste.cost; ds.wasteLife = waste.yield; }
+        const corona = cy(findCon('corona')); if (corona) { ds.coronaCost = corona.cost; ds.coronaLife = corona.yield; }
+      } else {
+        // Offset: ink, plates, blankets, chemicals
+        const os = machineSpecs as unknown as Record<string, unknown>;
+        // Ink price (average €/kg)
+        const inks = cons.filter(c => c.conType === 'ink' && c.conModule === 'offset');
+        if (inks.length > 0) {
+          const prices = inks.map(c => ((c.costPerBase || c.costPerUnit || 0) as number)).filter(p => p > 0);
+          if (prices.length > 0) os.inkPricePerKg = prices.reduce((a, b) => a + b, 0) / prices.length;
+        }
+        // Plates
+        const plate = findCon('plate'); if (plate) { const p = (plate.costPerBase || plate.costPerUnit || 0) as number; if (p > 0) os.plateCost = p; }
+        // Blanket
+        const blanket = findCon('blanket');
+        if (blanket) {
+          const bc = (blanket.costPerBase || blanket.costPerUnit || 0) as number;
+          const bl = (blanket.yieldPages || 0) as number;
+          if (bc > 0) os.blanketCost = bc;
+          if (bl > 0) os.blanketLife = bl;
+        }
+        // Chemicals
+        const chems = cons.filter(c => c.conType === 'chemical');
+        for (const c of chems) {
+          const cpl = ((c.costPerBase || 0) as number) || ((c.unitSize as number) ? ((c.costPerUnit || 0) as number) / (c.unitSize as number) : 0);
+          if (cpl <= 0) continue;
+          const name = ((c.name as string) || '').toLowerCase();
+          if (name.includes('wash') && name.includes('ink') || name.includes('mrc')) os.inkCleanerCpl = cpl;
+          else if (name.includes('wash') && name.includes('water') || name.includes('hpl')) os.waterCleanerCpl = cpl;
+          else if (name.includes('alcohol') || name.includes('ipa') || name.includes('isopropyl')) os.ipaCpl = cpl;
+        }
+      }
+    }
+
     // ─── IMPOSITION ───
     const area: PrintableArea = {
-      paperW: machine.maxLS || 330,
-      paperH: machine.maxSS || 487,
+      paperW: body.machineSheetW || machine.maxLS || 330,
+      paperH: body.machineSheetH || machine.maxSS || 487,
       marginTop: machine.marginTop || 0,
       marginBottom: machine.marginBottom || 0,
       marginLeft: machine.marginLeft || 0,
@@ -268,34 +335,6 @@ export async function POST(req: NextRequest) {
         discount_max: productPricing.discount_max as number,
       } : undefined,
     };
-
-    // Resolve offset consumable prices from linked consumables (warehouse)
-    if (machineCat === 'offset' && machine.consumables?.length) {
-      const oSpecs = costInput.specs as unknown as Record<string, unknown>;
-      const cons = machine.consumables;
-
-      // Ink: average €/kg from linked ink consumables
-      const inks = cons.filter(c => c.conType === 'ink' && c.conModule === 'offset');
-      if (inks.length > 0) {
-        const prices = inks.map(c => (c.costPerBase || c.costPerUnit || 0) as number).filter(p => p > 0);
-        if (prices.length > 0) oSpecs.inkPricePerKg = prices.reduce((a, b) => a + b, 0) / prices.length;
-      }
-
-      // Chemicals: resolve €/lt from consumables instead of wizard raw values
-      const chems = cons.filter(c => c.conType === 'chemical' && c.conModule === 'offset');
-      for (const c of chems) {
-        const cpl = ((c.costPerBase || 0) as number) || (c.unitSize ? ((c.costPerUnit || 0) as number) / (c.unitSize as number) : 0);
-        if (cpl <= 0) continue;
-        const name = (c.name as string || '').toLowerCase();
-        if (name.includes('wash') && name.includes('ink') || name.includes('mrc')) {
-          oSpecs.inkCleanerCpl = cpl;
-        } else if (name.includes('wash') && name.includes('water') || name.includes('hpl')) {
-          oSpecs.waterCleanerCpl = cpl;
-        } else if (name.includes('alcohol') || name.includes('ipa') || name.includes('isopropyl')) {
-          oSpecs.ipaCpl = cpl;
-        }
-      }
-    }
 
     const result = calculateCost(costInput);
 

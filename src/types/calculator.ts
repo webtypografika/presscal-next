@@ -12,6 +12,8 @@ export type WorkTurnType = 'turn' | 'tumble';
 
 export interface CalculatorInput {
   machineId: UUID;
+  machineSheetW?: number;   // override machine sheet LS (mm)
+  machineSheetH?: number;   // override machine sheet SS (mm)
   paperId: UUID;
   productId?: UUID;
   jobW: number;           // trim width mm

@@ -398,6 +398,10 @@ export default function CalculatorShell() {
           bleed: pg.bleedDetected > 0 ? pg.bleedDetected : prev.bleed,
         }));
       }
+      // Auto-set coverage from PDF analysis
+      if (parsed.coverage) {
+        setColor(prev => ({ ...prev, coverage: 'pdf' as const }));
+      }
     } catch (err) {
       console.error('PDF parse error:', err);
     } finally {
@@ -525,6 +529,8 @@ export default function CalculatorShell() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           machineId: machine.id,
+          machineSheetW: sheetW,
+          machineSheetH: sheetH,
           paperId: activePaperId,
           productId: job.productId || undefined,
           jobW: job.width,
@@ -534,7 +540,7 @@ export default function CalculatorShell() {
           colorMode: color.model === 'cmyk' ? 'color' : 'bw',
           bleed: effectiveBleed,
           impositionMode: impoMode,
-          impoRotation: impoRotation,
+          impoRotation: impoRotation || (job.rotation ? 90 : 0),
           impoDuplexOrient: impoDuplexOrient,
           impoGutter: impoGutter,
           impoBleed: effectiveBleed,
@@ -542,6 +548,7 @@ export default function CalculatorShell() {
           impoCropMarks: impoCropMarks,
           wasteFixed,
           coverageLevel: color.coverage || 'mid',
+          coveragePdf: pdf?.coverage ? { c: pdf.coverage.c, m: pdf.coverage.m, y: pdf.coverage.y, k: pdf.coverage.k } : undefined,
           offsetFrontCmyk: color.platesFront,
           offsetBackCmyk: color.platesBack,
           offsetFrontPms: color.pmsFront,
@@ -566,7 +573,7 @@ export default function CalculatorShell() {
         .finally(() => setCalculating(false));
     }, 300);
     return () => { if (calcTimer.current) clearTimeout(calcTimer.current); };
-  }, [machine.id, activePaperId, job, color, wasteFixed, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish]);
+  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage]);
 
   // ─── DISPLAY VALUES ───
   const r = calcResult;
@@ -1137,7 +1144,7 @@ export default function CalculatorShell() {
               {machine?.cat === 'offset' ? (<>
                 {/* ═══ OFFSET COLOR ═══ */}
                 <MfLabel>ΕΠΙΚΑΛΥΨΗ (TAC)</MfLabel>
-                <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
+                <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
                   {([
                     { v: 'low' as const, l: '20%' },
                     { v: 'mid' as const, l: '100%' },
@@ -1145,7 +1152,20 @@ export default function CalculatorShell() {
                   ]).map(o => (
                     <Pill key={o.v} active={color.coverage === o.v} onClick={() => setColor({ ...color, coverage: o.v })} color="var(--blue)">{o.l}</Pill>
                   ))}
+                  {pdf?.coverage && (
+                    <Pill active={color.coverage === 'pdf'} onClick={() => setColor({ ...color, coverage: 'pdf' })} color="var(--success)">
+                      PDF {Math.round(pdf.coverage.tac * 100)}%
+                    </Pill>
+                  )}
                 </div>
+                {color.coverage === 'pdf' && pdf?.coverage && (
+                  <div style={{ fontSize: '0.55rem', color: '#64748b', marginBottom: 6, display: 'flex', gap: 8 }}>
+                    <span style={{ color: '#00aeef' }}>C:{Math.round(pdf.coverage.c * 100)}%</span>
+                    <span style={{ color: '#e91e90' }}>M:{Math.round(pdf.coverage.m * 100)}%</span>
+                    <span style={{ color: '#f0b400' }}>Y:{Math.round(pdf.coverage.y * 100)}%</span>
+                    <span style={{ color: '#999' }}>K:{Math.round(pdf.coverage.k * 100)}%</span>
+                  </div>
+                )}
 
                 <MfLabel>ΠΛΑΚΕΣ</MfLabel>
                 {/* Presets */}
@@ -1268,7 +1288,7 @@ export default function CalculatorShell() {
 
                 {/* Coverage */}
                 <MfLabel>ΕΠΙΚΑΛΥΨΗ (TAC)</MfLabel>
-                <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
+                <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
                   {([
                     { v: 'low' as const, l: '20%' },
                     { v: 'mid' as const, l: '100%' },
@@ -1276,7 +1296,20 @@ export default function CalculatorShell() {
                   ]).map(o => (
                     <Pill key={o.v} active={color.coverage === o.v} onClick={() => setColor({ ...color, coverage: o.v })} color="var(--blue)">{o.l}</Pill>
                   ))}
+                  {pdf?.coverage && (
+                    <Pill active={color.coverage === 'pdf'} onClick={() => setColor({ ...color, coverage: 'pdf' })} color="var(--success)">
+                      PDF {Math.round(pdf.coverage.tac * 100)}%
+                    </Pill>
+                  )}
                 </div>
+                {color.coverage === 'pdf' && pdf?.coverage && (
+                  <div style={{ fontSize: '0.55rem', color: '#64748b', marginBottom: 6, display: 'flex', gap: 8 }}>
+                    <span style={{ color: '#00aeef' }}>C:{Math.round(pdf.coverage.c * 100)}%</span>
+                    <span style={{ color: '#e91e90' }}>M:{Math.round(pdf.coverage.m * 100)}%</span>
+                    <span style={{ color: '#f0b400' }}>Y:{Math.round(pdf.coverage.y * 100)}%</span>
+                    <span style={{ color: '#999' }}>K:{Math.round(pdf.coverage.k * 100)}%</span>
+                  </div>
+                )}
               </>)}
             </>)}
 
@@ -1663,7 +1696,13 @@ export default function CalculatorShell() {
                     const zone = Number(pb.zoneMarkup) || 0;
                     return (<>
                       {toner > 0 && <DevRow label={`Τόνερ (inkArea ×${Number(pb.inkAreaMult).toFixed(2)})`} value={toner} indent />}
-                      {consumables > 0 && <DevRow label={`Αναλώσιμα (wear ×${pb.wearMult})`} value={consumables} indent />}
+                      {consumables > 0 && (<>
+                        <DevRow label={`Αναλώσιμα (wear ×${pb.wearMult})`} value={consumables} indent />
+                        {((pb.precisionItems as Array<{ label: string; perA4: number }>) ?? []).map((item, i) => (
+                          <DevRow key={i} label={`  ${item.label}: €${item.perA4.toFixed(4)}/A4`} value={item.perA4 * Number(pb.faces) * Number(pb.wearMult)} indent />
+                        ))}
+                        <DevRow label={`  Σύνολο/A4: €${Number(pb.nonTonerPerA4).toFixed(4)}`} value={0} indent />
+                      </>)}
                       {dep > 0 && <DevRow label="Απόσβεση" value={dep} indent />}
                       {zone > 0 && <DevRow label={`Zone markup +${zone}%`} value={calcResult.costPrint - (toner + consumables + dep)} indent />}
                     </>);
