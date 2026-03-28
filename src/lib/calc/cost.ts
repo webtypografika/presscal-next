@@ -15,6 +15,7 @@ export interface CostInput {
   machineMaxW: number;
   machineMaxH: number;
   specs: DigitalSpecs | OffsetSpecs;
+  tacLimit?: number;           // TAC limit % (default 280)
   includeDepreciation: boolean;
   machineCost?: number;
   machineLifetimePasses?: number;
@@ -93,12 +94,14 @@ export interface CostInput {
   };
 }
 
-// ─── COVERAGE MULTIPLIERS ───
-// Digital: 5% (industry yield standard), 50%, 100%
-// Offset: 25%, 50%, 100%
+// ─── COVERAGE (TAC-based) ───
+// Pills represent Total Area Coverage (sum of all channels).
+// Engine divides by 4 to get per-channel coverage.
+// Default machine TAC limit: 280% (digital), 300% (indigo)
 
-const COVERAGE_DIGITAL: Record<string, number> = { low: 0.05, mid: 0.50, high: 1.0, pdf: 1.0 };
-const COVERAGE_OFFSET: Record<string, number> = { low: 0.25, mid: 0.50, high: 1.0, pdf: 1.0 };
+const TAC_PILLS: Record<string, number> = { low: 0.20, mid: 1.00, high: 3.00, pdf: 1.0 };
+// low=20% TAC (÷4=5%/ch — text), mid=100% TAC (÷4=25%/ch — graphics), high=300% TAC (÷4=75%/ch — heavy photos)
+const DEFAULT_TAC_LIMIT = 2.80; // 280%
 
 // ─── AREA HELPERS ───
 
@@ -142,16 +145,27 @@ function getCpc(specs: DigitalSpecs, sheetW: number, sheetH: number, colorMode: 
        : (specs.clickBannerBw || 0);
 }
 
-/** Coverage multiplier for a specific channel when PDF data exists */
+/** Coverage per channel.
+ *  Pills: TAC ÷ 4 (uniform distribution).
+ *  PDF: per-channel data, capped to machine TAC limit. */
 function channelCoverage(
   channel: 'c' | 'm' | 'y' | 'k',
   coverageLevel: string,
   coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
 ): number {
   if (coverageLevel === 'pdf' && coveragePdf) {
+    const limit = tacLimit || DEFAULT_TAC_LIMIT;
+    const actualTac = coveragePdf.c + coveragePdf.m + coveragePdf.y + coveragePdf.k;
+    if (actualTac > limit) {
+      // Scale down proportionally to respect TAC limit
+      return coveragePdf[channel] * (limit / actualTac);
+    }
     return coveragePdf[channel];
   }
-  return COVERAGE_DIGITAL[coverageLevel] || 0.50;
+  // Pills: TAC value ÷ 4 channels
+  const tac = TAC_PILLS[coverageLevel] ?? 1.00;
+  return tac / 4;
 }
 
 // ─── MODEL 1: SIMPLE_IN — CPC only ───
@@ -341,10 +355,10 @@ function digitalIndigo(
   const modes = specs.indigoColorModes || { cmyk: 4, epm: 3, ovg: 7, bw: 1 };
   const impsPerSide = colorMode === 'bw' ? modes.bw : modes.cmyk;
 
-  // Ink cost (coverage-dependent)
+  // Ink cost (coverage-dependent) — TAC ÷ 4 for pills, avg of channels for PDF
   const avgCov = coverageLevel === 'pdf' && coveragePdf
-    ? (coveragePdf.c + coveragePdf.m + coveragePdf.y + coveragePdf.k) / 4
-    : COVERAGE_DIGITAL[coverageLevel] || 0.50;
+    ? Math.min(coveragePdf.c + coveragePdf.m + coveragePdf.y + coveragePdf.k, DEFAULT_TAC_LIMIT) / 4
+    : (TAC_PILLS[coverageLevel] ?? 1.00) / 4;
   const inkPerFace = (specs.inkCostPerMl || 0) * avgCov * inkMult;
   const inkTotal = faces * inkPerFace;
 
@@ -528,8 +542,8 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
     const backInkPerSheet = input.sides === 2 ? frontInkPerSheet : 0;
     inkCost = totalSheets * (frontInkPerSheet + backInkPerSheet);
   } else {
-    // Preset coverage
-    const coverageMult = COVERAGE_OFFSET[input.coverageLevel] || 0.50;
+    // Preset coverage: TAC ÷ 4 per channel
+    const coverageMult = (TAC_PILLS[input.coverageLevel] ?? 1.00) / 4;
     const inkPerSheet = printAreaM2 * inkGm2 * coverageMult * totalColors * (inkPricePerKg / 1000);
     inkCost = totalSheets * inkPerSheet;
   }

@@ -107,6 +107,7 @@ export const DIGITAL_DEFAULTS: Record<string, unknown> = {
   margin_left: null,
   margin_right: null,
   feed_direction: 'sef',
+  tac_limit: 280,  // % Total Area Coverage limit
   custom_papers: [
     { name: 'SRA3', ss: 320, ls: 450 },
     { name: '33×48.7', ss: 330, ls: 487 },

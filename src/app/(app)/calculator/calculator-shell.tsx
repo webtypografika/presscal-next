@@ -1136,12 +1136,12 @@ export default function CalculatorShell() {
             {activePanel === 'color' && (<>
               {machine?.cat === 'offset' ? (<>
                 {/* ═══ OFFSET COLOR ═══ */}
-                <MfLabel>ΕΠΙΚΑΛΥΨΗ</MfLabel>
+                <MfLabel>ΕΠΙΚΑΛΥΨΗ (TAC)</MfLabel>
                 <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
                   {([
-                    { v: 'low' as const, l: '25%' },
-                    { v: 'mid' as const, l: '50%' },
-                    { v: 'high' as const, l: '100%' },
+                    { v: 'low' as const, l: '20%' },
+                    { v: 'mid' as const, l: '100%' },
+                    { v: 'high' as const, l: '300%' },
                   ]).map(o => (
                     <Pill key={o.v} active={color.coverage === o.v} onClick={() => setColor({ ...color, coverage: o.v })} color="var(--blue)">{o.l}</Pill>
                   ))}
@@ -1267,12 +1267,12 @@ export default function CalculatorShell() {
                 </div>
 
                 {/* Coverage */}
-                <MfLabel>ΕΠΙΚΑΛΥΨΗ</MfLabel>
+                <MfLabel>ΕΠΙΚΑΛΥΨΗ (TAC)</MfLabel>
                 <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
                   {([
-                    { v: 'low' as const, l: '5%' },
-                    { v: 'mid' as const, l: '50%' },
-                    { v: 'high' as const, l: '100%' },
+                    { v: 'low' as const, l: '20%' },
+                    { v: 'mid' as const, l: '100%' },
+                    { v: 'high' as const, l: '300%' },
                   ]).map(o => (
                     <Pill key={o.v} active={color.coverage === o.v} onClick={() => setColor({ ...color, coverage: o.v })} color="var(--blue)">{o.l}</Pill>
                   ))}
