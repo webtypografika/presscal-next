@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DIGITAL_STEPS, DIGITAL_DEFAULTS } from './digital-steps';
 import { WizardShell } from './wizard-shell';
 import { renderDigitalStep } from './digital-renderer';
 import { createMachine, updateMachine } from '../actions';
+import { syncConsumables } from './sync-consumables';
 import type { Machine } from '@/generated/prisma/client';
 
 interface Props {
@@ -28,6 +29,11 @@ export function DigitalWizard({ machine, onClose }: Props) {
     margin_left: machine?.marginLeft ?? DIGITAL_DEFAULTS.margin_left,
     margin_right: machine?.marginRight ?? DIGITAL_DEFAULTS.margin_right,
   });
+
+  // Sync linked consumable prices from warehouse on load
+  useEffect(() => {
+    if (machine?.id) syncConsumables(machine.id, setData);
+  }, [machine?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleChange(field: string, value: unknown) {
     setData((prev) => ({ ...prev, [field]: value }));

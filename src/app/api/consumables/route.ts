@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   const conType = searchParams.get('conType');
   const conModule = searchParams.get('conModule');
   const color = searchParams.get('color');
+  const machineId = searchParams.get('machineId');
 
   const where: Record<string, unknown> = {
     orgId: ORG_ID,
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
   if (conType) where.conType = conType;
   if (conModule) where.conModule = { in: [conModule, 'shared'] };
   if (color) where.color = color;
+  if (machineId) where.machineId = machineId;
 
   const items = await prisma.consumable.findMany({
     where,
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest) {
       unit: true,
       unitSize: true,
       costPerUnit: true,
+      costPerBase: true,
       yieldPages: true,
     },
     orderBy: { name: 'asc' },

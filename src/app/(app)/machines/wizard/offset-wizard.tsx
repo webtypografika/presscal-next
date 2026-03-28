@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { OFFSET_STEPS, OFFSET_DEFAULTS } from './offset-steps';
 import { WizardShell } from './wizard-shell';
 import { renderOffsetStep } from './offset-renderer';
 import { createMachine, updateMachine } from '../actions';
+import { syncConsumables } from './sync-consumables';
 import type { Machine } from '@/generated/prisma/client';
 
 interface Props {
@@ -24,6 +25,11 @@ export function OffsetWizard({ machine, onClose }: Props) {
     off_min_ss: machine?.minSS ?? OFFSET_DEFAULTS.off_min_ss,
     off_min_ls: machine?.minLS ?? OFFSET_DEFAULTS.off_min_ls,
   });
+
+  // Sync linked consumable prices from warehouse on load
+  useEffect(() => {
+    if (machine?.id) syncConsumables(machine.id, setData);
+  }, [machine?.id]);
 
   function handleChange(field: string, value: unknown) {
     setData((prev) => ({ ...prev, [field]: value }));
