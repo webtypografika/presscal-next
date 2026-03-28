@@ -463,10 +463,11 @@ export default function ImpositionCanvas({
         machCat, pdf, pageIdx, isBack);
     }
 
-    // Feed direction arrow (left side of sheet)
+    // Feed direction arrow — indicates which edge enters machine first
     if (feedEdge) {
-      const arrowLabel = feedEdge === 'sef' ? 'Short edge' : 'Long edge';
-      // Calculate sheet position for arrow placement
+      const isSef = feedEdge === 'sef';
+      const label = isSef ? 'Short edge' : 'Long edge';
+      // Calculate sheet position
       const scX = (cW - 24) / sheetW;
       const scY = (cH - reserveTop - reserveBot) / sheetH;
       const sc = Math.min(scX, scY);
@@ -474,34 +475,36 @@ export default function ImpositionCanvas({
       const dH = sheetH * sc;
       const sx = (cW - dW) / 2;
       const sy = reserveTop + (cH - reserveTop - reserveBot - dH) / 2;
-
-      // Arrow on top edge pointing down (feed direction into machine)
-      const arrowX = sx + dW / 2;
-      const arrowY = sy - 2;
       const arrowLen = 14;
 
       ctx.save();
       ctx.strokeStyle = 'rgba(59,130,246,0.6)';
       ctx.fillStyle = 'rgba(59,130,246,0.6)';
       ctx.lineWidth = 1.5;
-
-      // Arrow line
-      ctx.beginPath();
-      ctx.moveTo(arrowX, arrowY - arrowLen);
-      ctx.lineTo(arrowX, arrowY);
-      ctx.stroke();
-      // Arrowhead
-      ctx.beginPath();
-      ctx.moveTo(arrowX, arrowY + 1);
-      ctx.lineTo(arrowX - 3.5, arrowY - 4);
-      ctx.lineTo(arrowX + 3.5, arrowY - 4);
-      ctx.closePath();
-      ctx.fill();
-
-      // Label
       ctx.font = '600 7.5px Inter, DM Sans, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(arrowLabel, arrowX, arrowY - arrowLen - 4);
+
+      if (isSef) {
+        // SEF: arrow on TOP edge (short edge enters), pointing down
+        const ax = sx + dW / 2;
+        const ay = sy - 2;
+        ctx.beginPath(); ctx.moveTo(ax, ay - arrowLen); ctx.lineTo(ax, ay); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ax, ay + 1); ctx.lineTo(ax - 3.5, ay - 4); ctx.lineTo(ax + 3.5, ay - 4); ctx.closePath(); ctx.fill();
+        ctx.textAlign = 'center';
+        ctx.fillText(label, ax, ay - arrowLen - 4);
+      } else {
+        // LEF: arrow on LEFT edge (long edge enters), pointing right
+        const ax = sx - 2;
+        const ay = sy + dH / 2;
+        ctx.beginPath(); ctx.moveTo(ax - arrowLen, ay); ctx.lineTo(ax, ay); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ax + 1, ay); ctx.lineTo(ax - 4, ay - 3.5); ctx.lineTo(ax - 4, ay + 3.5); ctx.closePath(); ctx.fill();
+        ctx.save();
+        ctx.translate(ax - arrowLen - 4, ay);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.fillText(label, 0, 0);
+        ctx.restore();
+      }
+
       ctx.restore();
     }
 
