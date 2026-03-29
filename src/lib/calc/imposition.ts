@@ -200,9 +200,12 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
 
   const rawSheets = Math.ceil(qty / ups);
 
+  // Center grid in printable area
+  const cenOffX = area.marginLeft + (pw - usedW) / 2;
+  const cenOffY = area.marginTop + (ph - usedH) / 2;
   const cells = buildCells(
     cols, rows, actualCellW, actualCellH, gutter,
-    area.marginLeft, area.marginTop,
+    cenOffX, cenOffY,
     contentRotation,
   );
 
@@ -349,8 +352,8 @@ export function calcBookletCreep(totalSheets: number, paperThicknessMM: number):
   const creep: number[] = [];
   for (let i = 0; i < totalSheets; i++) {
     // Outermost sheet (idx 0): zero creep
-    // Inner sheets get more creep
-    creep.push(i * paperThicknessMM / 2);
+    // Each inner sheet adds one paper thickness of creep
+    creep.push(i * paperThicknessMM);
   }
   return creep;
 }
