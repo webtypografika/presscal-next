@@ -260,8 +260,9 @@ export async function POST(req: NextRequest) {
     const area: PrintableArea = {
       paperW: isSEF ? rawH : rawW,
       paperH: isSEF ? rawW : rawH,
-      marginTop: machine.marginTop || 0,
-      marginBottom: machine.marginBottom || 0,
+      // Offset: DB marginTop=gripper(bottom), marginBottom=tail(top) → swap for visual layout
+      marginTop: machineCat === 'offset' ? (machine.marginBottom || 0) : (machine.marginTop || 0),
+      marginBottom: machineCat === 'offset' ? (machine.marginTop || 0) : (machine.marginBottom || 0),
       marginLeft: machine.marginLeft || 0,
       marginRight: machine.marginRight || 0,
     };

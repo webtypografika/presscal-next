@@ -200,14 +200,16 @@ function Pill({ active, onClick, children, color }: { active?: boolean; onClick:
 }
 
 /* ═══ TOGGLE BAR ═══ */
-function ToggleBar({ options, value, onChange }: { options: { v: string; l: string }[]; value: string; onChange: (v: string) => void }) {
+function ToggleBar({ options, value, onChange, color }: { options: { v: string; l: string }[]; value: string; onChange: (v: string) => void; color?: string }) {
+  const c = color || 'var(--accent)';
+  const bgAlpha = color ? `color-mix(in srgb, ${c} 12%, transparent)` : 'rgba(245,130,32,0.12)';
   return (
     <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
       {options.map((o, i) => (
         <button key={o.v} onClick={() => onChange(o.v)} style={{
           flex: 1, padding: '8px 0', textAlign: 'center', fontSize: '0.82rem', fontWeight: 600,
-          background: value === o.v ? 'rgba(245,130,32,0.12)' : 'transparent',
-          border: 'none', color: value === o.v ? 'var(--accent)' : '#64748b',
+          background: value === o.v ? bgAlpha : 'transparent',
+          border: 'none', color: value === o.v ? c : '#64748b',
           cursor: 'pointer', transition: 'all 0.2s',
           borderRight: i < options.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none',
         }}>{o.l}</button>
@@ -487,8 +489,9 @@ export default function CalculatorShell() {
     area: {
       paperW: vizW,
       paperH: vizH,
-      marginTop: machine?.marginTop || 0,
-      marginBottom: machine?.marginBottom || 0,
+      // Offset: DB marginTop=gripper(bottom), marginBottom=tail(top) → swap for visual layout
+      marginTop: machine?.cat === 'offset' ? (machine?.marginBottom || 0) : (machine?.marginTop || 0),
+      marginBottom: machine?.cat === 'offset' ? (machine?.marginTop || 0) : (machine?.marginBottom || 0),
       marginLeft: machine?.marginLeft || 0,
       marginRight: machine?.marginRight || 0,
     },
@@ -782,9 +785,11 @@ export default function CalculatorShell() {
 
         {/* ═══ LEFT PANEL ═══ */}
         <div style={{
-          width: 310, flexShrink: 0, background: 'rgba(0,0,0,0.2)',
-          borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
+          width: 310, flexShrink: 0,
+          background: activePanel === 'mode-settings' ? 'rgba(132,204,22,0.10)' : 'rgba(0,0,0,0.2)',
+          borderRight: `1px solid ${activePanel === 'mode-settings' ? 'rgba(132,204,22,0.30)' : 'var(--border)'}`,
+          display: 'flex', flexDirection: 'column',
+          overflow: 'hidden', transition: 'background 0.2s, border-color 0.2s',
         }}>
           {/* Panel tabs */}
           <div style={{ display: 'flex', flexShrink: 0, borderBottom: '1px solid var(--border)' }}>
@@ -1352,7 +1357,7 @@ export default function CalculatorShell() {
                 }}>
                   <i className="fas fa-arrow-left" />
                 </button>
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--impo)', display: 'flex', alignItems: 'center', gap: 5 }}>
                   <i className="fas fa-cog" style={{ fontSize: '0.62rem' }} />
                   {IMPO_MODES.find(m => m.key === impoMode)?.label}
                 </span>
@@ -1368,8 +1373,8 @@ export default function CalculatorShell() {
                 ]).map(t => (
                   <button key={t.k} onClick={() => setImpoModeTab(t.k)} style={{
                     flex: 1, padding: '5px 0', borderRadius: 5, border: 'none', cursor: 'pointer',
-                    background: impoModeTab === t.k ? 'rgba(245,130,32,0.1)' : 'transparent',
-                    color: impoModeTab === t.k ? 'var(--accent)' : '#64748b',
+                    background: impoModeTab === t.k ? 'rgba(132,204,22,0.12)' : 'transparent',
+                    color: impoModeTab === t.k ? 'var(--impo)' : '#64748b',
                     fontSize: '0.6rem', fontWeight: 600, fontFamily: 'inherit',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                   }}>
@@ -1435,7 +1440,7 @@ export default function CalculatorShell() {
                 {impoMode === 'workturn' && (
                   <div style={{ marginBottom: 10 }}>
                     <MfLabel>ΤΡΟΠΟΣ ΑΝΑΣΤΡΟΦΗΣ</MfLabel>
-                    <ToggleBar value={impoTurnType} onChange={v => setImpoTurnType(v as 'turn' | 'tumble')} options={[{ v: 'turn', l: 'Work & Turn' }, { v: 'tumble', l: 'Work & Tumble' }]} />
+                    <ToggleBar value={impoTurnType} onChange={v => setImpoTurnType(v as 'turn' | 'tumble')} options={[{ v: 'turn', l: 'Work & Turn' }, { v: 'tumble', l: 'Work & Tumble' }]} color="var(--impo)" />
                   </div>
                 )}
               </>)}
@@ -1463,7 +1468,7 @@ export default function CalculatorShell() {
                 <MfLabel>ΠΕΡΙΣΤΡΟΦΗ PDF</MfLabel>
                 <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
                   {[0, 90, 180, 270].map(deg => (
-                    <Pill key={deg} active={impoRotation === deg} onClick={() => setImpoRotation(deg)}>
+                    <Pill key={deg} active={impoRotation === deg} onClick={() => setImpoRotation(deg)} color="var(--impo)">
                       {deg}°
                     </Pill>
                   ))}
@@ -1476,7 +1481,7 @@ export default function CalculatorShell() {
                 {job.sides === 2 && impoMode !== 'workturn' && (<>
                   <MfLabel>DUPLEX ORIENTATION</MfLabel>
                   <ToggleBar value={impoDuplexOrient} onChange={v => setImpoDuplexOrient(v as 'h2h' | 'h2f')}
-                    options={[{ v: 'h2h', l: 'Head-Head' }, { v: 'h2f', l: 'Head-Foot' }]} />
+                    options={[{ v: 'h2h', l: 'Head-Head' }, { v: 'h2f', l: 'Head-Foot' }]} color="var(--impo)" />
                 </>)}
               </>)}
 
@@ -1485,9 +1490,9 @@ export default function CalculatorShell() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
                   <button onClick={() => setImpoCropMarks(!impoCropMarks)} style={{
                     display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
-                    borderRadius: 7, border: `1px solid ${impoCropMarks ? 'var(--accent)' : 'var(--border)'}`,
-                    background: impoCropMarks ? 'rgba(245,130,32,0.06)' : 'transparent',
-                    color: impoCropMarks ? 'var(--accent)' : '#64748b',
+                    borderRadius: 7, border: `1px solid ${impoCropMarks ? 'var(--impo)' : 'var(--border)'}`,
+                    background: impoCropMarks ? 'rgba(132,204,22,0.06)' : 'transparent',
+                    color: impoCropMarks ? 'var(--impo)' : '#64748b',
                     fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', width: '100%',
                   }}>
                     <i className="fas fa-crop-alt" style={{ fontSize: '0.58rem' }} /> Crop Marks
@@ -1495,9 +1500,9 @@ export default function CalculatorShell() {
                   </button>
                   <button onClick={() => setImpoKeepSourceMarks(!impoKeepSourceMarks)} style={{
                     display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
-                    borderRadius: 7, border: `1px solid ${impoKeepSourceMarks ? 'var(--accent)' : 'var(--border)'}`,
-                    background: impoKeepSourceMarks ? 'rgba(245,130,32,0.06)' : 'transparent',
-                    color: impoKeepSourceMarks ? 'var(--accent)' : '#64748b',
+                    borderRadius: 7, border: `1px solid ${impoKeepSourceMarks ? 'var(--impo)' : 'var(--border)'}`,
+                    background: impoKeepSourceMarks ? 'rgba(132,204,22,0.06)' : 'transparent',
+                    color: impoKeepSourceMarks ? 'var(--impo)' : '#64748b',
                     fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', width: '100%',
                   }}>
                     <i className="fas fa-file-alt" style={{ fontSize: '0.58rem' }} /> Σημεία αρχείου
@@ -1568,18 +1573,18 @@ export default function CalculatorShell() {
                 <div key={m.key} style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
                   <button onClick={() => setImpoMode(m.key)} style={{
                     padding: '6px 14px', borderRadius: active ? '7px 0 0 7px' : 7, fontSize: '0.75rem', fontWeight: 600,
-                    border: `1px solid ${active ? 'var(--accent)' : 'rgba(255,255,255,0.08)'}`,
+                    border: `1px solid ${active ? 'var(--impo)' : 'rgba(255,255,255,0.08)'}`,
                     borderRight: active ? 'none' : undefined,
-                    background: active ? 'rgba(245,130,32,0.08)' : 'transparent',
-                    color: active ? 'var(--accent)' : '#64748b',
+                    background: active ? 'rgba(132,204,22,0.08)' : 'transparent',
+                    color: active ? 'var(--impo)' : '#64748b',
                     cursor: 'pointer', transition: 'all 0.2s', fontFamily: 'inherit',
                   }}>{m.label}</button>
                   {active && (
                     <button onClick={() => togglePanel(activePanel === 'mode-settings' ? 'job' : 'mode-settings')} style={{
                       padding: '0 10px', borderRadius: '0 7px 7px 0', fontSize: '0.68rem',
                       border: 'none',
-                      background: activePanel === 'mode-settings' ? 'var(--accent)' : 'rgba(245,130,32,0.25)',
-                      color: activePanel === 'mode-settings' ? '#fff' : 'var(--accent)',
+                      background: activePanel === 'mode-settings' ? 'var(--impo)' : 'rgba(132,204,22,0.25)',
+                      color: activePanel === 'mode-settings' ? '#fff' : 'var(--impo)',
                       cursor: 'pointer', transition: 'all 0.2s',
                       display: 'flex', alignItems: 'center',
                     }} title="Ρυθμίσεις mode">

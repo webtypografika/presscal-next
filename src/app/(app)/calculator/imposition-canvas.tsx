@@ -134,9 +134,9 @@ function drawSheet(
     ctx.font = '600 7px Inter, DM Sans, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = COLORS.tail;
-    ctx.fillText('TAIL', offX + drawW / 2, offY + mB / 2 + 3);
+    ctx.fillText('TAIL', offX + drawW / 2, offY + mT / 2 + 3);
     ctx.fillStyle = COLORS.gripper;
-    ctx.fillText('GRIPPER', offX + drawW / 2, offY + drawH - mT / 2 + 3);
+    ctx.fillText('GRIPPER', offX + drawW / 2, offY + drawH - mB / 2 + 3);
   }
 
   // Print area
