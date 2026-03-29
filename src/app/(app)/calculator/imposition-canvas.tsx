@@ -277,6 +277,27 @@ function drawSheet(
     }
   }
 
+  // W&T fold/cut line (dashed line at sheet center — where the sheet is cut after printing)
+  if (isWT) {
+    const isTumble = impo.turnType === 'tumble';
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = COLORS.cropMark;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    if (isTumble) {
+      const fy = offY + drawH / 2;
+      ctx.moveTo(offX, fy);
+      ctx.lineTo(offX + drawW, fy);
+    } else {
+      const fx = offX + drawW / 2;
+      ctx.moveTo(fx, offY);
+      ctx.lineTo(fx, offY + drawH);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // Gutter lines (skip for W&T — cells use actual coordinates with fold gap)
   if (hasGutter && gutterPx > 1 && !isWT) {
     ctx.fillStyle = COLORS.gutterFill;

@@ -542,58 +542,69 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const rawCellH = trimH + bleed * 2;
   const { w: pw, h: ph } = printable(area);
   const rot = ((rotation || 0) % 360 + 360) % 360;
-  // 90°/270° swap cell dimensions (piece changes orientation)
-  const isSwapped = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
-  const cellW = isSwapped ? rawCellH : rawCellW;
-  const cellH = isSwapped ? rawCellW : rawCellH;
-  let frontRot = rot;
-  let backRot = (rot + 180) % 360;
+
+  const cellW = rawCellW;
+  const cellH = rawCellH;
 
   const isTumble = turnType === 'tumble';
-  // Turn: split width (left/right), Tumble: split height (top/bottom)
+  // Turn: left-right split (same gripper), Tumble: top-bottom split (gripper changes)
   const halfW = isTumble ? pw : pw / 2;
   const halfH = isTumble ? ph / 2 : ph;
 
-  // Try normal orientation in one half
+  // ─── Step 1: Auto-orient — find best base orientation ───
   const cols1 = fitCount(halfW, cellW, gutter);
   const rows1 = fitCount(halfH, cellH, gutter);
   const fit1 = cols1 * rows1;
-
-  // Try rotated 90°
   const cols2 = fitCount(halfW, cellH, gutter);
   const rows2 = fitCount(halfH, cellW, gutter);
   const fit2 = cols2 * rows2;
 
-  if (fit1 === 0 && fit2 === 0) {
-    // Nothing fits — return minimal result
+  let autoRotated = fit2 > fit1;
+  if (autoRotated && fit2 === 0) autoRotated = false;
+  if (!autoRotated && fit1 === 0) autoRotated = true;
+
+  const baseCellW = autoRotated ? cellH : cellW;
+  const baseCellH = autoRotated ? cellW : cellH;
+  const baseRot = autoRotated ? 90 : 0;
+
+  // ─── Step 2: Apply user rotation on top of base ───
+  // 90°/270° swap the base cell dims, 0°/180° keep them
+  const userSwaps = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
+  const actualCellW = userSwaps ? baseCellH : baseCellW;
+  const actualCellH = userSwaps ? baseCellW : baseCellH;
+
+  // Re-compute fit with final cell dimensions
+  const cols = fitCount(halfW, actualCellW, gutter);
+  const rows = fitCount(halfH, actualCellH, gutter);
+  const fitsPerHalf = cols * rows;
+
+  if (fitsPerHalf === 0) {
     return {
       mode: 'workturn', ups: 0, cols: 0, rows: 0,
       paperW: area.paperW, paperH: area.paperH,
-      pieceW: cellW, pieceH: cellH, trimW, trimH,
+      pieceW: actualCellW, pieceH: actualCellH, trimW, trimH,
       rotated: false, wastePercent: 100, cells: [], totalSheets: 0,
       turnType, fitsPerHalf: 0, ...marginInfo(area),
     };
   }
 
-  // Always pick best orientation for max fit (content rotation is separate)
-  let rotated = fit2 > fit1;
-  if (rotated && fit2 === 0) rotated = false;
-  if (!rotated && fit1 === 0) rotated = true;
-
-  const cols = rotated ? cols2 : cols1;
-  const rows = rotated ? rows2 : rows1;
-  const fitsPerHalf = rotated ? fit2 : fit1;
   const ups = Math.max(fitsPerHalf * 2, 1);
   const rawSheets = Math.ceil(qty / ups);
+  const rotated = autoRotated || userSwaps;
 
-  const actualCellW = rotated ? cellH : cellW;
-  const actualCellH = rotated ? cellW : cellH;
-
-  // Auto-rotation gives more fits — adjust content rotation (+90°)
-  if (rotated) {
-    frontRot = (frontRot + 90) % 360;
-    backRot = (frontRot + 180) % 360;
-  }
+  // Content rotation: auto-fill so PDF matches cell + user flip
+  // If PDF orientation ≠ cell orientation → rotate 90° to fill
+  // If user chose 180°/270° → add 180° for "heads out" flip
+  const pdfPortrait = cellW <= cellH;
+  const finalPortrait = actualCellW <= actualCellH;
+  const fillRot = (pdfPortrait !== finalPortrait) ? 90 : 0;
+  const flipOffset = (rot >= 135 && rot <= 315) ? 180 : 0;
+  const frontRot = (fillRot + flipOffset) % 360;
+  // When auto-rotated (fillRot=90): back gets opposite direction → heads outward
+  // When natural fit (fillRot=0): back same as front → physical turn handles it
+  const backRot = fillRot
+    ? ((360 - fillRot) + flipOffset) % 360
+    : frontRot;
 
   const usedW = cols * actualCellW + (cols - 1) * gutter;
   const usedH = rows * actualCellH + (rows - 1) * gutter;

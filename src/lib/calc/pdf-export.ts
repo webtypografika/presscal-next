@@ -1301,7 +1301,10 @@ async function exportWorkTurn(
         // Content always rotated 180° (αντικριστά)
         const cellX2 = backHalfX + col2 * (pieceW + gutterPt);
         const cellY2 = backHalfY + (hRows - 1 - row2) * (pieceH + gutterPt);
-        wtDrawCell(page, cellX2, cellY2, epBack, epBackPg, 180);
+        // When auto-rotated: back gets opposite direction (heads outward)
+        // When natural fit: back same as front (physical turn handles it)
+        const backExtraRot = wtNeedsRot ? 180 : 0;
+        wtDrawCell(page, cellX2, cellY2, epBack, epBackPg, backExtraRot);
       }
     }
 

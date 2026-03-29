@@ -362,7 +362,7 @@ export default function CalculatorShell() {
   const [machineSheetW, setMachineSheetW] = useState<number | null>(null);
   const [machineSheetH, setMachineSheetH] = useState<number | null>(null);
   // Feed direction: sef = short edge first, lef = long edge first
-  const [feedEdge, setFeedEdge] = useState<'sef' | 'lef'>('sef');
+  const [feedEdge, setFeedEdge] = useState<'sef' | 'lef'>('lef');
   // Speed override (null = use machine default)
   const [speedOverride, setSpeedOverride] = useState<number | null>(null);
   // Waste (φύλλα μοντάζ)
