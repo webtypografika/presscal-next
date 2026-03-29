@@ -253,9 +253,13 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── IMPOSITION ───
+    const rawW = body.machineSheetW || machine.maxLS || 330;
+    const rawH = body.machineSheetH || machine.maxSS || 487;
+    // SEF: short edge enters first → portrait (swap so W < H)
+    const isSEF = body.feedEdge === 'sef';
     const area: PrintableArea = {
-      paperW: body.machineSheetW || machine.maxLS || 330,
-      paperH: body.machineSheetH || machine.maxSS || 487,
+      paperW: isSEF ? rawH : rawW,
+      paperH: isSEF ? rawW : rawH,
       marginTop: machine.marginTop || 0,
       marginBottom: machine.marginBottom || 0,
       marginLeft: machine.marginLeft || 0,
@@ -273,6 +277,7 @@ export async function POST(req: NextRequest) {
       area,
       forceUps: body.impoForceUps,
       rotation: body.impoRotation,
+      turnType: body.impoTurnType,
     };
 
     const imposition = calcImposition(impoInput);

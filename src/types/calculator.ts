@@ -32,6 +32,7 @@ export interface CalculatorInput {
   impoGutter: number;
   impoBleed: number;
   impoForceUps?: number;
+  impoTurnType?: WorkTurnType;
   impoCropMarks: boolean;
 
   // Offset

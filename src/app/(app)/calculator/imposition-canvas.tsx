@@ -155,15 +155,15 @@ function drawSheet(
   const cenX = paX + (printAreaW - totalGridW) / 2 + gridOffsetX * scale;
   const cenY = paY + (printAreaH - totalGridH) / 2 + gridOffsetY * scale;
 
+  // W&T uses actual cell coordinates (includes fold gap), others use uniform grid
+  const isWT = impo.mode === 'workturn';
+
   // Draw cells
   for (let row = 0; row < impo.rows; row++) {
     for (let col = 0; col < impo.cols; col++) {
       const idx = row * impo.cols + col;
       if (idx >= impo.cells.length) continue;
       const cell = impo.cells[idx];
-
-      // W&T: use actual cell coordinates (includes fold gap), others: uniform grid
-      const isWT = impo.mode === 'workturn';
       const x = isWT ? offX + cell.x * scale : cenX + col * (pw + gutterPx);
       const y = isWT ? offY + cell.y * scale : cenY + row * (ph + gutterPx);
       const isRotated = cell.rotation && cell.rotation !== 0;
@@ -277,8 +277,8 @@ function drawSheet(
     }
   }
 
-  // Gutter lines
-  if (hasGutter && gutterPx > 1) {
+  // Gutter lines (skip for W&T — cells use actual coordinates with fold gap)
+  if (hasGutter && gutterPx > 1 && !isWT) {
     ctx.fillStyle = COLORS.gutterFill;
     for (let col = 1; col < impo.cols; col++) {
       const gx = cenX + col * pw + (col - 1) * gutterPx;
@@ -290,8 +290,8 @@ function drawSheet(
     }
   }
 
-  // Crop marks
-  if (cropMarks) {
+  // Crop marks (skip for W&T — uses cell coordinates, marks drawn correctly in PDF export)
+  if (cropMarks && !isWT) {
     ctx.strokeStyle = COLORS.cropMark;
     ctx.lineWidth = 0.5;
     for (let row = 0; row <= impo.rows; row++) {

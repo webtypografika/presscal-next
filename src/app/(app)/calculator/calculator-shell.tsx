@@ -505,7 +505,8 @@ export default function CalculatorShell() {
   const rawSheets = impo.totalSheets || Math.ceil(job.qty / ups);
   const wasteSheets = wasteFixed;
   const sheets = rawSheets + wasteSheets;
-  const printSheets = job.sides === 2 ? sheets * 2 : sheets;
+  // W&T prints single-sided (same plate both sides after flip), no double count
+  const printSheets = (job.sides === 2 && impoMode !== 'workturn') ? sheets * 2 : sheets;
   // Estimated time from machine speed (with optional override)
   const specs = (machine?.specs ?? {}) as Record<string, unknown>;
   const maxSpeed = machine?.cat === 'offset'
@@ -553,6 +554,7 @@ export default function CalculatorShell() {
           impoGutter: impoGutter,
           impoBleed: effectiveBleed,
           impoForceUps: impoForceUps || undefined,
+          impoTurnType: impoTurnType,
           impoCropMarks: impoCropMarks,
           wasteFixed,
           coverageLevel: color.coverage || 'mid',
@@ -724,6 +726,7 @@ export default function CalculatorShell() {
                 isDuplex: job.sides === 2,
                 duplexOrient: impoDuplexOrient,
                 rotation: impoRotation,
+                turnType: impoTurnType,
                 jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
               });
             } catch (e) {

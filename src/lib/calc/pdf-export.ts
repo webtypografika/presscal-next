@@ -1297,16 +1297,11 @@ async function exportWorkTurn(
     const backHalfY = isTumble ? mB + halfH + (halfH - totalGridH) / 2 : cenFY;
     for (let row2 = 0; row2 < hRows; row2++) {
       for (let col2 = 0; col2 < hCols; col2++) {
-        let cellX2: number, cellY2: number;
-        if (isTumble) {
-          cellX2 = backHalfX + col2 * (pieceW + gutterPt);
-          cellY2 = backHalfY + row2 * (pieceH + gutterPt);
-        } else {
-          cellX2 = backHalfX + (hCols - 1 - col2) * (pieceW + gutterPt);
-          cellY2 = backHalfY + (hRows - 1 - row2) * (pieceH + gutterPt);
-        }
-        const tumbleRot = isTumble ? 180 : 0;
-        wtDrawCell(page, cellX2, cellY2, epBack, epBackPg, tumbleRot);
+        // Same grid positions as front half, shifted to back half area
+        // Content always rotated 180° (αντικριστά)
+        const cellX2 = backHalfX + col2 * (pieceW + gutterPt);
+        const cellY2 = backHalfY + (hRows - 1 - row2) * (pieceH + gutterPt);
+        wtDrawCell(page, cellX2, cellY2, epBack, epBackPg, 180);
       }
     }
 
@@ -1340,9 +1335,9 @@ async function exportWorkTurn(
       page.drawRectangle({ x: 0, y: fGridT, width: paperWpt, height: bGridB - fGridT, color: white });
     }
 
-    // Gutter masks
+    // Gutter masks (per-half grid dimensions, not doubled totals)
     if (gutterPt > 0.5) {
-      for (let gc = 0; gc < impo.cols - 1; gc++) {
+      for (let gc = 0; gc < hCols - 1; gc++) {
         const fgx = fGridL + gc * (pieceW + gutterPt) + pieceW;
         const fgxL = fgx + Math.min(wtBleedPt, gutterPt / 2);
         const fgxR = fgx + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
@@ -1352,11 +1347,15 @@ async function exportWorkTurn(
         const bgxR = bgx + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
         if (bgxR > bgxL + 0.5) page.drawRectangle({ x: bgxL, y: bGridB, width: bgxR - bgxL, height: totalGridH, color: white });
       }
-      for (let gr = 0; gr < impo.rows - 1; gr++) {
-        const gy = fGridB + gr * (pieceH + gutterPt) + pieceH;
-        const gyB = gy + Math.min(wtBleedPt, gutterPt / 2);
-        const gyT = gy + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
-        if (gyT > gyB + 0.5) page.drawRectangle({ x: 0, y: gyB, width: paperWpt, height: gyT - gyB, color: white });
+      for (let gr = 0; gr < hRows - 1; gr++) {
+        const fgy = fGridB + gr * (pieceH + gutterPt) + pieceH;
+        const fgyB = fgy + Math.min(wtBleedPt, gutterPt / 2);
+        const fgyT = fgy + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
+        if (fgyT > fgyB + 0.5) page.drawRectangle({ x: fGridL, y: fgyB, width: totalGridW, height: fgyT - fgyB, color: white });
+        const bgy = bGridB + gr * (pieceH + gutterPt) + pieceH;
+        const bgyB = bgy + Math.min(wtBleedPt, gutterPt / 2);
+        const bgyT = bgy + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
+        if (bgyT > bgyB + 0.5) page.drawRectangle({ x: bGridL, y: bgyB, width: totalGridW, height: bgyT - bgyB, color: white });
       }
     }
 
@@ -1365,12 +1364,12 @@ async function exportWorkTurn(
       ? ascii((opts.jobDescription || 'Job') + ' W&T ' + (s + 1) + ' (P' + (frontIdx + 1) + '+P' + (backIdx + 1) + ')')
       : ascii((opts.jobDescription || 'Job') + ' W&T ' + (s + 1));
 
-    const halfMM = (isTumble ? (impo as any).printableH : (impo as any).printableW) / 2;
+    const halfMM = ((isTumble ? impo.printableH : impo.printableW) ?? 0) / 2;
     const baseMarks = {
       marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
       marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
       pieceW: impo.pieceW, pieceH: impo.pieceH,
-      cols: impo.cols, rows: impo.rows,
+      cols: hCols, rows: hRows,
       gutterMM: opts.gutter || 0, bleedMM: opts.bleed || 0,
       offsetX: impo.offsetX, offsetY: impo.offsetY,
       cropMarks: opts.showCropMarks,

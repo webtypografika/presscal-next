@@ -546,8 +546,8 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const isSwapped = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
   const cellW = isSwapped ? rawCellH : rawCellW;
   const cellH = isSwapped ? rawCellW : rawCellH;
-  const frontRot = rot;
-  const backRot = (rot + 180) % 360;
+  let frontRot = rot;
+  let backRot = (rot + 180) % 360;
 
   const isTumble = turnType === 'tumble';
   // Turn: split width (left/right), Tumble: split height (top/bottom)
@@ -589,6 +589,12 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const actualCellW = rotated ? cellH : cellW;
   const actualCellH = rotated ? cellW : cellH;
 
+  // Auto-rotation gives more fits — adjust content rotation (+90°)
+  if (rotated) {
+    frontRot = (frontRot + 90) % 360;
+    backRot = (frontRot + 180) % 360;
+  }
+
   const usedW = cols * actualCellW + (cols - 1) * gutter;
   const usedH = rows * actualCellH + (rows - 1) * gutter;
 
@@ -610,7 +616,7 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
           y: area.marginTop + gridOffY + r * (actualCellH + gutter),
           w: actualCellW, h: actualCellH,
           pageNum: 1,
-          rotation: frontRot || undefined,
+          rotation: frontRot,
         });
       }
     }
@@ -638,7 +644,7 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
           y: area.marginTop + gridOffY + r * (actualCellH + gutter),
           w: actualCellW, h: actualCellH,
           pageNum: 1,
-          rotation: frontRot || undefined,
+          rotation: frontRot,
         });
       }
       // Right half — back (page 2), same positions shifted right + 180° content
@@ -655,8 +661,8 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
     }
   }
 
-  const totalUsedW = isTumble ? usedW : usedW * 2 + gutter;
-  const totalUsedH = isTumble ? usedH * 2 + gutter : usedH;
+  const totalUsedW = isTumble ? usedW : usedW * 2;
+  const totalUsedH = isTumble ? usedH * 2 : usedH;
 
   return {
     mode: 'workturn',
