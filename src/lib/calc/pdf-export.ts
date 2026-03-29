@@ -7,6 +7,7 @@ import {
   PDFPage,
   PDFEmbeddedPage,
   rgb,
+  cmyk,
   StandardFonts,
   PDFFont,
   pushGraphicsState,
@@ -353,7 +354,7 @@ function drawPDFMarks(
   const cenX = mL + (printableW - totalGridW) / 2 + offXpt;
   const cenY = mB + (printableH - totalGridH) / 2 - offYpt;
 
-  const black = rgb(0, 0, 0);
+  const black = cmyk(0, 0, 0, 1);
 
   // Crop marks
   const bleedPt = mmToPt(impo.bleedMM || 0);
@@ -449,16 +450,17 @@ function drawPDFMarks(
       { x: 0, y: paperHpt / 2 },
       { x: paperWpt, y: paperHpt / 2 },
     ];
+    const regColor = cmyk(1, 1, 1, 1); // Registration — prints on ALL plates
     for (const p of regPts) {
-      page.drawLine({ start: { x: p.x - regSize, y: p.y }, end: { x: p.x + regSize, y: p.y }, thickness: 0.3, color: black });
-      page.drawLine({ start: { x: p.x, y: p.y - regSize }, end: { x: p.x, y: p.y + regSize }, thickness: 0.3, color: black });
-      page.drawCircle({ x: p.x, y: p.y, size: regSize * 0.6, borderWidth: 0.3, borderColor: black });
+      page.drawLine({ start: { x: p.x - regSize, y: p.y }, end: { x: p.x + regSize, y: p.y }, thickness: 0.3, color: regColor });
+      page.drawLine({ start: { x: p.x, y: p.y - regSize }, end: { x: p.x, y: p.y + regSize }, thickness: 0.3, color: regColor });
+      page.drawCircle({ x: p.x, y: p.y, size: regSize * 0.6, borderWidth: 0.3, borderColor: regColor });
     }
   }
 
   // Plate sluglines — offset only
   if (options?.showPlateSlug && options.machineCat === 'offset' && options.font) {
-    const cmykRGB = [[0, 0.68, 0.94], [0.93, 0, 0.55], [0.83, 0.66, 0], [0.14, 0.12, 0.13]];
+    const cmykColors = [cmyk(1,0,0,0), cmyk(0,1,0,0), cmyk(0,0,1,0), cmyk(0,0,0,1)];
     const slugFont = options.font;
     const slugSize = 5.5;
     const slugNames = ['Cyan', 'Magenta', 'Yellow', 'Black'];
@@ -472,7 +474,7 @@ function drawPDFMarks(
     }
     let slugX = mmToPt(5);
     for (let si = 0; si < 4; si++) {
-      const slugColor = rgb(cmykRGB[si][0], cmykRGB[si][1], cmykRGB[si][2]);
+      const slugColor = cmykColors[si];
       const slugText = slugNames[si] + (si === 3 ? slugJobText : '');
       const slugTw = slugFont.widthOfTextAtSize(slugText, slugSize);
       page.drawText(slugText, {
@@ -488,7 +490,7 @@ function drawPDFMarks(
     const safeText = ascii(options.jobName + ' | ' + new Date().toLocaleDateString('en-GB'));
     page.drawText(safeText, {
       x: mmToPt(5), y: paperHpt - mmToPt(3),
-      size: 6, font: options.font, color: rgb(0.4, 0.4, 0.4),
+      size: 6, font: options.font, color: cmyk(0, 0, 0, 0.6),
     });
   }
 
@@ -516,7 +518,7 @@ function drawPDFMarks(
     const foldX = paperWpt / 2;
     page.drawLine({
       start: { x: foldX, y: mB }, end: { x: foldX, y: paperHpt - mT },
-      thickness: 0.5, color: rgb(1, 0, 0), dashArray: [4, 3],
+      thickness: 0.5, color: cmyk(0, 1, 1, 0), dashArray: [4, 3],
     });
   }
 }
@@ -532,7 +534,7 @@ function drawMarginalMasks(
   gridB: number,
   gridT: number,
 ) {
-  const white = rgb(1, 1, 1);
+  const white = cmyk(0, 0, 0, 0);
   if (gridL > 0.5) page.drawRectangle({ x: 0, y: 0, width: gridL, height: paperHpt, color: white });
   if (paperWpt - gridR > 0.5) page.drawRectangle({ x: gridR, y: 0, width: paperWpt - gridR, height: paperHpt, color: white });
   if (gridB > 0.5) page.drawRectangle({ x: gridL, y: 0, width: gridR - gridL, height: gridB, color: white });
@@ -553,7 +555,7 @@ function drawGutterMasks(
   bleedPt: number,
   totalGridH: number,
 ) {
-  const white = rgb(1, 1, 1);
+  const white = cmyk(0, 0, 0, 0);
   if (gutterPt > 0.5) {
     for (let gc = 0; gc < cols - 1; gc++) {
       const gx = cenX + gc * (pieceW + gutterPt) + pieceW;
@@ -680,7 +682,7 @@ async function exportNUp(
 
     // When preserving source marks, skip masking + own crop marks
     if (!opts.keepSourceMarks) {
-      const white = rgb(1, 1, 1);
+      const white = cmyk(0, 0, 0, 0);
       const maskCenX = isBackSide ? (paperWpt - cenX - totalGridW) : cenX;
 
       // Gutter masks
@@ -1016,7 +1018,7 @@ async function exportPerfectBound(
     drawPDFMarks(backP, paperWpt, paperHpt, pbMarksImpo, { ...marksOpts, jobName: ascii((pressLabel ? pressLabel + ' ' : '') + 'Back (' + sigsAcross + '\u00d7' + sigsDown + ')') });
 
     // Mask outer edges
-    const white = rgb(1, 1, 1);
+    const white = cmyk(0, 0, 0, 0);
     const gridL = gridOriginX;
     const gridR = gridOriginX + totalGridW;
     const gridB = gridOriginY;
@@ -1070,7 +1072,7 @@ async function exportCutStack(
   const cenX = mmToPt(impo.marginL ?? 0) + (printableW - totalGridW) / 2 + offXpt;
   const cenY = mmToPt(impo.marginB ?? 0) + (printableH - totalGridH) / 2 - offYpt;
 
-  const numPdfColor = (opts.numberColor === '#cc0000') ? rgb(0.8, 0, 0) : rgb(0, 0, 0);
+  const numPdfColor = (opts.numberColor === '#cc0000') ? cmyk(0, 1, 1, 0) : cmyk(0, 0, 0, 1);
   const startNum = opts.numberStartNum || 1;
 
   const bleedPt = mmToPt(opts.bleed || 0);
@@ -1080,7 +1082,7 @@ async function exportCutStack(
 
   // Helper: draw masking on a page
   const csMask = (pg: PDFPage, mirrored: boolean) => {
-    const white = rgb(1, 1, 1);
+    const white = cmyk(0, 0, 0, 0);
     const mCenX = mirrored ? (paperWpt - cenX - totalGridW) : cenX;
     if (gutterPt > 0.5) {
       for (let gc = 0; gc < impo.cols - 1; gc++) {
@@ -1309,7 +1311,7 @@ async function exportWorkTurn(
     }
 
     // White masks
-    const white = rgb(1, 1, 1);
+    const white = cmyk(0, 0, 0, 0);
 
     // Front half grid bounds (using per-half grid size)
     const fGridL = cenFX;
@@ -1499,7 +1501,7 @@ function drawStepMultiMarks(
   blPt: number,
 ) {
   if (impo.cropMarks === false) return;
-  const black = rgb(0, 0, 0);
+  const black = cmyk(0, 0, 0, 1);
   const markLen = mmToPt(4);
   const markOff = mmToPt(1);
   const gutterPt = mmToPt(impo.gutterMM || 0);
@@ -1642,7 +1644,7 @@ async function exportStepMulti(
   }
 
   // White masking outside all blocks
-  const white = rgb(1, 1, 1);
+  const white = cmyk(0, 0, 0, 0);
   if (mLpt > 0.5) frontPage.drawRectangle({ x: 0, y: 0, width: mLpt, height: paperHpt, color: white });
   const mRpt = mmToPt(impo.marginR ?? 0);
   if (mRpt > 0.5) frontPage.drawRectangle({ x: paperWpt - mRpt, y: 0, width: mRpt, height: paperHpt, color: white });
