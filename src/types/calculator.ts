@@ -195,6 +195,7 @@ export interface ImpositionResult {
   pageCount?: number;
 
   // Perfect Bound-specific
+  spineWidth?: number;
   gapVmm?: number;
   gapHmm?: number;
   sigsAcross?: number;

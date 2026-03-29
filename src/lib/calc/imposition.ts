@@ -481,36 +481,67 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   }
 
   const layout = PB_LAYOUTS[bestSigSize]!;
-  const totalSigs = Math.ceil(pages / bestSigSize);
+  const paddedPages = Math.ceil(pages / bestSigSize) * bestSigSize;
+  const totalSigs = paddedPages / bestSigSize;
   const cellW = trimW + bleed;
   const cellH = trimH + bleed * 2;
 
   const usedW = layout.cols * cellW + (layout.cols - 1) * gutter;
   const usedH = layout.rows * cellH + (layout.rows - 1) * gutter;
+  const cenOffX = area.marginLeft + (pw - usedW) / 2;
+  const cenOffY = area.marginTop + (ph - usedH) / 2;
 
   const totalSheets = totalSigs * qty;
 
-  // Build cells with PB page numbering
-  // Front: pages read across rows; alternating rows rotate 180°
-  const cells: ImpositionCell[] = [];
-  const pagesPerSide = bestSigSize / 2;
-  for (let r = 0; r < layout.rows; r++) {
-    for (let c = 0; c < layout.cols; c++) {
-      const idx = r * layout.cols + c;
-      // Page numbering for front side of signature
-      const pageNum = idx + 1;
-      // Alternating rows get 180° rotation for head-to-head
-      const rot = (r % 2 === 1) ? 180 : 0;
-      cells.push({
-        col: c,
-        row: r,
-        x: area.marginLeft + c * (cellW + gutter),
-        y: area.marginTop + r * (cellH + gutter),
-        w: cellW,
-        h: cellH,
-        pageNum,
-        rotation: rot,
+  // Build signature map: each signature is imposed like a mini saddle-stitch booklet
+  // Pages flow sequentially through signatures (stack, not nest)
+  const sigMaps: BookletSignatureMap['sheets'][] = [];
+  for (let s = 0; s < totalSigs; s++) {
+    const sigStartPage = s * bestSigSize + 1;
+    const sigSheets = bestSigSize / 4; // sheets per signature
+    const sigMap: BookletSignatureMap['sheets'] = [];
+    for (let i = 0; i < sigSheets; i++) {
+      // Saddle-stitch pairing within this signature
+      // Front: [sigSize - 2i, 2i + 1], Back: [2i + 2, sigSize - 2i - 1]
+      sigMap.push({
+        front: [sigStartPage + bestSigSize - 1 - 2 * i, sigStartPage + 2 * i],
+        back: [sigStartPage + 2 * i + 1, sigStartPage + bestSigSize - 2 - 2 * i],
       });
+    }
+    sigMaps.push(sigMap);
+  }
+
+  // Build cells for front of first signature (for canvas preview)
+  const cells: ImpositionCell[] = [];
+  if (sigMaps.length > 0 && sigMaps[0].length > 0) {
+    const firstSheet = sigMaps[0][0];
+    const frontPages = firstSheet.front; // [leftPage, rightPage]
+    // For a 2-up layout (cols=2, rows=1): left = page, right = page
+    // For larger layouts, distribute pages across grid
+    const pagesPerSide = layout.cols * layout.rows;
+    for (let r = 0; r < layout.rows; r++) {
+      for (let c = 0; c < layout.cols; c++) {
+        const idx = r * layout.cols + c;
+        // Use saddle-stitch page from signature map when available
+        let pageNum: number;
+        if (pagesPerSide === 2) {
+          pageNum = idx < frontPages.length ? frontPages[idx] : 1;
+        } else {
+          // For 4-up/8-up signatures, page assignment follows fold pattern
+          // Simplified: use sequential from signature start
+          pageNum = sigMaps[0][Math.floor(idx / 2)]?.front[idx % 2] ?? (idx + 1);
+        }
+        // Alternating rows get 180° rotation for head-to-head (fold imposition)
+        const rot = (r % 2 === 1) ? 180 : 0;
+        cells.push({
+          col: c, row: r,
+          x: cenOffX + c * (cellW + gutter),
+          y: cenOffY + r * (cellH + gutter),
+          w: cellW, h: cellH,
+          pageNum,
+          rotation: rot,
+        });
+      }
     }
   }
 
@@ -530,6 +561,7 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
     cells,
     totalSheets,
     signatures: totalSigs,
+    spineWidth,
     ...marginInfo(area),
   };
 }
