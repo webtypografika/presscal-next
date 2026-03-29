@@ -150,6 +150,17 @@ export interface StepBlock {
   _manualGrid?: boolean;
 }
 
+// ─── PERFECT BOUND SIGNATURE ───
+
+export interface PBSignature {
+  startPage: number;       // first page of this signature (1-indexed)
+  actualPages: number;     // actual pages (may be < sigSize if last sig)
+  signatureMap: {
+    front: number[][];     // front[row][col] = local page number
+    back: number[][];      // back[row][col] = local page number
+  };
+}
+
 // ─── IMPOSITION RESULT ───
 
 export interface ImpositionResult {
@@ -206,6 +217,8 @@ export interface ImpositionResult {
   canRepeat?: boolean;
   totalPressSheets?: number;
   bodyPages?: number;
+  pbSignatures?: PBSignature[];
+  sigSize?: number;
 
   // Cut & Stack-specific
   stackPositions?: CutStackPosition[];

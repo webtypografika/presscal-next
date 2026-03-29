@@ -6,6 +6,7 @@ import { calcImposition } from '@/lib/calc/imposition';
 import type { ImpositionInput } from '@/lib/calc/imposition';
 import type { ImpositionMode, ImpositionResult, CalculatorResult } from '@/types/calculator';
 import ImpositionCanvas from './imposition-canvas';
+import DuplexNavigator from './signature-navigator';
 import { parsePDF } from '@/lib/calc/pdf-utils';
 import type { ParsedPDF } from '@/lib/calc/pdf-utils';
 import { downloadImpositionPDF } from '@/lib/calc/pdf-export';
@@ -137,7 +138,7 @@ const ARCHETYPES = [
 // ─── ARCHETYPE ↔ MODE VALIDATION ───
 const ARCHETYPE_MODES: Record<string, ImpositionMode[]> = {
   single_leaf: ['nup', 'cutstack', 'workturn', 'gangrun', 'stepmulti'],
-  pad: ['nup'],
+  pad: ['nup', 'cutstack'],
   booklet: ['booklet'],
   perfect_bound: ['perfect_bound'],
   die_cut: ['nup', 'stepmulti'],
@@ -353,6 +354,21 @@ export default function CalculatorShell() {
   const [impoRotation, setImpoRotation] = useState<number>(0);
   const [impoDuplexOrient, setImpoDuplexOrient] = useState<'h2h' | 'h2f'>('h2h');
   const [impoTurnType, setImpoTurnType] = useState<'turn' | 'tumble'>('turn');
+  // Cut & Stack
+  const [csStackOrder, setCsStackOrder] = useState<'row' | 'column' | 'snake'>('row');
+  const [csStartNum, setCsStartNum] = useState(1);
+  const [csNumbering, setCsNumbering] = useState(false);
+  const [csNumPrefix, setCsNumPrefix] = useState('');
+  const [csNumDigits, setCsNumDigits] = useState(4);
+  const [csNumFontSize, setCsNumFontSize] = useState(8);
+  const [csNumColor, setCsNumColor] = useState<'black' | 'red'>('black');
+  const [csNumFont, setCsNumFont] = useState<'Helvetica' | 'Courier'>('Helvetica');
+  const [csNumPosX, setCsNumPosX] = useState(0.5); // 0-1 normalized
+  const [csNumPosY, setCsNumPosY] = useState(0.95);
+  const [csNumRotation, setCsNumRotation] = useState(0);
+  const [csFixedBack, setCsFixedBack] = useState(false);
+  const [csBackPdf, setCsBackPdf] = useState<{ bytes: Uint8Array; name: string } | null>(null);
+  const [pbPaperThickness, setPbPaperThickness] = useState(0.1); // mm per sheet
   const [impoColorBar, setImpoColorBar] = useState(false);
   const [impoColorBarType, setImpoColorBarType] = useState<'cmyk' | 'cmyk_tint50'>('cmyk');
   const [impoColorBarEdge, setImpoColorBarEdge] = useState<'tail' | 'gripper'>('tail');
@@ -360,6 +376,8 @@ export default function CalculatorShell() {
   const [impoPlateSlug, setImpoPlateSlug] = useState(false);
   const [impoPlateSlugEdge, setImpoPlateSlugEdge] = useState<'tail' | 'gripper'>('tail');
   const [impoModeTab, setImpoModeTab] = useState<'spacing' | 'position' | 'rotation' | 'marks'>('spacing');
+  const [activeSigSheet, setActiveSigSheet] = useState(0);
+  const [sigShowBack, setSigShowBack] = useState(false);
   // Machine sheet override (null = use machine default)
   const [machineSheetW, setMachineSheetW] = useState<number | null>(null);
   const [machineSheetH, setMachineSheetH] = useState<number | null>(null);
@@ -445,6 +463,9 @@ export default function CalculatorShell() {
     }
   }, [impoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Reset signature navigator when mode or page count changes
+  useEffect(() => { setActiveSigSheet(0); setSigShowBack(false); }, [impoMode, job.pages, job.bodyPages]);
+
   // ─── DERIVED ───
   const machine = machines[activeMachine] || machines[0];
   const paper = papers.find(p => p.id === activePaperId) || papers[0];
@@ -500,7 +521,11 @@ export default function CalculatorShell() {
     forceRows: impoForceRows || undefined,
     rotation: impoRotation || (job.rotation ? 90 : 0),
     pages: job.archetype === 'booklet' ? job.pages : job.archetype === 'perfect_bound' ? job.bodyPages : undefined,
+    paperThickness: pbPaperThickness,
     turnType: impoTurnType,
+    // Cut & Stack
+    stackOrder: csStackOrder,
+    stackStartNum: csStartNum,
   };
 
   const impo: ImpositionResult = calcImposition(impoInput);
@@ -730,6 +755,23 @@ export default function CalculatorShell() {
                 duplexOrient: impoDuplexOrient,
                 rotation: impoRotation,
                 turnType: impoTurnType,
+                // Cut & Stack
+                stackPositions: impo.stackPositions,
+                csStackSize: impo.totalSheets || Math.ceil(job.qty / Math.max(impo.ups, 1)),
+                csGetStackNum: impo.stackPositions
+                  ? (posIdx: number) => impo.stackPositions![posIdx]?.stackNum ?? posIdx
+                  : undefined,
+                numberingEnabled: impoMode === 'cutstack' && csNumbering,
+                numberPrefix: csNumPrefix,
+                numberStartNum: csStartNum,
+                numberDigits: csNumDigits,
+                numberFontSize: csNumFontSize,
+                numberColor: csNumColor === 'red' ? '#cc0000' : '#000000',
+                numberFont: csNumFont,
+                numberRotation: csNumRotation || undefined,
+                numberGlobalPos: { x: csNumPosX, y: csNumPosY },
+                fixedBack: impoMode === 'cutstack' && csFixedBack,
+                fixedBackPdfBytes: csBackPdf?.bytes,
                 jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
               });
             } catch (e) {
@@ -1087,7 +1129,7 @@ export default function CalculatorShell() {
               {job.archetype === 'booklet' && (
                 <div style={{ marginBottom: 10 }}>
                   <MfLabel>ΣΕΛΙΔΕΣ (×4)</MfLabel>
-                  <MfInput value={job.pages || 8} onChange={(v) => setJob({ ...job, pages: Math.max(4, Number(v) || 4) })} style={{ width: 80, textAlign: 'center' }} />
+                  <MfInput value={job.pages ?? ''} onChange={(v) => setJob({ ...job, pages: Number(v) || undefined })} style={{ width: 80, textAlign: 'center' }} />
                 </div>
               )}
               {job.archetype === 'pad' && (
@@ -1411,11 +1453,146 @@ export default function CalculatorShell() {
                   </div>
                 )}
 
+                {/* Cut & Stack */}
+                {impoMode === 'cutstack' && (<>
+                  <div style={{ marginBottom: 10 }}>
+                    <MfLabel>ΣΕΙΡΑ ΣΤΟΙΒΑΣ</MfLabel>
+                    <ToggleBar value={csStackOrder} onChange={v => setCsStackOrder(v as 'row' | 'column' | 'snake')}
+                      options={[{ v: 'row', l: 'Row' }, { v: 'column', l: 'Column' }, { v: 'snake', l: 'Snake' }]} color="var(--impo)" />
+                  </div>
+                  <div style={{ marginBottom: 10 }}>
+                    <MfLabel>ΑΡΧΗ ΑΡΙΘΜΗΣΗΣ</MfLabel>
+                    <MfStepper value={csStartNum} onChange={v => setCsStartNum(Math.max(1, Number(v) || 1))} step={1} min={1} />
+                  </div>
+                  {/* Stack positions info */}
+                  {impo.stackPositions && (
+                    <div style={{ fontSize: '0.55rem', color: '#64748b', marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: '3px 8px' }}>
+                      {impo.stackPositions.map(p => (
+                        <span key={p.posLabel} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          <strong style={{ color: '#94a3b8' }}>#{p.posLabel}</strong> {p.seqFrom}-{p.seqTo}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── Numbering ── */}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginBottom: 10 }}>
+                    <button onClick={() => setCsNumbering(!csNumbering)} style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', width: '100%',
+                      borderRadius: 7, border: `1px solid ${csNumbering ? 'var(--impo)' : 'var(--border)'}`,
+                      background: csNumbering ? 'rgba(132,204,22,0.06)' : 'transparent',
+                      color: csNumbering ? 'var(--impo)' : '#64748b',
+                      fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>
+                      <i className="fas fa-hashtag" style={{ fontSize: '0.58rem' }} /> Αρίθμηση
+                      <span style={{ marginLeft: 'auto', fontSize: '0.58rem' }}>{csNumbering ? 'ON' : 'OFF'}</span>
+                    </button>
+                    {csNumbering && (
+                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <MfLabel>PREFIX</MfLabel>
+                            <MfInput value={csNumPrefix} onChange={v => setCsNumPrefix(v)} style={{ width: '100%', textAlign: 'center' }} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <MfLabel>ΨΗΦΙΑ</MfLabel>
+                            <MfStepper value={csNumDigits} onChange={v => setCsNumDigits(Math.max(1, Math.min(8, Number(v) || 4)))} step={1} min={1} max={8} />
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <MfLabel>ΜΕΓΕΘΟΣ (PT)</MfLabel>
+                            <MfStepper value={csNumFontSize} onChange={v => setCsNumFontSize(Math.max(4, Number(v) || 8))} step={1} min={4} max={72} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <MfLabel>ΣΤΡΟΦΗ</MfLabel>
+                            <MfStepper value={csNumRotation} onChange={v => setCsNumRotation(Number(v) || 0)} step={90} min={0} max={270} />
+                          </div>
+                        </div>
+                        <div>
+                          <MfLabel>ΓΡΑΜΜΑΤΟΣΕΙΡΑ</MfLabel>
+                          <ToggleBar value={csNumFont} onChange={v => setCsNumFont(v as 'Helvetica' | 'Courier')}
+                            options={[{ v: 'Helvetica', l: 'Helvetica' }, { v: 'Courier', l: 'Courier' }]} color="var(--impo)" />
+                        </div>
+                        <div>
+                          <MfLabel>ΧΡΩΜΑ</MfLabel>
+                          <ToggleBar value={csNumColor} onChange={v => setCsNumColor(v as 'black' | 'red')}
+                            options={[{ v: 'black', l: 'Μαύρο' }, { v: 'red', l: 'Κόκκινο' }]} color="var(--impo)" />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <MfLabel>ΘΕΣΗ X</MfLabel>
+                            <MfStepper value={csNumPosX} onChange={v => setCsNumPosX(Math.max(0, Math.min(1, Number(v) || 0.5)))} step={0.05} min={0} max={1} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <MfLabel>ΘΕΣΗ Y</MfLabel>
+                            <MfStepper value={csNumPosY} onChange={v => setCsNumPosY(Math.max(0, Math.min(1, Number(v) || 0.95)))} step={0.05} min={0} max={1} />
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '0.5rem', color: '#475569' }}>
+                          <i className="fas fa-info-circle" style={{ marginRight: 3 }} />
+                          X/Y: 0=αριστερά/κάτω, 1=δεξιά/πάνω
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Fixed Back ── */}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginBottom: 10 }}>
+                    <button onClick={() => setCsFixedBack(!csFixedBack)} style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', width: '100%',
+                      borderRadius: 7, border: `1px solid ${csFixedBack ? 'var(--impo)' : 'var(--border)'}`,
+                      background: csFixedBack ? 'rgba(132,204,22,0.06)' : 'transparent',
+                      color: csFixedBack ? 'var(--impo)' : '#64748b',
+                      fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>
+                      <i className="fas fa-clone" style={{ fontSize: '0.58rem' }} /> Πίσω Όψη (Fixed)
+                      <span style={{ marginLeft: 'auto', fontSize: '0.58rem' }}>{csFixedBack ? 'ON' : 'OFF'}</span>
+                    </button>
+                    {csFixedBack && (
+                      <div style={{ marginTop: 8 }}>
+                        <button onClick={() => {
+                          const inp = document.createElement('input');
+                          inp.type = 'file'; inp.accept = '.pdf';
+                          inp.onchange = async () => {
+                            const f = inp.files?.[0];
+                            if (!f) return;
+                            const bytes = new Uint8Array(await f.arrayBuffer());
+                            setCsBackPdf({ bytes, name: f.name });
+                          };
+                          inp.click();
+                        }} style={{
+                          display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', width: '100%',
+                          borderRadius: 6, border: `1px solid ${csBackPdf ? 'color-mix(in srgb, var(--success) 30%, transparent)' : 'var(--border)'}`,
+                          background: csBackPdf ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.03)',
+                          color: csBackPdf ? 'var(--success)' : '#64748b',
+                          fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                        }}>
+                          <i className="fas fa-file-pdf" style={{ fontSize: '0.55rem' }} />
+                          {csBackPdf ? csBackPdf.name.slice(0, 25) : 'Upload PDF πίσω όψης'}
+                        </button>
+                        {csBackPdf && (
+                          <button onClick={() => setCsBackPdf(null)} style={{
+                            marginTop: 4, border: 'none', background: 'none', color: '#64748b',
+                            fontSize: '0.55rem', cursor: 'pointer', padding: '2px 0',
+                          }}>
+                            <i className="fas fa-times" style={{ marginRight: 3 }} />Αφαίρεση
+                          </button>
+                        )}
+                        <div style={{ fontSize: '0.5rem', color: '#475569', marginTop: 4 }}>
+                          <i className="fas fa-info-circle" style={{ marginRight: 3 }} />
+                          {csBackPdf ? 'Σελ. 1 του PDF σε κάθε cell' : 'Χωρίς PDF: χρήση τελευταίας σελίδας του κύριου PDF'}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>)}
+
                 {/* Booklet */}
                 {impoMode === 'booklet' && (
                   <div style={{ marginBottom: 10 }}>
                     <MfLabel>ΣΕΛΙΔΕΣ (×4)</MfLabel>
-                    <MfStepper value={job.pages || 8} onChange={v => setJob({ ...job, pages: Math.max(4, Number(v) || 4) })} step={4} min={4} />
+                    <MfStepper value={job.pages ?? ''} onChange={v => setJob({ ...job, pages: Number(v) || undefined })} step={4} min={4} />
                     <div style={{ fontSize: '0.58rem', color: '#64748b', marginTop: 4 }}>
                       <i className="fas fa-info-circle" style={{ marginRight: 3 }} />Πολλαπλάσιο του 4
                     </div>
@@ -1430,10 +1607,20 @@ export default function CalculatorShell() {
                       <MfStepper value={job.bodyPages || 64} onChange={v => setJob({ ...job, bodyPages: Math.max(4, Number(v) || 4) })} step={4} min={4} />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <MfLabel>ΠΑΧΟΣ (MM)</MfLabel>
-                      <MfStepper value={0.1} onChange={() => {}} step={0.01} min={0.01} />
+                      <MfLabel>ΠΑΧΟΣ ΧΑΡΤΙΟΥ (MM)</MfLabel>
+                      <MfStepper value={pbPaperThickness} onChange={v => setPbPaperThickness(Math.max(0.01, Number(v) || 0.1))} step={0.01} min={0.01} max={0.5} />
                     </div>
                   </div>
+                  {/* PB info */}
+                  {impo.numSigs && (
+                    <div style={{ fontSize: '0.55rem', color: '#64748b', marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: '3px 10px' }}>
+                      <span><strong style={{ color: '#94a3b8' }}>{impo.numSigs}</strong> τυπογρ.</span>
+                      <span><strong style={{ color: '#94a3b8' }}>{impo.sigSize || '?'}pp</strong> /τυπ.</span>
+                      <span><strong style={{ color: '#94a3b8' }}>{impo.sigsAcross}×{impo.sigsDown}</strong> /φύλ.</span>
+                      <span>ράχη <strong style={{ color: '#94a3b8' }}>{impo.spineWidth?.toFixed(1)}</strong>mm</span>
+                      {(impo.totalPressSheets ?? 0) > 1 && <span><strong style={{ color: '#94a3b8' }}>{impo.totalPressSheets}</strong> press sheets</span>}
+                    </div>
+                  )}
                 </>)}
 
                 {/* Work&Turn */}
@@ -1596,6 +1783,20 @@ export default function CalculatorShell() {
             })}
           </div>
 
+          {/* Page/sheet navigator (all modes except W&T) */}
+          {impoMode !== 'workturn' && (pdf || impo.signatureMap) && (
+            <DuplexNavigator
+              impo={impo}
+              activePage={activeSigSheet}
+              showBack={sigShowBack}
+              totalPdfPages={pdf?.pageCount ?? 0}
+              isDuplex={job.sides === 2}
+              ups={impo.ups}
+              onPageChange={setActiveSigSheet}
+              onSideChange={setSigShowBack}
+            />
+          )}
+
           {/* Canvas + Dev panels */}
           <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 0 }}>
           {/* Canvas */}
@@ -1624,6 +1825,19 @@ export default function CalculatorShell() {
                 pdf={pdf}
                 onDrop={handlePdfFiles}
                 feedEdge={feedEdge}
+                activeSigSheet={(pdf || impo.signatureMap) ? activeSigSheet : undefined}
+                sigShowBack={job.sides === 2 ? sigShowBack : undefined}
+                csNumbering={impoMode === 'cutstack' && csNumbering ? {
+                  prefix: csNumPrefix,
+                  digits: csNumDigits,
+                  startNum: csStartNum,
+                  posX: csNumPosX,
+                  posY: csNumPosY,
+                  color: csNumColor === 'red' ? '#cc0000' : '#000000',
+                  fontSize: csNumFontSize,
+                  font: csNumFont,
+                  rotation: csNumRotation,
+                } : undefined}
               />
               {/* PDF upload overlay (top-left) */}
               <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>

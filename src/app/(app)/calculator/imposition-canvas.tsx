@@ -32,6 +32,19 @@ interface ImpositionCanvasProps {
   pdf?: ParsedPDF | null;
   onDrop?: (files: FileList) => void;
   feedEdge?: 'sef' | 'lef';
+  activeSigSheet?: number;   // signature navigator: which sheet to display
+  sigShowBack?: boolean;     // signature navigator: show back side
+  csNumbering?: {            // cut & stack numbering overlay
+    prefix: string;
+    digits: number;
+    startNum: number;
+    posX: number;            // 0-1 normalized
+    posY: number;
+    color: string;
+    fontSize: number;
+    font: 'Helvetica' | 'Courier';
+    rotation: number;        // degrees
+  };
 }
 
 type ViewMode = 'single' | 'dual';
@@ -88,6 +101,8 @@ function drawSheet(
   pdfPageIdx: number, // which PDF page to show in step-repeat cells
   isBack: boolean,
   label?: string,
+  activeSigSheet?: number,
+  csNumbering?: ImpositionCanvasProps['csNumbering'],
 ) {
   const scale = drawW / sheetW;
   const hasBleed = bleed > 0;
@@ -164,6 +179,33 @@ function drawSheet(
       const idx = row * impo.cols + col;
       if (idx >= impo.cells.length) continue;
       const cell = impo.cells[idx];
+
+      // Signature navigator override: swap page numbers for the active sheet
+      let cellPageNum = cell.pageNum;
+      if (activeSigSheet != null && impo.signatureMap) {
+        const sigSheet = impo.signatureMap.sheets[activeSigSheet];
+        if (sigSheet) {
+          if (impo.mode === 'booklet') {
+            // Booklet: cells alternate [left, right] per spread
+            const side = isBack ? sigSheet.back : sigSheet.front;
+            const posInSpread = col % 2; // 0=left, 1=right
+            cellPageNum = side[posInSpread];
+          } else if (impo.mode === 'perfect_bound' && impo.pbSignatures) {
+            // PB: show full signature front/back from fold map
+            // activeSigSheet indexes into navigator sheets (spreads across all sigs)
+            // Determine which signature and use its fold map
+            const sheetsPerSig = impo.signatureMap.sheets.length / (impo.numSigs || 1);
+            const sigIdx = Math.floor(activeSigSheet / sheetsPerSig);
+            const sig = impo.pbSignatures[sigIdx];
+            if (sig) {
+              const faceMap = isBack ? sig.signatureMap.back : sig.signatureMap.front;
+              const localPage = faceMap[row]?.[col] ?? 0;
+              cellPageNum = localPage > 0 ? sig.startPage + localPage - 1 : 0;
+            }
+          }
+        }
+      }
+
       const x = isWT ? offX + cell.x * scale : cenX + col * (pw + gutterPx);
       const y = isWT ? offY + cell.y * scale : cenY + row * (ph + gutterPx);
       const isRotated = cell.rotation && cell.rotation !== 0;
@@ -191,15 +233,25 @@ function drawSheet(
 
       // PDF page to show
       const mode = impo.mode;
-      const isStepRepeat = mode === 'nup' || mode === 'cutstack' || mode === 'gangrun';
+      const pdfCount = pdf?.thumbnails?.length || 0;
+      const isCutStack = mode === 'cutstack' && pdfCount > 1;
+      const isStepRepeat = !isCutStack && (mode === 'nup' || mode === 'cutstack' || mode === 'gangrun');
       let pidx: number;
-      if (isStepRepeat) {
+      if (isCutStack) {
+        // Cut & Stack: each position gets a different page from the PDF
+        // stackNum * sheetsNeeded + sheetIndex → after cut+stack = sequential
+        const sheetsNeeded = Math.ceil(pdfCount / Math.max(impo.ups, 1));
+        const stackNum = impo.stackPositions?.[idx]?.stackNum ?? idx;
+        const sheetIdx = activeSigSheet ?? 0;
+        pidx = stackNum * sheetsNeeded + sheetIdx;
+      } else if (isStepRepeat) {
         pidx = pdfPageIdx; // controlled by caller (front=0, back=1)
       } else {
-        pidx = (cell.pageNum || idx + 1) - 1;
+        pidx = (cellPageNum || idx + 1) - 1;
       }
-      const thumb = pdf?.thumbnails?.[pidx % (pdf?.thumbnails?.length || 1)];
-      const pgSize = pdf?.pageSizes?.[pidx % (pdf?.pageSizes?.length || 1)];
+      const validPidx = pdfCount > 0 && pidx < pdfCount;
+      const thumb = validPidx ? pdf?.thumbnails?.[pidx] : undefined;
+      const pgSize = validPidx ? pdf?.pageSizes?.[pidx] : undefined;
 
       if (thumb && pgSize) {
         ctx.save();
@@ -260,6 +312,39 @@ function drawSheet(
         ctx.strokeStyle = 'rgba(255,255,255,0.1)';
         ctx.lineWidth = 0.5;
         ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+
+        // Overlay: show page/position number on top of thumbnail
+        if ((isStepRepeat || isCutStack) && impo.mode !== 'gangrun') {
+          if (isCutStack && csNumbering) {
+            // Formatted numbering overlay at specified position
+            const seqNum = csNumbering.startNum + pidx;
+            const numStr = csNumbering.prefix + String(seqNum).padStart(csNumbering.digits, '0');
+            const nFS = Math.min(csNumbering.fontSize * scale * 0.8, trimW * 0.25, trimH * 0.2);
+            const nx = trimX + csNumbering.posX * trimW;
+            const ny = trimY + (1 - csNumbering.posY) * trimH;
+            const fontFam = csNumbering.font === 'Courier' ? 'Courier New, Courier, monospace' : 'Helvetica, Arial, sans-serif';
+            ctx.save();
+            ctx.translate(nx, ny);
+            if (csNumbering.rotation) ctx.rotate(csNumbering.rotation * Math.PI / 180);
+            ctx.font = `700 ${nFS}px ${fontFam}`;
+            ctx.textAlign = 'center';
+            const tw = ctx.measureText(numStr).width;
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.fillRect(-tw / 2 - 2, -nFS * 0.7, tw + 4, nFS * 1.1);
+            ctx.fillStyle = csNumbering.color === '#cc0000' ? 'rgba(204,0,0,0.9)' : 'rgba(0,0,0,0.8)';
+            ctx.fillText(numStr, 0, 0);
+            ctx.restore();
+          } else {
+            const overlayNum = isCutStack ? pidx + 1 : (cellPageNum || idx + 1);
+            const oFS = Math.min(trimW * 0.22, trimH * 0.22, 16);
+            ctx.font = `700 ${oFS}px Inter, DM Sans, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillText(String(overlayNum), trimX + trimW / 2 + 0.5, trimY + trimH / 2 + oFS * 0.35 + 0.5);
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            ctx.fillText(String(overlayNum), trimX + trimW / 2, trimY + trimH / 2 + oFS * 0.35);
+          }
+        }
       } else {
         ctx.fillStyle = isRotated ? COLORS.rotatedFill : COLORS.trimFill;
         ctx.fillRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
@@ -268,11 +353,29 @@ function drawSheet(
         ctx.lineWidth = 1;
         ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
 
-        const fontSize = Math.min(trimW * 0.3, trimH * 0.3, 20);
-        ctx.font = `600 ${fontSize}px Inter, DM Sans, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = isRotated ? COLORS.rotatedNum : COLORS.cellNum;
-        ctx.fillText(String(cell.pageNum || idx + 1), trimX + trimW / 2, trimY + trimH / 2 + fontSize * 0.35);
+        const cellLabel = isCutStack ? pidx + 1 : (cellPageNum || idx + 1);
+        if (isCutStack && csNumbering) {
+          const seqNum = csNumbering.startNum + pidx;
+          const numStr = csNumbering.prefix + String(seqNum).padStart(csNumbering.digits, '0');
+          const nFS = Math.min(csNumbering.fontSize * scale * 0.8, trimW * 0.25, trimH * 0.2);
+          const nx = trimX + csNumbering.posX * trimW;
+          const ny = trimY + (1 - csNumbering.posY) * trimH;
+          const fontFam = csNumbering.font === 'Courier' ? 'Courier New, Courier, monospace' : 'Helvetica, Arial, sans-serif';
+          ctx.save();
+          ctx.translate(nx, ny);
+          if (csNumbering.rotation) ctx.rotate(csNumbering.rotation * Math.PI / 180);
+          ctx.font = `700 ${nFS}px ${fontFam}`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = csNumbering.color === '#cc0000' ? 'rgba(204,0,0,0.9)' : 'rgba(0,0,0,0.8)';
+          ctx.fillText(numStr, 0, 0);
+          ctx.restore();
+        } else {
+          const fontSize = Math.min(trimW * 0.3, trimH * 0.3, 20);
+          ctx.font = `600 ${fontSize}px Inter, DM Sans, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = isRotated ? COLORS.rotatedNum : COLORS.cellNum;
+          ctx.fillText(String(cellLabel), trimX + trimW / 2, trimY + trimH / 2 + fontSize * 0.35);
+        }
       }
     }
   }
@@ -394,7 +497,7 @@ export default function ImpositionCanvas({
   impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
   bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
   showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge,
-  pdf, onDrop, feedEdge,
+  pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -404,12 +507,10 @@ export default function ImpositionCanvas({
   const draggingRef = useRef(false);
   const dragLastRef = useRef({ x: 0, y: 0 });
 
-  // View controls
-  // W&T shows both pages on same sheet (signature) — no separate duplex view
-  const isDuplex = (sides ?? 1) === 2 && (pdf?.thumbnails?.length ?? 0) >= 2 && impo.mode !== 'workturn';
-  const totalPages = isDuplex ? (pdf?.thumbnails?.length ?? 1) : 1;
+  // View controls — external navigator drives front/back for all duplex modes
+  const hasSigNav = activeSigSheet != null;
+  const isDuplex = (sides ?? 1) === 2 && impo.mode !== 'workturn';
   const [viewMode, setViewMode] = useState<ViewMode>('single');
-  const [activePage, setActivePage] = useState(0); // 0=front, 1=back, 2+=booklet pages
 
   const LOGICAL_W = 750;
   const LOGICAL_H = 625;
@@ -460,14 +561,14 @@ export default function ImpositionCanvas({
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 0, false, 'A');
+        machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering);
 
       // Back
       drawSheet(ctx, baseX + drawW + gap, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 1, true, 'B');
+        machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering);
     } else {
       // ═══ SINGLE VIEW: one sheet, pagination ═══
       const scaleX = (cW - 24 - markLen * 2) / sheetW;
@@ -478,13 +579,20 @@ export default function ImpositionCanvas({
       const offX = (cW - drawW) / 2;
       const offY = reserveTop + markLen + (cH - reserveTop - reserveBot - markLen * 2 - drawH) / 2;
 
-      const pageIdx = isDuplex ? activePage : 0;
-      const isBack = pageIdx > 0;
+      // External navigator controls front/back
+      const isBack = hasSigNav ? (sigShowBack ?? false) : false;
+      // For signature modes: page comes from signature map override (activeSigSheet drives drawSheet)
+      // For non-signature modes: activeSigSheet = page/sheet index
+      const pageIdx = hasSigNav
+        ? (impo.signatureMap
+          ? (isBack ? 1 : 0)
+          : (isDuplex ? (activeSigSheet ?? 0) * 2 + (isBack ? 1 : 0) : (activeSigSheet ?? 0)))
+        : 0;
       drawSheet(ctx, offX, offY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, pageIdx, isBack);
+        machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering);
     }
 
     // Feed direction arrow — LEFT edge, digital only
@@ -539,7 +647,7 @@ export default function ImpositionCanvas({
     ctx.textAlign = 'center';
     ctx.fillText(parts.join(' · '), cW / 2, cH - 5);
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge, pdf, viewMode, activePage, isDuplex, feedEdge]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -628,7 +736,7 @@ export default function ImpositionCanvas({
     >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', transformOrigin: '0 0' }} />
 
-      {/* ═══ VIEW CONTROLS (bottom-right) ═══ */}
+      {/* View mode toggle (bottom-right, dual only) */}
       {isDuplex && (
         <div style={{
           position: 'absolute', bottom: 26, right: 8, zIndex: 3,
@@ -636,25 +744,12 @@ export default function ImpositionCanvas({
           background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
           borderRadius: 8, padding: '3px 4px',
         }}>
-          {/* View mode toggle */}
           <button onClick={() => setViewMode('single')} style={pillStyle(viewMode === 'single')} title="Single view">
             <i className="fas fa-square" style={{ fontSize: '0.5rem' }} />
           </button>
           <button onClick={() => setViewMode('dual')} style={pillStyle(viewMode === 'dual')} title="Side-by-side">
             <i className="fas fa-columns" style={{ fontSize: '0.5rem' }} />
           </button>
-
-          {/* Pagination (single mode only) */}
-          {viewMode === 'single' && (
-            <>
-              <div style={{ width: 1, height: 14, background: 'rgba(255,255,255,0.1)', margin: '0 2px' }} />
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button key={i} onClick={() => setActivePage(i)} style={pillStyle(activePage === i)}>
-                  {i === 0 ? 'A' : i === 1 ? 'B' : `${i + 1}`}
-                </button>
-              ))}
-            </>
-          )}
         </div>
       )}
 

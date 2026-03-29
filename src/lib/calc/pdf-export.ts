@@ -233,11 +233,40 @@ async function embedSourcePages(
         trimH = cropBox.height;
       }
     } else {
-      // Booklet/PerfectBound/CutStack: embed at TrimBox for clean fit
-      const tb = trimBox || cropBox;
-      bounds = { left: tb.x, bottom: tb.y, right: tb.x + tb.width, top: tb.y + tb.height };
-      trimW = tb.width;
-      trimH = tb.height;
+      // Booklet/PerfectBound/CutStack: include bleed content for proper imposition
+      if (bleedBox && trimBox) {
+        bounds = {
+          left: bleedBox.x, bottom: bleedBox.y,
+          right: bleedBox.x + bleedBox.width, top: bleedBox.y + bleedBox.height,
+        };
+        trimOffsetX = trimBox.x - bleedBox.x;
+        trimOffsetY = trimBox.y - bleedBox.y;
+        trimW = trimBox.width;
+        trimH = trimBox.height;
+      } else if (trimBox) {
+        // Synthesize bleed bounds from trim + bleedPt
+        const synL = Math.max(cropBox.x, trimBox.x - bleedPt);
+        const synB = Math.max(cropBox.y, trimBox.y - bleedPt);
+        const synR = Math.min(cropBox.x + cropBox.width, trimBox.x + trimBox.width + bleedPt);
+        const synT = Math.min(cropBox.y + cropBox.height, trimBox.y + trimBox.height + bleedPt);
+        bounds = { left: synL, bottom: synB, right: synR, top: synT };
+        trimOffsetX = trimBox.x - synL;
+        trimOffsetY = trimBox.y - synB;
+        trimW = trimBox.width;
+        trimH = trimBox.height;
+      } else if (bleedBox) {
+        bounds = {
+          left: bleedBox.x, bottom: bleedBox.y,
+          right: bleedBox.x + bleedBox.width, top: bleedBox.y + bleedBox.height,
+        };
+        trimW = bleedBox.width;
+        trimH = bleedBox.height;
+      } else {
+        // No trim/bleed info — use cropBox as-is
+        bounds = { left: cropBox.x, bottom: cropBox.y, right: cropBox.x + cropBox.width, top: cropBox.y + cropBox.height };
+        trimW = cropBox.width;
+        trimH = cropBox.height;
+      }
     }
 
     const ep = await outputDoc.embedPage(pg, bounds);
@@ -584,7 +613,7 @@ function pbIsRotated(row: number, totalRows: number): boolean {
 function formatNumber(prefix: string, num: number, digits: number): string {
   let s = String(num);
   while (s.length < digits) s = '0' + s;
-  return (prefix || '') + s;
+  return ascii(prefix || '') + s;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -922,12 +951,14 @@ async function exportPerfectBound(
   const gridOriginX = mL + (printableW - totalGridW) / 2 + offXpt;
   const gridOriginY = mB + (printableH - totalGridH) / 2 - offYpt;
 
-  const signatures = (impo as any).signatures || [];
+  const signatures = (impo as any).pbSignatures || [];
   const numSigs = (impo as any).numSigs || signatures.length;
   const canRepeat = (impo as any).canRepeat || false;
   const totalPressSheets = (impo as any).totalPressSheets || 1;
 
-  const drawBlock = (page: PDFPage, sig: any, faceName: string, blockBaseX: number, blockBaseY: number) => {
+  if (signatures.length === 0) return; // no signatures to export
+
+  const drawBlock = (page: PDFPage, sig: { startPage: number; actualPages: number; signatureMap: { front: number[][]; back: number[][] } }, faceName: string, blockBaseX: number, blockBaseY: number) => {
     const sigMapLocal = sig.signatureMap;
     const sigOffset = sig.startPage - 1;
     const faceRows = faceName === 'front' ? sigMapLocal.front : sigMapLocal.back;

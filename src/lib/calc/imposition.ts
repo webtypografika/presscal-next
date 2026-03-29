@@ -4,7 +4,7 @@
 
 import type {
   ImpositionMode, ImpositionResult, ImpositionCell,
-  BookletSignatureMap, CutStackPosition, CutStackOrder,
+  BookletSignatureMap, BookletSignatureSheet, CutStackPosition, CutStackOrder,
   GangRunData, StepBlock, WorkTurnType,
 } from '@/types/calculator';
 
@@ -440,6 +440,7 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
     signatures: signatureMap.totalSheets,
     signatureMap,
     creepPerSheet,
+    pageCount: rawPages || 4,
     ...marginInfo(area),
   };
 }
@@ -456,6 +457,37 @@ const PB_LAYOUTS: Record<number, { cols: number; rows: number }> = {
   32: { cols: 4, rows: 4 },
 };
 
+/** Standard octavo fold patterns — local page numbers (1-indexed) within a signature.
+ *  3-right-angle-fold imposition standard. */
+const PB_PAGE_MAP: Record<number, { front: number[][]; back: number[][] }> = {
+  4: {
+    front: [[4, 1]],
+    back:  [[2, 3]],
+  },
+  8: {
+    front: [[5, 4], [8, 1]],
+    back:  [[3, 6], [2, 7]],
+  },
+  16: {
+    front: [[13, 4, 1, 16], [12, 5, 8, 9]],
+    back:  [[15, 2, 3, 14], [10, 7, 6, 11]],
+  },
+  32: {
+    front: [
+      [29, 4, 5, 28],
+      [20, 13, 12, 21],
+      [17, 16, 9, 24],
+      [32, 1, 8, 25],
+    ],
+    back: [
+      [27, 6, 3, 30],
+      [22, 11, 14, 19],
+      [23, 10, 15, 18],
+      [26, 7, 2, 31],
+    ],
+  },
+};
+
 export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, gutter, area, pages: rawPages, paperThickness = 0.1 } = input;
 
@@ -465,6 +497,7 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   const { w: pw, h: ph } = printable(area);
   const sigSizes = [32, 16, 8, 4];
 
+  // Find largest signature size that fits on the sheet
   let bestSigSize = 4;
   for (const sig of sigSizes) {
     const layout = PB_LAYOUTS[sig];
@@ -473,7 +506,6 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
     const cellH = trimH + bleed * 2;
     const neededW = layout.cols * cellW + (layout.cols - 1) * gutter;
     const neededH = layout.rows * cellH + (layout.rows - 1) * gutter;
-
     if (neededW <= pw && neededH <= ph) {
       bestSigSize = sig;
       break;
@@ -486,52 +518,74 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   const cellW = trimW + bleed;
   const cellH = trimH + bleed * 2;
 
-  const usedW = layout.cols * cellW + (layout.cols - 1) * gutter;
-  const usedH = layout.rows * cellH + (layout.rows - 1) * gutter;
+  // One signature block dimensions
+  const numPairs = Math.ceil(layout.cols / 2);
+  const pairW = 2 * cellW;
+  const blockW = numPairs * pairW + (numPairs > 1 ? gutter : 0);
+  const blockH = layout.rows * cellH + (layout.rows > 1 ? gutter : 0);
+
+  // How many signature blocks fit on the press sheet
+  const blockGapH = 3; // mm between sig blocks horizontal
+  const blockGapV = 3; // mm between sig blocks vertical
+  const sigsAcross = Math.max(1, Math.floor((pw + blockGapH) / (blockW + blockGapH)));
+  const sigsDown = Math.max(1, Math.floor((ph + blockGapV) / (blockH + blockGapV)));
+  const sigsPerSheet = sigsAcross * sigsDown;
+
+  const canRepeat = sigsPerSheet >= totalSigs;
+  const totalPressSheets = canRepeat ? 1 : Math.ceil(totalSigs / sigsPerSheet);
+  const totalSheets = totalPressSheets * qty;
+
+  // Grid dimensions for canvas (one block)
+  const usedW = blockW;
+  const usedH = blockH;
   const cenOffX = area.marginLeft + (pw - usedW) / 2;
   const cenOffY = area.marginTop + (ph - usedH) / 2;
 
-  const totalSheets = totalSigs * qty;
+  // ─── Build structured signatures using standard octavo fold pattern ───
+  const foldMap = PB_PAGE_MAP[bestSigSize];
+  const pbSignatures: import('@/types/calculator').PBSignature[] = [];
+  const navSheets: BookletSignatureMap['sheets'] = [];
 
-  // Build signature map: each signature is imposed like a mini saddle-stitch booklet
-  // Pages flow sequentially through signatures (stack, not nest)
-  const sigMaps: BookletSignatureMap['sheets'][] = [];
   for (let s = 0; s < totalSigs; s++) {
     const sigStartPage = s * bestSigSize + 1;
-    const sigSheets = bestSigSize / 4; // sheets per signature
-    const sigMap: BookletSignatureMap['sheets'] = [];
-    for (let i = 0; i < sigSheets; i++) {
-      // Saddle-stitch pairing within this signature
-      // Front: [sigSize - 2i, 2i + 1], Back: [2i + 2, sigSize - 2i - 1]
-      sigMap.push({
-        front: [sigStartPage + bestSigSize - 1 - 2 * i, sigStartPage + 2 * i],
-        back: [sigStartPage + 2 * i + 1, sigStartPage + bestSigSize - 2 - 2 * i],
-      });
+    const actualPages = Math.min(bestSigSize, pages - s * bestSigSize);
+
+    // Build front/back grids with absolute page numbers for export
+    const front: number[][] = foldMap.front.map(row => row.map(p => p));
+    const back: number[][] = foldMap.back.map(row => row.map(p => p));
+
+    pbSignatures.push({ startPage: sigStartPage, actualPages, signatureMap: { front, back } });
+
+    // Build navigator sheet pairs from the fold map
+    // Each pair of adjacent columns forms a spread (fold line between them)
+    for (let r = 0; r < layout.rows; r++) {
+      for (let p = 0; p < numPairs; p++) {
+        const c0 = p * 2;
+        const c1 = p * 2 + 1;
+        const fl = foldMap.front[r][c0], fr = foldMap.front[r][c1];
+        const bl = foldMap.back[r][c0], br = foldMap.back[r][c1];
+        navSheets.push({
+          front: [sigStartPage + fl - 1, sigStartPage + fr - 1],
+          back: [sigStartPage + bl - 1, sigStartPage + br - 1],
+        });
+      }
     }
-    sigMaps.push(sigMap);
   }
 
-  // Build cells for front of first signature (for canvas preview)
+  // Navigator signature map
+  const signatureMap: BookletSignatureMap = {
+    sheets: navSheets,
+    paddedPages,
+    totalSheets: navSheets.length,
+  };
+
+  // Build cells for canvas preview (first signature, front side)
   const cells: ImpositionCell[] = [];
-  if (sigMaps.length > 0 && sigMaps[0].length > 0) {
-    const firstSheet = sigMaps[0][0];
-    const frontPages = firstSheet.front; // [leftPage, rightPage]
-    // For a 2-up layout (cols=2, rows=1): left = page, right = page
-    // For larger layouts, distribute pages across grid
-    const pagesPerSide = layout.cols * layout.rows;
+  if (foldMap) {
     for (let r = 0; r < layout.rows; r++) {
       for (let c = 0; c < layout.cols; c++) {
-        const idx = r * layout.cols + c;
-        // Use saddle-stitch page from signature map when available
-        let pageNum: number;
-        if (pagesPerSide === 2) {
-          pageNum = idx < frontPages.length ? frontPages[idx] : 1;
-        } else {
-          // For 4-up/8-up signatures, page assignment follows fold pattern
-          // Simplified: use sequential from signature start
-          pageNum = sigMaps[0][Math.floor(idx / 2)]?.front[idx % 2] ?? (idx + 1);
-        }
-        // Alternating rows get 180° rotation for head-to-head (fold imposition)
+        const localPage = foldMap.front[r]?.[c] ?? 0;
+        const pageNum = localPage; // local page within first signature
         const rot = (r % 2 === 1) ? 180 : 0;
         cells.push({
           col: c, row: r,
@@ -561,7 +615,22 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
     cells,
     totalSheets,
     signatures: totalSigs,
+    numSigs: totalSigs,
+    signatureMap,
     spineWidth,
+    pageCount: pages,
+    sigSize: bestSigSize,
+    // Multi-sig grid
+    sigsAcross,
+    sigsDown,
+    sigsPerSheet,
+    blockGapH,
+    blockGapV,
+    gapVmm: numPairs > 1 ? gutter : 0,
+    gapHmm: layout.rows > 1 ? gutter : 0,
+    canRepeat,
+    totalPressSheets,
+    pbSignatures,
     ...marginInfo(area),
   };
 }
