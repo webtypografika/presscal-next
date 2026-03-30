@@ -1,0 +1,737 @@
+'use client';
+
+import { useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import type { PostpressMachine } from '@/generated/prisma/client';
+import { createPostpressMachine, updatePostpressMachine, deletePostpressMachine } from './actions';
+
+// ─── 3-PASS CUT MODEL (client-side for examples) ───
+interface CutResult { totalCuts: number; totalStacks: number; totalMins: number; p1: number; p2: number; p3: number }
+
+function calc3Pass(rows: number, cols: number, totalSheets: number, gsm: number, coated: boolean, liftH: number): CutResult {
+  const trimCuts = 4;
+  const secsPerCut = 20;
+  const secsPerStack = 90;
+  const thick = gsm * (coated ? 1.0 : 1.25) / 1000;
+  const liftMM = liftH * 10;
+  const sps = Math.max(1, Math.floor(liftMM / thick));
+  const stacks1 = totalSheets > 0 ? Math.ceil(totalSheets / sps) : 1;
+
+  if (rows <= 1 && cols <= 1) {
+    const p1 = trimCuts * stacks1;
+    return { totalCuts: p1, totalStacks: stacks1, totalMins: (p1 * secsPerCut + stacks1 * secsPerStack) / 60, p1, p2: 0, p3: 0 };
+  }
+  let fc: number, fs: number, sc: number;
+  if (cols <= rows) { fc = cols - 1; fs = cols; sc = rows - 1; }
+  else { fc = rows - 1; fs = rows; sc = cols - 1; }
+
+  const p1 = trimCuts * stacks1;
+  const p2 = fc * stacks1;
+  const full = stacks1 > 1 ? stacks1 - 1 : 0;
+  let last = totalSheets - full * sps; if (last <= 0) last = sps;
+  const bFull = Math.max(1, Math.floor(liftMM / (sps * thick)));
+  const lFull = full * Math.ceil(fs / bFull);
+  const bLast = Math.max(1, Math.floor(liftMM / (last * thick)));
+  const lLast = Math.ceil(fs / bLast);
+  const stacks3 = lFull + lLast;
+  const p3 = sc * stacks3;
+  const tc = p1 + p2 + p3;
+  const th = stacks1 + stacks3;
+  return { totalCuts: tc, totalStacks: th, totalMins: (tc * secsPerCut + th * secsPerStack) / 60, p1, p2, p3 };
+}
+
+const EXAMPLES = [
+  { name: 'Κάρτες 90×50', icon: 'fa-id-card', paper: 'Velvet 350gsm', sheet: 'SRA3', gsm: 350, coated: true, rows: 6, cols: 5, qtys: [1000, 10000] },
+  { name: 'Σουπλά 420×297', icon: 'fa-utensils', paper: 'Offset 80gsm', sheet: '64×90', gsm: 80, coated: false, rows: 2, cols: 2, qtys: [1000, 10000] },
+  { name: 'A4 Φυλλάδιο', icon: 'fa-file-alt', paper: 'Velvet 200gsm', sheet: '50×70', gsm: 200, coated: true, rows: 2, cols: 2, qtys: [1000, 10000] },
+];
+
+// ─── SUBTYPE META ───
+const SUBTYPES: { key: string; label: string; icon: string; color: string; cat: string }[] = [
+  { key: 'guillotine', label: 'Γκιλοτίνα',          icon: 'fa-cut',         color: 'var(--violet)', cat: 'sheet' },
+  { key: 'lam_roll',   label: 'Πλαστικοποίηση Roll', icon: 'fa-scroll',      color: 'var(--teal)',   cat: 'roll' },
+  { key: 'lam_sheet',  label: 'Πλαστικοποίηση Sheet',icon: 'fa-layer-group', color: 'var(--teal)',   cat: 'sheet' },
+  { key: 'fold',       label: 'Τσακιστικό',          icon: 'fa-arrows-alt-v',color: 'var(--blue)',   cat: 'sheet' },
+  { key: 'gathering',  label: 'Μαζεμένη',            icon: 'fa-stream',      color: 'var(--blue)',   cat: 'sheet' },
+  { key: 'staple',     label: 'Συρραπτικό',          icon: 'fa-paperclip',   color: 'var(--amber)',  cat: 'sheet' },
+  { key: 'glue_bind',  label: 'Θερμοκόλληση',        icon: 'fa-book',        color: 'var(--amber)',  cat: 'sheet' },
+  { key: 'spiral',     label: 'Σπιράλ',              icon: 'fa-ring',        color: 'var(--amber)',  cat: 'sheet' },
+  { key: 'custom',     label: 'Άλλο',                icon: 'fa-cogs',        color: '#64748b',       cat: 'sheet' },
+];
+
+const subtypeMeta = (key: string) => SUBTYPES.find(s => s.key === key) ?? SUBTYPES[SUBTYPES.length - 1];
+
+// ─── SPEC FIELDS PER SUBTYPE ───
+interface SpecField { key: string; label: string; unit?: string; type?: 'number' | 'text' | 'slider'; min?: number; max?: number; step?: number }
+
+const SPEC_FIELDS: Record<string, SpecField[]> = {
+  guillotine: [
+    { key: '_label', label: 'ΠΡΟΔΙΑΓΡΑΦΕΣ' },
+    { key: 'cut_width', label: 'Άνοιγμα (Μπούκα)', unit: 'cm' },
+    { key: 'lift_h', label: 'Ύψος Στίβας', unit: 'cm' },
+    { key: '_label', label: 'ΧΡΕΩΣΗ' },
+    { key: 'rate_per_cut', label: 'Μαχαιριές', unit: '€ / μαχαιριά', type: 'slider', min: 0, max: 1, step: 0.01 },
+    { key: 'rate_weight', label: 'Βάρος', unit: '€ / 1000φ @100gsm', type: 'slider', min: 0, max: 10, step: 0.10 },
+    { key: 'rate_per_stack', label: 'Στίβες', unit: '€ / στίβα', type: 'slider', min: 0, max: 5, step: 0.05 },
+    { key: 'rate_per_minute', label: 'Χρόνος', unit: '€ / λεπτό', type: 'slider', min: 0, max: 5, step: 0.05 },
+  ],
+  lam_roll: [
+    { key: 'max_w', label: 'Μέγιστο πλάτος', unit: 'mm' },
+  ],
+  lam_sheet: [
+    { key: 'max_w', label: 'Μέγιστο πλάτος', unit: 'mm' },
+  ],
+  fold: [
+    { key: 'plates', label: 'Πλάκες', unit: '' },
+    { key: 'max_w', label: 'Μέγιστο πλάτος', unit: 'mm' },
+  ],
+  gathering: [
+    { key: 'stations', label: 'Σταθμοί', unit: '' },
+  ],
+  staple: [
+    { key: 'heads', label: 'Κεφαλές', unit: '' },
+  ],
+  glue_bind: [
+    { key: 'max_spine', label: 'Μέγιστη ράχη', unit: 'mm' },
+    { key: 'clamps', label: 'Τσιμπίδες', unit: '' },
+  ],
+  spiral: [
+    { key: 'max_spine', label: 'Μέγιστη ράχη', unit: 'mm' },
+  ],
+  custom: [],
+};
+
+// ─── FORM STATE ───
+interface FormState {
+  id?: string;
+  name: string;
+  subtype: string;
+  cat: string;
+  notes: string;
+  setupCost: string;
+  speed: string;
+  minCharge: string;
+  hourlyRate: string;
+  specs: Record<string, string>;
+}
+
+const emptyForm = (subtype = 'guillotine'): FormState => ({
+  name: '',
+  subtype,
+  cat: subtypeMeta(subtype).cat,
+  notes: '',
+  setupCost: '',
+  speed: '',
+  minCharge: '',
+  hourlyRate: '',
+  specs: {},
+});
+
+function machineToForm(m: PostpressMachine): FormState {
+  const specs = (m.specs ?? {}) as Record<string, unknown>;
+  const specStrings: Record<string, string> = {};
+  for (const [k, v] of Object.entries(specs)) specStrings[k] = v != null ? String(v) : '';
+  return {
+    id: m.id,
+    name: m.name,
+    subtype: m.subtype,
+    cat: m.cat,
+    notes: m.notes ?? '',
+    setupCost: m.setupCost != null ? String(m.setupCost) : '',
+    speed: m.speed != null ? String(m.speed) : '',
+    minCharge: m.minCharge != null ? String(m.minCharge) : '',
+    hourlyRate: m.hourlyRate != null ? String(m.hourlyRate) : '',
+    specs: specStrings,
+  };
+}
+
+// ─── COMPONENT ───
+interface Props { machines: PostpressMachine[] }
+
+export function PostpressList({ machines }: Props) {
+  const [filter, setFilter] = useState<string>('all');
+  const [editing, setEditing] = useState<FormState | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const filtered = filter === 'all' ? machines : machines.filter(m => m.subtype === filter);
+
+  // Count per subtype (only show tabs that have machines + always show 'all')
+  const subtypeCounts: Record<string, number> = {};
+  for (const m of machines) subtypeCounts[m.subtype] = (subtypeCounts[m.subtype] || 0) + 1;
+  const activeSubtypes = SUBTYPES.filter(s => subtypeCounts[s.key]);
+
+  const handleSave = useCallback(async () => {
+    if (!editing || !editing.name.trim()) return;
+    setSaving(true);
+    try {
+      const numSpecs: Record<string, number> = {};
+      for (const [k, v] of Object.entries(editing.specs)) {
+        if (v !== '') numSpecs[k] = parseFloat(v) || 0;
+      }
+      const payload = {
+        name: editing.name.trim(),
+        cat: editing.cat,
+        subtype: editing.subtype,
+        notes: editing.notes,
+        setupCost: editing.setupCost ? parseFloat(editing.setupCost) : null,
+        speed: editing.speed ? parseFloat(editing.speed) : null,
+        minCharge: editing.minCharge ? parseFloat(editing.minCharge) : null,
+        hourlyRate: editing.hourlyRate ? parseFloat(editing.hourlyRate) : null,
+        specs: numSpecs,
+      };
+      if (editing.id) {
+        await updatePostpressMachine(editing.id, payload);
+      } else {
+        await createPostpressMachine(payload);
+      }
+      setEditing(null);
+    } finally {
+      setSaving(false);
+    }
+  }, [editing]);
+
+  // Shared input style
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 10px', borderRadius: 8,
+    border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.04)',
+    color: 'var(--text)', fontSize: '0.85rem', fontFamily: 'inherit',
+    outline: 'none',
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: '0.68rem', fontWeight: 600, color: '#64748b',
+    textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4,
+    display: 'block',
+  };
+
+  return (
+    <>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 46, height: 46, borderRadius: '50%',
+            border: '2px solid color-mix(in srgb, var(--violet) 35%, transparent)',
+            background: 'color-mix(in srgb, var(--violet) 10%, transparent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.1rem', color: 'var(--violet)',
+          }}>
+            <i className="fas fa-cut" />
+          </div>
+          <div>
+            <h1 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Μετεκτύπωση</h1>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{machines.length} μηχανήματα</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setEditing(emptyForm())}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'var(--accent)', color: '#fff',
+            padding: '10px 20px', borderRadius: 10, border: 'none',
+            fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer',
+            boxShadow: '0 4px 16px rgba(245,130,32,0.3)',
+            transition: 'box-shadow 0.2s',
+          }}
+        >
+          <i className="fas fa-plus" /> Νέο Μηχάνημα
+        </button>
+      </div>
+
+      {/* Filter tabs */}
+      {activeSubtypes.length > 1 && (
+        <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 3, marginBottom: 20, flexWrap: 'wrap', width: 'fit-content' }}>
+          <button
+            onClick={() => setFilter('all')}
+            style={{
+              padding: '7px 16px', borderRadius: 8, border: 'none',
+              fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+              color: filter === 'all' ? 'var(--accent)' : 'var(--text-muted)',
+              background: filter === 'all' ? 'rgba(245,130,32,0.12)' : 'transparent',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            Όλα <span style={{ marginLeft: 4, fontSize: '0.7rem', opacity: 0.6 }}>{machines.length}</span>
+          </button>
+          {activeSubtypes.map(s => (
+            <button
+              key={s.key}
+              onClick={() => setFilter(s.key)}
+              style={{
+                padding: '7px 16px', borderRadius: 8, border: 'none',
+                fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+                color: filter === s.key ? 'var(--accent)' : 'var(--text-muted)',
+                background: filter === s.key ? 'rgba(245,130,32,0.12)' : 'transparent',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {s.label} <span style={{ marginLeft: 4, fontSize: '0.7rem', opacity: 0.6 }}>{subtypeCounts[s.key]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Machine cards */}
+      {filtered.length === 0 ? (
+        <div style={{ padding: 48, textAlign: 'center' }}>
+          <i className="fas fa-cut" style={{ fontSize: '2.5rem', color: 'var(--text-muted)', opacity: 0.2 }} />
+          <p style={{ marginTop: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Δεν υπάρχουν μηχανήματα μετεκτύπωσης</p>
+          <button
+            onClick={() => setEditing(emptyForm())}
+            style={{ marginTop: 16, fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            + Προσθέστε το πρώτο μηχάνημα
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          {filtered.map(machine => {
+            const meta = subtypeMeta(machine.subtype);
+            const specs = (machine.specs ?? {}) as Record<string, number>;
+
+            return (
+              <div
+                key={machine.id}
+                className="card pp-card"
+                style={{ '--card-accent': meta.color, cursor: 'pointer' } as React.CSSProperties}
+                onClick={() => setEditing(machineToForm(machine))}
+              >
+                <div className="pp-card-glow" />
+                {/* Orb icon */}
+                <div style={{
+                  width: 46, height: 46, borderRadius: '50%',
+                  border: `2px solid color-mix(in srgb, ${meta.color} 35%, transparent)`,
+                  background: `color-mix(in srgb, ${meta.color} 10%, transparent)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '1.1rem', color: meta.color, marginBottom: 16,
+                  transition: 'all 400ms var(--spring)',
+                }}>
+                  <i className={`fas ${meta.icon}`} />
+                </div>
+
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: 4 }}>{machine.name}</h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {meta.label}
+                  {machine.speed ? ` · ${machine.speed} φ/ώρα` : ''}
+                </p>
+                {machine.setupCost != null && machine.setupCost > 0 && (
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: 4 }}>
+                    Setup €{machine.setupCost}
+                    {machine.hourlyRate ? ` · €${machine.hourlyRate}/ώρα` : ''}
+                  </p>
+                )}
+                {/* Quick spec peek */}
+                {(specs.costPerCut || specs.costPerUnit || specs.runCostPerSheet) && (
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: 2 }}>
+                    {specs.costPerCut ? `€${specs.costPerCut}/κοπή` : ''}
+                    {specs.costPerUnit ? `€${specs.costPerUnit}/τεμ` : ''}
+                    {specs.runCostPerSheet ? `€${specs.runCostPerSheet}/φύλλο` : ''}
+                  </p>
+                )}
+
+                {/* Actions */}
+                <div className="pp-card-actions" style={{ position: 'absolute', right: 12, top: 12, display: 'flex', gap: 4, opacity: 0, transition: 'opacity 0.2s' }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditing(machineToForm(machine)); }}
+                    title="Επεξεργασία"
+                    style={{ padding: 6, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', transition: 'color 0.2s' }}
+                  >
+                    <i className="fas fa-pen" />
+                  </button>
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (confirm(`Διαγραφή ${machine.name};`)) {
+                        await deletePostpressMachine(machine.id);
+                      }
+                    }}
+                    title="Διαγραφή"
+                    style={{ padding: 6, borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', transition: 'color 0.2s' }}
+                  >
+                    <i className="fas fa-trash" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── EDIT / CREATE MODAL ── */}
+      {editing && createPortal(
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+          onClick={() => setEditing(null)}
+        >
+          <div
+            style={{
+              width: 720, maxHeight: '90vh', overflow: 'auto',
+              borderRadius: 'var(--radius)', border: '1px solid var(--glass-border)',
+              background: 'rgb(20, 30, 55)', padding: 32, boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: '50%',
+                background: `color-mix(in srgb, ${subtypeMeta(editing.subtype).color} 12%, transparent)`,
+                border: `2px solid color-mix(in srgb, ${subtypeMeta(editing.subtype).color} 35%, transparent)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: subtypeMeta(editing.subtype).color, fontSize: '1rem',
+              }}>
+                <i className={`fas ${subtypeMeta(editing.subtype).icon}`} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: '1.15rem', fontWeight: 700 }}>
+                  {editing.id ? editing.name || 'Επεξεργασία' : 'Νέο Μηχάνημα Μετεκτύπωσης'}
+                </h2>
+                {editing.id && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{subtypeMeta(editing.subtype).label}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Subtype picker (only on create) */}
+            {!editing.id && (
+              <>
+                <label style={labelStyle}>ΤΥΠΟΣ ΜΗΧΑΝΗΜΑΤΟΣ</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 22 }}>
+                  {SUBTYPES.map(s => {
+                    const active = editing.subtype === s.key;
+                    return (
+                      <button
+                        key={s.key}
+                        onClick={() => setEditing({ ...emptyForm(s.key), subtype: s.key, cat: s.cat })}
+                        style={{
+                          padding: '12px 10px', borderRadius: 10, border: '2px solid',
+                          borderColor: active ? s.color : 'var(--glass-border)',
+                          background: active ? `color-mix(in srgb, ${s.color} 10%, transparent)` : 'transparent',
+                          color: active ? s.color : 'var(--text-muted)',
+                          fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <i className={`fas ${s.icon}`} style={{ fontSize: '0.85rem' }} />
+                        {s.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* Name + Notes row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+              <div>
+                <label style={labelStyle}>ΟΝΟΜΑ</label>
+                <input
+                  value={editing.name}
+                  onChange={e => setEditing({ ...editing, name: e.target.value })}
+                  placeholder="π.χ. Polar 92"
+                  style={{ ...inputStyle, padding: '10px 12px', fontSize: '0.9rem' }}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>ΣΗΜΕΙΩΣΕΙΣ</label>
+                <input
+                  value={editing.notes}
+                  onChange={e => setEditing({ ...editing, notes: e.target.value })}
+                  placeholder="Προαιρετικές σημειώσεις..."
+                  style={{ ...inputStyle, padding: '10px 12px', fontSize: '0.9rem' }}
+                />
+              </div>
+            </div>
+
+            {/* Setup + Min Charge */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 6 }}>
+              <div>
+                <label style={labelStyle}>ΠΑΓΙΟ SETUP (€)</label>
+                <input
+                  value={editing.setupCost}
+                  onChange={e => setEditing({ ...editing, setupCost: e.target.value })}
+                  type="number" step="0.01" min="0" placeholder="0"
+                  style={{ ...inputStyle, padding: '10px 12px' }}
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>ΕΛΑΧΙΣΤΗ ΧΡΕΩΣΗ (€)</label>
+                <input
+                  value={editing.minCharge}
+                  onChange={e => setEditing({ ...editing, minCharge: e.target.value })}
+                  type="number" step="0.01" min="0" placeholder="0"
+                  style={{ ...inputStyle, padding: '10px 12px' }}
+                />
+              </div>
+            </div>
+
+            {/* Subtype-specific spec fields */}
+            {(SPEC_FIELDS[editing.subtype] ?? []).length > 0 && (() => {
+              const fields = SPEC_FIELDS[editing.subtype] ?? [];
+              const sections: { label: string; fields: SpecField[] }[] = [];
+              let cur: { label: string; fields: SpecField[] } = { label: '', fields: [] };
+              for (const f of fields) {
+                if (f.key === '_label') {
+                  if (cur.fields.length > 0) sections.push(cur);
+                  cur = { label: f.label, fields: [] };
+                } else {
+                  cur.fields.push(f);
+                }
+              }
+              if (cur.fields.length > 0) sections.push(cur);
+
+              return sections.map((sec, si) => (
+                <div key={si}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 22, marginBottom: 12 }}>
+                    <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', color: sec.label.includes('ΧΡΕΩΣΗ') ? 'var(--accent)' : '#64748b' }}>
+                      {sec.label}
+                    </span>
+                    <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
+                  </div>
+                  {sec.fields.some(f => f.type === 'slider') ? (<>
+                    {/* Presets */}
+                    {(() => {
+                      const presets: { label: string; icon: string; values: Record<string, string> }[] = [
+                        { label: 'Μαχαιριές', icon: 'fa-scissors', values: { rate_per_cut: '0.12', rate_weight: '0', rate_per_stack: '0', rate_per_minute: '0' } },
+                        { label: 'Βάρος', icon: 'fa-weight-hanging', values: { rate_per_cut: '0', rate_weight: '2.00', rate_per_stack: '0', rate_per_minute: '0' } },
+                        { label: 'Στίβες', icon: 'fa-layer-group', values: { rate_per_cut: '0', rate_weight: '0', rate_per_stack: '0.80', rate_per_minute: '0' } },
+                        { label: 'Χρόνος', icon: 'fa-clock', values: { rate_per_cut: '0', rate_weight: '0', rate_per_stack: '0', rate_per_minute: '1.20' } },
+                        { label: 'Μιξ Κοπή+Βάρος', icon: 'fa-blender', values: { rate_per_cut: '0.08', rate_weight: '1.50', rate_per_stack: '0', rate_per_minute: '0' } },
+                        { label: 'Πλήρες', icon: 'fa-sliders-h', values: { rate_per_cut: '0.06', rate_weight: '1.00', rate_per_stack: '0.40', rate_per_minute: '0.60' } },
+                      ];
+                      return (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                          <span style={{ fontSize: '0.68rem', color: '#475569', fontWeight: 600, display: 'flex', alignItems: 'center', marginRight: 4 }}>Σενάρια:</span>
+                          {presets.map(p => (
+                            <button
+                              key={p.label}
+                              onClick={() => setEditing({ ...editing, specs: { ...editing.specs, ...p.values } })}
+                              style={{
+                                padding: '5px 12px', borderRadius: 7, border: '1px solid var(--glass-border)',
+                                background: 'rgba(255,255,255,0.03)', color: '#94a3b8',
+                                fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', gap: 5,
+                                transition: 'all 0.15s',
+                              }}
+                            >
+                              <i className={`fas ${p.icon}`} style={{ fontSize: '0.6rem' }} />
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                      {sec.fields.map(f => {
+                        const icons: Record<string, string> = { rate_per_cut: 'fa-scissors', rate_weight: 'fa-weight-hanging', rate_per_stack: 'fa-layer-group', rate_per_minute: 'fa-clock' };
+                        const colors: Record<string, string> = { rate_per_cut: 'var(--violet)', rate_weight: 'var(--teal)', rate_per_stack: 'var(--blue)', rate_per_minute: 'var(--amber)' };
+                        const clr = colors[f.key] || 'var(--accent)';
+                        return (
+                          <div key={f.key} style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                            padding: '16px 10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: 12,
+                            border: '1px solid var(--glass-border)',
+                          }}>
+                            <div style={{
+                              width: 32, height: 32, borderRadius: 8,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              background: `color-mix(in srgb, ${clr} 15%, transparent)`,
+                              color: clr, fontSize: '0.8rem',
+                            }}>
+                              <i className={`fas ${icons[f.key] || 'fa-circle'}`} />
+                            </div>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#cbd5e1' }}>{f.label}</span>
+                            <span style={{ fontSize: '0.62rem', color: '#64748b', marginTop: -4 }}>{f.unit}</span>
+                            <input
+                              type="range"
+                              min={f.min ?? 0} max={f.max ?? 1} step={f.step ?? 0.01}
+                              value={editing.specs[f.key] ?? '0'}
+                              onChange={e => setEditing({ ...editing, specs: { ...editing.specs, [f.key]: e.target.value } })}
+                              className="pp-slider"
+                              style={{ width: '100%', accentColor: clr }}
+                            />
+                            <input
+                              type="number"
+                              min={f.min ?? 0} max={f.max ?? 999} step={f.step ?? 0.01}
+                              value={editing.specs[f.key] ?? ''}
+                              onChange={e => setEditing({ ...editing, specs: { ...editing.specs, [f.key]: e.target.value } })}
+                              placeholder="0.00"
+                              style={{
+                                width: '80%', padding: '7px 8px', borderRadius: 8,
+                                border: `1.5px solid color-mix(in srgb, ${clr} 30%, transparent)`,
+                                background: 'rgba(255,255,255,0.03)',
+                                color: clr, fontSize: '0.95rem', fontWeight: 700,
+                                textAlign: 'center' as const, fontFamily: 'inherit', outline: 'none',
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* ── ΔΟΚΙΜΑΣΤΙΚΟΙ ΥΠΟΛΟΓΙΣΜΟΙ ── */}
+                    {editing.subtype === 'guillotine' && (() => {
+                      const liftH = parseFloat(editing.specs.lift_h || '0') || 8;
+                      const rCut = parseFloat(editing.specs.rate_per_cut || '0');
+                      const rWeight = parseFloat(editing.specs.rate_weight || '0');
+                      const rStack = parseFloat(editing.specs.rate_per_stack || '0');
+                      const rMin = parseFloat(editing.specs.rate_per_minute || '0');
+                      const setupC = parseFloat(editing.setupCost || '0');
+                      const minCh = parseFloat(editing.minCharge || '0');
+                      const hasRates = rCut > 0 || rWeight > 0 || rStack > 0 || rMin > 0;
+                      if (!hasRates) return null;
+
+                      function calcEx(ex: typeof EXAMPLES[0], qty: number) {
+                        const ups = ex.rows * ex.cols;
+                        const sheets = Math.ceil(qty / ups);
+                        const cp = calc3Pass(ex.rows, ex.cols, sheets, ex.gsm, ex.coated, liftH);
+                        const chCut = cp.totalCuts * rCut;
+                        const chWeight = (ex.gsm / 100) * rWeight * (sheets / 1000);
+                        const chStack = cp.totalStacks * rStack;
+                        const chTime = cp.totalMins * rMin;
+                        let charge = setupC + chCut + chWeight + chStack + chTime;
+                        if (minCh > 0 && charge < minCh) charge = minCh;
+                        const perUnit = qty > 0 ? charge / qty : 0;
+                        return { ...cp, sheets, ups, charge, perUnit };
+                      }
+
+                      const fmt = (v: number) => v.toFixed(2) + '€';
+                      const fmtT = (m: number) => m < 1 ? '<1\'' : '~' + Math.round(m) + '\'';
+
+                      return (
+                        <div style={{ marginTop: 18 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                            <i className="fas fa-flask" style={{ fontSize: '0.7rem', color: 'var(--accent)' }} />
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.06em' }}>ΔΟΚΙΜΑΣΤΙΚΟΙ ΥΠΟΛΟΓΙΣΜΟΙ</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                            {EXAMPLES.map(ex => {
+                              const r1 = calcEx(ex, ex.qtys[0]);
+                              const r2 = calcEx(ex, ex.qtys[1]);
+                              return (
+                                <div key={ex.name} style={{
+                                  padding: '14px 12px', borderRadius: 10,
+                                  background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)',
+                                }}>
+                                  {/* Header */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                    <i className={`fas ${ex.icon}`} style={{ fontSize: '0.65rem', color: '#64748b' }} />
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#e2e8f0' }}>{ex.name}</span>
+                                  </div>
+                                  <div style={{ fontSize: '0.65rem', color: '#475569', marginBottom: 10 }}>
+                                    {ex.paper} · {ex.sheet} · {r1.ups}-up
+                                  </div>
+                                  {/* Two qty columns */}
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    {[{ r: r1, q: ex.qtys[0] }, { r: r2, q: ex.qtys[1] }].map(({ r, q }) => (
+                                      <div key={q} style={{ textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.65rem', color: '#64748b', marginBottom: 4 }}>{q.toLocaleString('el')} τεμ</div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 4, flexWrap: 'wrap' }}>
+                                          <span style={{ fontSize: '0.62rem', color: 'var(--blue)', fontWeight: 600 }}>
+                                            <i className="fas fa-coins" style={{ fontSize: '0.5rem', marginRight: 2 }} />{fmt(r.perUnit)}
+                                          </span>
+                                          <span style={{ fontSize: '0.62rem', color: '#475569' }}>→</span>
+                                          <span style={{ fontSize: '0.85rem', color: 'var(--accent)', fontWeight: 700 }}>{fmt(r.charge)}</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.58rem', color: '#475569', marginTop: 3 }}>
+                                          <i className="fas fa-cut" style={{ marginRight: 2 }} />
+                                          {r.p1}+{r.p2}+{r.p3}={r.totalCuts} · {fmtT(r.totalMins)}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </>) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                      {sec.fields.map(f => (
+                        <div key={f.key}>
+                          <label style={labelStyle}>{f.label} {f.unit ? `(${f.unit})` : ''}</label>
+                          <input
+                            value={editing.specs[f.key] ?? ''}
+                            onChange={e => setEditing({ ...editing, specs: { ...editing.specs, [f.key]: e.target.value } })}
+                            type={f.type === 'text' ? 'text' : 'number'}
+                            step="0.01" min="0"
+                            style={{ ...inputStyle, padding: '10px 12px' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ));
+            })()}
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 28 }}>
+              <button
+                onClick={() => setEditing(null)}
+                style={{
+                  padding: '11px 24px', borderRadius: 10, border: '1px solid var(--glass-border)',
+                  background: 'transparent', color: 'var(--text-muted)',
+                  fontSize: '0.88rem', fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Ακύρωση
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || !editing.name.trim()}
+                style={{
+                  padding: '11px 28px', borderRadius: 10, border: 'none',
+                  background: 'var(--accent)', color: '#fff',
+                  fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer',
+                  opacity: saving || !editing.name.trim() ? 0.5 : 1,
+                  boxShadow: '0 4px 16px rgba(245,130,32,0.3)',
+                }}
+              >
+                {saving ? 'Αποθήκευση...' : editing.id ? 'Ενημέρωση' : 'Δημιουργία'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      <style>{`
+        .pp-card { position: relative; overflow: hidden; }
+        .pp-card::before {
+          content: '';
+          position: absolute; inset: 0;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+          transform: translateX(-100%);
+          transition: transform 0.6s ease;
+          pointer-events: none;
+        }
+        .pp-card:hover::before { transform: translateX(130%); }
+        .pp-card::after {
+          content: '';
+          position: absolute; top: 0; left: 24px; right: 24px; height: 2px;
+          background: var(--card-accent, var(--accent));
+          opacity: 0; transition: opacity 0.3s ease;
+          pointer-events: none;
+        }
+        .pp-card:hover::after { opacity: 1; }
+        .pp-card:hover {
+          box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+          border-color: var(--border-hover);
+          background: var(--bg-elevated);
+        }
+        .pp-card-glow {
+          position: absolute; inset: -1px; border-radius: var(--radius);
+          background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--card-accent, var(--accent)) 12%, transparent), transparent 70%);
+          opacity: 0; transition: opacity 0.4s ease; pointer-events: none;
+        }
+        .pp-card:hover .pp-card-glow { opacity: 1; }
+        .pp-card:hover .pp-card-actions { opacity: 1 !important; }
+        .pp-card-actions button:hover { color: var(--accent) !important; background: rgba(255,255,255,0.05) !important; }
+      `}</style>
+    </>
+  );
+}

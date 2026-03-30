@@ -122,9 +122,22 @@ export async function POST(req: NextRequest) {
       if (guill) {
         const gSpecs = (guill.specs as Record<string, number>) || {};
         guillotineData = {
-          costPerCut: gSpecs.costPerCut,
-          costPerMinute: guill.hourlyRate ? guill.hourlyRate / 60 : undefined,
-          speed: guill.speed || undefined,
+          // 4-channel charge rates
+          ratePerCut: gSpecs.rate_per_cut,
+          rateWeight: gSpecs.rate_weight,
+          ratePerStack: gSpecs.rate_per_stack,
+          ratePerMinute: gSpecs.rate_per_minute,
+          // 3-pass model specs
+          liftH: gSpecs.lift_h || 8,
+          secsPerCut: gSpecs.secs_per_cut || 20,
+          secsPerStack: gSpecs.secs_per_stack || 90,
+          trimCuts: 4,
+          // Cost fields
+          setupCost: guill.setupCost || 0,
+          sharpPrice: gSpecs.sharp_price,
+          bladeLife: gSpecs.blade_life || 2000,
+          hourlyCost: gSpecs.hourly_cost,
+          minCharge: guill.minCharge || 0,
         };
       }
     }
@@ -365,7 +378,7 @@ export async function POST(req: NextRequest) {
 
 // ─── MACHINES LIST ───
 export async function GET() {
-  const [machines, materials, postpress, , products] = await Promise.all([
+  const [machines, materials, postpress, , products, films] = await Promise.all([
     prisma.machine.findMany({
       where: { orgId: ORG_ID, deletedAt: null },
       select: {
@@ -411,9 +424,17 @@ export async function GET() {
       },
       orderBy: { name: 'asc' },
     }),
+    prisma.material.findMany({
+      where: { orgId: ORG_ID, deletedAt: null, cat: 'film' },
+      select: {
+        id: true, name: true, groupName: true,
+        costPerUnit: true, unit: true,
+      },
+      orderBy: [{ groupName: 'asc' }, { name: 'asc' }],
+    }),
   ]);
 
-  return Response.json({ machines, materials, postpress, products });
+  return Response.json({ machines, materials, postpress, products, films });
 }
 
 // ─── PATCH: update machine custom_papers ───

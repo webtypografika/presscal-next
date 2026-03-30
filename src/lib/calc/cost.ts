@@ -42,11 +42,23 @@ export interface CostInput {
 
   // Finishing
   guillotine?: {
-    costPerCut?: number;
-    costPerKg?: number;
-    costPerStack?: number;
-    costPerMinute?: number;
-    speed?: number;
+    // 4-channel charge rates (from machine setup — additive)
+    ratePerCut?: number;       // € per cut
+    rateWeight?: number;       // € per 1000 sheets @100gsm
+    ratePerStack?: number;     // € per stack
+    ratePerMinute?: number;    // € per minute
+    // Machine specs for 3-pass model
+    liftH?: number;            // stack height cm
+    secsPerCut?: number;       // seconds per cut (default 20)
+    secsPerStack?: number;     // seconds per stack handling (default 90)
+    coated?: boolean;          // paper coated?
+    trimCuts?: number;         // trim cuts (default 4)
+    // Cost fields
+    setupCost?: number;        // € flat setup
+    sharpPrice?: number;       // € per blade sharpening
+    bladeLife?: number;        // cuts per blade (default 2000)
+    hourlyCost?: number;       // € per hour machine cost
+    minCharge?: number;        // minimum charge €
   };
   lamination?: {
     filmCostPerSqm: number;
@@ -673,21 +685,105 @@ function calcPaperCost(input: CostInput, totalMachineSheets: number): { totalSto
 
 // ─── FINISHING COSTS ───
 
+// ── 3-PASS GUILLOTINE CUT MODEL ──
+// Pass 1 — Τρίμμα: trimCuts × αρχικές στίβες
+// Pass 2 — 1η διαχωριστική: κοπές × αρχικές στίβες → strips
+// Pass 3 — 2η διαχωριστική: κοπές × νέες στίβες (strips re-stacked)
+interface CutModelResult {
+  totalCuts: number;
+  totalStacks: number;
+  totalSecs: number;
+  totalMins: number;
+  sheetsPerStack: number;
+}
+
+function calc3PassCuts(
+  rows: number, cols: number, totalSheets: number,
+  gsm: number, coated: boolean, trimCuts: number,
+  liftH: number, secsPerCut: number, secsPerStack: number,
+): CutModelResult {
+  // Paper thickness (mm) — coated is denser
+  const bulkFactor = coated ? 1.0 : 1.25;
+  const thick = gsm * bulkFactor / 1000;
+  const liftMM = liftH * 10; // cm → mm
+  const sheetsPerStack = Math.max(1, Math.floor(liftMM / thick));
+  const stacks1 = totalSheets > 0 ? Math.ceil(totalSheets / sheetsPerStack) : 1;
+
+  // 1-up: only trim
+  if (rows <= 1 && cols <= 1) {
+    const p1c = trimCuts * stacks1;
+    const secs = p1c * secsPerCut + stacks1 * secsPerStack;
+    return { totalCuts: p1c, totalStacks: stacks1, totalSecs: secs, totalMins: secs / 60, sheetsPerStack };
+  }
+
+  // Cut order: fewer divisions first → fewer strips → easier re-stack
+  let firstCutsN: number, firstStrips: number, secondCutsN: number;
+  if (cols <= rows) {
+    firstCutsN = cols - 1; firstStrips = cols; secondCutsN = rows - 1;
+  } else {
+    firstCutsN = rows - 1; firstStrips = rows; secondCutsN = cols - 1;
+  }
+
+  // Pass 1 — Trim
+  const p1cuts = trimCuts * stacks1;
+  // Pass 2 — 1st separation
+  const p2cuts = firstCutsN * stacks1;
+  // Pass 3 — 2nd separation (re-stacked strips)
+  const fullStacks = stacks1 > 1 ? stacks1 - 1 : 0;
+  let lastStackSheets = totalSheets - fullStacks * sheetsPerStack;
+  if (lastStackSheets <= 0) lastStackSheets = sheetsPerStack;
+
+  const fullStripH = sheetsPerStack * thick;
+  const bundlesPerLiftFull = Math.max(1, Math.floor(liftMM / fullStripH));
+  const liftsFull = fullStacks * Math.ceil(firstStrips / bundlesPerLiftFull);
+
+  const lastStripH = lastStackSheets * thick;
+  const bundlesPerLiftLast = Math.max(1, Math.floor(liftMM / lastStripH));
+  const liftsLast = Math.ceil(firstStrips / bundlesPerLiftLast);
+
+  const stacks3 = liftsFull + liftsLast;
+  const p3cuts = secondCutsN * stacks3;
+
+  const totalHandlings = stacks1 + stacks3;
+  const totalCuts = p1cuts + p2cuts + p3cuts;
+  const totalSecs = totalCuts * secsPerCut + totalHandlings * secsPerStack;
+
+  return { totalCuts, totalStacks: totalHandlings, totalSecs, totalMins: totalSecs / 60, sheetsPerStack };
+}
+
 function calcGuillotineCost(input: CostInput, totalSheets: number): number {
   if (!input.guillotine) return 0;
   const g = input.guillotine;
 
-  const cutsPerSheet = (input.imposition.cols + 1) + (input.imposition.rows + 1);
-  const totalCuts = totalSheets * cutsPerSheet;
+  const rows = input.imposition.rows;
+  const cols = input.imposition.cols;
 
-  let cost = 0;
-  if (g.costPerCut) cost += totalCuts * g.costPerCut;
-  if (g.costPerMinute && g.speed) {
-    const minutes = totalCuts / (g.speed || 30);
-    cost += minutes * g.costPerMinute;
+  // 3-pass realistic cut model
+  const cp = calc3PassCuts(
+    rows, cols, totalSheets,
+    input.paperGsm, g.coated ?? false, g.trimCuts ?? 4,
+    g.liftH ?? 8, g.secsPerCut ?? 20, g.secsPerStack ?? 90,
+  );
+
+  // ── COST (τι μου κοστίζει) ──
+  const setupCost = g.setupCost ?? 0;
+  const bladeCost = cp.totalCuts * ((g.bladeLife ?? 2000) > 0 ? (g.sharpPrice ?? 0) / (g.bladeLife ?? 2000) : 0);
+  const machineCost = (cp.totalSecs / 3600) * (g.hourlyCost ?? 0);
+  const totalCost = setupCost + bladeCost + machineCost;
+
+  // ── CHARGE (τι χρεώνω — 4-channel formula, additive) ──
+  const chCut   = cp.totalCuts * (g.ratePerCut ?? 0);
+  const chWeight = (input.paperGsm / 100) * (g.rateWeight ?? 0) * (totalSheets / 1000);
+  const chStack  = cp.totalStacks * (g.ratePerStack ?? 0);
+  const chTime   = cp.totalMins * (g.ratePerMinute ?? 0);
+  let charge = setupCost + chCut + chWeight + chStack + chTime;
+
+  if ((g.minCharge ?? 0) > 0 && charge < g.minCharge!) {
+    charge = g.minCharge!;
   }
 
-  return cost;
+  // Return the higher of cost and charge (charge is what we bill)
+  return Math.max(totalCost, charge);
 }
 
 function calcLaminationCost(input: CostInput, totalSheets: number): number {

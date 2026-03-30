@@ -79,6 +79,13 @@ interface DbMaterial {
   costPerUnit: number | null;
   unit: string;
 }
+interface DbFilm {
+  id: string;
+  name: string;
+  groupName: string | null;
+  costPerUnit: number | null;
+  unit: string;
+}
 interface DbPostpress {
   id: string;
   name: string;
@@ -317,6 +324,7 @@ export default function CalculatorShell() {
   const [machines, setMachines] = useState<DbMachine[]>(DEMO_MACHINES);
   const [papers, setPapers] = useState<DbMaterial[]>(DEMO_PAPERS);
   const [postpress, setPostpress] = useState<DbPostpress[]>([]);
+  const [films, setFilms] = useState<DbFilm[]>([]);
   const [products, setProducts] = useState<DbProduct[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
 
@@ -450,6 +458,7 @@ export default function CalculatorShell() {
           setActivePaperId(data.materials[0].id);
         }
         if (data.postpress?.length) setPostpress(data.postpress);
+        if (data.films?.length) setFilms(data.films);
         if (data.products?.length) setProducts(data.products);
         setDataLoaded(true);
       })
@@ -880,13 +889,63 @@ export default function CalculatorShell() {
             <div style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.02em' }}>€{fmt(totalPrice)}</div>
             <div style={{ fontSize: '0.6rem', color: '#94a3b8' }}>€{fmt(pricePerUnit)}/τεμ · κέρδος €{fmt(profitAmount)}</div>
           </div>
-          <button style={{
-            padding: '7px 14px', borderRadius: 7,
-            background: 'var(--accent)', color: '#fff', border: 'none',
-            fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 5,
-            boxShadow: '0 2px 12px rgba(245,130,32,0.3)', transition: 'all 0.2s', flexShrink: 0,
-          }}>
+          <button
+            onClick={async () => {
+              if (!quoteLink) return
+              try {
+                const { updateQuote } = await import('../quotes/actions')
+                // Fetch current quote items
+                const res = await fetch(`/api/quotes/${quoteLink.quoteId}/items`)
+                if (!res.ok) throw new Error('Failed to fetch quote')
+                const data = await res.json()
+                const items = (data.items as any[]) || []
+
+                // Find and update the item
+                const idx = items.findIndex((i: any) => i.id === quoteLink.itemId)
+                if (idx === -1) throw new Error('Item not found')
+
+                items[idx] = {
+                  ...items[idx],
+                  type: 'calculator',
+                  cost: Math.round(totalCost * 100) / 100,
+                  unitPrice: Math.round(pricePerUnit * 1000) / 1000,
+                  finalPrice: Math.round(totalPrice * 100) / 100,
+                  profit: Math.round(profitAmount * 100) / 100,
+                  calcData: {
+                    archetype: job.archetype,
+                    width: job.width,
+                    height: job.height,
+                    qty: job.qty,
+                    sides: job.sides,
+                    pages: job.pages,
+                    totalCost,
+                    totalPrice,
+                    pricePerUnit,
+                    profitAmount,
+                    sheets: totalStockSheets,
+                    machineName: machine?.name,
+                    paperName: paper?.name,
+                  }
+                }
+
+                await updateQuote(quoteLink.quoteId, { items })
+                // Navigate back to quote
+                window.location.href = `/quotes/${quoteLink.quoteId}`
+              } catch (e) {
+                console.error('Save to quote error:', e)
+                alert('Σφάλμα αποθήκευσης: ' + (e as Error).message)
+              }
+            }}
+            disabled={!quoteLink}
+            style={{
+              padding: '7px 14px', borderRadius: 7,
+              background: quoteLink ? 'var(--accent)' : 'var(--border)', color: '#fff', border: 'none',
+              fontSize: '0.72rem', fontWeight: 600, cursor: quoteLink ? 'pointer' : 'not-allowed',
+              display: 'flex', alignItems: 'center', gap: 5,
+              boxShadow: quoteLink ? '0 2px 12px rgba(245,130,32,0.3)' : 'none', transition: 'all 0.2s', flexShrink: 0,
+              opacity: quoteLink ? 1 : 0.4,
+            }}
+          >
             <i className="fas fa-cart-plus" /> Καλάθι
           </button>
           <button onClick={async () => {
@@ -1558,18 +1617,38 @@ export default function CalculatorShell() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
                 <Pill active={!finish.lamMachineId} onClick={() => setFinish({ ...finish, lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς' })} color="var(--violet)">Χωρίς</Pill>
                 {laminators.map((l) => (
-                  <Pill key={l.id} active={finish.lamMachineId === l.id} onClick={() => setFinish({ ...finish, lamMachineId: l.id, lamName: l.name })} color="var(--violet)">{l.name}</Pill>
+                  <Pill key={l.id} active={finish.lamMachineId === l.id} onClick={() => setFinish({ ...finish, lamMachineId: l.id, lamName: l.name, lamFilmId: films[0]?.id || '' })} color="var(--violet)">{l.name}</Pill>
                 ))}
               </div>
               {finish.lamMachineId && (<>
+                <MfLabel>ΦΙΛΜ ΠΛΑΣΤΙΚΟΠΟΙΗΣΗΣ</MfLabel>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
+                  {films.map((f) => (
+                    <Pill key={f.id} active={finish.lamFilmId === f.id} onClick={() => setFinish({ ...finish, lamFilmId: f.id })} color="var(--violet)">{f.name}</Pill>
+                  ))}
+                  {!films.length && <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Δεν βρέθηκαν φιλμ</span>}
+                </div>
                 <MfLabel>ΟΨΕΙΣ ΠΛΑΣΤΙΚΟΠΟΙΗΣΗΣ</MfLabel>
                 <ToggleBar value={String(finish.lamSides)} onChange={(v) => setFinish({ ...finish, lamSides: Number(v) as 1 | 2 })} options={[{ v: '1', l: '1 Όψη' }, { v: '2', l: '2 Όψεις' }]} />
                 <div style={{ height: 10 }} />
               </>)}
               <MfLabel>ΒΙΒΛΙΟΔΕΣΙΑ</MfLabel>
-              <ToggleBar value={finish.binding} onChange={(v) => setFinish({ ...finish, binding: v })}
+              <ToggleBar value={finish.binding} onChange={(v) => {
+                const subtype = v === 'glue' ? 'glue_bind' : v;
+                const firstMatch = binders.find(b => b.subtype === subtype);
+                setFinish({ ...finish, binding: v, bindingMachineId: firstMatch?.id || '' });
+              }}
                 options={[{ v: 'none', l: 'Καμία' }, { v: 'staple', l: 'Συρραφή' }, { v: 'glue', l: 'Κόλλα' }, { v: 'spiral', l: 'Σπιράλ' }]}
               />
+              {finish.binding !== 'none' && binders.length > 0 && (<>
+                <div style={{ height: 10 }} />
+                <MfLabel>ΜΗΧΑΝΗΜΑ ΒΙΒΛΙΟΔΕΣΙΑΣ</MfLabel>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
+                  {binders.filter(b => b.subtype === (finish.binding === 'glue' ? 'glue_bind' : finish.binding)).map((b) => (
+                    <Pill key={b.id} active={finish.bindingMachineId === b.id} onClick={() => setFinish({ ...finish, bindingMachineId: b.id })} color="var(--violet)">{b.name}</Pill>
+                  ))}
+                </div>
+              </>)}
             </>)}
 
             {/* ── MODE SETTINGS PANEL ── */}
