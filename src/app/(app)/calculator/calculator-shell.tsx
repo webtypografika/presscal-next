@@ -1048,17 +1048,23 @@ export default function CalculatorShell() {
                   }}
                 />
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 12 }}>
-                  <MfInput value={sheetH}
-                    onChange={v => setMachineSheetH(Number(v) || null)}
-                    style={{ width: 70, textAlign: 'center' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <MfInput value={sheetW}
+                      onChange={v => setMachineSheetW(Number(v) || null)}
+                      style={{ width: 70, textAlign: 'center' }} />
+                    <span style={{ fontSize: '0.48rem', color: '#64748b', marginTop: 1 }}>LS</span>
+                  </div>
                   <span style={{ color: '#475569', fontWeight: 600 }}>×</span>
-                  <MfInput value={sheetW}
-                    onChange={v => setMachineSheetW(Number(v) || null)}
-                    style={{ width: 70, textAlign: 'center' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <MfInput value={sheetH}
+                      onChange={v => setMachineSheetH(Number(v) || null)}
+                      style={{ width: 70, textAlign: 'center' }} />
+                    <span style={{ fontSize: '0.48rem', color: '#64748b', marginTop: 1 }}>SS</span>
+                  </div>
                   <button onClick={() => setFeedEdge(f => f === 'sef' ? 'lef' : 'sef')}
-                    style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.5rem', fontWeight: 700, padding: '4px 6px', borderRadius: 4, fontFamily: 'inherit' }}
-                    title={feedEdge === 'sef' ? 'Short Edge First → Long Edge First' : 'Long Edge First → Short Edge First'}>
-                    {feedEdge === 'sef' ? 'SEF' : 'LEF'}
+                    style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.5rem', fontWeight: 700, padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                    title={feedEdge === 'sef' ? `Μπαίνει η μικρή (${sheetH}mm) — κλικ για αλλαγή` : `Μπαίνει η μεγάλη (${sheetW}mm) — κλικ για αλλαγή`}>
+                    {feedEdge === 'sef' ? `↕ ${sheetH} SEF` : `↔ ${sheetW} LEF`}
                   </button>
                 </div>
 

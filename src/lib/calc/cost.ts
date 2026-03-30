@@ -111,14 +111,17 @@ const DEFAULT_TAC_LIMIT = 2.80; // 280%
 const A4_AREA = 210 * 297;
 
 /** Stepped wear multiplier based on feed length (how far drum rotates).
- *  Drum rotation: feed ≤ machineMax/2 → half rotation (A4) → 1×
- *                 feed > machineMax/2 → full rotation (A3) → 2× */
+ *  Canvas: left edge = feed side (paper enters from left).
+ *  Feed length = vizW = the horizontal dimension the drum prints across.
+ *  LEF: long edge enters (left), drum prints across long side → feed = LS
+ *  SEF: short edge enters (left), drum prints across short side → feed = SS
+ *  Drum threshold: machineMax/2 → half rotation = A4, full = A3 */
 function wearMult(sheetW: number, sheetH: number, feedEdge?: 'sef' | 'lef', machineMaxDim?: number): number {
   const ss = Math.min(sheetW, sheetH);
   const ls = Math.max(sheetW, sheetH);
-  // Feed length = the dimension parallel to feed path (perpendicular to leading edge)
+  // LEF: long edge enters, paper travels SS. SEF: short edge enters, paper travels LS.
   const feedLength = feedEdge === 'lef' ? ss : ls;
-  // Threshold = half the machine's maximum dimension (half drum rotation)
+  // Threshold = half the machine's max dimension (half drum rotation)
   const halfDrum = (machineMaxDim || ls) / 2;
   if (feedLength <= halfDrum) return 1;  // half rotation → A4
   return 2;                              // full rotation → A3
@@ -134,6 +137,7 @@ function inkAreaMult(impo: { ups: number; pieceW: number; pieceH: number }): num
 function sheetSizeCategory(w: number, h: number, feedEdge?: 'sef' | 'lef', machineMaxDim?: number): 'a4' | 'a3' {
   const ss = Math.min(w, h);
   const ls = Math.max(w, h);
+  // Same logic as wearMult: LEF → paper travels SS, SEF → paper travels LS
   const feedLength = feedEdge === 'lef' ? ss : ls;
   const halfDrum = (machineMaxDim || ls) / 2;
   if (feedLength <= halfDrum) return 'a4';
@@ -840,6 +844,7 @@ export function calculateCost(input: CostInput): CalculatorResult {
   const sellPrice = chargePaper + chargePrint + chargeFinishing;
   const profitAmount = sellPrice - totalCost;
   const pricePerPiece = input.qty > 0 ? sellPrice / input.qty : 0;
+
 
   // Print model label
   const printModel = input.machineCat === 'digital'
