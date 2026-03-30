@@ -123,8 +123,33 @@ export async function updateQuoteStatus(id: string, status: string) {
 export async function linkEmailToQuote(quoteId: string, messageId: string, threadId: string) {
   const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { linkedEmails: true, threadId: true } });
   if (!quote) throw new Error('Quote not found');
-  const linked = quote.linkedEmails || [];
+
+  let linked = quote.linkedEmails || [];
+
+  // Try to fetch all messages in the thread so the full conversation is linked
+  try {
+    const { getGmailToken, getThread } = await import('@/lib/gmail');
+    const { getServerSession } = await import('next-auth');
+    const { authOptions } = await import('@/lib/auth');
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as Record<string, unknown>)?.id as string;
+    if (userId) {
+      const token = await getGmailToken(userId);
+      if (token) {
+        const threadMsgIds = await getThread(token, threadId);
+        for (const id of threadMsgIds) {
+          if (!linked.includes(id)) linked.push(id);
+        }
+      }
+    }
+  } catch {
+    // Fallback: just link the single message
+    if (!linked.includes(messageId)) linked.push(messageId);
+  }
+
+  // Ensure at least the clicked message is linked
   if (!linked.includes(messageId)) linked.push(messageId);
+
   await prisma.quote.update({
     where: { id: quoteId },
     data: { linkedEmails: linked, threadId: quote.threadId || threadId },
@@ -162,10 +187,35 @@ export async function createCustomer(data: {
   city?: string;
   zip?: string;
   notes?: string;
+  folderPath?: string;
 }) {
   const customer = await prisma.customer.create({
     data: { orgId: ORG_ID, ...data },
   });
   revalidatePath('/quotes');
+  revalidatePath('/customers');
+  return customer;
+}
+
+export async function updateCustomer(id: string, data: {
+  name?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  afm?: string;
+  doy?: string;
+  address?: string;
+  city?: string;
+  zip?: string;
+  notes?: string;
+  folderPath?: string | null;
+}) {
+  const customer = await prisma.customer.update({
+    where: { id },
+    data,
+  });
+  revalidatePath('/quotes');
+  revalidatePath('/customers');
   return customer;
 }

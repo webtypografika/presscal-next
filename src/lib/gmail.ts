@@ -261,6 +261,14 @@ function extractCidMap(payload: Record<string, unknown>): Record<string, string>
   return map;
 }
 
+// ─── GET THREAD (all messages in a conversation) ───
+
+export async function getThread(token: string, threadId: string): Promise<string[]> {
+  const data = await gmailFetch(token, `/threads/${threadId}?format=minimal`);
+  const messages = data.messages as Array<{ id: string }> | undefined;
+  return messages?.map(m => m.id) || [];
+}
+
 // ─── GET ATTACHMENT ───
 
 export async function getAttachment(token: string, messageId: string, attachmentId: string): Promise<string> {

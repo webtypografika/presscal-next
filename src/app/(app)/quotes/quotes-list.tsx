@@ -254,15 +254,41 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
                       draggable
                       onDragStart={e => handleDragStart(e, q.id)}
                       onClick={() => router.push(`/quotes/${q.id}`)}
+                      className="quote-card-hover"
                       style={{
                         padding: '8px 10px', borderRadius: 8,
                         border: '1px solid var(--border)', marginBottom: 5,
                         cursor: 'pointer', transition: 'background 0.15s',
-                        background: 'transparent',
+                        background: 'transparent', position: 'relative',
                       }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
+                      {/* Delete button */}
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!confirm(`Διαγραφή ${q.number};`)) return;
+                          try {
+                            await deleteQuote(q.id);
+                            setQuotes(prev => prev.filter(x => x.id !== q.id));
+                            toast('Η προσφορά διαγράφηκε');
+                          } catch { toast('Σφάλμα διαγραφής', 'error'); }
+                        }}
+                        style={{
+                          position: 'absolute', top: 6, right: 6,
+                          width: 22, height: 22, borderRadius: 6,
+                          border: 'none', background: 'transparent',
+                          color: 'var(--text-muted)', cursor: 'pointer',
+                          fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          opacity: 0, transition: 'opacity 0.15s, color 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
+                        title="Διαγραφή"
+                      >
+                        <i className="fas fa-trash" />
+                      </button>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
                         <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent)', opacity: 0.8 }}>{q.number}</span>
                         <span style={{ flex: 1 }} />

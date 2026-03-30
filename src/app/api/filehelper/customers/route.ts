@@ -38,6 +38,23 @@ export async function GET(req: NextRequest) {
     email: c.email,
     phone: c.phone,
     tags: c.tags,
+    folderPath: c.folderPath,
     quoteCount: c._count.quotes
   })))
+}
+
+// PATCH /api/filehelper/customers — Update customer (e.g. set folderPath)
+export async function PATCH(req: NextRequest) {
+  const auth = await authenticateFilehelper(req)
+  if ('error' in auth) return auth.error
+
+  const { id, ...data } = await req.json()
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const customer = await (prisma as any).customer.updateMany({
+    where: { id, orgId: auth.org.id },
+    data
+  })
+
+  return NextResponse.json({ ok: true, count: customer.count })
 }
