@@ -92,6 +92,23 @@ model Org {
   apiGemini    String?  // Gemini API key (override .env)
   apiFilehelper String? // File Helper API key
 
+  // Elorus integration settings
+  elorusOrgId          String?  // Elorus organization ID
+  elorusOrgSlug        String?  // e.g. "typografika" for URLs
+  elorusOrgName        String?  // Organization display name
+  elorusDefaultDocType String?  // Document type ID
+  elorusDefaultTaxId   String?  // Tax ID (e.g. 24% ΦΠΑ)
+  elorusDefaultMyData  String?  // MyDATA doc type e.g. "2.1"
+  elorusDefaultClassCat String? // e.g. "category1_3"
+  elorusDefaultClassType String? // e.g. "E3_561_001"
+  elorusDocTypes       Json?    // Cached: [{id,title,category}]
+  elorusTaxes          Json?    // Cached: [{id,title,percentage}]
+
+  // AADE credentials (for AFM lookup)
+  aadeUsername  String?
+  aadePassword  String?
+  aadeAfm       String?  // Company's own ΑΦΜ for AADE calls
+
   machines         Machine[]
   postpressMachines PostpressMachine[]
   users            User[]
@@ -346,10 +363,12 @@ model Customer {
   mobile    String?
   afm       String?  // Greek Tax ID
   doy       String?  // Tax Office
+  elorusContactId String?  // Linked Elorus contact
   address   String?
   city      String?
   zip       String?
   notes     String   @default("")
+  folderPath String?  // Local filesystem path for customer folder
 
   // CRM
   contacts  Json     @default("[]")  // sub-contacts array
@@ -414,6 +433,7 @@ model Quote {
 
   // Invoicing
   elorusInvoiceId  String?
+  elorusInvoiceUrl String?
   elorusContactId  String?
 
   // Company profile snapshot (for approval page branding)

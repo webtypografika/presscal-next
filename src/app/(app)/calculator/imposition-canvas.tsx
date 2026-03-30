@@ -27,6 +27,7 @@ interface ImpositionCanvasProps {
   showColorBar?: boolean;
   colorBarEdge?: 'tail' | 'gripper';
   colorBarOffY?: number;  // mm micro-adjust
+  colorBarScale?: number; // % scale (default 100)
   showPlateSlug?: boolean;
   plateSlugEdge?: 'tail' | 'gripper';
   pdf?: ParsedPDF | null;
@@ -94,7 +95,7 @@ function drawSheet(
   marginTop: number, marginBottom: number, marginLeft: number, marginRight: number,
   bleed: number, gutter: number, cropMarks: boolean,
   gridOffsetX: number, gridOffsetY: number,
-  showColorBar: boolean, colorBarEdge: string, colorBarOffY: number,
+  showColorBar: boolean, colorBarEdge: string, colorBarOffY: number, colorBarScale: number,
   showPlateSlug: boolean, plateSlugEdge: string,
   machCat: string | undefined,
   pdf: ParsedPDF | null | undefined,
@@ -206,8 +207,8 @@ function drawSheet(
         }
       }
 
-      const x = isWT ? offX + cell.x * scale : cenX + col * (pw + gutterPx);
-      const y = isWT ? offY + cell.y * scale : cenY + row * (ph + gutterPx);
+      const x = isWT ? offX + cell.x * scale + gridOffsetX * scale : cenX + col * (pw + gutterPx);
+      const y = isWT ? offY + cell.y * scale + gridOffsetY * scale : cenY + row * (ph + gutterPx);
       const isRotated = cell.rotation && cell.rotation !== 0;
 
       // Bleed zone
@@ -436,8 +437,13 @@ function drawSheet(
 
   // ─── COLOR BAR ───
   if (showColorBar) {
-    const cbPatchH = 2.5; // patch height px
-    const cbPatchW = 6;   // patch width px
+    const cbS = colorBarScale / 100;
+    const cbPatchHmm = 5 * cbS;   // patch height in mm
+    const cbPatchWmm = 10 * cbS;  // patch width in mm
+    const cbGapmm = 0.5 * cbS;    // gap between patches in mm
+    const cbPatchH = cbPatchHmm * scale;
+    const cbPatchW = cbPatchWmm * scale;
+    const cbGap = cbGapmm * scale;
     const cmykFull = ['#00aeef', '#ec008c', '#fff200', '#231f20'];
     const cmykTint = ['rgba(0,174,239,0.5)', 'rgba(236,0,140,0.5)', 'rgba(255,242,0,0.5)', 'rgba(35,31,32,0.5)'];
     const isTailEdge = colorBarEdge === 'tail';
@@ -445,7 +451,7 @@ function drawSheet(
     // Position inside margin + micro-adjust
     const cbBaseY = isTailEdge
       ? offY + mT * 0.3 + cbOffPx
-      : offY + drawH - mB * 0.3 - cbPatchH * 2 - 1 - cbOffPx;
+      : offY + drawH - mB * 0.3 - cbPatchH * 2 - cbGap - cbOffPx;
     // Tile patches across printable width
     const startX = offX + mL;
     const endX = offX + drawW - mR;
@@ -458,8 +464,8 @@ function drawSheet(
       ctx.fillRect(cx, cbBaseY, cbPatchW, cbPatchH);
       // 50% tint patch below
       ctx.fillStyle = cmykTint[ci];
-      ctx.fillRect(cx, cbBaseY + cbPatchH + 0.5, cbPatchW, cbPatchH);
-      cx += cbPatchW + 0.5;
+      ctx.fillRect(cx, cbBaseY + cbPatchH + cbGap, cbPatchW, cbPatchH);
+      cx += cbPatchW + cbGap;
       colorIdx++;
     }
   }
@@ -496,7 +502,7 @@ function drawSheet(
 export default function ImpositionCanvas({
   impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
   bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
-  showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge,
+  showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
   pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -560,14 +566,14 @@ export default function ImpositionCanvas({
       drawSheet(ctx, baseX, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
-        showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
+        showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
         machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering);
 
       // Back
       drawSheet(ctx, baseX + drawW + gap, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
-        showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
+        showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
         machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering);
     } else {
       // ═══ SINGLE VIEW: one sheet, pagination ═══
@@ -591,7 +597,7 @@ export default function ImpositionCanvas({
       drawSheet(ctx, offX, offY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
-        showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
+        showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
         machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering);
     }
 
@@ -647,7 +653,7 @@ export default function ImpositionCanvas({
     ctx.textAlign = 'center';
     ctx.fillText(parts.join(' · '), cW / 2, cH - 5);
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering]);
 
   useEffect(() => { draw(); }, [draw]);
 

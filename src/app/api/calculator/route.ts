@@ -291,6 +291,7 @@ export async function POST(req: NextRequest) {
       specs: machineSpecs,
       tacLimit: ((rawSpecs.tac_limit as number) || 280) / 100,  // convert % to fraction
       feedEdge: (body.feedEdge as 'sef' | 'lef' | undefined) ?? ((rawSpecs.feed_direction as string) === 'lef' ? 'lef' : 'sef'),
+      machineMaxDim: Math.max(machine.maxLS || 0, machine.maxSS || 0),  // machine's absolute max for drum threshold
       includeDepreciation: !!rawSpecs.include_depreciation,
       machineCost: (rawSpecs.machine_cost as number) || undefined,
       machineLifetimePasses: (rawSpecs.machine_lifetime_passes as number) || undefined,

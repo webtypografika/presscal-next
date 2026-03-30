@@ -18,6 +18,19 @@ export interface QuoteLineItem {
   profit: number;
   notes?: string;
   calcData?: Record<string, unknown>;
+  // Linked file from FileHelper
+  linkedFile?: {
+    path: string;
+    name: string;
+    type: string;       // pdf, ai, psd, etc.
+    size: number;
+    width?: number;     // mm (TrimBox for PDFs)
+    height?: number;    // mm
+    pages?: number;
+    colors?: string;    // e.g. "4/4", "4/0", "CMYK"
+    dpi?: number;
+    bleed?: number;     // mm
+  };
 }
 
 export interface Quote extends Timestamped, SoftDeletable, OrgScoped {

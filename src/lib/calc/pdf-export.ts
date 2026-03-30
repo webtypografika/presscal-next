@@ -61,6 +61,7 @@ export interface ExportOptions {
   colorBarEdge?: 'tail' | 'gripper';
   colorBarPdfBytes?: Uint8Array;   // color bar PDF content
   colorBarOffsetY?: number;
+  colorBarScale?: number;           // % scale (default 100)
   showPlateSlug?: boolean;
   plateSlugEdge?: 'tail' | 'gripper';
   keepSourceMarks?: boolean;
@@ -128,6 +129,7 @@ interface DrawMarksOptions {
   plateSlugEdge?: string;
   colorBarEdge?: string;
   colorBarOffsetY?: number;
+  colorBarScale?: number;
 }
 
 // ─── Embed Source Pages ───
@@ -383,7 +385,8 @@ function drawPDFMarks(
   const cenX = mL + (printableW - totalGridW) / 2 + offXpt;
   const cenY = mB + (printableH - totalGridH) / 2 - offYpt;
 
-  const black = cmyk(0, 0, 0, 1);
+  const regAll = cmyk(1, 1, 1, 1); // Registration — prints on ALL plates
+  const markColor = options?.machineCat === 'offset' ? regAll : cmyk(0, 0, 0, 1);
 
   // Crop marks
   const bleedPt = mmToPt(impo.bleedMM || 0);
@@ -429,14 +432,14 @@ function drawPDFMarks(
     // Perimeter marks — top & bottom
     for (let vmi = 0; vmi < uV.length; vmi++) {
       const vx = uV[vmi];
-      page.drawLine({ start: { x: vx, y: gT + cropGap }, end: { x: vx, y: gT + cropGap + markLen }, thickness: 0.5, color: black });
-      page.drawLine({ start: { x: vx, y: gB - cropGap }, end: { x: vx, y: gB - cropGap - markLen }, thickness: 0.5, color: black });
+      page.drawLine({ start: { x: vx, y: gT + cropGap }, end: { x: vx, y: gT + cropGap + markLen }, thickness: 0.5, color: markColor });
+      page.drawLine({ start: { x: vx, y: gB - cropGap }, end: { x: vx, y: gB - cropGap - markLen }, thickness: 0.5, color: markColor });
     }
     // Perimeter marks — left & right
     for (let hmi = 0; hmi < uH.length; hmi++) {
       const hy = uH[hmi];
-      page.drawLine({ start: { x: gL - cropGap, y: hy }, end: { x: gL - cropGap - markLen, y: hy }, thickness: 0.5, color: black });
-      page.drawLine({ start: { x: gR + cropGap, y: hy }, end: { x: gR + cropGap + markLen, y: hy }, thickness: 0.5, color: black });
+      page.drawLine({ start: { x: gL - cropGap, y: hy }, end: { x: gL - cropGap - markLen, y: hy }, thickness: 0.5, color: markColor });
+      page.drawLine({ start: { x: gR + cropGap, y: hy }, end: { x: gR + cropGap + markLen, y: hy }, thickness: 0.5, color: markColor });
     }
 
     // Gutter marks — vertical gutters (between columns)
@@ -448,8 +451,8 @@ function drawPDFMarks(
           const gxVg = cenX + vg * (pieceW + gutterColPt) + pieceW;
           for (let hci = 0; hci < uH.length; hci++) {
             const hy2 = uH[hci];
-            page.drawLine({ start: { x: gxVg + gutGapPt, y: hy2 }, end: { x: gxVg + gutGapPt + gutColMarkLen, y: hy2 }, thickness: 0.5, color: black });
-            page.drawLine({ start: { x: gxVg + gutterColPt - gutGapPt, y: hy2 }, end: { x: gxVg + gutterColPt - gutGapPt - gutColMarkLen, y: hy2 }, thickness: 0.5, color: black });
+            page.drawLine({ start: { x: gxVg + gutGapPt, y: hy2 }, end: { x: gxVg + gutGapPt + gutColMarkLen, y: hy2 }, thickness: 0.5, color: markColor });
+            page.drawLine({ start: { x: gxVg + gutterColPt - gutGapPt, y: hy2 }, end: { x: gxVg + gutterColPt - gutGapPt - gutColMarkLen, y: hy2 }, thickness: 0.5, color: markColor });
           }
         }
       }
@@ -462,8 +465,8 @@ function drawPDFMarks(
           const gyHg = cenY + hg * (pieceH + gutterRowPt) + pieceH;
           for (let vci = 0; vci < uV.length; vci++) {
             const vx2 = uV[vci];
-            page.drawLine({ start: { x: vx2, y: gyHg + gutGapPt }, end: { x: vx2, y: gyHg + gutGapPt + gutRowMarkLen }, thickness: 0.5, color: black });
-            page.drawLine({ start: { x: vx2, y: gyHg + gutterRowPt - gutGapPt }, end: { x: vx2, y: gyHg + gutterRowPt - gutGapPt - gutRowMarkLen }, thickness: 0.5, color: black });
+            page.drawLine({ start: { x: vx2, y: gyHg + gutGapPt }, end: { x: vx2, y: gyHg + gutGapPt + gutRowMarkLen }, thickness: 0.5, color: markColor });
+            page.drawLine({ start: { x: vx2, y: gyHg + gutterRowPt - gutGapPt }, end: { x: vx2, y: gyHg + gutterRowPt - gutGapPt - gutRowMarkLen }, thickness: 0.5, color: markColor });
           }
         }
       }
@@ -523,22 +526,23 @@ function drawPDFMarks(
     });
   }
 
-  // Color bar (tiled at natural size across paper width)
+  // Color bar (tiled at scaled size across paper width)
   if (options?.colorBarPage) {
     const cbp = options.colorBarPage;
-    const cbNatW = cbp.width;
-    const cbNatH = cbp.height;
+    const cbScale = (options.colorBarScale ?? 100) / 100;
+    const cbW = cbp.width * cbScale;
+    const cbH = cbp.height * cbScale;
     const cbOffY = mmToPt(options.colorBarOffsetY || 0);
     let cbY: number;
     if (options.colorBarEdge === 'tail') {
-      cbY = paperHpt - cbNatH - mmToPt(1) - cbOffY;
+      cbY = paperHpt - cbH - mmToPt(1) - cbOffY;
     } else {
       cbY = mmToPt(1) + cbOffY;
     }
-    const cbTiles = Math.ceil(paperWpt / cbNatW);
+    const cbTiles = Math.ceil(paperWpt / cbW);
     for (let cbt = 0; cbt < cbTiles; cbt++) {
-      const cbX = cbt * cbNatW;
-      page.drawPage(cbp, { x: cbX, y: cbY, width: cbNatW, height: cbNatH });
+      const cbX = cbt * cbW;
+      page.drawPage(cbp, { x: cbX, y: cbY, width: cbW, height: cbH });
     }
   }
 
@@ -757,6 +761,7 @@ async function exportNUp(
         plateSlugEdge: opts.plateSlugEdge,
         colorBarEdge: opts.colorBarEdge,
         colorBarOffsetY: opts.colorBarOffsetY,
+        colorBarScale: opts.colorBarScale,
       });
     }
   }
@@ -897,6 +902,7 @@ async function exportBooklet(
       plateSlugEdge: opts.plateSlugEdge,
       colorBarEdge: opts.colorBarEdge,
       colorBarOffsetY: opts.colorBarOffsetY,
+        colorBarScale: opts.colorBarScale,
     };
     drawPDFMarks(frontPage, paperWpt, paperHpt, bkMarks, { ...marksOpts, jobName: ascii((opts.jobDescription || 'Job') + psLabel + ' Front') });
     drawPDFMarks(backPage, paperWpt, paperHpt, bkMarks, { ...marksOpts, jobName: ascii((opts.jobDescription || 'Job') + psLabel + ' Back') });
@@ -1044,6 +1050,7 @@ async function exportPerfectBound(
       plateSlugEdge: opts.plateSlugEdge,
       colorBarEdge: opts.colorBarEdge,
       colorBarOffsetY: opts.colorBarOffsetY,
+        colorBarScale: opts.colorBarScale,
     };
     drawPDFMarks(frontP, paperWpt, paperHpt, pbMarksImpo, { ...marksOpts, jobName: ascii((pressLabel ? pressLabel + ' ' : '') + 'Front (' + sigsAcross + '\u00d7' + sigsDown + ')') });
     drawPDFMarks(backP, paperWpt, paperHpt, pbMarksImpo, { ...marksOpts, jobName: ascii((pressLabel ? pressLabel + ' ' : '') + 'Back (' + sigsAcross + '\u00d7' + sigsDown + ')') });
@@ -1203,6 +1210,7 @@ async function exportCutStack(
       plateSlugEdge: opts.plateSlugEdge,
       colorBarEdge: opts.colorBarEdge,
       colorBarOffsetY: opts.colorBarOffsetY,
+        colorBarScale: opts.colorBarScale,
     });
 
     // BACK PAGE (fixed — same content in every cell, mirrored)
@@ -1235,6 +1243,7 @@ async function exportCutStack(
         plateSlugEdge: opts.plateSlugEdge,
         colorBarEdge: opts.colorBarEdge,
         colorBarOffsetY: opts.colorBarOffsetY,
+        colorBarScale: opts.colorBarScale,
       });
     }
   }
@@ -1418,6 +1427,7 @@ async function exportWorkTurn(
       plateSlugEdge: opts.plateSlugEdge,
       colorBarEdge: opts.colorBarEdge,
       colorBarOffsetY: opts.colorBarOffsetY,
+        colorBarScale: opts.colorBarScale,
     };
 
     if (isTumble) {
@@ -1512,6 +1522,7 @@ async function exportGangRun(
     plateSlugEdge: opts.plateSlugEdge,
     colorBarEdge: opts.colorBarEdge,
     colorBarOffsetY: opts.colorBarOffsetY,
+        colorBarScale: opts.colorBarScale,
   });
 }
 
@@ -1530,9 +1541,11 @@ function drawStepMultiMarks(
   printWpt: number,
   printHpt: number,
   blPt: number,
+  machineCat?: string,
 ) {
   if (impo.cropMarks === false) return;
-  const black = cmyk(0, 0, 0, 1);
+  const regAll = cmyk(1, 1, 1, 1);
+  const black = machineCat === 'offset' ? regAll : cmyk(0, 0, 0, 1);
   const markLen = mmToPt(4);
   const markOff = mmToPt(1);
   const gutterPt = mmToPt(impo.gutterMM || 0);
@@ -1712,7 +1725,7 @@ async function exportStepMulti(
   }
 
   // Crop marks
-  drawStepMultiMarks(frontPage, paperWpt, paperHpt, { cropMarks: opts.showCropMarks, gutterMM: gutMM, bleedMM: bl }, blocks, mLpt, mBpt, printWpt, printHpt, blPt);
+  drawStepMultiMarks(frontPage, paperWpt, paperHpt, { cropMarks: opts.showCropMarks, gutterMM: gutMM, bleedMM: bl }, blocks, mLpt, mBpt, printWpt, printHpt, blPt, opts.machineCat);
 
   const smJobName = ascii(opts.jobDescription || 'Step Multi');
   drawPDFMarks(frontPage, paperWpt, paperHpt, {
@@ -1730,6 +1743,7 @@ async function exportStepMulti(
     plateSlugEdge: opts.plateSlugEdge,
     colorBarEdge: opts.colorBarEdge,
     colorBarOffsetY: opts.colorBarOffsetY,
+        colorBarScale: opts.colorBarScale,
   });
 
   // Back side (if any block has backPageNum)
@@ -1771,7 +1785,7 @@ async function exportStepMulti(
     if (mBpt > 0.5) backPage.drawRectangle({ x: mLpt, y: 0, width: printWpt, height: mBpt, color: white });
     if (mTpt > 0.5) backPage.drawRectangle({ x: mLpt, y: paperHpt - mTpt, width: printWpt, height: mTpt, color: white });
 
-    drawStepMultiMarks(backPage, paperWpt, paperHpt, { cropMarks: opts.showCropMarks, gutterMM: gutMM, bleedMM: bl }, blocks, mLpt, mBpt, printWpt, printHpt, blPt);
+    drawStepMultiMarks(backPage, paperWpt, paperHpt, { cropMarks: opts.showCropMarks, gutterMM: gutMM, bleedMM: bl }, blocks, mLpt, mBpt, printWpt, printHpt, blPt, opts.machineCat);
     drawPDFMarks(backPage, paperWpt, paperHpt, {
       marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
       marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
@@ -1787,6 +1801,7 @@ async function exportStepMulti(
       plateSlugEdge: opts.plateSlugEdge,
       colorBarEdge: opts.colorBarEdge,
       colorBarOffsetY: opts.colorBarOffsetY,
+        colorBarScale: opts.colorBarScale,
     });
   }
 }

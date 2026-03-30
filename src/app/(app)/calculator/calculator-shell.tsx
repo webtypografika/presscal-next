@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { calcImposition } from '@/lib/calc/imposition';
 import type { ImpositionInput } from '@/lib/calc/imposition';
@@ -311,6 +312,7 @@ function MachinePaperPresets({ machine, sheetW, sheetH, onSelect, onUpdate }: {
 
 /* ═══ CALCULATOR COMPONENT ═══ */
 export default function CalculatorShell() {
+  const searchParams = useSearchParams();
   // ─── DB DATA ───
   const [machines, setMachines] = useState<DbMachine[]>(DEMO_MACHINES);
   const [papers, setPapers] = useState<DbMaterial[]>(DEMO_PAPERS);
@@ -373,6 +375,7 @@ export default function CalculatorShell() {
   const [impoColorBarType, setImpoColorBarType] = useState<'cmyk' | 'cmyk_tint50'>('cmyk');
   const [impoColorBarEdge, setImpoColorBarEdge] = useState<'tail' | 'gripper'>('tail');
   const [impoColorBarOffY, setImpoColorBarOffY] = useState(0); // mm micro-adjust
+  const [impoColorBarScale, setImpoColorBarScale] = useState(100); // % scale
   const [impoPlateSlug, setImpoPlateSlug] = useState(false);
   const [impoPlateSlugEdge, setImpoPlateSlugEdge] = useState<'tail' | 'gripper'>('tail');
   const [impoModeTab, setImpoModeTab] = useState<'spacing' | 'position' | 'rotation' | 'marks'>('spacing');
@@ -398,6 +401,10 @@ export default function CalculatorShell() {
   const [showDebug, setShowDebug] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const calcTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Quote link (from URL params)
+  const [quoteLink, setQuoteLink] = useState<{ quoteId: string; itemId: string; desc: string } | null>(null);
+  const [linkedFile, setLinkedFile] = useState<{ path: string; name: string } | null>(null);
 
   const togglePanel = useCallback((key: 'machine' | 'paper' | 'job' | 'color' | 'finish' | 'mode-settings') => {
     setActivePanel(key);
@@ -448,6 +455,82 @@ export default function CalculatorShell() {
       })
       .catch(() => setDataLoaded(true)); // use demo data on failure
   }, []);
+
+  // ─── PRE-FILL FROM URL PARAMS (quote → calculator) ───
+  const prefillDone = useRef(false);
+  useEffect(() => {
+    if (!dataLoaded || prefillDone.current) return;
+    const w = searchParams.get('w');
+    const h = searchParams.get('h');
+    if (!w && !h) return; // no params to apply
+    prefillDone.current = true;
+
+    const updates: Partial<JobData> = {};
+    if (w) updates.width = parseInt(w);
+    if (h) updates.height = parseInt(h);
+    const qty = searchParams.get('qty');
+    if (qty) updates.qty = parseInt(qty);
+    const sides = searchParams.get('sides');
+    if (sides) updates.sides = parseInt(sides) as 1 | 2;
+
+    // Pages
+    const pages = searchParams.get('pages');
+    if (pages) updates.pages = parseInt(pages);
+
+    setJob(prev => ({ ...prev, ...updates }));
+
+    // Color from URL
+    const colorsF = searchParams.get('colorsF');
+    const colorsB = searchParams.get('colorsB');
+    if (colorsF || colorsB) {
+      const f = parseInt(colorsF || '4');
+      const b = parseInt(colorsB || '0');
+      setColor(prev => ({
+        ...prev,
+        model: (f <= 1 && b <= 1) ? 'bw' : 'cmyk',
+        platesFront: f,
+        platesBack: b,
+      }));
+    }
+
+    // Quote link
+    const quoteId = searchParams.get('quoteId');
+    const itemId = searchParams.get('itemId');
+    const desc = searchParams.get('desc');
+    if (quoteId && itemId) {
+      setQuoteLink({ quoteId, itemId, desc: desc || '' });
+    }
+
+    // Linked file info
+    const filePath = searchParams.get('filePath');
+    const fileName = searchParams.get('fileName');
+    if (filePath && fileName) {
+      setLinkedFile({ path: filePath, name: fileName });
+    }
+  }, [dataLoaded, searchParams]);
+
+  // ─── AUTO-LOAD LINKED PDF VIA HELPER FILE SERVER ───
+  useEffect(() => {
+    if (!linkedFile?.path || !linkedFile.name.toLowerCase().endsWith('.pdf')) return
+    const loadPdf = async () => {
+      try {
+        setPdfLoading(true)
+        const url = `http://localhost:17824/?path=${encodeURIComponent(linkedFile.path)}`
+        const res = await fetch(url)
+        if (!res.ok) throw new Error('File server not available')
+        const blob = await res.blob()
+        const file = new File([blob], linkedFile.name, { type: 'application/pdf' })
+        const dt = new DataTransfer()
+        dt.items.add(file)
+        await handlePdfFiles(dt.files)
+      } catch (e) {
+        console.log('Auto-load PDF failed (Helper file server may not be running):', e)
+      } finally {
+        setPdfLoading(false)
+      }
+    }
+    loadPdf()
+  }, [linkedFile, handlePdfFiles])
 
   // ─── ARCHETYPE ↔ MODE ↔ SIDES VALIDATION ───
   // Auto-correct mode when archetype changes
@@ -631,6 +714,55 @@ export default function CalculatorShell() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)', marginTop: -8 }}>
 
+      {/* ═══ QUOTE LINK BANNER ═══ */}
+      {quoteLink && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px',
+          background: 'color-mix(in srgb, var(--blue) 8%, transparent)',
+          borderBottom: '1px solid color-mix(in srgb, var(--blue) 20%, transparent)',
+          fontSize: '0.78rem', flexShrink: 0,
+        }}>
+          <i className="fas fa-link" style={{ color: 'var(--blue)', fontSize: '0.65rem' }} />
+          <span style={{ color: 'var(--text-muted)' }}>Κοστολόγηση για:</span>
+          <span style={{ fontWeight: 600, color: 'var(--text)' }}>{quoteLink.desc || 'Είδος προσφοράς'}</span>
+          <div style={{ flex: 1 }} />
+          <a href={`/quotes/${quoteLink.quoteId}`} style={{
+            display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+            borderRadius: 6, border: '1px solid color-mix(in srgb, var(--blue) 25%, transparent)',
+            background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
+            color: 'var(--blue)', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
+          }}>
+            <i className="fas fa-arrow-left" style={{ fontSize: '0.55rem' }} /> Επιστροφή στην Προσφορά
+          </a>
+        </div>
+      )}
+
+      {/* ═══ LINKED FILE BANNER ═══ */}
+      {linkedFile && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px',
+          background: 'rgba(245,130,32,0.06)',
+          borderBottom: '1px solid rgba(245,130,32,0.15)',
+          fontSize: '0.78rem', flexShrink: 0,
+        }}>
+          <i className="fas fa-paperclip" style={{ color: '#f58220', fontSize: '0.65rem' }} />
+          <span style={{ color: 'var(--text-muted)' }}>Αρχείο:</span>
+          <span style={{ fontWeight: 600, color: '#f58220' }}>{linkedFile.name}</span>
+          <div style={{ flex: 1 }} />
+          <a
+            href={`presscal-fh://open-folder?path=${encodeURIComponent(linkedFile.path.replace(/[/\\][^/\\]+$/, ''))}`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+              borderRadius: 6, border: '1px solid rgba(245,130,32,0.3)',
+              background: 'rgba(245,130,32,0.1)',
+              color: '#f58220', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
+            }}
+          >
+            <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} /> Άνοιγμα στο Helper
+          </a>
+        </div>
+      )}
+
       {/* ═══ HORIZONTAL COST BAR (was right sidebar) ═══ */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px',
@@ -748,6 +880,7 @@ export default function CalculatorShell() {
                 colorBarType: impoColorBarType as 'cmyk' | 'cmyk_tint50',
                 colorBarEdge: impoColorBarEdge as 'tail' | 'gripper',
                 colorBarOffsetY: impoColorBarOffY,
+                colorBarScale: impoColorBarScale,
                 showPlateSlug: impoPlateSlug,
                 plateSlugEdge: impoPlateSlugEdge,
                 keepSourceMarks: impoKeepSourceMarks,
@@ -1718,9 +1851,15 @@ export default function CalculatorShell() {
                       <Pill active={impoColorBarEdge === 'tail'} onClick={() => setImpoColorBarEdge('tail')} color="var(--blue)">Tail</Pill>
                       <Pill active={impoColorBarEdge === 'gripper'} onClick={() => setImpoColorBarEdge('gripper')} color="var(--blue)">Gripper</Pill>
                     </div>
-                    <div>
-                      <MfLabel>OFFSET Y (MM)</MfLabel>
-                      <MfStepper value={impoColorBarOffY} onChange={v => setImpoColorBarOffY(Number(v) || 0)} step={0.5} />
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <div style={{ flex: 1 }}>
+                        <MfLabel>OFFSET Y (MM)</MfLabel>
+                        <MfStepper value={impoColorBarOffY} onChange={v => setImpoColorBarOffY(Number(v) || 0)} step={0.5} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <MfLabel>SCALE %</MfLabel>
+                        <MfStepper value={impoColorBarScale} onChange={v => setImpoColorBarScale(Math.max(10, Math.min(200, Number(v) || 100)))} step={10} />
+                      </div>
                     </div>
                   </>)}
                 </div>
@@ -1820,6 +1959,7 @@ export default function CalculatorShell() {
                 showColorBar={impoColorBar}
                 colorBarEdge={impoColorBarEdge as 'tail' | 'gripper'}
                 colorBarOffY={impoColorBarOffY}
+                colorBarScale={impoColorBarScale}
                 showPlateSlug={impoPlateSlug}
                 plateSlugEdge={impoPlateSlugEdge}
                 pdf={pdf}

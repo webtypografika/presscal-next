@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist_Mono } from 'next/font/google';
+import Script from 'next/script';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
@@ -28,11 +29,7 @@ export default function RootLayout({
       <head>
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&subset=greek,latin,latin-ext&display=swap" rel="stylesheet" />
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try{if(JSON.parse(localStorage.getItem('ui-store')||'{}').state?.theme==='dark')document.documentElement.classList.add('dark')}catch(e){}`,
-          }}
-        />
+        <Script id="theme-init" strategy="beforeInteractive">{`try{if(JSON.parse(localStorage.getItem('ui-store')||'{}').state?.theme==='dark')document.documentElement.classList.add('dark')}catch(e){}`}</Script>
       </head>
       <body className="min-h-full bg-background text-foreground">
         <Providers>{children}</Providers>
