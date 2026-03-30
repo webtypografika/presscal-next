@@ -18,6 +18,7 @@ export interface CostInput {
   tacLimit?: number;           // TAC limit % (default 280)
   feedEdge?: 'sef' | 'lef';    // feed direction
   machineMaxDim?: number;       // machine's absolute max dimension (LS) for wear threshold
+  feedLength?: number;          // pre-computed: how far paper travels (mm)
   includeDepreciation: boolean;
   machineCost?: number;
   machineLifetimePasses?: number;
@@ -116,15 +117,12 @@ const A4_AREA = 210 * 297;
  *  LEF: long edge enters (left), drum prints across long side → feed = LS
  *  SEF: short edge enters (left), drum prints across short side → feed = SS
  *  Drum threshold: machineMax/2 → half rotation = A4, full = A3 */
-function wearMult(sheetW: number, sheetH: number, feedEdge?: 'sef' | 'lef', machineMaxDim?: number): number {
-  const ss = Math.min(sheetW, sheetH);
-  const ls = Math.max(sheetW, sheetH);
-  // LEF: long edge enters, paper travels SS. SEF: short edge enters, paper travels LS.
-  const feedLength = feedEdge === 'lef' ? ss : ls;
-  // Threshold = half the machine's max dimension (half drum rotation)
-  const halfDrum = (machineMaxDim || ls) / 2;
-  if (feedLength <= halfDrum) return 1;  // half rotation → A4
-  return 2;                              // full rotation → A3
+function wearMult(feedLen: number, machineMaxDim: number): number {
+  // feedLen = how far paper travels (pre-computed by caller)
+  // machineMaxDim/2 = half drum rotation threshold
+  const halfDrum = machineMaxDim / 2;
+  if (feedLen <= halfDrum) return 1;  // half rotation → A4
+  return 2;                           // full rotation → A3
 }
 
 /** Print area ratio to A4 for toner/ink — based on actual piece area,
@@ -134,19 +132,15 @@ function inkAreaMult(impo: { ups: number; pieceW: number; pieceH: number }): num
 }
 
 /** Discrete size category (for CPC models that use tiered pricing) */
-function sheetSizeCategory(w: number, h: number, feedEdge?: 'sef' | 'lef', machineMaxDim?: number): 'a4' | 'a3' {
-  const ss = Math.min(w, h);
-  const ls = Math.max(w, h);
-  // Same logic as wearMult: LEF → paper travels SS, SEF → paper travels LS
-  const feedLength = feedEdge === 'lef' ? ss : ls;
-  const halfDrum = (machineMaxDim || ls) / 2;
-  if (feedLength <= halfDrum) return 'a4';
+function sheetSizeCategory(feedLen: number, machineMaxDim: number): 'a4' | 'a3' {
+  const halfDrum = machineMaxDim / 2;
+  if (feedLen <= halfDrum) return 'a4';
   return 'a3';
 }
 
 /** Get CPC for a given size & color mode */
-function getCpc(specs: DigitalSpecs, sheetW: number, sheetH: number, colorMode: 'color' | 'bw', feedEdge?: 'sef' | 'lef', machineMaxDim?: number): number {
-  const size = sheetSizeCategory(sheetW, sheetH, feedEdge, machineMaxDim);
+function getCpc(specs: DigitalSpecs, feedLen: number, machineMaxDim: number, colorMode: 'color' | 'bw'): number {
+  const size = sheetSizeCategory(feedLen, machineMaxDim);
   if (colorMode === 'color') {
     return size === 'a4' ? (specs.clickA4Color || 0) : (specs.clickA3Color || 0);
   }
@@ -183,13 +177,11 @@ function digitalSimpleIn(
   specs: DigitalSpecs,
   totalSheets: number,
   sides: 1 | 2,
-  sheetW: number,
-  sheetH: number,
   colorMode: 'color' | 'bw',
-  feedEdge?: 'sef' | 'lef',
-  machineMaxDim?: number,
+  feedLen: number,
+  machineMaxDim: number,
 ): { total: number; tonerOnly: number } {
-  const cpc = getCpc(specs, sheetW, sheetH, colorMode, feedEdge, machineMaxDim);
+  const cpc = getCpc(specs, feedLen, machineMaxDim, colorMode);
   const duplexMult = sides === 2 ? (specs.duplexClickMultiplier || 2) : 1;
   const total = totalSheets * cpc * duplexMult;
   return { total, tonerOnly: 0 }; // toner bundled in CPC
@@ -202,16 +194,14 @@ function digitalSimpleOut(
   specs: DigitalSpecs,
   totalSheets: number,
   sides: 1 | 2,
-  sheetW: number,
-  sheetH: number,
   colorMode: 'color' | 'bw',
   coverageLevel: string,
   inkMult: number,
+  feedLen: number,
+  machineMaxDim: number,
   coveragePdf?: { c: number; m: number; y: number; k: number },
-  feedEdge?: 'sef' | 'lef',
-  machineMaxDim?: number,
 ): { total: number; tonerOnly: number } {
-  const { total: cpcCost } = digitalSimpleIn(specs, totalSheets, sides, sheetW, sheetH, colorMode, feedEdge, machineMaxDim);
+  const { total: cpcCost } = digitalSimpleIn(specs, totalSheets, sides, colorMode, feedLen, machineMaxDim);
   const faces = sides === 2 ? totalSheets * 2 : totalSheets;
 
   let tonerPerFace = 0;
@@ -472,18 +462,24 @@ function calcDigitalCost(input: CostInput, totalSheets: number): number {
   const impo = input.imposition;
   let result: { total: number; tonerOnly: number };
 
+  // Feed length: pre-computed by API or derive from raw dims + feedEdge
+  const mMax = input.machineMaxDim || Math.max(input.machineMaxW, input.machineMaxH);
+  const fLen = input.feedLength ?? (() => {
+    const ss = Math.min(input.machineMaxW, input.machineMaxH);
+    const ls = Math.max(input.machineMaxW, input.machineMaxH);
+    return input.feedEdge === 'lef' ? ss : ls;
+  })();
   // Drum rotation wear mult: feed ≤ machineMax/2 → ×1 (half rotation), else ×2 (full)
-  const mMax = input.machineMaxDim;
-  const wMult = wearMult(input.machineMaxW, input.machineMaxH, input.feedEdge, mMax);
+  const wMult = wearMult(fLen, mMax);
   // Ink/toner area mult: actual print area vs A4
   const iMult = inkAreaMult(impo);
 
   switch (specs.costMode) {
     case 'simple_in':
-      result = digitalSimpleIn(specs, totalSheets, input.sides, input.machineMaxW, input.machineMaxH, input.colorMode, input.feedEdge, mMax);
+      result = digitalSimpleIn(specs, totalSheets, input.sides, input.colorMode, fLen, mMax);
       break;
     case 'simple_out':
-      result = digitalSimpleOut(specs, totalSheets, input.sides, input.machineMaxW, input.machineMaxH, input.colorMode, input.coverageLevel, iMult, input.coveragePdf, input.feedEdge, mMax);
+      result = digitalSimpleOut(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, fLen, mMax, input.coveragePdf);
       break;
     case 'precision':
       result = digitalPrecision(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, wMult, input.coveragePdf);
@@ -495,7 +491,7 @@ function calcDigitalCost(input: CostInput, totalSheets: number): number {
       result = digitalRiso(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, input.coveragePdf);
       break;
     default:
-      result = digitalSimpleIn(specs, totalSheets, input.sides, input.machineMaxW, input.machineMaxH, input.colorMode, input.feedEdge, mMax);
+      result = digitalSimpleIn(specs, totalSheets, input.sides, input.colorMode, fLen, mMax);
   }
 
   let printCost = result.total;
@@ -730,6 +726,14 @@ export function calculateCost(input: CostInput): CalculatorResult {
   const impo = input.imposition;
   const rawMachineSheets = impo.totalSheets || Math.ceil(input.qty / Math.max(impo.ups, 1));
 
+  // Feed length & machine max (used for digital wear/pricing)
+  const mMax = input.machineMaxDim || Math.max(input.machineMaxW, input.machineMaxH);
+  const fLen = input.feedLength ?? (() => {
+    const ss = Math.min(input.machineMaxW, input.machineMaxH);
+    const ls = Math.max(input.machineMaxW, input.machineMaxH);
+    return input.feedEdge === 'lef' ? ss : ls;
+  })();
+
   // Waste
   const wasteSheets = calcWasteSheets(input.wasteFixed);
   const totalMachineSheets = rawMachineSheets + wasteSheets;
@@ -775,7 +779,7 @@ export function calculateCost(input: CostInput): CalculatorResult {
     // Digital product: per-page pricing (price defined per A4, scaled by sheet size)
     const totalFaces = input.sides === 2 ? totalMachineSheets * 2 : totalMachineSheets;
     const pricePerPage = input.colorMode === 'color' ? (pp.price_color || 0) : (pp.price_bw || 0);
-    const sheetMult = wearMult(input.machineMaxW, input.machineMaxH, input.feedEdge, input.machineMaxDim);
+    const sheetMult = wearMult(fLen, mMax);
     const baseRevenue = totalFaces * pricePerPage * sheetMult;
     let productRevenue = baseRevenue;
     productDetail.push({ label: `${totalFaces} όψεις × €${pricePerPage} × ${sheetMult}`, value: baseRevenue });

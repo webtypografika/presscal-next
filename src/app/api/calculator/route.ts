@@ -260,6 +260,8 @@ export async function POST(req: NextRequest) {
     const rawH = Math.min(dimA, dimB); // SS (short side)
     // SEF: short edge enters first → portrait (swap so W < H)
     const isSEF = body.feedEdge === 'sef';
+    // Feed length: LEF = long enters, paper travels SS. SEF = short enters, paper travels LS.
+    const feedLength = isSEF ? rawW : rawH; // SEF → travels LS(rawW), LEF → travels SS(rawH)
     const area: PrintableArea = {
       paperW: isSEF ? rawH : rawW,
       paperH: isSEF ? rawW : rawH,
@@ -296,6 +298,7 @@ export async function POST(req: NextRequest) {
       tacLimit: ((rawSpecs.tac_limit as number) || 280) / 100,  // convert % to fraction
       feedEdge: (body.feedEdge as 'sef' | 'lef' | undefined) ?? ((rawSpecs.feed_direction as string) === 'lef' ? 'lef' : 'sef'),
       machineMaxDim: Math.max(machine.maxLS || 0, machine.maxSS || 0),  // machine's absolute max for drum threshold
+      feedLength,  // pre-computed: how far paper travels (mm)
       includeDepreciation: !!rawSpecs.include_depreciation,
       machineCost: (rawSpecs.machine_cost as number) || undefined,
       machineLifetimePasses: (rawSpecs.machine_lifetime_passes as number) || undefined,
