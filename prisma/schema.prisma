@@ -90,6 +90,7 @@ model Org {
   apiElorus    String?  // Elorus API key
   apiGmail     String?  // Gmail App Password or OAuth token
   apiGemini    String?  // Gemini API key (override .env)
+  apiFilehelper String? // File Helper API key
 
   machines         Machine[]
   postpressMachines PostpressMachine[]
@@ -100,6 +101,7 @@ model Org {
   customers        Customer[]
   quotes           Quote[]
   products         Product[]
+  fileLinks        FileLink[]
 }
 
 // ─── MACHINES (Digital / Offset / Plotter) ───
@@ -354,6 +356,7 @@ model Customer {
   tags      String[] @default([])
 
   quotes    Quote[]
+  fileLinks FileLink[]
 
   deletedAt DateTime?
   createdAt DateTime @default(now())
@@ -425,7 +428,41 @@ model Quote {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  fileLinks FileLink[]
+
   @@index([orgId, status])
   @@index([orgId, deletedAt])
   @@unique([orgId, number])
+}
+
+// ─── FILE LINKS (File Helper integration) ───
+model FileLink {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  // File info
+  fileName  String
+  filePath  String
+  fileType  String     // extension: pdf, psd, ai, etc.
+  fileSize  Int
+  source    String     // 'local' | 'dropbox'
+
+  // Links (one of)
+  quoteId    String?
+  quote      Quote?    @relation(fields: [quoteId], references: [id])
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  // Metadata
+  thumbnail       String?  // base64 thumbnail data
+  preflightStatus String?  // 'pass' | 'warning' | 'error'
+  notes           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([quoteId])
+  @@index([customerId])
 }

@@ -13,7 +13,7 @@ function makePrisma() {
 }
 
 // Invalidate cache if model set changes (e.g. after prisma generate adds new models)
-const PRISMA_VERSION = 3; // bump when schema changes
+const PRISMA_VERSION = 4; // bump when schema changes
 if (g.prisma && g._prismaV !== PRISMA_VERSION) {
   g.prisma = undefined;
 }

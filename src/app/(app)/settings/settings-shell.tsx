@@ -48,6 +48,7 @@ export function SettingsShell({ org }: { org: Org }) {
   const [apiElorus, setApiElorus] = useState(org.apiElorus ?? '');
   const [apiGmail, setApiGmail] = useState(org.apiGmail ?? '');
   const [apiGemini, setApiGemini] = useState(org.apiGemini ?? '');
+  const [apiFilehelper, setApiFilehelper] = useState(org.apiFilehelper ?? '');
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -76,7 +77,7 @@ export function SettingsShell({ org }: { org: Org }) {
       gemh: gemh || null, profession: profession || null,
       address: address || null, city: city || null, postalCode: postalCode || null,
       phone: phone || null, email: email || null, website: website || null,
-      apiElorus: apiElorus || null, apiGmail: apiGmail || null, apiGemini: apiGemini || null,
+      apiElorus: apiElorus || null, apiGmail: apiGmail || null, apiGemini: apiGemini || null, apiFilehelper: apiFilehelper || null,
     });
     setSaving(false);
     if (result.ok) {
@@ -288,6 +289,54 @@ export function SettingsShell({ org }: { org: Org }) {
             <Field label="Gemini API Key">
               <input className={inputCls} type="password" value={apiGemini} onChange={e => setApiGemini(e.target.value)} placeholder="AIza..." />
             </Field>
+          </Section>
+
+          <Section icon="fa-folder-open" iconColor="#f58220" title="FILE HELPER — DESKTOP APP">
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+              API key για σύνδεση με την desktop εφαρμογή File Helper (preview, preflight, διαχείριση αρχείων).
+            </p>
+            <Field label="API Key">
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input className={inputCls} type="text" value={apiFilehelper} readOnly placeholder="fh_..." style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.72rem' }} />
+                <button
+                  onClick={() => {
+                    const key = 'fh_' + crypto.randomUUID().replace(/-/g, '');
+                    setApiFilehelper(key);
+                  }}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                    background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
+                    cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  <i className="fas fa-sync-alt" style={{ marginRight: 4 }} />
+                  Generate
+                </button>
+                {apiFilehelper && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(apiFilehelper);
+                    }}
+                    style={{
+                      padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                      background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <i className="fas fa-copy" style={{ marginRight: 4 }} />
+                    Copy
+                  </button>
+                )}
+              </div>
+            </Field>
+            {apiFilehelper && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} />
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  Βάλε αυτό το key στο File Helper app: Settings → PressCal → API Key
+                </span>
+              </div>
+            )}
           </Section>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20 }}>
