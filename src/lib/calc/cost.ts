@@ -462,13 +462,9 @@ function calcDigitalCost(input: CostInput, totalSheets: number): number {
   const impo = input.imposition;
   let result: { total: number; tonerOnly: number };
 
-  // Feed length: pre-computed by API or derive from raw dims + feedEdge
+  // Use pre-computed feedLength from API (no local re-derivation)
   const mMax = input.machineMaxDim || Math.max(input.machineMaxW, input.machineMaxH);
-  const fLen = input.feedLength ?? (() => {
-    const ss = Math.min(input.machineMaxW, input.machineMaxH);
-    const ls = Math.max(input.machineMaxW, input.machineMaxH);
-    return input.feedEdge === 'lef' ? ss : ls;
-  })();
+  const fLen = input.feedLength || Math.max(input.machineMaxW, input.machineMaxH);
   // Drum rotation wear mult: feed ≤ machineMax/2 → ×1 (half rotation), else ×2 (full)
   const wMult = wearMult(fLen, mMax);
   // Ink/toner area mult: actual print area vs A4

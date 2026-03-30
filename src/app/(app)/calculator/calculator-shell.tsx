@@ -557,9 +557,11 @@ export default function CalculatorShell() {
   const rawSheetB = machineSheetH || machine?.maxSS || 487;
   const sheetW = Math.max(rawSheetA, rawSheetB); // LS (long side)
   const sheetH = Math.min(rawSheetA, rawSheetB); // SS (short side)
-  // Visual dimensions: SEF = portrait (short edge at top), LEF = landscape (long edge at top)
-  const vizW = feedEdge === 'sef' ? sheetH : sheetW;
-  const vizH = feedEdge === 'sef' ? sheetW : sheetH;
+  // Visual dimensions: left edge of canvas = feed side (paper enters from left)
+  // LEF: long edge enters (left=LS) → portrait (LS tall, SS wide)
+  // SEF: short edge enters (left=SS) → landscape (SS tall, LS wide)
+  const vizW = feedEdge === 'lef' ? sheetH : sheetW;  // LEF: SS wide, SEF: LS wide
+  const vizH = feedEdge === 'lef' ? sheetW : sheetH;  // LEF: LS tall (feed side), SEF: SS tall (feed side)
 
   const guillotines = postpress.filter(p => p.subtype === 'guillotine');
   const laminators = postpress.filter(p => p.subtype === 'lam_roll' || p.subtype === 'lam_sheet');
@@ -1063,9 +1065,12 @@ export default function CalculatorShell() {
                   </div>
                   <button onClick={() => setFeedEdge(f => f === 'sef' ? 'lef' : 'sef')}
                     style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.5rem', fontWeight: 700, padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                    title={feedEdge === 'sef' ? `Μπαίνει η μικρή (${sheetH}mm) — κλικ για αλλαγή` : `Μπαίνει η μεγάλη (${sheetW}mm) — κλικ για αλλαγή`}>
-                    {feedEdge === 'sef' ? `↕ ${sheetH} SEF` : `↔ ${sheetW} LEF`}
+                    title="Κλικ για αλλαγή feed direction">
+                    {feedEdge === 'sef' ? 'SEF' : 'LEF'}
                   </button>
+                  <span style={{ fontSize: '0.45rem', color: '#64748b', whiteSpace: 'nowrap' }}>
+                    {feedEdge === 'sef' ? `μπαίνει ${sheetH}mm → κύλινδρος ${sheetW}mm` : `μπαίνει ${sheetW}mm → κύλινδρος ${sheetH}mm`}
+                  </span>
                 </div>
 
                 <MfLabel>ΦΥΡΑ (φύλλα μοντάζ)</MfLabel>

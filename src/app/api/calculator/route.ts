@@ -258,13 +258,13 @@ export async function POST(req: NextRequest) {
     const dimB = body.machineSheetH || machine.maxSS || 487;
     const rawW = Math.max(dimA, dimB); // LS (long side)
     const rawH = Math.min(dimA, dimB); // SS (short side)
-    // SEF: short edge enters first → portrait (swap so W < H)
-    const isSEF = body.feedEdge === 'sef';
-    // Feed length: LEF = long enters, paper travels SS. SEF = short enters, paper travels LS.
-    const feedLength = isSEF ? rawW : rawH; // SEF → travels LS(rawW), LEF → travels SS(rawH)
+    // Canvas: left edge = feed side. LEF: long enters → portrait (W=SS, H=LS). SEF: short enters → landscape (W=LS, H=SS).
+    const isLEF = body.feedEdge === 'lef';
+    // Feed length = dimension parallel to drum (vizW). LEF: SS, SEF: LS.
+    const feedLength = isLEF ? rawH : rawW;
     const area: PrintableArea = {
-      paperW: isSEF ? rawH : rawW,
-      paperH: isSEF ? rawW : rawH,
+      paperW: isLEF ? rawH : rawW,  // LEF: SS wide, SEF: LS wide
+      paperH: isLEF ? rawW : rawH,  // LEF: LS tall, SEF: SS tall
       // Offset: DB marginTop=gripper(bottom), marginBottom=tail(top) → swap for visual layout
       marginTop: machineCat === 'offset' ? (machine.marginBottom || 0) : (machine.marginTop || 0),
       marginBottom: machineCat === 'offset' ? (machine.marginTop || 0) : (machine.marginBottom || 0),
