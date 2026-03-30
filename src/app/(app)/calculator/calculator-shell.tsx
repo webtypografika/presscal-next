@@ -533,6 +533,14 @@ export default function CalculatorShell() {
   }, [linkedFile, handlePdfFiles])
 
   // ─── ARCHETYPE ↔ MODE ↔ SIDES VALIDATION ───
+  // Set default feed direction from machine specs
+  useEffect(() => {
+    const s = (machines[activeMachine]?.specs as Record<string, unknown> | undefined);
+    const dir = (s?.feed_direction as string) || 'sef';
+    if (dir === 'sef' || dir === 'lef') setFeedEdge(dir);
+    else setFeedEdge('sef'); // 'both' defaults to SEF
+  }, [activeMachine, machines]);
+
   // Auto-correct mode when archetype changes
   useEffect(() => {
     const valid = ARCHETYPE_MODES[job.archetype] || ARCHETYPE_MODES.single_leaf;
@@ -562,6 +570,21 @@ export default function CalculatorShell() {
   // SEF: short edge enters (left=SS) → landscape (SS tall, LS wide)
   const vizW = feedEdge === 'lef' ? sheetH : sheetW;  // LEF: SS wide, SEF: LS wide
   const vizH = feedEdge === 'lef' ? sheetW : sheetH;  // LEF: LS tall (feed side), SEF: SS tall (feed side)
+
+  // Machine opening = maxSS. Check if feed direction is possible.
+  const machSpecs = machine?.specs as Record<string, unknown> | undefined;
+  const machineFeedDir = (machSpecs?.feed_direction as string) || 'sef';
+  const machineOpening = Math.min(machine?.maxLS || 9999, machine?.maxSS || 9999); // SS = opening
+  // LEF: LS enters → needs LS ≤ opening. SEF: SS enters → always fits (SS ≤ opening by definition).
+  const canLEF = machineFeedDir !== 'sef' || sheetW <= machineOpening; // sef-only machine: LEF only if LS fits in opening
+  const canSEF = machineFeedDir !== 'lef' || sheetW <= machineOpening; // lef-only: SEF only if... always true since SS ≤ opening
+  // Actually: LEF impossible when LS > opening (regardless of machine setting)
+  const lefPossible = sheetW <= machineOpening;
+  // SEF always possible since SS ≤ opening by definition
+
+  // Auto-correct: if LEF selected but LS > opening → force SEF
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (feedEdge === 'lef' && !lefPossible) setFeedEdge('sef'); }, [feedEdge, lefPossible]);
 
   const guillotines = postpress.filter(p => p.subtype === 'guillotine');
   const laminators = postpress.filter(p => p.subtype === 'lam_roll' || p.subtype === 'lam_sheet');
@@ -1063,9 +1086,21 @@ export default function CalculatorShell() {
                       style={{ width: 70, textAlign: 'center' }} />
                     <span style={{ fontSize: '0.48rem', color: '#64748b', marginTop: 1 }}>SS</span>
                   </div>
-                  <button onClick={() => setFeedEdge(f => f === 'sef' ? 'lef' : 'sef')}
-                    style={{ border: '1px solid var(--border)', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.5rem', fontWeight: 700, padding: '4px 8px', borderRadius: 4, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                    title="Κλικ για αλλαγή feed direction">
+                  <button
+                    onClick={() => {
+                      if (feedEdge === 'sef' && !lefPossible) return; // can't switch to LEF
+                      setFeedEdge(f => f === 'sef' ? 'lef' : 'sef');
+                    }}
+                    disabled={feedEdge === 'sef' && !lefPossible}
+                    style={{
+                      border: '1px solid var(--border)', background: 'transparent',
+                      color: (feedEdge === 'sef' && !lefPossible) ? '#475569' : 'var(--blue)',
+                      cursor: (feedEdge === 'sef' && !lefPossible) ? 'not-allowed' : 'pointer',
+                      fontSize: '0.5rem', fontWeight: 700, padding: '4px 8px', borderRadius: 4,
+                      fontFamily: 'inherit', whiteSpace: 'nowrap',
+                      opacity: (feedEdge === 'sef' && !lefPossible) ? 0.4 : 1,
+                    }}
+                    title={feedEdge === 'sef' && !lefPossible ? `LEF αδύνατο — ${sheetW}mm > άνοιγμα ${machineOpening}mm` : 'Κλικ για αλλαγή feed direction'}>
                     {feedEdge === 'sef' ? 'SEF' : 'LEF'}
                   </button>
                   <span style={{ fontSize: '0.45rem', color: '#64748b', whiteSpace: 'nowrap' }}>
