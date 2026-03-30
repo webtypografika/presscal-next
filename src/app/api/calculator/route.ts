@@ -253,8 +253,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── IMPOSITION ───
-    const rawW = body.machineSheetW || machine.maxLS || 330;
-    const rawH = body.machineSheetH || machine.maxSS || 487;
+    // Normalize: LS = always long side, SS = always short side
+    const dimA = body.machineSheetW || machine.maxLS || 330;
+    const dimB = body.machineSheetH || machine.maxSS || 487;
+    const rawW = Math.max(dimA, dimB); // LS (long side)
+    const rawH = Math.min(dimA, dimB); // SS (short side)
     // SEF: short edge enters first → portrait (swap so W < H)
     const isSEF = body.feedEdge === 'sef';
     const area: PrintableArea = {

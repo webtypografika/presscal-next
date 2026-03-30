@@ -552,8 +552,11 @@ export default function CalculatorShell() {
   // ─── DERIVED ───
   const machine = machines[activeMachine] || machines[0];
   const paper = papers.find(p => p.id === activePaperId) || papers[0];
-  const sheetW = machineSheetW || machine?.maxLS || 330;
-  const sheetH = machineSheetH || machine?.maxSS || 487;
+  // Normalize: sheetW = always LS (long side), sheetH = always SS (short side)
+  const rawSheetA = machineSheetW || machine?.maxLS || 330;
+  const rawSheetB = machineSheetH || machine?.maxSS || 487;
+  const sheetW = Math.max(rawSheetA, rawSheetB); // LS (long side)
+  const sheetH = Math.min(rawSheetA, rawSheetB); // SS (short side)
   // Visual dimensions: SEF = portrait (short edge at top), LEF = landscape (long edge at top)
   const vizW = feedEdge === 'sef' ? sheetH : sheetW;
   const vizH = feedEdge === 'sef' ? sheetW : sheetH;
