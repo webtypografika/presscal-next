@@ -55,11 +55,12 @@ const KB_COLUMNS = [
   { id: 'editing', label: 'Σε Επεξεργασία', statuses: ['editing', 'revision'], color: 'var(--accent)', icon: 'fa-pen' },
   { id: 'sent', label: 'Εστάλησαν', statuses: ['sent'], color: '#60a5fa', icon: 'fa-paper-plane' },
   { id: 'approved', label: 'Εγκρίθηκαν', statuses: ['approved', 'partial'], color: 'var(--success)', icon: 'fa-check' },
-  { id: 'rejected', label: 'Απορρίφθηκαν', statuses: ['rejected'], color: 'var(--danger)', icon: 'fa-times' },
+  { id: 'completed', label: 'Ολοκληρωμένες', statuses: ['completed'], color: 'var(--teal)', icon: 'fa-flag-checkered' },
+  { id: 'rejected', label: 'Απορρίφθηκαν', statuses: ['rejected', 'cancelled'], color: 'var(--danger)', icon: 'fa-times' },
 ] as const;
 
 type KbColId = typeof KB_COLUMNS[number]['id'];
-const COL_TO_STATUS: Record<KbColId, string> = { new: 'new', editing: 'editing', sent: 'sent', approved: 'approved', rejected: 'rejected' };
+const COL_TO_STATUS: Record<KbColId, string> = { new: 'new', editing: 'editing', sent: 'sent', approved: 'approved', completed: 'completed', rejected: 'rejected' };
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Πρόχειρη', new: 'Νέα', editing: 'Σε Επεξ.', revision: 'Αναθεώρηση',
@@ -116,9 +117,8 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // Filter (exclude completed/cancelled)
+  // Filter
   const kanbanQuotes = quotes.filter(q => {
-    if (['completed', 'cancelled'].includes(q.status)) return false;
     if (search) {
       const s = search.toLowerCase();
       return q.number.toLowerCase().includes(s) ||

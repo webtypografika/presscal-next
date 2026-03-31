@@ -212,6 +212,7 @@ function digitalSimpleOut(
   feedLen: number,
   machineMaxDim: number,
   coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
 ): { total: number; tonerOnly: number } {
   const { total: cpcCost } = digitalSimpleIn(specs, totalSheets, sides, colorMode, feedLen, machineMaxDim);
   const faces = sides === 2 ? totalSheets * 2 : totalSheets;
@@ -226,13 +227,13 @@ function digitalSimpleOut(
     ];
     for (const { yield: toner, ch } of channels) {
       if (toner && toner.yield > 0) {
-        const cov = channelCoverage(ch, coverageLevel, coveragePdf) / 0.05; // normalize to 5% base
+        const cov = channelCoverage(ch, coverageLevel, coveragePdf, tacLimit) / 0.05; // normalize to 5% base
         tonerPerFace += (toner.cost / toner.yield) * cov;
       }
     }
   } else {
     if (specs.tonerK && specs.tonerK.yield > 0) {
-      const cov = channelCoverage('k', coverageLevel, coveragePdf) / 0.05;
+      const cov = channelCoverage('k', coverageLevel, coveragePdf, tacLimit) / 0.05;
       tonerPerFace = (specs.tonerK.cost / specs.tonerK.yield) * cov;
     }
   }
@@ -255,6 +256,7 @@ function digitalPrecision(
   inkMult: number,
   wMult: number,
   coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
 ): { total: number; tonerOnly: number } {
   const faces = sides === 2 ? totalSheets * 2 : totalSheets;
 
@@ -269,13 +271,13 @@ function digitalPrecision(
     ];
     for (const { yield: toner, ch } of channels) {
       if (toner && toner.yield > 0) {
-        const cov = channelCoverage(ch, coverageLevel, coveragePdf) / 0.05;
+        const cov = channelCoverage(ch, coverageLevel, coveragePdf, tacLimit) / 0.05;
         tonerPerFace += (toner.cost / toner.yield) * cov;
       }
     }
   } else {
     if (specs.tonerK && specs.tonerK.yield > 0) {
-      const cov = channelCoverage('k', coverageLevel, coveragePdf) / 0.05;
+      const cov = channelCoverage('k', coverageLevel, coveragePdf, tacLimit) / 0.05;
       tonerPerFace = (specs.tonerK.cost / specs.tonerK.yield) * cov;
     }
   }
@@ -391,6 +393,7 @@ function digitalIndigo(
   inkMult: number,
   wMult: number,
   coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
 ): { total: number; tonerOnly: number } {
   const faces = sides === 2 ? totalSheets * 2 : totalSheets;
 
@@ -400,7 +403,7 @@ function digitalIndigo(
 
   // Ink cost (coverage-dependent) — TAC ÷ 4 for pills, avg of channels for PDF
   const avgCov = coverageLevel === 'pdf' && coveragePdf
-    ? Math.min(coveragePdf.c + coveragePdf.m + coveragePdf.y + coveragePdf.k, DEFAULT_TAC_LIMIT) / 4
+    ? Math.min(coveragePdf.c + coveragePdf.m + coveragePdf.y + coveragePdf.k, tacLimit || DEFAULT_TAC_LIMIT) / 4
     : (TAC_PILLS[coverageLevel] ?? 1.00) / 4;
   const inkPerFace = (specs.inkCostPerMl || 0) * avgCov * inkMult;
   const inkTotal = faces * inkPerFace;
@@ -435,6 +438,7 @@ function digitalRiso(
   coverageLevel: string,
   inkMult: number,
   coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
 ): { total: number; tonerOnly: number } {
   const faces = sides === 2 ? totalSheets * 2 : totalSheets;
 
@@ -448,7 +452,7 @@ function digitalRiso(
     ];
     for (const { cart, ch } of carts) {
       if (cart && cart.yield > 0) {
-        const cov = channelCoverage(ch, coverageLevel, coveragePdf) / 0.05;
+        const cov = channelCoverage(ch, coverageLevel, coveragePdf, tacLimit) / 0.05;
         costPerFace += (cart.cost / cart.yield) * cov;
       }
     }
@@ -458,7 +462,7 @@ function digitalRiso(
     }
   } else {
     if (specs.cartridgeK && specs.cartridgeK.yield > 0) {
-      const cov = channelCoverage('k', coverageLevel, coveragePdf) / 0.05;
+      const cov = channelCoverage('k', coverageLevel, coveragePdf, tacLimit) / 0.05;
       costPerFace = (specs.cartridgeK.cost / specs.cartridgeK.yield) * cov;
     }
   }
@@ -487,16 +491,16 @@ function calcDigitalCost(input: CostInput, totalSheets: number): number {
       result = digitalSimpleIn(specs, totalSheets, input.sides, input.colorMode, fLen, mMax);
       break;
     case 'simple_out':
-      result = digitalSimpleOut(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, fLen, mMax, input.coveragePdf);
+      result = digitalSimpleOut(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, fLen, mMax, input.coveragePdf, input.tacLimit);
       break;
     case 'precision':
-      result = digitalPrecision(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, wMult, input.coveragePdf);
+      result = digitalPrecision(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, wMult, input.coveragePdf, input.tacLimit);
       break;
     case 'indigo':
-      result = digitalIndigo(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, wMult, input.coveragePdf);
+      result = digitalIndigo(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, wMult, input.coveragePdf, input.tacLimit);
       break;
     case 'riso':
-      result = digitalRiso(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, input.coveragePdf);
+      result = digitalRiso(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, input.coveragePdf, input.tacLimit);
       break;
     default:
       result = digitalSimpleIn(specs, totalSheets, input.sides, input.colorMode, fLen, mMax);

@@ -471,7 +471,8 @@ export default function CalculatorShell() {
     if (!dataLoaded || prefillDone.current) return;
     const w = searchParams.get('w');
     const h = searchParams.get('h');
-    if (!w && !h) return; // no params to apply
+    const hasQuoteLink = searchParams.get('quoteId') && searchParams.get('itemId');
+    if (!w && !h && !hasQuoteLink) return; // no params to apply
     prefillDone.current = true;
 
     const updates: Partial<JobData> = {};
@@ -508,6 +509,7 @@ export default function CalculatorShell() {
     const desc = searchParams.get('desc');
     if (quoteId && itemId) {
       setQuoteLink({ quoteId, itemId, desc: desc || '' });
+      setActivePanel('machine');
     }
 
     // Linked file info
@@ -518,15 +520,18 @@ export default function CalculatorShell() {
     }
   }, [dataLoaded, searchParams]);
 
-  // ─── AUTO-LOAD LINKED PDF VIA HELPER FILE SERVER ───
+  // ─── AUTO-LOAD LINKED PDF VIA HELPER FILE SERVER OR STORAGE ───
   useEffect(() => {
     if (!linkedFile?.path || !linkedFile.name.toLowerCase().endsWith('.pdf')) return
     const loadPdf = async () => {
       try {
         setPdfLoading(true)
-        const url = `http://localhost:17824/?path=${encodeURIComponent(linkedFile.path)}`
+        // Stored files: fetch directly from Next.js. Temp files: via Helper's local server.
+        const url = linkedFile.path.startsWith('/storage/')
+          ? linkedFile.path
+          : `http://localhost:17824/?path=${encodeURIComponent(linkedFile.path)}`
         const res = await fetch(url)
-        if (!res.ok) throw new Error('File server not available')
+        if (!res.ok) throw new Error('File not available')
         const blob = await res.blob()
         const file = new File([blob], linkedFile.name, { type: 'application/pdf' })
         const dt = new DataTransfer()
@@ -925,6 +930,33 @@ export default function CalculatorShell() {
                     sheets: totalStockSheets,
                     machineName: machine?.name,
                     paperName: paper?.name,
+                    // Full inputs for re-calculation
+                    machineId: machine?.id,
+                    paperId: activePaperId,
+                    productId: job.productId || undefined,
+                    feedEdge,
+                    machineSheetW: sheetW,
+                    machineSheetH: sheetH,
+                    colorMode: color.model === 'cmyk' ? 'color' : 'bw',
+                    bleed: effectiveBleed,
+                    impositionMode: impoMode,
+                    impoRotation: impoRotation || (job.rotation ? 90 : 0),
+                    impoGutter,
+                    impoForceUps: impoForceUps || undefined,
+                    impoTurnType,
+                    wasteFixed,
+                    coverageLevel: color.coverage || 'mid',
+                    offsetFrontCmyk: color.platesFront,
+                    offsetBackCmyk: color.platesBack,
+                    offsetFrontPms: color.pmsFront,
+                    offsetBackPms: color.pmsBack,
+                    offsetOilVarnish: color.varnish === 'oil',
+                    guillotineId: finish.guillotineId || undefined,
+                    lamMachineId: finish.lamMachineId || undefined,
+                    lamFilmId: finish.lamFilmId || undefined,
+                    lamSides: finish.lamSides,
+                    bindingType: finish.binding !== 'none' ? finish.binding : '',
+                    bindingMachineId: finish.bindingMachineId || undefined,
                   }
                 }
 
@@ -1131,7 +1163,7 @@ export default function CalculatorShell() {
                     }
                   }}
                 />
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <MfInput value={sheetW}
                       onChange={v => setMachineSheetW(Number(v) || null)}
@@ -1145,27 +1177,36 @@ export default function CalculatorShell() {
                       style={{ width: 70, textAlign: 'center' }} />
                     <span style={{ fontSize: '0.48rem', color: '#64748b', marginTop: 1 }}>SS</span>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (feedEdge === 'sef' && !lefPossible) return; // can't switch to LEF
-                      setFeedEdge(f => f === 'sef' ? 'lef' : 'sef');
-                    }}
-                    disabled={feedEdge === 'sef' && !lefPossible}
-                    style={{
-                      border: '1px solid var(--border)', background: 'transparent',
-                      color: (feedEdge === 'sef' && !lefPossible) ? '#475569' : 'var(--blue)',
-                      cursor: (feedEdge === 'sef' && !lefPossible) ? 'not-allowed' : 'pointer',
-                      fontSize: '0.5rem', fontWeight: 700, padding: '4px 8px', borderRadius: 4,
-                      fontFamily: 'inherit', whiteSpace: 'nowrap',
-                      opacity: (feedEdge === 'sef' && !lefPossible) ? 0.4 : 1,
-                    }}
-                    title={feedEdge === 'sef' && !lefPossible ? `LEF αδύνατο — ${sheetW}mm > άνοιγμα ${machineOpening}mm` : 'Κλικ για αλλαγή feed direction'}>
-                    {feedEdge === 'sef' ? 'SEF' : 'LEF'}
-                  </button>
-                  <span style={{ fontSize: '0.45rem', color: '#64748b', whiteSpace: 'nowrap' }}>
-                    {feedEdge === 'sef' ? `μπαίνει ${sheetH}mm → κύλινδρος ${sheetW}mm` : `μπαίνει ${sheetW}mm → κύλινδρος ${sheetH}mm`}
-                  </span>
                 </div>
+
+                {/* ── FEED DIRECTION ── */}
+                <MfLabel>FEED DIRECTION</MfLabel>
+                <button
+                  onClick={() => {
+                    if (feedEdge === 'sef' && !lefPossible) return;
+                    setFeedEdge(f => f === 'sef' ? 'lef' : 'sef');
+                  }}
+                  disabled={feedEdge === 'sef' && !lefPossible}
+                  style={{
+                    width: '100%', marginBottom: 12,
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '8px 12px', borderRadius: 8,
+                    border: `2px solid ${feedEdge === 'lef' ? 'var(--blue)' : 'var(--accent)'}`,
+                    background: `color-mix(in srgb, ${feedEdge === 'lef' ? 'var(--blue)' : 'var(--accent)'} 8%, transparent)`,
+                    color: feedEdge === 'lef' ? 'var(--blue)' : 'var(--accent)',
+                    cursor: (feedEdge === 'sef' && !lefPossible) ? 'not-allowed' : 'pointer',
+                    opacity: (feedEdge === 'sef' && !lefPossible) ? 0.4 : 1,
+                    fontFamily: 'inherit', transition: 'all 0.2s',
+                  }}
+                  title={feedEdge === 'sef' && !lefPossible ? `LEF αδύνατο — ${sheetW}mm > άνοιγμα ${machineOpening}mm` : 'Κλικ για αλλαγή feed direction'}>
+                  <i className={feedEdge === 'lef' ? 'fas fa-arrows-alt-h' : 'fas fa-arrows-alt-v'} style={{ fontSize: '1rem' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.05em' }}>{feedEdge === 'sef' ? 'SEF' : 'LEF'}</span>
+                    <span style={{ fontSize: '0.6rem', opacity: 0.7, fontWeight: 500 }}>
+                      {feedEdge === 'sef' ? `μπαίνει ${sheetH}mm → κύλινδρος ${sheetW}mm` : `μπαίνει ${sheetW}mm → κύλινδρος ${sheetH}mm`}
+                    </span>
+                  </div>
+                </button>
 
                 <MfLabel>ΦΥΡΑ (φύλλα μοντάζ)</MfLabel>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
@@ -2144,8 +2185,15 @@ export default function CalculatorShell() {
             />
           </div>
 
-          {/* ═══ DEV PANELS (right of canvas) ═══ */}
-          {calcResult && (() => {
+          {/* DEV PANELS removed — now in fixed right sidebar */}
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* ═══ DEV PANELS (portalled outside app, fixed right sidebar) ═══ */}
+      {calcResult && (() => {
             const bd = (calcResult.printDetail?.costBreakdown ?? {}) as Record<string, unknown>;
             const chargePaper = Number(bd.chargePaper) || 0;
             const chargePrint = Number(bd.chargePrint) || 0;
@@ -2154,8 +2202,8 @@ export default function CalculatorShell() {
             const guillProfit = calcResult.chargeGuillotine - calcResult.costGuillotine;
             const lamProfit = calcResult.chargeLamination - calcResult.costLamination;
             const bindProfit = (Number(bd.chargeBinding) || 0) - calcResult.costBinding;
-            return (
-            <div style={{ width: 280, flexShrink: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 8px 8px 0' }}>
+            return createPortal(
+            <div style={{ position: 'fixed', right: 0, top: 0, bottom: 0, width: 280, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 10px', background: 'rgb(12, 18, 36)', borderLeft: '1px solid var(--border)', zIndex: 9999 }}>
               {/* COST BREAKDOWN */}
               <DevPanel title="ΚΟΣΤΟΣ" color="#f87171">
                 <DevRow label="Χαρτί" sub={`${calcResult.totalStockSheets} φύλ × €${Number(bd.paperCostPerUnit ?? 0).toFixed(3)}`} value={calcResult.costPaper} />
@@ -2229,14 +2277,9 @@ export default function CalculatorShell() {
                 <DevDivider />
                 <DevRow label="Ανά τεμάχιο" value={calcResult.pricePerPiece} sub={`${calcResult.ups}-up · ${calcResult.totalMachineSheets} φύλ`} bold />
               </DevPanel>
-            </div>
-            );
+            </div>,
+            document.body);
           })()}
-          </div>
-
-        </div>
-
-      </div>
 
       {/* Machine modal removed — now in left panel */}
     </div>

@@ -101,10 +101,10 @@ export async function updateQuote(id: string, data: {
   return quote;
 }
 
-// ─── DELETE (soft) ───
+// ─── DELETE ───
 
 export async function deleteQuote(id: string) {
-  await prisma.quote.update({ where: { id }, data: { deletedAt: new Date() } });
+  await prisma.quote.delete({ where: { id } });
   revalidatePath('/quotes');
 }
 

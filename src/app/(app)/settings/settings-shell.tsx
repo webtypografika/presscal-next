@@ -44,6 +44,16 @@ export function SettingsShell({ org }: { org: Org }) {
   const [uploading, setUploading] = useState(false);
   const logoRef = useRef<HTMLInputElement>(null);
 
+  // Quote terms (simple text lines)
+  const [quoteTerms, setQuoteTerms] = useState<string[]>(() => {
+    const raw = org.quoteTerms as any;
+    if (Array.isArray(raw)) {
+      // Handle both old {title,text} format and new string[] format
+      return raw.map((t: any) => typeof t === 'string' ? t : (t.text || t.title || '')).filter(Boolean);
+    }
+    return [];
+  });
+
   // APIs
   const [apiGmail, setApiGmail] = useState(org.apiGmail ?? '');
   const [apiGemini, setApiGemini] = useState(org.apiGemini ?? '');
@@ -76,6 +86,7 @@ export function SettingsShell({ org }: { org: Org }) {
       gemh: gemh || null, profession: profession || null,
       address: address || null, city: city || null, postalCode: postalCode || null,
       phone: phone || null, email: email || null, website: website || null,
+      quoteTerms: JSON.stringify(quoteTerms.filter(t => t.trim())),
       apiGmail: apiGmail || null, apiGemini: apiGemini || null, apiFilehelper: apiFilehelper || null,
     });
     setSaving(false);
@@ -186,6 +197,40 @@ export function SettingsShell({ org }: { org: Org }) {
               <Field label="Email"><input className={inputCls} value={email} onChange={e => setEmail(e.target.value)} placeholder="info@..." /></Field>
               <Field label="Website"><input className={inputCls} value={website} onChange={e => setWebsite(e.target.value)} placeholder="www..." /></Field>
             </div>
+          </Section>
+
+          <Section icon="fa-file-contract" iconColor="var(--violet)" title="ΟΡΟΙ & ΠΡΟΫΠΟΘΕΣΕΙΣ ΠΡΟΣΦΟΡΑΣ">
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 10 }}>
+              Αριθμημένοι όροι που εμφανίζονται στο email προσφοράς.
+            </p>
+            {quoteTerms.map((term, idx) => (
+              <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)', minWidth: 20 }}>{idx + 1}.</span>
+                <textarea
+                  className={inputCls + " !h-10 py-2"}
+                  style={{ resize: 'vertical', minHeight: 36, flex: 1 }}
+                  value={term}
+                  onChange={e => setQuoteTerms(prev => prev.map((t, i) => i === idx ? e.target.value : t))}
+                  placeholder="Όρος..."
+                />
+                <button
+                  onClick={() => setQuoteTerms(prev => prev.filter((_, i) => i !== idx))}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', opacity: 0.5 }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                ><i className="fas fa-times" /></button>
+              </div>
+            ))}
+            <button
+              onClick={() => setQuoteTerms(prev => [...prev, ''])}
+              style={{
+                border: '1px dashed var(--border)', background: 'transparent', borderRadius: 8,
+                padding: '8px 16px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600,
+                cursor: 'pointer', width: '100%',
+              }}
+            >
+              <i className="fas fa-plus" style={{ marginRight: 6, fontSize: '0.6rem' }} />Προσθήκη Όρου
+            </button>
           </Section>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20 }}>

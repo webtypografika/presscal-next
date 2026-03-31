@@ -8,12 +8,19 @@ import { prisma } from '@/lib/db';
 
 export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [quote, customers, org] = await Promise.all([
+  const [quote, customers, org, materials] = await Promise.all([
     getQuote(id),
     getCustomers(),
-    prisma.org.findUnique({ where: { id: 'default-org' }, select: { apiElorus: true, elorusOrgId: true, elorusOrgSlug: true } }),
+    prisma.org.findUnique({
+      where: { id: 'default-org' },
+      select: {
+        apiElorus: true, elorusOrgId: true, elorusOrgSlug: true,
+        legalName: true, afm: true, doy: true, address: true, city: true, postalCode: true, phone: true, email: true,
+      },
+    }),
+    prisma.material.findMany({ where: { orgId: 'default-org', cat: 'sheet', deletedAt: null }, orderBy: { name: 'asc' } }),
   ]);
   if (!quote) redirect('/quotes');
   const elorusConfigured = !!(org?.apiElorus && org.elorusOrgId);
-  return <QuoteDetail quote={quote} customers={customers} elorusConfigured={elorusConfigured} elorusSlug={org?.elorusOrgSlug ?? ''} />;
+  return <QuoteDetail quote={quote} customers={customers} elorusConfigured={elorusConfigured} elorusSlug={org?.elorusOrgSlug ?? ''} materials={materials} org={org} />;
 }

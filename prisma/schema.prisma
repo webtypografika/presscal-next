@@ -19,10 +19,11 @@ model User {
   image         String?
   orgId         String?
   org           Org?      @relation(fields: [orgId], references: [id])
-  accounts      Account[]
-  sessions      Session[]
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  accounts        Account[]
+  sessions        Session[]
+  dismissedEmails DismissedEmail[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Account {
@@ -103,6 +104,9 @@ model Org {
   elorusDefaultClassType String? // e.g. "E3_561_001"
   elorusDocTypes       Json?    // Cached: [{id,title,category}]
   elorusTaxes          Json?    // Cached: [{id,title,percentage}]
+
+  // Quote terms & conditions (supports numbered sections in JSON)
+  quoteTerms   Json?    // [{title: string, text: string}]
 
   // AADE credentials (for AFM lookup)
   aadeUsername  String?
@@ -453,6 +457,18 @@ model Quote {
   @@index([orgId, status])
   @@index([orgId, deletedAt])
   @@unique([orgId, number])
+}
+
+// ─── DISMISSED EMAILS (hidden from dashboard, not deleted from Gmail) ───
+model DismissedEmail {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gmailId   String   // Gmail message ID
+  createdAt DateTime @default(now())
+
+  @@unique([userId, gmailId])
+  @@index([userId])
 }
 
 // ─── FILE LINKS (File Helper integration) ───

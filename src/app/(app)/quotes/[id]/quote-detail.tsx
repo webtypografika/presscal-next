@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import type { Quote, Customer } from '@/generated/prisma/client';
+import type { Quote, Customer, Material, Org } from '@/generated/prisma/client';
 import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer } from '../actions';
 
 type QuoteWithCustomer = Quote & { customer: Customer | null };
@@ -156,9 +156,9 @@ function aiToItem(ai: any) {
 }
 
 // ─── MAIN COMPONENT ───
-interface Props { quote: QuoteWithCustomer; customers: Customer[]; elorusConfigured?: boolean; elorusSlug?: string; }
+interface Props { quote: QuoteWithCustomer; customers: Customer[]; elorusConfigured?: boolean; elorusSlug?: string; materials?: Material[]; org?: Pick<Org, 'legalName' | 'afm' | 'doy' | 'address' | 'city' | 'postalCode' | 'phone' | 'email'> | null; }
 
-export function QuoteDetail({ quote: initial, customers, elorusConfigured, elorusSlug }: Props) {
+export function QuoteDetail({ quote: initial, customers, elorusConfigured, elorusSlug, materials = [], org }: Props) {
   const router = useRouter();
   const [quote, setQuote] = useState(initial);
   const [items, setItems] = useState<any[]>(() => Array.isArray(initial.items) && (initial.items as any[]).length > 0 ? initial.items as any[] : []);
@@ -172,6 +172,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [showSendModal, setShowSendModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
 
   const toast = useCallback((message: string, type: ToastType = 'success') => {
     setToasts(prev => [...prev, { message, type, id: ++toastId }]);
@@ -258,6 +259,97 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       setQuote(prev => ({ ...prev, status, ...(status === 'sent' ? { sentAt: new Date() } : {}), ...(status === 'completed' ? { completedAt: new Date() } : {}) }));
       toast(`Κατάσταση: ${STATUS_MAP[status]?.label ?? status}`);
     } catch { toast('Σφάλμα', 'error'); }
+  }
+
+  const [applyingCalc, setApplyingCalc] = useState(false);
+
+  async function applyCalcToOthers(sourceItem: any) {
+    const cd = sourceItem.calcData;
+    if (!cd?.machineId || !cd?.paperId) {
+      toast('Κοστολογήστε ξανά αυτό το είδος για να αποθηκευτούν οι ρυθμίσεις', 'error');
+      return;
+    }
+    const targets = items.filter(i => i.id !== sourceItem.id && !i.calcData?.machineId);
+    if (targets.length === 0) {
+      toast('Δεν υπάρχουν είδη χωρίς κοστολόγηση', 'info');
+      return;
+    }
+    setApplyingCalc(true);
+    try {
+      const updated = [...items];
+      for (const target of targets) {
+        const qty = target.qty || 1;
+        const res = await fetch('/api/calculator', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            machineId: cd.machineId,
+            machineSheetW: cd.machineSheetW,
+            machineSheetH: cd.machineSheetH,
+            feedEdge: cd.feedEdge,
+            paperId: cd.paperId,
+            productId: cd.productId,
+            jobW: cd.width,
+            jobH: cd.height,
+            qty,
+            sides: cd.sides,
+            colorMode: cd.colorMode,
+            bleed: cd.bleed,
+            impositionMode: cd.impositionMode,
+            impoRotation: cd.impoRotation,
+            impoGutter: cd.impoGutter,
+            impoForceUps: cd.impoForceUps,
+            impoTurnType: cd.impoTurnType,
+            wasteFixed: cd.wasteFixed,
+            coverageLevel: cd.coverageLevel,
+            offsetFrontCmyk: cd.offsetFrontCmyk,
+            offsetBackCmyk: cd.offsetBackCmyk,
+            offsetFrontPms: cd.offsetFrontPms,
+            offsetBackPms: cd.offsetBackPms,
+            offsetOilVarnish: cd.offsetOilVarnish,
+            guillotineId: cd.guillotineId,
+            lamMachineId: cd.lamMachineId,
+            lamFilmId: cd.lamFilmId,
+            lamSides: cd.lamSides,
+            bindingType: cd.bindingType,
+            bindingMachineId: cd.bindingMachineId,
+          }),
+        });
+        const data = await res.json();
+        if (!data.result) continue;
+        const r = data.result;
+        const totalCost = r.totalCost ?? 0;
+        const totalPrice = r.sellPrice ?? totalCost;
+        const pricePerUnit = r.pricePerPiece ?? (qty > 0 ? totalPrice / qty : 0);
+        const profitAmount = r.profitAmount ?? (totalPrice - totalCost);
+        const totalSheets = r.totalStockSheets ?? 0;
+        const tidx = updated.findIndex(i => i.id === target.id);
+        if (tidx === -1) continue;
+        updated[tidx] = {
+          ...updated[tidx],
+          type: 'calculator',
+          cost: Math.round(totalCost * 100) / 100,
+          unitPrice: Math.round(pricePerUnit * 1000) / 1000,
+          finalPrice: Math.round(totalPrice * 100) / 100,
+          profit: Math.round(profitAmount * 100) / 100,
+          calcData: {
+            ...cd,
+            qty,
+            totalCost,
+            totalPrice,
+            pricePerUnit,
+            profitAmount,
+            sheets: totalSheets,
+          },
+        };
+      }
+      setItems(updated);
+      toast(`Κοστολογήθηκαν ${targets.length} είδη`);
+    } catch (e) {
+      toast('Σφάλμα: ' + (e as Error).message, 'error');
+    } finally {
+      setApplyingCalc(false);
+    }
   }
 
   async function handleDelete() {
@@ -438,6 +530,19 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           )
         )}
 
+        {/* Order papers */}
+        {items.some(i => i.calcData?.paperName) && (
+          <button onClick={() => setShowOrderModal(true)} style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
+            background: 'color-mix(in srgb, var(--teal) 12%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--teal) 25%, transparent)',
+            color: 'var(--teal)', cursor: 'pointer',
+          }}>
+            <i className="fas fa-truck" style={{ fontSize: '0.6rem' }} /> Παραγγελία Χαρτιών
+          </button>
+        )}
+
         {/* Status transitions */}
         {transitions.map(t => (
           <button key={t.status} onClick={() => changeStatus(t.status)} style={{
@@ -519,6 +624,35 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                   )}
                   {item.linkedFile.bleed && (
                     <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>bleed {item.linkedFile.bleed}mm</span>
+                  )}
+                </div>
+              )}
+              {item.calcData?.paperName && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px', marginTop: -2 }}>
+                  <i className="fas fa-scroll" style={{ fontSize: '0.5rem', color: 'var(--teal)' }} />
+                  <span style={{ fontSize: '0.68rem', color: 'var(--teal)' }}>{item.calcData.paperName}</span>
+                  {item.calcData.sheets && (
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{item.calcData.sheets} φύλλα</span>
+                  )}
+                  {item.calcData.machineName && (
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{item.calcData.machineName}</span>
+                  )}
+                  {items.some(i => i.id !== item.id && !i.calcData?.machineId) && (
+                    <button
+                      onClick={() => applyCalcToOthers(item)}
+                      disabled={applyingCalc}
+                      title="Αντιγραφή κοστολόγησης στα υπόλοιπα"
+                      style={{
+                        background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px',
+                        color: 'var(--blue)', fontSize: '0.6rem', opacity: applyingCalc ? 0.4 : 0.7,
+                        display: 'flex', alignItems: 'center', gap: 3,
+                      }}
+                      onMouseEnter={e => { if (!applyingCalc) e.currentTarget.style.opacity = '1'; }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = applyingCalc ? '0.4' : '0.7'; }}
+                    >
+                      {applyingCalc ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-copy" />}
+                      <span style={{ fontSize: '0.62rem' }}>Εφαρμογή σε όλα</span>
+                    </button>
                   )}
                 </div>
               )}
@@ -653,11 +787,13 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       {/* ─── SEND QUOTE MODAL ─── */}
       {showSendModal && (
         <SendQuoteModal
+          key={customerId}
           quoteId={quote.id}
           quoteNumber={quote.number}
-          customerEmail={quote.customer?.email ?? ''}
+          customerEmail={(selectedCustomer as any)?.email ?? ''}
           customerName={customerName}
           grandTotal={grandTotal}
+          linkedEmails={quote.linkedEmails as string[] || []}
           onClose={() => setShowSendModal(false)}
           onSent={() => {
             setShowSendModal(false);
@@ -688,8 +824,299 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         />
       )}
 
+      {/* ─── ORDER PAPERS MODAL ─── */}
+      {showOrderModal && (
+        <OrderPapersModal
+          items={items}
+          materials={materials}
+          org={org}
+          quoteNumber={quote.number}
+          toast={toast}
+          onClose={() => setShowOrderModal(false)}
+        />
+      )}
+
       <ToastContainer toasts={toasts} onRemove={removeToast} />
     </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// ORDER PAPERS MODAL
+// ═══════════════════════════════════════════════════════
+function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }: {
+  items: any[];
+  materials: Material[];
+  org?: Pick<Org, 'legalName' | 'afm' | 'doy' | 'address' | 'city' | 'postalCode' | 'phone' | 'email'> | null;
+  quoteNumber: string;
+  toast: (msg: string, type?: ToastType) => void;
+  onClose: () => void;
+}) {
+  // Collect papers needed from calcData
+  const papersNeeded = items
+    .filter(i => i.calcData?.paperName)
+    .map(i => ({
+      paperName: i.calcData.paperName as string,
+      sheets: i.calcData.sheets as number || 0,
+      itemName: i.name as string,
+    }));
+
+  // Group by paper name and sum sheets
+  const paperMap = new Map<string, { name: string; totalSheets: number; items: string[] }>();
+  for (const p of papersNeeded) {
+    const key = p.paperName.toLowerCase();
+    if (!paperMap.has(key)) paperMap.set(key, { name: p.paperName, totalSheets: 0, items: [] });
+    const entry = paperMap.get(key)!;
+    entry.totalSheets += p.sheets;
+    entry.items.push(p.itemName);
+  }
+
+  // Match with materials from DB to get supplier info — prefer records with supplierEmail
+  const paperEntries = [...paperMap.values()].map(p => {
+    const matches = materials.filter(m => m.name.toLowerCase() === p.name.toLowerCase());
+    const mat = matches.find(m => m.supplierEmail) || matches[0] || null;
+    return { ...p, material: mat };
+  });
+
+  // Group by supplier
+  const bySupplier = new Map<string, { supplier: string; email: string; papers: typeof paperEntries }>();
+  const noSupplier: typeof paperEntries = [];
+  for (const pe of paperEntries) {
+    const email = pe.material?.supplierEmail;
+    if (!email) { noSupplier.push(pe); continue; }
+    const key = email.toLowerCase();
+    if (!bySupplier.has(key)) bySupplier.set(key, { supplier: pe.material?.supplier || email, email, papers: [] });
+    bySupplier.get(key)!.papers.push(pe);
+  }
+  const supplierGroups = [...bySupplier.entries()];
+
+  const [quantities, setQuantities] = useState<Record<string, string>>(() => {
+    const q: Record<string, string> = {};
+    for (const pe of paperEntries) q[pe.name] = String(pe.totalSheets);
+    return q;
+  });
+  const [delivery, setDelivery] = useState<'pickup' | 'deliver'>('deliver');
+  const [notes, setNotes] = useState('');
+  const [emails, setEmails] = useState<Record<string, string>>(() => {
+    const e: Record<string, string> = {};
+    for (const [key, group] of bySupplier.entries()) e[key] = group.email;
+    return e;
+  });
+
+  const hasCompany = !!(org?.legalName && org?.afm);
+
+  function buildMailto(email: string, papers: typeof paperEntries) {
+    const subject = `Παραγγελία Χαρτιών — ${quoteNumber}${org?.legalName ? ` — ${org.legalName}` : ''}`;
+    const lines = papers.map(p => {
+      const qty = quantities[p.name] || '___';
+      const mat = p.material;
+      const dims = mat?.width && mat?.height ? ` ${mat.width}×${mat.height}mm` : '';
+      const gsm = mat?.thickness ? ` ${mat.thickness}gsm` : '';
+      return `• ${p.name}${dims}${gsm} — ${qty} φύλλα`;
+    });
+
+    const companyBlock = org ? [
+      org.legalName, org.afm ? `ΑΦΜ: ${org.afm}` : '',
+      org.doy ? `ΔΟΥ: ${org.doy}` : '',
+      [org.address, org.city, org.postalCode].filter(Boolean).join(', '),
+      org.phone ? `Τηλ: ${org.phone}` : '',
+      org.email ? `Email: ${org.email}` : '',
+    ].filter(Boolean).join('\n') : '';
+
+    const deliveryText = delivery === 'pickup' ? 'Θα παραλάβω εγώ.' : 'Παρακαλώ αποστείλατε στη διεύθυνσή μας.';
+
+    const body = [
+      'Αγαπητοί,',
+      '',
+      `Θα ήθελα να παραγγείλω τα παρακάτω (για ${quoteNumber}):`,
+      '',
+      ...lines,
+      '',
+      deliveryText,
+      notes ? `\nΣημειώσεις: ${notes}` : '',
+      '',
+      '— ΣΤΟΙΧΕΙΑ ΠΕΛΑΤΗ —',
+      companyBlock || '(Συμπληρώστε τα στοιχεία στις Ρυθμίσεις)',
+      '',
+      'Ευχαριστώ',
+    ].join('\n');
+
+    return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }} onClick={onClose}>
+      <div style={{ width: 600, maxHeight: '85vh', background: 'rgb(20,30,55)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, boxShadow: '0 32px 80px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column' }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <i className="fas fa-truck" style={{ color: 'var(--teal)' }} />
+            Παραγγελία Χαρτιών — {quoteNumber}
+          </h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.2rem', cursor: 'pointer' }}>&times;</button>
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24 }} className="custom-scrollbar">
+
+          {/* Company info */}
+          <div style={{ marginBottom: 16 }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>ΣΤΟΙΧΕΙΑ ΕΤΑΙΡΕΙΑΣ</span>
+            {hasCompany ? (
+              <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', fontSize: '0.78rem', color: 'var(--text-dim)', lineHeight: 1.7 }}>
+                <strong style={{ color: 'var(--text)' }}>{org!.legalName}</strong> · ΑΦΜ: {org!.afm}
+                {org!.doy ? <> · ΔΟΥ: {org!.doy}</> : null}
+                {org!.address || org!.city ? <><br />{[org!.address, org!.city, org!.postalCode].filter(Boolean).join(', ')}</> : null}
+                {org!.phone ? <> · Τηλ: {org!.phone}</> : null}
+              </div>
+            ) : (
+              <a href="/settings" style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 8,
+                background: 'color-mix(in srgb, var(--accent) 6%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                fontSize: '0.75rem', color: 'var(--accent)', textDecoration: 'none',
+              }}>
+                <i className="fas fa-exclamation-circle" /> Συμπληρώστε τα στοιχεία σας στις Ρυθμίσεις
+              </a>
+            )}
+          </div>
+
+          {/* Papers by supplier */}
+          {supplierGroups.map(([key, group]) => (
+            <div key={key} style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <i className="fas fa-truck" style={{ color: 'var(--teal)', fontSize: '0.7rem' }} />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)' }}>{group.supplier}</span>
+                <input
+                  style={{ width: 240, height: 30, fontSize: '0.75rem', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 8px', color: 'var(--text)', outline: 'none' }}
+                  value={emails[key] || ''}
+                  onChange={e => setEmails(prev => ({ ...prev, [key]: e.target.value }))}
+                  placeholder="email@supplier.com"
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {group.papers.map(p => (
+                  <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 7, background: 'rgba(255,255,255,0.03)' }}>
+                    <span style={{ flex: 1, fontSize: '0.82rem' }}>
+                      {p.name}
+                      {p.material?.width && p.material?.height ? <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: '0.72rem' }}>{p.material.width}×{p.material.height}</span> : null}
+                      {p.material?.thickness ? <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: '0.72rem' }}>{p.material.thickness}gsm</span> : null}
+                    </span>
+                    <input
+                      style={{ width: 90, height: 32, textAlign: 'center', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 8px', color: 'var(--text)', outline: 'none', fontSize: '0.82rem' }}
+                      type="number"
+                      value={quantities[p.name] || ''}
+                      onChange={e => setQuantities(prev => ({ ...prev, [p.name]: e.target.value }))}
+                      placeholder="Ποσ."
+                    />
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', width: 40 }}>φύλλα</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Papers without supplier */}
+          {noSupplier.length > 0 && (
+            <div style={{ padding: '10px 12px', borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', marginBottom: 12 }}>
+              <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>
+                <i className="fas fa-exclamation-triangle" style={{ marginRight: 4 }} />{noSupplier.length} χαρτιά χωρίς προμηθευτή:
+              </p>
+              {noSupplier.map(p => (
+                <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  <span style={{ flex: 1 }}>{p.name}</span>
+                  <span>{quantities[p.name] || p.totalSheets} φύλλα</span>
+                </div>
+              ))}
+              <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 4 }}>Προσθέστε email προμηθευτή στην Αποθήκη</p>
+            </div>
+          )}
+
+          {/* Delivery method */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: '0.65rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 6 }}>Τρόπος Παραλαβής</label>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {([
+                { v: 'deliver' as const, l: 'Αποστολή στη διεύθυνσή μας', icon: 'fa-shipping-fast' },
+                { v: 'pickup' as const, l: 'Θα παραλάβω εγώ', icon: 'fa-store' },
+              ]).map(o => (
+                <button key={o.v} onClick={() => setDelivery(o.v)} style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: '0.78rem', fontWeight: 600,
+                  border: `1px solid ${delivery === o.v ? 'color-mix(in srgb, var(--success) 50%, transparent)' : 'rgba(255,255,255,0.08)'}`,
+                  background: delivery === o.v ? 'color-mix(in srgb, var(--success) 10%, transparent)' : 'transparent',
+                  color: delivery === o.v ? 'var(--success)' : '#94a3b8', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center',
+                }}>
+                  <i className={`fas ${o.icon}`} style={{ fontSize: '0.7rem' }} />{o.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label style={{ fontSize: '0.65rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Σημειώσεις</label>
+            <textarea style={{ width: '100%', height: 56, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: '0.82rem', outline: 'none', resize: 'none' }}
+              value={notes} onChange={e => setNotes(e.target.value)} placeholder="π.χ. Παράδοση μέχρι Παρασκευή..." />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: 'transparent', color: '#94a3b8', fontSize: '0.82rem', cursor: 'pointer' }}>Ακύρωση</button>
+          <div style={{ flex: 1 }} />
+          {supplierGroups.map(([key, group]) => {
+            const targetEmail = emails[key] || group.email;
+            return (
+              <div key={key} style={{ display: 'flex', gap: 4 }}>
+                <button onClick={async () => {
+                  const orderItems = group.papers.map(p => ({
+                    name: p.name,
+                    dims: p.material?.width && p.material?.height ? `${p.material.width}×${p.material.height}mm${p.material.thickness ? ` · ${p.material.thickness}gsm` : ''}` : '',
+                    qty: quantities[p.name] || '',
+                  }));
+                  try {
+                    const res = await fetch('/api/send-order', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ to: targetEmail, supplier: group.supplier, items: orderItems, delivery, notes }),
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                      toast(`Email στάλθηκε στο ${targetEmail}`);
+                      onClose();
+                    } else {
+                      toast(data.error || 'Αποτυχία αποστολής', 'error');
+                    }
+                  } catch { toast('Σφάλμα σύνδεσης', 'error'); }
+                }} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '10px 20px', borderRadius: 8, border: 'none',
+                  background: 'var(--success)', color: '#fff', fontSize: '0.82rem', fontWeight: 700,
+                  cursor: 'pointer', boxShadow: '0 4px 16px rgba(16,185,129,0.3)',
+                }}>
+                  <i className="fas fa-paper-plane" /> {supplierGroups.length > 1 ? group.supplier : 'Αποστολή Email'}
+                </button>
+                <a href={buildMailto(targetEmail, group.papers)} target="_blank" rel="noreferrer"
+                  title="Άνοιγμα στο email client"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 38, borderRadius: 8,
+                    border: '1px solid color-mix(in srgb, var(--success) 40%, transparent)',
+                    background: 'transparent', color: 'var(--success)',
+                    fontSize: '0.85rem', textDecoration: 'none', cursor: 'pointer',
+                  }}>
+                  <i className="fas fa-external-link-alt" />
+                </a>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1301,12 +1728,13 @@ function ReplyPanel({ customerEmail, threadId, quoteNumber, toast }: {
 // ═══════════════════════════════════════════════════════
 // SEND QUOTE MODAL
 // ═══════════════════════════════════════════════════════
-function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, grandTotal, onClose, onSent, toast }: {
+function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, grandTotal, linkedEmails, onClose, onSent, toast }: {
   quoteId: string;
   quoteNumber: string;
   customerEmail: string;
   customerName: string;
   grandTotal: number;
+  linkedEmails?: string[];
   onClose: () => void;
   onSent: () => void;
   toast: (msg: string, type?: ToastType) => void;
@@ -1316,6 +1744,20 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
   const [lang, setLang] = useState<'el' | 'en'>('el');
   const [customMessage, setCustomMessage] = useState('');
   const [sending, setSending] = useState(false);
+
+  // Fallback: if no customer email, try to extract from linked emails
+  useEffect(() => {
+    if (to || !linkedEmails?.length) return;
+    fetch(`/api/email/messages/${linkedEmails[0]}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(msg => {
+        if (!msg?.from) return;
+        // Extract email from "Name <email>" format
+        const match = msg.from.match(/<([^>]+)>/) || [null, msg.from];
+        if (match[1]) setTo(match[1]);
+      })
+      .catch(() => {});
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const subject = lang === 'en' ? `Quote ${quoteNumber}` : `Προσφορά ${quoteNumber}`;
 

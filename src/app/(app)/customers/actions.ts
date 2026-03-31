@@ -103,10 +103,7 @@ export async function updateCustomer(id: string, data: {
 // ─── DELETE (soft) ───
 
 export async function deleteCustomer(id: string) {
-  await prisma.customer.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  });
+  await prisma.customer.delete({ where: { id } });
   revalidatePath('/customers');
   revalidatePath('/quotes');
 }
@@ -154,12 +151,11 @@ export async function bulkCreateCustomers(rows: {
   return { count };
 }
 
-// ─── BULK DELETE (soft) ───
+// ─── BULK DELETE ───
 
 export async function bulkDeleteCustomers(ids: string[]) {
-  await prisma.customer.updateMany({
+  await prisma.customer.deleteMany({
     where: { id: { in: ids } },
-    data: { deletedAt: new Date() },
   });
   revalidatePath('/customers');
   revalidatePath('/quotes');

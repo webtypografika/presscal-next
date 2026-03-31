@@ -375,7 +375,7 @@ export function JobsBoard({ jobs: initialJobs }: Props) {
 
       {view === 'board' ? (
         /* ═══ BOARD VIEW ═══ */
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAGES.length}, 1fr)`, gap: 10, minHeight: 400 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${STAGES.length}, minmax(0, 1fr))`, gap: 10, minHeight: 400 }}>
           {STAGES.map(stage => {
             const stageJobs = jobs.filter(j => j.jobStage === stage.id && j.status !== 'completed');
             return (
@@ -389,6 +389,7 @@ export function JobsBoard({ jobs: initialJobs }: Props) {
                   border: '1px solid var(--border)',
                   transition: 'background 0.2s',
                   display: 'flex', flexDirection: 'column',
+                  minWidth: 0, overflow: 'hidden',
                 }}
               >
                 {/* Column header */}

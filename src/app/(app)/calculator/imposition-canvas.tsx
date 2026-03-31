@@ -601,8 +601,8 @@ export default function ImpositionCanvas({
         machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering);
     }
 
-    // Feed direction indicator — LEFT edge = paper entry side (digital only)
-    if (feedEdge && machCat !== 'offset') {
+    // Feed direction indicator — LEFT edge = paper entry side
+    if (feedEdge) {
       const scX = (cW - 24) / sheetW;
       const scY = (cH - reserveTop - reserveBot) / sheetH;
       const sc = Math.min(scX, scY);
@@ -610,26 +610,29 @@ export default function ImpositionCanvas({
       const dH = sheetH * sc;
       const sx = (cW - dW) / 2;
       const sy = reserveTop + (cH - reserveTop - reserveBot - dH) / 2;
-      const arrowLen = 16;
 
       ctx.save();
-      ctx.strokeStyle = 'rgba(59,130,246,0.5)';
-      ctx.fillStyle = 'rgba(59,130,246,0.5)';
-      ctx.lineWidth = 1.5;
-      ctx.font = '600 7px Inter, DM Sans, sans-serif';
+      ctx.fillStyle = 'rgba(245,130,32,0.7)';
 
-      // Arrow on LEFT edge, pointing right → feed direction
-      const ax = sx - 2;
+      // Large triangle arrow (no tail) pointing right at sheet left edge
+      const ax = sx - 3;
       const ay = sy + dH / 2;
-      ctx.beginPath(); ctx.moveTo(ax - arrowLen, ay); ctx.lineTo(ax, ay); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(ax + 1, ay); ctx.lineTo(ax - 4, ay - 3.5); ctx.lineTo(ax - 4, ay + 3.5); ctx.closePath(); ctx.fill();
+      const triW = 14;
+      const triH = 10;
+      ctx.beginPath();
+      ctx.moveTo(ax + 2, ay);
+      ctx.lineTo(ax + 2 - triW, ay - triH);
+      ctx.lineTo(ax + 2 - triW, ay + triH);
+      ctx.closePath();
+      ctx.fill();
 
-      // Label: "FEED" rotated vertically
+      // Label: "MACHINE FEED SIDE" — fixed at left edge of canvas, always visible
       ctx.save();
-      ctx.translate(ax - arrowLen - 6, ay);
+      ctx.font = '700 9px Inter, DM Sans, sans-serif';
+      ctx.translate(10, sy + dH / 2);
       ctx.rotate(-Math.PI / 2);
       ctx.textAlign = 'center';
-      ctx.fillText('FEED', 0, 0);
+      ctx.fillText('MACHINE FEED SIDE', 0, 0);
       ctx.restore();
 
       ctx.restore();

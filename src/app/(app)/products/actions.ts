@@ -68,8 +68,5 @@ export async function updateProduct(id: string, data: {
 }
 
 export async function deleteProduct(id: string) {
-  return prisma.product.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  });
+  return prisma.product.delete({ where: { id } });
 }

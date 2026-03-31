@@ -89,9 +89,6 @@ export async function updateMachine(
 }
 
 export async function deleteMachine(id: string) {
-  await prisma.machine.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  });
+  await prisma.machine.delete({ where: { id } });
   revalidatePath('/machines');
 }

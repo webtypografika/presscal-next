@@ -74,9 +74,6 @@ export async function updatePostpressMachine(
 }
 
 export async function deletePostpressMachine(id: string) {
-  await prisma.postpressMachine.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  });
+  await prisma.postpressMachine.delete({ where: { id } });
   revalidatePath('/postpress');
 }
