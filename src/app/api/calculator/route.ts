@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
     }
 
     let lamData: CostInput['lamination'] | undefined;
+    const lamWarnings: string[] = [];
     if (body.lamMachineId && body.lamFilmId) {
       const lamMachine = await prisma.postpressMachine.findFirst({
         where: { id: body.lamMachineId, orgId: ORG_ID, deletedAt: null },
@@ -152,12 +153,81 @@ export async function POST(req: NextRequest) {
       });
       if (lamMachine && lamFilm) {
         const lSpecs = (lamMachine.specs as Record<string, number>) || {};
-        lamData = {
-          filmCostPerSqm: lamFilm.costPerUnit || 0,
-          machineSetupCost: lamMachine.setupCost || 0,
-          machineRunCostPerSheet: lSpecs.runCostPerSheet || 0,
-          sides: body.lamSides || 1,
-        };
+        const fSpecs = (lamFilm.specs as Record<string, number>) || {};
+        // Pouch = film has both width and height dimensions
+        const isPouch = !!(lamFilm.width && lamFilm.height && lamFilm.cat === 'film');
+        const maxW = lSpecs.max_w || 0;
+
+        if (isPouch) {
+          // Pouch lamination — cost per piece from film (package cost / qty per package)
+          const pouchW = lamFilm.width || 0;
+          const pouchH = lamFilm.height || 0;
+          const sealMargin = lSpecs.seal_margin ?? 5;
+          const pouchCostPerPiece = lamFilm.costPerUnit || 0;
+
+          // Validate: sheet must fit inside pouch minus seal margins
+          const maxSheetW = pouchW - sealMargin * 2;
+          const maxSheetH = pouchH - sealMargin * 2;
+          if (body.jobW > maxSheetW || body.jobH > maxSheetH) {
+            const fitRotated = body.jobH <= maxSheetW && body.jobW <= maxSheetH;
+            if (!fitRotated) {
+              lamWarnings.push(`Το φύλλο ${body.jobW}×${body.jobH}mm δεν χωράει στο pouch ${pouchW}×${pouchH}mm (περιθώριο ${sealMargin}mm/πλευρά, μέγιστο ${maxSheetW}×${maxSheetH}mm)`);
+            }
+          }
+
+          lamData = {
+            mode: 'pouch',
+            filmCostPerSqm: 0,
+            machineSetupCost: lamMachine.setupCost || 0,
+            sides: 1,
+            pouchCostPerPiece,
+            pouchSellPerPiece: lamFilm.sellPerUnit || undefined,
+            pouchW,
+            pouchH,
+            sealMargin,
+            maxW,
+          };
+        } else {
+          // Roll lamination — film cost per m² from roll specs
+          // Film: costPerUnit = cost per m², or calculated from roll price/length/width
+          let filmCostPerSqm = lamFilm.costPerUnit || 0;
+          // If film is a roll with rollLength and width, calculate €/m²
+          if (lamFilm.cat === 'roll' && lamFilm.rollLength && lamFilm.width) {
+            const rollAreaSqm = (lamFilm.width / 1000) * lamFilm.rollLength; // width(mm→m) × length(m)
+            filmCostPerSqm = (fSpecs.roll_price || lamFilm.costPerUnit || 0) / rollAreaSqm;
+          }
+          const dualRoll = !!(lSpecs.dual_roll);
+
+          // Validate: sheet width must fit machine opening
+          if (maxW > 0) {
+            const sheetSS = Math.min(body.jobW || 0, body.jobH || 0);
+            // The machine sheet (not trim) goes through the laminator
+            // We'll warn based on machine paper size vs laminator opening
+            // (checked at UI level too)
+          }
+
+          // Sell price per m²: from material or derive from markup
+          let filmSellPerSqm: number | undefined;
+          if (lamFilm.sellPerUnit && lamFilm.sellPerUnit > 0) {
+            // If material is a roll, sellPerUnit was stored as €/m²
+            filmSellPerSqm = lamFilm.sellPerUnit;
+            // But if stored as per-roll sell, recalculate
+            if (lamFilm.cat === 'roll' && lamFilm.rollLength && lamFilm.width) {
+              // sellPerUnit is already €/m² (set during material creation)
+              filmSellPerSqm = lamFilm.sellPerUnit;
+            }
+          }
+
+          lamData = {
+            mode: 'roll',
+            filmCostPerSqm,
+            filmSellPerSqm,
+            machineSetupCost: lamMachine.setupCost || 0,
+            sides: body.lamSides || 1,
+            dualRoll,
+            maxW,
+          };
+        }
       }
     }
 
@@ -365,6 +435,7 @@ export async function POST(req: NextRequest) {
     };
 
     const result = calculateCost(costInput);
+    if (lamWarnings.length > 0) result.lamWarnings = lamWarnings;
 
     return Response.json({ imposition, result, debug: { machineCat, productPricing: productPricing?.name } });
   } catch (err) {
@@ -425,10 +496,12 @@ export async function GET() {
       orderBy: { name: 'asc' },
     }),
     prisma.material.findMany({
-      where: { orgId: ORG_ID, deletedAt: null, cat: 'film' },
+      where: { orgId: ORG_ID, deletedAt: null, cat: { in: ['film', 'roll'] } },
       select: {
-        id: true, name: true, groupName: true,
+        id: true, name: true, groupName: true, cat: true,
         costPerUnit: true, unit: true,
+        width: true, height: true, rollLength: true,
+        specs: true,
       },
       orderBy: [{ groupName: 'asc' }, { name: 'asc' }],
     }),

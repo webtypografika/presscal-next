@@ -2,7 +2,6 @@
 
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
-import { normalize, normalizeGreeklish } from '@/lib/search';
 
 const ORG_ID = 'default-org';
 
@@ -80,19 +79,14 @@ export async function createQuote(data: {
   recipientContactIds?: string[];  // contact IDs to add as recipients
 }) {
   const number = await nextQuoteNumber();
-  // Validate companyId exists in Company table
-  let companyId: string | null = null;
-  const candidateId = data.companyId || data.customerId || null;
-  if (candidateId) {
-    const exists = await prisma.company.findUnique({ where: { id: candidateId }, select: { id: true } });
-    if (exists) companyId = candidateId;
-  }
+  const companyId = data.companyId || data.customerId || null;
   const quote = await prisma.quote.create({
     data: {
       orgId: ORG_ID,
       number,
       status: 'draft',
       companyId,
+      customerId: data.customerId || null,
       title: data.title || null,
       description: data.description || null,
       notes: data.notes || null,
@@ -135,18 +129,12 @@ export async function updateQuote(id: string, data: {
   totalCost?: number;
   totalProfit?: number;
 }) {
-  // Separate companyId/customerId from other fields to avoid FK issues
-  const { companyId, customerId, items, ...rest } = data;
-  const updateData: Record<string, unknown> = { ...rest };
-  if (items !== undefined) updateData.items = items as any;
-  if (companyId !== undefined) updateData.companyId = companyId || null;
-  // Don't set customerId to a company ID — only set if it's actually a Customer record
-  // During transition, leave customerId untouched unless explicitly null
-  if (customerId === null) updateData.customerId = null;
-
   const quote = await prisma.quote.update({
     where: { id },
-    data: updateData,
+    data: {
+      ...data,
+      items: data.items !== undefined ? (data.items as any) : undefined,
+    },
   });
   revalidatePath('/quotes');
   return quote;
@@ -165,20 +153,8 @@ export async function updateQuoteStatus(id: string, status: string) {
   const data: Record<string, unknown> = { status };
   if (status === 'sent') data.sentAt = new Date();
   if (status === 'completed') data.completedAt = new Date();
-
-  // Auto-promote to first job stage when approved
-  if (status === 'approved') {
-    const org = await prisma.org.findUnique({ where: { id: ORG_ID }, select: { jobStages: true } });
-    const stages = (org?.jobStages as any[]) || [];
-    const firstStage = stages[0]?.id || 'files';
-    data.jobStage = firstStage;
-    data.jobStageUpdatedAt = new Date();
-  }
-
   await prisma.quote.update({ where: { id }, data });
   revalidatePath('/quotes');
-  revalidatePath('/jobs');
-  revalidatePath('/');
 }
 
 // ─── LINK EMAIL ───
@@ -229,92 +205,7 @@ export async function unlinkEmailFromQuote(quoteId: string, messageId: string) {
   revalidatePath(`/quotes/${quoteId}`);
 }
 
-// ─── COMPANIES (for selector) ───
-
-export async function getCompaniesForQuotes(search?: string) {
-  const where: any = { orgId: ORG_ID, deletedAt: null };
-  if (search?.trim()) {
-    const norm = normalize(search.trim());
-    const greeklish = normalizeGreeklish(search.trim());
-    const variants = [search.trim(), norm, greeklish].filter((v, i, a) => a.indexOf(v) === i);
-    where.OR = variants.flatMap(s => [
-      { name: { contains: s, mode: 'insensitive' } },
-      { email: { contains: s, mode: 'insensitive' } },
-      { afm: { contains: s } },
-      { companyContacts: { some: { contact: { OR: [
-        { name: { contains: s, mode: 'insensitive' } },
-        { email: { contains: s, mode: 'insensitive' } },
-      ] } } } },
-    ]);
-  }
-  return prisma.company.findMany({
-    where,
-    include: {
-      companyContacts: {
-        include: { contact: true },
-        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
-      },
-    },
-    orderBy: { name: 'asc' },
-    take: 30,
-  });
-}
-
-export async function createCompanyQuick(data: {
-  name: string;
-  email?: string;
-  phone?: string;
-  afm?: string;
-  contactName?: string;  // auto-create a primary contact
-  contactEmail?: string;
-}) {
-  const company = await prisma.company.create({
-    data: {
-      orgId: ORG_ID,
-      name: data.name,
-      email: data.email || null,
-      phone: data.phone || null,
-      afm: data.afm || null,
-    },
-  });
-
-  // Auto-create primary contact if provided
-  if (data.contactName) {
-    const contact = await prisma.contact.create({
-      data: {
-        orgId: ORG_ID,
-        name: data.contactName,
-        email: data.contactEmail || data.email || null,
-        role: 'employee',
-      },
-    });
-    await prisma.companyContact.create({
-      data: { companyId: company.id, contactId: contact.id, isPrimary: true, role: 'employee' },
-    });
-  }
-
-  revalidatePath('/quotes');
-  revalidatePath('/companies');
-  return company;
-}
-
-// ─── QUOTE RECIPIENTS ───
-
-export async function addQuoteRecipient(quoteId: string, contactId: string, type: 'to' | 'cc' = 'to') {
-  await prisma.quoteRecipient.create({
-    data: { quoteId, contactId, type },
-  }).catch(() => {}); // ignore duplicates
-  revalidatePath(`/quotes/${quoteId}`);
-}
-
-export async function removeQuoteRecipient(quoteId: string, contactId: string) {
-  await prisma.quoteRecipient.deleteMany({
-    where: { quoteId, contactId },
-  });
-  revalidatePath(`/quotes/${quoteId}`);
-}
-
-// ─── DEPRECATED: keep for backward compat ───
+// ─── CUSTOMERS (for selector) ───
 
 export async function getCustomers() {
   return prisma.customer.findMany({
@@ -328,58 +219,42 @@ export async function createCustomer(data: {
   company?: string;
   email?: string;
   phone?: string;
+  mobile?: string;
+  afm?: string;
+  doy?: string;
+  address?: string;
+  city?: string;
+  zip?: string;
+  notes?: string;
+  folderPath?: string;
 }) {
-  // Create as Company + Contact in new model
-  const company = await prisma.company.create({
-    data: {
-      orgId: ORG_ID,
-      name: data.company || data.name,
-      email: data.email || null,
-      phone: data.phone || null,
-    },
-  });
-  const contact = await prisma.contact.create({
-    data: {
-      orgId: ORG_ID,
-      name: data.name,
-      email: data.email || null,
-      role: data.company ? 'employee' : 'contact',
-    },
-  });
-  await prisma.companyContact.create({
-    data: { companyId: company.id, contactId: contact.id, isPrimary: true },
+  const customer = await prisma.customer.create({
+    data: { orgId: ORG_ID, ...data },
   });
   revalidatePath('/quotes');
-  revalidatePath('/companies');
-  // Return company-like object for backward compat
-  return { id: company.id, name: company.name, company: company.name, email: company.email };
+  revalidatePath('/customers');
+  return customer;
 }
 
-export async function updateCustomer(id: string, data: Record<string, unknown>) {
-  // Try updating as Company first (new model), fall back to old Customer
-  try {
-    const company = await prisma.company.update({
-      where: { id },
-      data: {
-        name: data.name as string | undefined,
-        afm: data.afm as string | undefined,
-        doy: data.doy as string | undefined,
-        address: data.address as string | undefined,
-        city: data.city as string | undefined,
-        zip: data.zip as string | undefined,
-        phone: data.phone as string | undefined,
-        email: data.email as string | undefined,
-        notes: data.notes as string | undefined,
-        folderPath: data.folderPath as string | undefined,
-      },
-    });
-    revalidatePath('/quotes');
-    revalidatePath('/companies');
-    return company;
-  } catch {
-    // Fallback to old Customer table
-    const customer = await prisma.customer.update({ where: { id }, data: data as any });
-    revalidatePath('/quotes');
-    return customer;
-  }
+export async function updateCustomer(id: string, data: {
+  name?: string;
+  company?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  afm?: string;
+  doy?: string;
+  address?: string;
+  city?: string;
+  zip?: string;
+  notes?: string;
+  folderPath?: string | null;
+}) {
+  const customer = await prisma.customer.update({
+    where: { id },
+    data,
+  });
+  revalidatePath('/quotes');
+  revalidatePath('/customers');
+  return customer;
 }

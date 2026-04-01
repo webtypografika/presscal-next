@@ -77,3 +77,63 @@ export async function deletePostpressMachine(id: string) {
   await prisma.postpressMachine.delete({ where: { id } });
   revalidatePath('/postpress');
 }
+
+// ─── LAMINATION MATERIALS (film rolls & pouches) ───
+
+export async function getLamMaterials() {
+  await ensureOrg();
+  return prisma.material.findMany({
+    where: { orgId: ORG_ID, deletedAt: null, cat: { in: ['film', 'roll'] } },
+    orderBy: [{ cat: 'asc' }, { name: 'asc' }],
+  });
+}
+
+export async function createLamMaterial(data: {
+  name: string;
+  cat: string;
+  groupName?: string;
+  subtype?: string;
+  width?: number | null;
+  height?: number | null;
+  thickness?: number | null;
+  rollLength?: number | null;
+  costPerUnit?: number | null;
+  markup?: number | null;
+  sellPerUnit?: number | null;
+  unit?: string;
+  supplier?: string;
+  supplierEmail?: string;
+  notes?: string;
+  stock?: number | null;
+  stockTarget?: number | null;
+  stockAlert?: number | null;
+  specs?: object;
+}) {
+  await ensureOrg();
+  const material = await prisma.material.create({
+    data: {
+      orgId: ORG_ID,
+      name: data.name,
+      cat: data.cat,
+      groupName: data.groupName ?? 'Πλαστικοποίηση',
+      subtype: data.subtype ?? null,
+      supplier: data.supplier ?? null,
+      supplierEmail: data.supplierEmail ?? null,
+      notes: data.notes ?? '',
+      width: data.width ?? null,
+      height: data.height ?? null,
+      thickness: data.thickness ?? null,
+      rollLength: data.rollLength ?? null,
+      costPerUnit: data.costPerUnit ?? null,
+      markup: data.markup ?? null,
+      sellPerUnit: data.sellPerUnit ?? null,
+      unit: data.unit ?? 'τεμ',
+      stock: data.stock ?? null,
+      stockTarget: data.stockTarget ?? null,
+      stockAlert: data.stockAlert ?? null,
+      specs: data.specs ?? {},
+    },
+  });
+  revalidatePath('/postpress');
+  return material;
+}

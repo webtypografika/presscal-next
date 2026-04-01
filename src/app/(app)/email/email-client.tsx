@@ -127,6 +127,17 @@ export default function EmailClient() {
     });
   }
 
+  // ─── DISMISS ───
+  async function handleDismiss(emailId: string) {
+    setEmails(prev => prev.filter(e => e.id !== emailId));
+    if (selectedId === emailId) { setSelectedId(null); setDetail(null); }
+    fetch('/api/email/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gmailId: emailId }),
+    }).catch(() => {});
+  }
+
   // ─── SEARCH ───
   function handleSearch(e: React.KeyboardEvent) {
     if (e.key === 'Enter') fetchMessages(folder, search, currentLabel);
@@ -377,6 +388,15 @@ export default function EmailClient() {
                       style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontSize: '0.7rem', color: email.labelIds.includes('STARRED') ? '#facc15' : 'var(--text-muted)', opacity: email.labelIds.includes('STARRED') ? 1 : 0.4, transition: 'all 0.15s' }}
                     >
                       <i className={email.labelIds.includes('STARRED') ? 'fas fa-star' : 'far fa-star'} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDismiss(email.id); }}
+                      title="Απόκρυψη"
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontSize: '0.65rem', color: 'var(--text-muted)', opacity: 0.3, transition: 'all 0.15s' }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.3')}
+                    >
+                      <i className="fas fa-eye-slash" />
                     </button>
                     {isUnread && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--blue)' }} />}
                     {email.hasAttachments && <i className="fas fa-paperclip" style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }} />}

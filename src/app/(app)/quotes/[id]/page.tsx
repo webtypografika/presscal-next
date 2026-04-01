@@ -1,16 +1,14 @@
 export const dynamic = 'force-dynamic';
 
 import { getQuote } from '../actions';
-import { getCustomers } from '../actions';
 import { QuoteDetail } from './quote-detail';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 
 export default async function QuoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [quote, customers, org, materials] = await Promise.all([
+  const [quote, org, materials] = await Promise.all([
     getQuote(id),
-    getCustomers(),
     prisma.org.findUnique({
       where: { id: 'default-org' },
       select: {
@@ -22,5 +20,5 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
   ]);
   if (!quote) redirect('/quotes');
   const elorusConfigured = !!(org?.apiElorus && org.elorusOrgId);
-  return <QuoteDetail quote={quote} customers={customers} elorusConfigured={elorusConfigured} elorusSlug={org?.elorusOrgSlug ?? ''} materials={materials} org={org} />;
+  return <QuoteDetail quote={quote} customers={[]} elorusConfigured={elorusConfigured} elorusSlug={org?.elorusOrgSlug ?? ''} materials={materials} org={org} />;
 }

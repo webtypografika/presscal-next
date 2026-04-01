@@ -83,8 +83,13 @@ interface DbFilm {
   id: string;
   name: string;
   groupName: string | null;
+  cat: string;
   costPerUnit: number | null;
   unit: string;
+  width: number | null;
+  height: number | null;
+  rollLength: number | null;
+  specs: Record<string, unknown>;
 }
 interface DbPostpress {
   id: string;
@@ -465,6 +470,25 @@ export default function CalculatorShell() {
       .catch(() => setDataLoaded(true)); // use demo data on failure
   }, []);
 
+  // ─── AUTO-SELECT DEFAULT POSTPRESS MACHINES ───
+  const defaultsApplied = useRef(false);
+  useEffect(() => {
+    if (!dataLoaded || defaultsApplied.current || !postpress.length) return;
+    defaultsApplied.current = true;
+    const defGuillotine = postpress.find(p => p.subtype === 'guillotine' && (p.specs as Record<string, unknown>)?.cal_default);
+    const defLaminator = postpress.find(p => (p.subtype === 'laminator' || p.subtype === 'lam_roll' || p.subtype === 'lam_sheet') && (p.specs as Record<string, unknown>)?.cal_default);
+    if (defGuillotine || defLaminator) {
+      setFinish(prev => ({
+        ...prev,
+        guillotineId: defGuillotine?.id || prev.guillotineId,
+        guillotineName: defGuillotine?.name || prev.guillotineName,
+        lamMachineId: defLaminator?.id || prev.lamMachineId,
+        lamName: defLaminator?.name || prev.lamName,
+        lamFilmId: defLaminator ? (films[0]?.id || '') : prev.lamFilmId,
+      }));
+    }
+  }, [dataLoaded, postpress, films]);
+
   // ─── PRE-FILL FROM URL PARAMS (quote → calculator) ───
   const prefillDone = useRef(false);
   useEffect(() => {
@@ -472,7 +496,8 @@ export default function CalculatorShell() {
     const w = searchParams.get('w');
     const h = searchParams.get('h');
     const hasQuoteLink = searchParams.get('quoteId') && searchParams.get('itemId');
-    if (!w && !h && !hasQuoteLink) return; // no params to apply
+    const hasFile = searchParams.get('filePath') && searchParams.get('fileName');
+    if (!w && !h && !hasQuoteLink && !hasFile) return; // no params to apply
     prefillDone.current = true;
 
     const updates: Partial<JobData> = {};
@@ -507,8 +532,8 @@ export default function CalculatorShell() {
     const quoteId = searchParams.get('quoteId');
     const itemId = searchParams.get('itemId');
     const desc = searchParams.get('desc');
-    if (quoteId && itemId) {
-      setQuoteLink({ quoteId, itemId, desc: desc || '' });
+    if (quoteId) {
+      setQuoteLink({ quoteId, itemId: itemId || '', desc: desc || '' });
       setActivePanel('machine');
     }
 
@@ -601,7 +626,7 @@ export default function CalculatorShell() {
   useEffect(() => { if (feedEdge === 'lef' && !lefPossible) setFeedEdge('sef'); }, [feedEdge, lefPossible]);
 
   const guillotines = postpress.filter(p => p.subtype === 'guillotine');
-  const laminators = postpress.filter(p => p.subtype === 'lam_roll' || p.subtype === 'lam_sheet');
+  const laminators = postpress.filter(p => p.subtype === 'laminator' || p.subtype === 'lam_roll' || p.subtype === 'lam_sheet');
   const binders = postpress.filter(p => ['spiral', 'glue_bind', 'staple'].includes(p.subtype));
 
   // Unique suppliers — filtered by current category
@@ -746,6 +771,7 @@ export default function CalculatorShell() {
   const costLamination = r?.costLamination ?? 0;
   const totalCost = r?.totalCost ?? (costPaper + costPrint + costGuillotine + costLamination);
 
+  const lamWarnings = r?.lamWarnings ?? [];
   const profitAmount = r?.profitAmount ?? totalCost * 0.5;
   const totalPrice = r?.sellPrice ?? totalCost + profitAmount;
   const pricePerUnit = r?.pricePerPiece ?? (job.qty > 0 ? totalPrice / job.qty : 0);
@@ -884,6 +910,7 @@ export default function CalculatorShell() {
           </span>
           {costGuillotine > 0 && <span style={{ fontSize: '0.68rem', color: '#94a3b8', flexShrink: 0 }}>Γκιλ. <strong style={{ color: 'var(--text)' }}>€{fmt(costGuillotine)}</strong></span>}
           {costLamination > 0 && <span style={{ fontSize: '0.68rem', color: '#94a3b8', flexShrink: 0 }}>Πλαστ. <strong style={{ color: 'var(--text)' }}>€{fmt(costLamination)}</strong></span>}
+          {lamWarnings.length > 0 && <span style={{ fontSize: '0.68rem', color: '#fca5a5', flexShrink: 0 }}><i className="fas fa-exclamation-triangle" style={{ marginRight: 4 }} />Pouch!</span>}
         </div>
 
         <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0 }} />
@@ -896,7 +923,7 @@ export default function CalculatorShell() {
           </div>
           <button
             onClick={async () => {
-              if (!quoteLink) return
+              if (!quoteLink || !quoteLink.itemId) return
               try {
                 const { updateQuote } = await import('../quotes/actions')
                 // Fetch current quote items
@@ -1656,23 +1683,62 @@ export default function CalculatorShell() {
               </div>
               <MfLabel>ΠΛΑΣΤΙΚΟΠΟΙΗΣΗ</MfLabel>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
-                <Pill active={!finish.lamMachineId} onClick={() => setFinish({ ...finish, lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς' })} color="var(--violet)">Χωρίς</Pill>
+                <Pill active={!finish.lamMachineId} onClick={() => setFinish({ ...finish, lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς' })} color="var(--teal)">Χωρίς</Pill>
                 {laminators.map((l) => (
-                  <Pill key={l.id} active={finish.lamMachineId === l.id} onClick={() => setFinish({ ...finish, lamMachineId: l.id, lamName: l.name, lamFilmId: films[0]?.id || '' })} color="var(--violet)">{l.name}</Pill>
+                  <Pill key={l.id} active={finish.lamMachineId === l.id} onClick={() => {
+                    setFinish({ ...finish, lamMachineId: l.id, lamName: l.name, lamFilmId: films[0]?.id || '' });
+                  }} color="var(--teal)">{l.name}</Pill>
                 ))}
               </div>
-              {finish.lamMachineId && (<>
-                <MfLabel>ΦΙΛΜ ΠΛΑΣΤΙΚΟΠΟΙΗΣΗΣ</MfLabel>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
-                  {films.map((f) => (
-                    <Pill key={f.id} active={finish.lamFilmId === f.id} onClick={() => setFinish({ ...finish, lamFilmId: f.id })} color="var(--violet)">{f.name}</Pill>
-                  ))}
-                  {!films.length && <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Δεν βρέθηκαν φιλμ</span>}
-                </div>
-                <MfLabel>ΟΨΕΙΣ ΠΛΑΣΤΙΚΟΠΟΙΗΣΗΣ</MfLabel>
-                <ToggleBar value={String(finish.lamSides)} onChange={(v) => setFinish({ ...finish, lamSides: Number(v) as 1 | 2 })} options={[{ v: '1', l: '1 Όψη' }, { v: '2', l: '2 Όψεις' }]} />
-                <div style={{ height: 10 }} />
-              </>)}
+              {finish.lamMachineId && (() => {
+                const selectedLam = laminators.find(x => x.id === finish.lamMachineId);
+                const selectedFilm = films.find(f => f.id === finish.lamFilmId);
+                // Pouch = film with width + height dimensions
+                const isPouch = !!(selectedFilm && selectedFilm.width && selectedFilm.height);
+                // Pouch fit check (client-side)
+                const sealMargin = Number((selectedLam?.specs as Record<string,unknown>)?.seal_margin) || 5;
+                const pouchFitError = isPouch && selectedFilm?.width && selectedFilm?.height
+                  ? (() => {
+                      const maxW = selectedFilm.width! - sealMargin * 2;
+                      const maxH = selectedFilm.height! - sealMargin * 2;
+                      const jW = job.width; const jH = job.height;
+                      const fits = (jW <= maxW && jH <= maxH) || (jH <= maxW && jW <= maxH);
+                      if (fits) return null;
+                      return `Το φύλλο ${jW}×${jH}mm δεν χωράει στο pouch ${selectedFilm.width}×${selectedFilm.height}mm (περιθώριο ${sealMargin}mm/πλευρά → μέγιστο ${maxW}×${maxH}mm)`;
+                    })()
+                  : null;
+                return (<>
+                  <MfLabel>ΥΛΙΚΟ ΠΛΑΣΤΙΚΟΠΟΙΗΣΗΣ</MfLabel>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
+                    {films.map((f) => {
+                      const hasSize = f.width && f.height;
+                      const info = hasSize ? ` ${f.width}×${f.height}` : '';
+                      const tag = hasSize ? ' (Pouch)' : '';
+                      return (
+                        <Pill key={f.id} active={finish.lamFilmId === f.id} onClick={() => setFinish({ ...finish, lamFilmId: f.id })} color="var(--teal)">{f.name}{info}{tag}</Pill>
+                      );
+                    })}
+                    {!films.length && <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Δεν βρέθηκαν υλικά — προσθέστε από Μετεκτύπωση → Πλαστικοποίηση</span>}
+                  </div>
+                  {pouchFitError && (
+                    <div style={{
+                      padding: '8px 12px', borderRadius: 8, marginBottom: 12,
+                      background: 'color-mix(in srgb, var(--red, #ef4444) 12%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--red, #ef4444) 30%, transparent)',
+                      color: '#fca5a5', fontSize: '0.75rem', fontWeight: 500,
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      <i className="fas fa-exclamation-triangle" style={{ color: '#ef4444' }} />
+                      {pouchFitError}
+                    </div>
+                  )}
+                  {!isPouch && (<>
+                    <MfLabel>ΟΨΕΙΣ ΠΛΑΣΤΙΚΟΠΟΙΗΣΗΣ</MfLabel>
+                    <ToggleBar value={String(finish.lamSides)} onChange={(v) => setFinish({ ...finish, lamSides: Number(v) as 1 | 2 })} options={[{ v: '1', l: '1 Όψη' }, { v: '2', l: '2 Όψεις' }]} />
+                  </>)}
+                  <div style={{ height: 10 }} />
+                </>);
+              })()}
               <MfLabel>ΒΙΒΛΙΟΔΕΣΙΑ</MfLabel>
               <ToggleBar value={finish.binding} onChange={(v) => {
                 const subtype = v === 'glue' ? 'glue_bind' : v;

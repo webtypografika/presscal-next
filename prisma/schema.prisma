@@ -108,6 +108,9 @@ model Org {
   // Quote terms & conditions (supports numbered sections in JSON)
   quoteTerms   Json?    // [{title: string, text: string}]
 
+  // Job stages (customizable)
+  jobStages    Json?    // [{id: string, label: string, icon: string, color: string}]
+
   // AADE credentials (for AFM lookup)
   aadeUsername  String?
   aadePassword  String?
@@ -119,7 +122,9 @@ model Org {
   materials        Material[]
   consumables      Consumable[]
   profiles         Profile[]
-  customers        Customer[]
+  companies        Company[]
+  contacts         Contact[]
+  customers        Customer[]  // DEPRECATED — kept for migration
   quotes           Quote[]
   products         Product[]
   fileLinks        FileLink[]
@@ -354,7 +359,7 @@ model Product {
   @@index([orgId, deletedAt])
 }
 
-// ─── CUSTOMERS ───
+// ─── CUSTOMERS (DEPRECATED — kept for migration) ───
 model Customer {
   id        String   @id @default(cuid())
   orgId     String
@@ -365,21 +370,19 @@ model Customer {
   email     String?
   phone     String?
   mobile    String?
-  afm       String?  // Greek Tax ID
-  doy       String?  // Tax Office
-  elorusContactId String?  // Linked Elorus contact
+  afm       String?
+  doy       String?
+  elorusContactId String?
   address   String?
   city      String?
   zip       String?
   notes     String   @default("")
-  folderPath String?  // Local filesystem path for customer folder
-
-  // CRM
-  contacts  Json     @default("[]")  // sub-contacts array
+  folderPath String?
+  contacts  Json     @default("[]")
   tags      String[] @default([])
 
-  quotes    Quote[]
-  fileLinks FileLink[]
+  quotes    Quote[]    @relation("CustomerQuotes")
+  fileLinks FileLink[] @relation("CustomerFileLinks")
 
   deletedAt DateTime?
   createdAt DateTime @default(now())
@@ -387,6 +390,100 @@ model Customer {
 
   @@index([orgId])
   @@index([orgId, deletedAt])
+}
+
+// ─── COMPANIES (billing entities) ───
+model Company {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  name      String            // Επωνυμία
+  afm       String?           // ΑΦΜ
+  doy       String?           // ΔΟΥ
+  address   String?
+  city      String?
+  zip       String?
+  phone     String?           // Company phone
+  email     String?           // Company general email
+  website   String?
+  notes     String   @default("")
+  tags      String[] @default([])
+
+  folderPath        String?   // Shared folder for this company
+  elorusContactId   String?   // Elorus contact (company-level)
+
+  // Relations
+  companyContacts CompanyContact[]
+  quotes          Quote[]
+  fileLinks       FileLink[]
+
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([orgId, deletedAt])
+}
+
+// ─── CONTACTS (people) ───
+model Contact {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  name      String
+  email     String?
+  phone     String?
+  mobile    String?
+  notes     String   @default("")
+  tags      String[] @default([])
+
+  // employee | designer | freelancer | broker | contact
+  role      String   @default("contact")
+
+  // Relations
+  companyContacts CompanyContact[]
+  quoteRecipients QuoteRecipient[]
+
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([orgId, email])
+  @@index([orgId, deletedAt])
+}
+
+// ─── COMPANY ↔ CONTACT (N:M) ───
+model CompanyContact {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  role      String   @default("employee")  // role within this company
+  isPrimary Boolean  @default(false)       // primary contact for this company
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, contactId])
+  @@index([contactId])
+}
+
+// ─── QUOTE RECIPIENTS ───
+model QuoteRecipient {
+  id        String   @id @default(cuid())
+  quoteId   String
+  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id])
+
+  type      String   @default("to")  // 'to' | 'cc'
+
+  @@unique([quoteId, contactId])
+  @@index([quoteId])
 }
 
 // ─── QUOTES ───
@@ -398,8 +495,12 @@ model Quote {
   number    String   // QT-2026-0001
   status    String   @default("draft") // draft, sent, approved, partial, rejected, completed, cancelled
 
+  companyId  String?
+  company    Company? @relation(fields: [companyId], references: [id])
+
+  // DEPRECATED — kept for migration
   customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id])
+  customer   Customer? @relation("CustomerQuotes", fields: [customerId], references: [id])
 
   title       String?
   description String?
@@ -452,9 +553,11 @@ model Quote {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  fileLinks FileLink[]
+  fileLinks       FileLink[]
+  quoteRecipients QuoteRecipient[]
 
   @@index([orgId, status])
+  @@index([orgId, companyId])
   @@index([orgId, deletedAt])
   @@unique([orgId, number])
 }
@@ -487,8 +590,12 @@ model FileLink {
   // Links (one of)
   quoteId    String?
   quote      Quote?    @relation(fields: [quoteId], references: [id])
+  companyId  String?
+  company    Company?  @relation(fields: [companyId], references: [id])
+
+  // DEPRECATED — kept for migration
   customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id])
+  customer   Customer? @relation("CustomerFileLinks", fields: [customerId], references: [id])
 
   // Metadata
   thumbnail       String?  // base64 thumbnail data
@@ -500,5 +607,5 @@ model FileLink {
 
   @@index([orgId])
   @@index([quoteId])
-  @@index([customerId])
+  @@index([companyId])
 }

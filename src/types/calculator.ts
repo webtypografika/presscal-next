@@ -83,6 +83,9 @@ export interface CalculatorResult {
   sellPrice: number;
   pricePerPiece: number;
 
+  // Lamination
+  lamWarnings?: string[];
+
   // Debug
   printModel: string;
   printDetail: Record<string, unknown>;

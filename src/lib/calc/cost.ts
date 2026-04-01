@@ -61,10 +61,19 @@ export interface CostInput {
     minCharge?: number;        // minimum charge €
   };
   lamination?: {
-    filmCostPerSqm: number;
+    mode: 'roll' | 'pouch';
+    filmCostPerSqm: number;       // roll: cost €/m²
+    filmSellPerSqm?: number;      // roll: sell €/m² (from material, overrides lamMarkup)
     machineSetupCost: number;
-    machineRunCostPerSheet: number;
     sides: 1 | 2;
+    dualRoll?: boolean;            // roll: 2 rolls = both sides in one pass
+    // Pouch-specific
+    pouchCostPerPiece?: number;   // cost €/piece
+    pouchSellPerPiece?: number;   // sell €/piece (from material, overrides lamMarkup)
+    pouchW?: number;              // pouch width (mm)
+    pouchH?: number;              // pouch height (mm)
+    sealMargin?: number;          // mm — sheet must be smaller by this on each side
+    maxW?: number;                // machine opening (mm)
   };
   binding?: {
     type: 'staple' | 'glue' | 'spiral';
@@ -794,14 +803,18 @@ function calcLaminationCost(input: CostInput, totalSheets: number): number {
   if (!input.lamination) return 0;
   const lam = input.lamination;
 
+  if (lam.mode === 'pouch') {
+    // Pouch: cost per piece × quantity (each finished piece needs one pouch)
+    const pouchCost = (lam.pouchCostPerPiece ?? 0) * input.qty;
+    return pouchCost + lam.machineSetupCost;
+  }
+
+  // Roll lamination
   const sheetArea = input.machineMaxW * input.machineMaxH / 1_000_000; // m²
   const faces = lam.sides === 2 ? totalSheets * 2 : totalSheets;
-
   const filmCost = faces * sheetArea * lam.filmCostPerSqm;
-  const runCost = faces * lam.machineRunCostPerSheet;
-  const setupCost = lam.machineSetupCost;
 
-  return filmCost + runCost + setupCost;
+  return filmCost + lam.machineSetupCost;
 }
 
 function calcBindingCost(input: CostInput): number {
@@ -856,10 +869,25 @@ export function calculateCost(input: CostInput): CalculatorResult {
     costGuillotine * (1 + input.guillotineMarkup / 100),
     input.minChargeGuillotine || 0,
   );
-  const chargeLamination = Math.max(
-    costLamination * (1 + input.lamMarkup / 100),
-    input.minChargeLam || 0,
-  );
+  const chargeLamination = (() => {
+    if (!input.lamination) return 0;
+    const lam = input.lamination;
+    // If material has its own sell price, use that instead of profile lamMarkup
+    if (lam.mode === 'pouch' && lam.pouchSellPerPiece && lam.pouchSellPerPiece > 0) {
+      const filmRevenue = lam.pouchSellPerPiece * input.qty;
+      const machineCharge = lam.machineSetupCost * (1 + input.lamMarkup / 100);
+      return Math.max(filmRevenue + machineCharge, input.minChargeLam || 0);
+    }
+    if (lam.mode === 'roll' && lam.filmSellPerSqm && lam.filmSellPerSqm > 0) {
+      const sheetArea = input.machineMaxW * input.machineMaxH / 1_000_000;
+      const faces = lam.sides === 2 ? totalMachineSheets * 2 : totalMachineSheets;
+      const filmRevenue = faces * sheetArea * lam.filmSellPerSqm;
+      const machineCharge = lam.machineSetupCost * (1 + input.lamMarkup / 100);
+      return Math.max(filmRevenue + machineCharge, input.minChargeLam || 0);
+    }
+    // Fallback: generic profile markup on total cost
+    return Math.max(costLamination * (1 + input.lamMarkup / 100), input.minChargeLam || 0);
+  })();
   const chargeBinding = costBinding * (1 + input.bindingMarkup / 100);
   const chargeFinishing = chargeGuillotine + chargeLamination + chargeBinding;
 

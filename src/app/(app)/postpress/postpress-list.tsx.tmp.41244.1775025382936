@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import type { PostpressMachine, Material } from '@/generated/prisma/client';
-import { createPostpressMachine, updatePostpressMachine, deletePostpressMachine, getLamMaterials, createLamMaterial } from './actions';
+import type { PostpressMachine } from '@/generated/prisma/client';
+import { createPostpressMachine, updatePostpressMachine, deletePostpressMachine } from './actions';
 
 // ─── 3-PASS CUT MODEL (client-side for examples) ───
 interface CutResult { totalCuts: number; totalStacks: number; totalMins: number; p1: number; p2: number; p3: number }
@@ -49,7 +49,8 @@ const EXAMPLES = [
 // ─── SUBTYPE META ───
 const SUBTYPES: { key: string; label: string; icon: string; color: string; cat: string }[] = [
   { key: 'guillotine', label: 'Γκιλοτίνα',          icon: 'fa-cut',         color: 'var(--violet)', cat: 'sheet' },
-  { key: 'laminator',  label: 'Πλαστικοποίηση',      icon: 'fa-scroll',      color: 'var(--teal)',   cat: 'sheet' },
+  { key: 'lam_roll',   label: 'Πλαστικοποίηση Roll', icon: 'fa-scroll',      color: 'var(--teal)',   cat: 'roll' },
+  { key: 'lam_sheet',  label: 'Πλαστικοποίηση Sheet',icon: 'fa-layer-group', color: 'var(--teal)',   cat: 'sheet' },
   { key: 'fold',       label: 'Τσακιστικό',          icon: 'fa-arrows-alt-v',color: 'var(--blue)',   cat: 'sheet' },
   { key: 'gathering',  label: 'Μαζεμένη',            icon: 'fa-stream',      color: 'var(--blue)',   cat: 'sheet' },
   { key: 'staple',     label: 'Συρραπτικό',          icon: 'fa-paperclip',   color: 'var(--amber)',  cat: 'sheet' },
@@ -73,13 +74,23 @@ const SPEC_FIELDS: Record<string, SpecField[]> = {
     { key: 'rate_weight', label: 'Βάρος', unit: '€ / 1000φ @100gsm', type: 'slider', min: 0, max: 10, step: 0.10 },
     { key: 'rate_per_stack', label: 'Στίβες', unit: '€ / στίβα', type: 'slider', min: 0, max: 5, step: 0.05 },
     { key: 'rate_per_minute', label: 'Χρόνος', unit: '€ / λεπτό', type: 'slider', min: 0, max: 5, step: 0.05 },
-    { key: '_label', label: 'ΕΚΠΤΩΣΗ ΠΟΣΟΤΗΤΑΣ' },
-    { key: 'discount_step', label: 'Βήμα (τεμ.)', unit: 'τεμ' },
-    { key: 'discount_pct', label: 'Μείωση %', unit: '%' },
-    { key: 'discount_max', label: 'Max %', unit: '%' },
   ],
-  // laminator specs are rendered dynamically based on lam_mode — see LAMINATOR_SPECS below
-  laminator: [],
+  lam_roll: [
+    { key: '_label', label: 'ΠΡΟΔΙΑΓΡΑΦΕΣ ΜΗΧΑΝΗΣ' },
+    { key: 'max_w', label: 'Άνοιγμα (Μπούκα)', unit: 'mm' },
+    { key: 'speed', label: 'Ταχύτητα', unit: 'φ/ώρα' },
+    { key: 'dual_pass', label: 'Διπλό πέρασμα (2 φύλλα)', unit: '', type: 'toggle' as 'number' },
+    { key: '_label', label: 'ΚΟΣΤΟΛΟΓΗΣΗ' },
+    { key: 'runCostPerSheet', label: 'Κόστος ανά φύλλο', unit: '€/φύλλο' },
+  ],
+  lam_sheet: [
+    { key: '_label', label: 'ΠΡΟΔΙΑΓΡΑΦΕΣ ΜΗΧΑΝΗΣ' },
+    { key: 'max_w', label: 'Άνοιγμα (Μπούκα)', unit: 'mm' },
+    { key: 'max_h', label: 'Μέγιστο μήκος', unit: 'mm' },
+    { key: 'seal_margin', label: 'Περιθώριο σφράγισης', unit: 'mm', min: 0, max: 20, step: 0.5 },
+    { key: '_label', label: 'ΚΟΣΤΟΛΟΓΗΣΗ' },
+    { key: 'runCostPerSheet', label: 'Κόστος ανά φύλλο', unit: '€/φύλλο' },
+  ],
   fold: [
     { key: 'plates', label: 'Πλάκες', unit: '' },
     { key: 'max_w', label: 'Μέγιστο πλάτος', unit: 'mm' },
@@ -88,37 +99,14 @@ const SPEC_FIELDS: Record<string, SpecField[]> = {
     { key: 'stations', label: 'Σταθμοί', unit: '' },
   ],
   staple: [
-    { key: '_label', label: 'ΧΡΟΝΟΙ ΠΑΡΑΓΩΓΗΣ' },
-    { key: 'speed_booklet', label: 'Φυλλάδια', unit: 'τεμ/ώρα' },
-    { key: 'speed_pad', label: 'Μπλοκ', unit: 'τεμ/ώρα' },
-    { key: '_label', label: 'ΤΙΜΟΛΟΓΗΣΗ' },
-    { key: 'price_booklet', label: 'Τιμή φυλλαδίου', unit: '€/τεμ' },
-    { key: 'price_pad', label: 'Τιμή μπλοκ', unit: '€/τεμ' },
-    { key: '_label', label: 'ΕΚΠΤΩΣΗ ΠΟΣΟΤΗΤΑΣ' },
-    { key: 'discount_step', label: 'Βήμα (τεμ.)', unit: 'τεμ' },
-    { key: 'discount_pct', label: 'Μείωση %', unit: '%' },
-    { key: 'discount_max', label: 'Max %', unit: '%' },
+    { key: 'heads', label: 'Κεφαλές', unit: '' },
   ],
   glue_bind: [
-    { key: '_label', label: 'ΠΡΟΔΙΑΓΡΑΦΕΣ' },
     { key: 'max_spine', label: 'Μέγιστη ράχη', unit: 'mm' },
     { key: 'clamps', label: 'Τσιμπίδες', unit: '' },
-    { key: '_label', label: 'ΤΙΜΟΛΟΓΗΣΗ' },
-    { key: 'price_per_unit', label: 'Τιμή', unit: '€/τεμ' },
-    { key: '_label', label: 'ΕΚΠΤΩΣΗ ΠΟΣΟΤΗΤΑΣ' },
-    { key: 'discount_step', label: 'Βήμα (τεμ.)', unit: 'τεμ' },
-    { key: 'discount_pct', label: 'Μείωση %', unit: '%' },
-    { key: 'discount_max', label: 'Max %', unit: '%' },
   ],
   spiral: [
-    { key: '_label', label: 'ΠΡΟΔΙΑΓΡΑΦΕΣ' },
     { key: 'max_spine', label: 'Μέγιστη ράχη', unit: 'mm' },
-    { key: '_label', label: 'ΤΙΜΟΛΟΓΗΣΗ' },
-    { key: 'price_per_unit', label: 'Τιμή', unit: '€/τεμ' },
-    { key: '_label', label: 'ΕΚΠΤΩΣΗ ΠΟΣΟΤΗΤΑΣ' },
-    { key: 'discount_step', label: 'Βήμα (τεμ.)', unit: 'τεμ' },
-    { key: 'discount_pct', label: 'Μείωση %', unit: '%' },
-    { key: 'discount_max', label: 'Max %', unit: '%' },
   ],
   custom: [],
 };
@@ -170,126 +158,10 @@ function machineToForm(m: PostpressMachine): FormState {
 // ─── COMPONENT ───
 interface Props { machines: PostpressMachine[] }
 
-// ─── MATERIAL FORM STATE ───
-interface MatFormState {
-  name: string;
-  type: 'roll' | 'pouch';
-  width: string;         // mm
-  height: string;        // mm (pouch only)
-  thickness: string;     // microns
-  rollLength: string;    // meters (roll only)
-  rollPrice: string;     // € per roll
-  pouchPackPrice: string; // € per package (pouch)
-  pouchPackQty: string;   // pieces per package (pouch)
-  markup: string;        // % markup on cost
-  sellPrice: string;     // € sell per m² (roll) or per piece (pouch)
-  // Full inventory fields
-  subtype: string;       // 'gloss' | 'matt' | 'soft_touch' | etc
-  supplier: string;
-  supplierEmail: string;
-  notes: string;
-  stock: string;
-  stockTarget: string;
-  stockAlert: string;
-}
-
-const emptyMatForm = (type: 'roll' | 'pouch' = 'roll'): MatFormState => ({
-  name: '', type, width: '', height: '', thickness: '',
-  rollLength: '', rollPrice: '', pouchPackPrice: '', pouchPackQty: '',
-  markup: '', sellPrice: '',
-  subtype: '', supplier: '', supplierEmail: '', notes: '',
-  stock: '', stockTarget: '', stockAlert: '',
-});
-
 export function PostpressList({ machines }: Props) {
   const [filter, setFilter] = useState<string>('all');
   const [editing, setEditing] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
-
-  // Lamination materials
-  const [lamMaterials, setLamMaterials] = useState<Material[]>([]);
-  const [matForm, setMatForm] = useState<MatFormState | null>(null);
-  const [savingMat, setSavingMat] = useState(false);
-
-  // Fetch materials when editing a lamination machine
-  useEffect(() => {
-    if (editing && (editing.subtype === 'laminator' || editing.subtype === 'lam_roll' || editing.subtype === 'lam_sheet')) {
-      getLamMaterials().then(setLamMaterials);
-    }
-  }, [editing?.subtype, editing?.id]);
-
-  const handleSaveMaterial = useCallback(async () => {
-    if (!matForm || !matForm.name.trim()) return;
-    setSavingMat(true);
-    try {
-      const isRoll = matForm.type === 'roll';
-      const w = parseFloat(matForm.width) || null;
-      const rollLen = parseFloat(matForm.rollLength) || null;
-      const rollPrice = parseFloat(matForm.rollPrice) || 0;
-
-      let costPerUnit: number | null = null;
-      let sellPerUnit: number | null = null;
-      let markup: number | null = parseFloat(matForm.markup) || null;
-      let unit = 'τεμ';
-      const specs: Record<string, number> = {};
-
-      if (isRoll) {
-        // €/m² = rollPrice / (width_m × rollLength_m)
-        if (w && rollLen) {
-          costPerUnit = rollPrice / ((w / 1000) * rollLen);
-        }
-        specs.roll_price = rollPrice;
-        unit = 'μέτρο';
-      } else {
-        // Pouch: cost per piece = packPrice / packQty
-        const packPrice = parseFloat(matForm.pouchPackPrice) || 0;
-        const packQty = parseFloat(matForm.pouchPackQty) || 1;
-        costPerUnit = packPrice / packQty;
-        specs.pack_price = packPrice;
-        specs.qty_per_pack = packQty;
-        unit = 'τεμ';
-      }
-
-      // Sell price: user can set directly or via markup
-      const userSell = parseFloat(matForm.sellPrice) || null;
-      if (userSell) {
-        sellPerUnit = userSell;
-        // Derive markup from sell/cost if cost exists
-        if (costPerUnit && costPerUnit > 0) {
-          markup = ((userSell - costPerUnit) / costPerUnit) * 100;
-        }
-      } else if (markup != null && costPerUnit) {
-        sellPerUnit = costPerUnit * (1 + markup / 100);
-      }
-
-      await createLamMaterial({
-        name: matForm.name.trim(),
-        cat: isRoll ? 'roll' : 'film',
-        subtype: matForm.subtype || matForm.type,
-        width: w,
-        height: isRoll ? null : (parseFloat(matForm.height) || null),
-        thickness: parseFloat(matForm.thickness) || null,
-        rollLength: isRoll ? rollLen : null,
-        costPerUnit,
-        markup,
-        sellPerUnit,
-        unit,
-        supplier: matForm.supplier || undefined,
-        supplierEmail: matForm.supplierEmail || undefined,
-        notes: matForm.notes || undefined,
-        stock: parseFloat(matForm.stock) || null,
-        stockTarget: parseFloat(matForm.stockTarget) || null,
-        stockAlert: parseFloat(matForm.stockAlert) || null,
-        specs,
-      });
-      // Refresh list
-      const updated = await getLamMaterials();
-      setLamMaterials(updated);
-      setMatForm(null);
-    } finally {
-      setSavingMat(false);
-    }
-  }, [matForm]);
 
   const filtered = filter === 'all' ? machines : machines.filter(m => m.subtype === filter);
 
@@ -446,10 +318,7 @@ export function PostpressList({ machines }: Props) {
                   <i className={`fas ${meta.icon}`} />
                 </div>
 
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: 4 }}>
-                  {machine.name}
-                  {specs.cal_default ? <i className="fas fa-star" style={{ marginLeft: 6, fontSize: '0.6rem', color: 'var(--accent)', opacity: 0.7 }} title="Default στον Calculator" /> : null}
-                </h3>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: 4 }}>{machine.name}</h3>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   {meta.label}
                   {machine.speed ? ` · ${machine.speed} φ/ώρα` : ''}
@@ -461,13 +330,11 @@ export function PostpressList({ machines }: Props) {
                   </p>
                 )}
                 {/* Quick spec peek */}
-                {(specs.costPerCut || specs.costPerUnit || specs.max_w) && (
+                {(specs.costPerCut || specs.costPerUnit || specs.runCostPerSheet) && (
                   <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: 2 }}>
                     {specs.costPerCut ? `€${specs.costPerCut}/κοπή` : ''}
                     {specs.costPerUnit ? `€${specs.costPerUnit}/τεμ` : ''}
-                    {specs.max_w ? `${specs.max_w}mm` : ''}
-                    {specs.dual_roll ? ' · Διπλό ρολό' : ''}
-                    {specs.seal_margin ? ` · ${specs.seal_margin}mm seal` : ''}
+                    {specs.runCostPerSheet ? `€${specs.runCostPerSheet}/φύλλο` : ''}
                   </p>
                 )}
 
@@ -587,25 +454,6 @@ export function PostpressList({ machines }: Props) {
               </div>
             </div>
 
-            {/* Default in calculator */}
-            <div style={{ marginBottom: 14 }}>
-              <button
-                onClick={() => setEditing({ ...editing, specs: { ...editing.specs, cal_default: editing.specs.cal_default === '1' ? '0' : '1' } })}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '9px 16px', borderRadius: 8,
-                  border: `1.5px solid ${editing.specs.cal_default === '1' ? 'var(--accent)' : 'var(--glass-border)'}`,
-                  background: editing.specs.cal_default === '1' ? 'rgba(245,130,32,0.08)' : 'rgba(255,255,255,0.04)',
-                  color: editing.specs.cal_default === '1' ? 'var(--accent)' : 'var(--text-muted)',
-                  fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                  transition: 'all 0.2s',
-                }}
-              >
-                <i className={`fas ${editing.specs.cal_default === '1' ? 'fa-star' : 'fa-star'}`} style={{ fontSize: '0.7rem', opacity: editing.specs.cal_default === '1' ? 1 : 0.3 }} />
-                {editing.specs.cal_default === '1' ? 'Ενεργό by default στον Calculator' : 'Ενεργοποίηση by default στον Calculator'}
-              </button>
-            </div>
-
             {/* Setup + Min Charge */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 6 }}>
               <div>
@@ -627,67 +475,6 @@ export function PostpressList({ machines }: Props) {
                 />
               </div>
             </div>
-
-            {/* ── LAMINATOR: mode toggle + mode-specific specs ── */}
-            {(editing.subtype === 'laminator' || editing.subtype === 'lam_roll' || editing.subtype === 'lam_sheet') && (() => {
-              const lamMode = editing.specs.lam_mode || 'roll';
-              return (<>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 22, marginBottom: 12 }}>
-                  <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
-                  <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--teal)' }}>ΤΥΠΟΣ ΠΛΑΣΤΙΚΟΠΟΙΗΣΗΣ</span>
-                  <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
-                </div>
-                <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 3, marginBottom: 16, width: 'fit-content' }}>
-                  {(['roll', 'pouch'] as const).map(mode => (
-                    <button key={mode} onClick={() => setEditing({ ...editing, specs: { ...editing.specs, lam_mode: mode } })}
-                      style={{
-                        padding: '8px 22px', borderRadius: 8, border: 'none', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
-                        color: lamMode === mode ? 'var(--teal)' : 'var(--text-muted)',
-                        background: lamMode === mode ? 'color-mix(in srgb, var(--teal) 15%, transparent)' : 'transparent',
-                        transition: 'all 0.2s',
-                      }}>
-                      <i className={`fas ${mode === 'roll' ? 'fa-scroll' : 'fa-layer-group'}`} style={{ marginRight: 8 }} />
-                      {mode === 'roll' ? 'Ρολό' : 'Pouch'}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Common: max_w */}
-                <div style={{ display: 'grid', gridTemplateColumns: lamMode === 'roll' ? '1fr 1fr 1fr' : '1fr 1fr', gap: 14, marginBottom: 6 }}>
-                  <div>
-                    <label style={labelStyle}>ΑΝΟΙΓΜΑ ΜΠΟΥΚΑ (mm)</label>
-                    <input value={editing.specs.max_w ?? ''} onChange={e => setEditing({ ...editing, specs: { ...editing.specs, max_w: e.target.value } })} type="number" placeholder="330" style={{ ...inputStyle, padding: '10px 12px' }} />
-                  </div>
-                  {lamMode === 'roll' && (
-                    <div>
-                      <label style={labelStyle}>ΤΑΧΥΤΗΤΑ (φ/ώρα)</label>
-                      <input value={editing.specs.speed ?? ''} onChange={e => setEditing({ ...editing, specs: { ...editing.specs, speed: e.target.value } })} type="number" placeholder="500" style={{ ...inputStyle, padding: '10px 12px' }} />
-                    </div>
-                  )}
-                  {lamMode === 'roll' ? (
-                    <div>
-                      <label style={labelStyle}>ΔΙΠΛΟ ΡΟΛΟ</label>
-                      <button onClick={() => setEditing({ ...editing, specs: { ...editing.specs, dual_roll: editing.specs.dual_roll === '1' ? '0' : '1' } })}
-                        style={{
-                          width: '100%', padding: '10px 12px', borderRadius: 8,
-                          border: `1.5px solid ${editing.specs.dual_roll === '1' ? 'var(--teal)' : 'var(--glass-border)'}`,
-                          background: editing.specs.dual_roll === '1' ? 'color-mix(in srgb, var(--teal) 12%, transparent)' : 'rgba(255,255,255,0.04)',
-                          color: editing.specs.dual_roll === '1' ? 'var(--teal)' : 'var(--text-muted)',
-                          fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s',
-                        }}>
-                        <i className={`fas ${editing.specs.dual_roll === '1' ? 'fa-check-circle' : 'fa-circle'}`} style={{ marginRight: 8 }} />
-                        {editing.specs.dual_roll === '1' ? '2 ρολά — 2 όψεις/πέρασμα' : '1 ρολό'}
-                      </button>
-                    </div>
-                  ) : (
-                    <div>
-                      <label style={labelStyle}>ΠΕΡΙΘΩΡΙΟ ΣΦΡΑΓΙΣΗΣ (mm)</label>
-                      <input value={editing.specs.seal_margin ?? ''} onChange={e => setEditing({ ...editing, specs: { ...editing.specs, seal_margin: e.target.value } })} type="number" step="0.5" min="0" max="20" placeholder="5" style={{ ...inputStyle, padding: '10px 12px' }} />
-                    </div>
-                  )}
-                </div>
-              </>);
-            })()}
 
             {/* Subtype-specific spec fields */}
             {(SPEC_FIELDS[editing.subtype] ?? []).length > 0 && (() => {
@@ -889,7 +676,7 @@ export function PostpressList({ machines }: Props) {
                               }}
                             >
                               <i className={`fas ${editing.specs[f.key] === '1' ? 'fa-check-circle' : 'fa-circle'}`} style={{ marginRight: 8 }} />
-                              {editing.specs[f.key] === '1' ? 'Ναι — 2 ρολά, πλαστικοποιεί 2 όψεις ταυτόχρονα' : 'Όχι — 1 ρολό, μία όψη ανά πέρασμα'}
+                              {editing.specs[f.key] === '1' ? 'Ναι — 2 φύλλα ανά πέρασμα' : 'Όχι — 1 φύλλο ανά πέρασμα'}
                             </button>
                           ) : (
                             <input
@@ -906,220 +693,6 @@ export function PostpressList({ machines }: Props) {
                   )}
                 </div>
               ));
-            })()}
-
-            {/* ── LINKED MATERIALS (laminator) ── */}
-            {(editing.subtype === 'laminator' || editing.subtype === 'lam_roll' || editing.subtype === 'lam_sheet') && (() => {
-              const rollMats = lamMaterials.filter(m => m.cat === 'roll' || (m.cat === 'film' && !m.height));
-              const pouchMats = lamMaterials.filter(m => m.cat === 'film' && m.width && m.height);
-              const matSpecs = (mat: Material) => (mat.specs ?? {}) as Record<string, number>;
-              const matTab = matForm?.type || 'roll';
-
-              // Render material card
-              const MatCard = ({ mat, isR }: { mat: Material; isR: boolean }) => {
-                const sp = matSpecs(mat);
-                return (
-                  <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)' }}>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#cbd5e1', marginBottom: 2 }}>{mat.name}</div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                      {isR ? (<>
-                        {mat.width ? `${mat.width}mm` : ''}{mat.rollLength ? ` × ${mat.rollLength}m` : ''}
-                        {sp.roll_price ? ` — €${sp.roll_price}` : ''}{mat.costPerUnit ? ` (€${mat.costPerUnit.toFixed(3)}/m²)` : ''}
-                      </>) : (<>
-                        {mat.width && mat.height ? `${mat.width}×${mat.height}mm` : ''}
-                        {sp.qty_per_pack ? ` — ${sp.qty_per_pack}τεμ/πακ` : ''}{mat.costPerUnit ? ` — €${mat.costPerUnit.toFixed(3)}/τεμ` : ''}
-                      </>)}
-                    </div>
-                    {mat.sellPerUnit != null && mat.sellPerUnit > 0 && (
-                      <div style={{ fontSize: '0.65rem', color: '#4ade80', marginTop: 2 }}>
-                        Πώληση: €{mat.sellPerUnit.toFixed(4)}{isR ? '/m²' : '/τεμ'}
-                        {mat.markup != null && mat.markup > 0 ? ` (${mat.markup.toFixed(0)}%)` : ''}
-                      </div>
-                    )}
-                    {mat.stock != null && (
-                      <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: 2 }}>Απόθεμα: {mat.stock} {mat.unit}</div>
-                    )}
-                  </div>
-                );
-              };
-
-              // Compute cost for pricing preview
-              const matCost = (() => {
-                if (!matForm) return 0;
-                if (matForm.type === 'roll') {
-                  const w = parseFloat(matForm.width) || 0;
-                  const len = parseFloat(matForm.rollLength) || 0;
-                  const rp = parseFloat(matForm.rollPrice) || 0;
-                  return w > 0 && len > 0 && rp > 0 ? rp / ((w / 1000) * len) : 0;
-                }
-                const pp = parseFloat(matForm.pouchPackPrice) || 0;
-                const pq = parseFloat(matForm.pouchPackQty) || 1;
-                return pp > 0 ? pp / pq : 0;
-              })();
-
-              return (
-                <div style={{ marginTop: 22 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                    <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--teal)' }}>ΥΛΙΚΑ ΠΛΑΣΤΙΚΟΠΟΙΗΣΗΣ</span>
-                    <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
-                  </div>
-
-                  {/* Roll section */}
-                  {rollMats.length > 0 && (<>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', marginBottom: 6, letterSpacing: '0.04em' }}>
-                      <i className="fas fa-scroll" style={{ marginRight: 6, color: 'var(--teal)' }} />ΡΟΛΑ ΦΙΛΜ
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 14 }}>
-                      {rollMats.map(mat => <MatCard key={mat.id} mat={mat} isR />)}
-                    </div>
-                  </>)}
-
-                  {/* Pouch section */}
-                  {pouchMats.length > 0 && (<>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', marginBottom: 6, letterSpacing: '0.04em' }}>
-                      <i className="fas fa-layer-group" style={{ marginRight: 6, color: 'var(--teal)' }} />POUCH
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 14 }}>
-                      {pouchMats.map(mat => <MatCard key={mat.id} mat={mat} isR={false} />)}
-                    </div>
-                  </>)}
-
-                  {rollMats.length === 0 && pouchMats.length === 0 && !matForm && (
-                    <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 10 }}>Δεν υπάρχουν υλικά πλαστικοποίησης στην αποθήκη</p>
-                  )}
-
-                  {/* Add new material */}
-                  {!matForm ? (
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => setMatForm(emptyMatForm('roll'))} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1px dashed var(--teal)', background: 'transparent', color: 'var(--teal)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
-                        <i className="fas fa-plus" style={{ fontSize: '0.65rem' }} /> Νέο Ρολό Φιλμ
-                      </button>
-                      <button onClick={() => setMatForm(emptyMatForm('pouch'))} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1px dashed var(--teal)', background: 'transparent', color: 'var(--teal)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
-                        <i className="fas fa-plus" style={{ fontSize: '0.65rem' }} /> Νέο Pouch
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ padding: 16, borderRadius: 12, border: '1.5px solid color-mix(in srgb, var(--teal) 40%, transparent)', background: 'color-mix(in srgb, var(--teal) 5%, transparent)' }}>
-                      {/* Roll / Pouch toggle */}
-                      <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2, marginBottom: 14, width: 'fit-content' }}>
-                        {(['roll', 'pouch'] as const).map(t => (
-                          <button key={t} onClick={() => setMatForm({ ...emptyMatForm(t), name: matForm.name, thickness: matForm.thickness })}
-                            style={{ padding: '6px 18px', borderRadius: 6, border: 'none', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
-                              color: matTab === t ? 'var(--teal)' : 'var(--text-muted)', background: matTab === t ? 'color-mix(in srgb, var(--teal) 15%, transparent)' : 'transparent' }}>
-                            {t === 'roll' ? 'Ρολό Φιλμ' : 'Pouch'}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Name + thickness */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                        <div>
-                          <label style={labelStyle}>ΟΝΟΜΑ</label>
-                          <input value={matForm.name} onChange={e => setMatForm({ ...matForm, name: e.target.value })} placeholder={matTab === 'roll' ? 'π.χ. Gloss 30mic' : 'π.χ. Α3 Matt Pouch'} style={{ ...inputStyle, padding: '8px 10px' }} autoFocus />
-                        </div>
-                        <div>
-                          <label style={labelStyle}>ΠΑΧΟΣ (microns)</label>
-                          <input value={matForm.thickness} onChange={e => setMatForm({ ...matForm, thickness: e.target.value })} type="number" placeholder="30" style={{ ...inputStyle, padding: '8px 10px' }} />
-                        </div>
-                      </div>
-
-                      {matTab === 'roll' ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
-                          <div><label style={labelStyle}>ΠΛΑΤΟΣ (mm)</label><input value={matForm.width} onChange={e => setMatForm({ ...matForm, width: e.target.value })} type="number" placeholder="330" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                          <div><label style={labelStyle}>ΜΕΤΡΑ ΡΟΛΟΥ</label><input value={matForm.rollLength} onChange={e => setMatForm({ ...matForm, rollLength: e.target.value })} type="number" placeholder="200" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                          <div><label style={labelStyle}>ΤΙΜΗ ΡΟΛΟΥ (€)</label><input value={matForm.rollPrice} onChange={e => setMatForm({ ...matForm, rollPrice: e.target.value })} type="number" step="0.01" placeholder="45.00" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
-                          <div><label style={labelStyle}>ΠΛΑΤΟΣ (mm)</label><input value={matForm.width} onChange={e => setMatForm({ ...matForm, width: e.target.value })} type="number" placeholder="303" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                          <div><label style={labelStyle}>ΥΨΟΣ (mm)</label><input value={matForm.height} onChange={e => setMatForm({ ...matForm, height: e.target.value })} type="number" placeholder="426" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                          <div><label style={labelStyle}>ΤΙΜΗ ΠΑΚΕΤΟΥ (€)</label><input value={matForm.pouchPackPrice} onChange={e => setMatForm({ ...matForm, pouchPackPrice: e.target.value })} type="number" step="0.01" placeholder="12.00" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                          <div><label style={labelStyle}>ΤΕΜ / ΠΑΚΕΤΟ</label><input value={matForm.pouchPackQty} onChange={e => setMatForm({ ...matForm, pouchPackQty: e.target.value })} type="number" placeholder="100" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                        </div>
-                      )}
-
-                      {/* ── PRICING: dropdown method ── */}
-                      {(() => {
-                        const costLabel = matTab === 'roll' ? '€/m²' : '€/τεμ';
-                        const pricingMode = matForm.sellPrice && !matForm.markup ? 'sell' : 'markup';
-                        return (<>
-                          <label style={labelStyle}>ΤΙΜΟΛΟΓΗΣΗ</label>
-                          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2, marginBottom: 10, width: 'fit-content' }}>
-                            <button onClick={() => setMatForm({ ...matForm, sellPrice: '', markup: matForm.markup })}
-                              style={{ padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
-                                color: pricingMode === 'markup' ? 'var(--accent)' : 'var(--text-muted)', background: pricingMode === 'markup' ? 'rgba(245,130,32,0.12)' : 'transparent' }}>
-                              Markup %
-                            </button>
-                            <button onClick={() => setMatForm({ ...matForm, markup: '', sellPrice: matForm.sellPrice })}
-                              style={{ padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
-                                color: pricingMode === 'sell' ? 'var(--accent)' : 'var(--text-muted)', background: pricingMode === 'sell' ? 'rgba(245,130,32,0.12)' : 'transparent' }}>
-                              Τιμή Πώλησης
-                            </button>
-                          </div>
-                          {pricingMode === 'markup' ? (
-                            <div style={{ marginBottom: 10 }}>
-                              <input value={matForm.markup} onChange={e => setMatForm({ ...matForm, markup: e.target.value, sellPrice: '' })} type="number" step="1" min="0" placeholder="π.χ. 100" style={{ ...inputStyle, padding: '8px 10px', width: 160 }} />
-                            </div>
-                          ) : (
-                            <div style={{ marginBottom: 10 }}>
-                              <input value={matForm.sellPrice} onChange={e => setMatForm({ ...matForm, sellPrice: e.target.value, markup: '' })} type="number" step="0.001" min="0" placeholder={`${costLabel}`} style={{ ...inputStyle, padding: '8px 10px', width: 160 }} />
-                            </div>
-                          )}
-                          {/* Live preview */}
-                          {matCost > 0 && (() => {
-                            const mk = parseFloat(matForm.markup) || 0;
-                            const sp = parseFloat(matForm.sellPrice) || 0;
-                            const sell = sp > 0 ? sp : mk > 0 ? matCost * (1 + mk / 100) : 0;
-                            const derivedMk = sp > 0 && matCost > 0 ? ((sp - matCost) / matCost) * 100 : mk;
-                            const profit = sell > 0 ? sell - matCost : 0;
-                            const areaInfo = matTab === 'roll' ? (() => { const w = parseFloat(matForm.width) || 0; const len = parseFloat(matForm.rollLength) || 0; return w > 0 && len > 0 ? `${((w / 1000) * len).toFixed(1)} m²` : ''; })() : '';
-                            return (
-                              <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', marginBottom: 10, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Κόστος: <strong style={{ color: 'var(--teal)' }}>€{matCost.toFixed(4)}{costLabel.replace('€','')}</strong></span>
-                                {areaInfo && <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Εμβαδόν: <strong style={{ color: '#cbd5e1' }}>{areaInfo}</strong></span>}
-                                {sell > 0 && <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Πώληση: <strong style={{ color: 'var(--accent)' }}>€{sell.toFixed(4)}{costLabel.replace('€','')}</strong></span>}
-                                {derivedMk > 0 && <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Markup: <strong style={{ color: '#cbd5e1' }}>{derivedMk.toFixed(1)}%</strong></span>}
-                                {profit > 0 && <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Κέρδος: <strong style={{ color: '#4ade80' }}>€{profit.toFixed(4)}{costLabel.replace('€','')}</strong></span>}
-                              </div>
-                            );
-                          })()}
-                        </>);
-                      })()}
-
-                      {/* ── INVENTORY & SUPPLIER ── */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, marginBottom: 10 }}>
-                        <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
-                        <span style={{ fontSize: '0.62rem', fontWeight: 600, letterSpacing: '0.06em', color: '#475569' }}>ΑΠΟΘΗΚΗ & ΠΡΟΜΗΘΕΥΤΗΣ</span>
-                        <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
-                        <div><label style={labelStyle}>ΕΙΔΟΣ</label><input value={matForm.subtype} onChange={e => setMatForm({ ...matForm, subtype: e.target.value })} placeholder="π.χ. gloss, matt, soft touch" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                        <div><label style={labelStyle}>ΠΡΟΜΗΘΕΥΤΗΣ</label><input value={matForm.supplier} onChange={e => setMatForm({ ...matForm, supplier: e.target.value })} placeholder="π.χ. Antalis" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                        <div><label style={labelStyle}>EMAIL ΠΡΟΜΗΘΕΥΤΗ</label><input value={matForm.supplierEmail} onChange={e => setMatForm({ ...matForm, supplierEmail: e.target.value })} placeholder="orders@..." type="email" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 2fr', gap: 10, marginBottom: 10 }}>
-                        <div><label style={labelStyle}>ΑΠΟΘΕΜΑ</label><input value={matForm.stock} onChange={e => setMatForm({ ...matForm, stock: e.target.value })} type="number" min="0" placeholder="0" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                        <div><label style={labelStyle}>ΣΤΟΧΟΣ</label><input value={matForm.stockTarget} onChange={e => setMatForm({ ...matForm, stockTarget: e.target.value })} type="number" min="0" placeholder="—" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                        <div><label style={labelStyle}>ΕΙΔΟΠΟΙΗΣΗ</label><input value={matForm.stockAlert} onChange={e => setMatForm({ ...matForm, stockAlert: e.target.value })} type="number" min="0" placeholder="—" style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                        <div><label style={labelStyle}>ΣΗΜΕΙΩΣΕΙΣ</label><input value={matForm.notes} onChange={e => setMatForm({ ...matForm, notes: e.target.value })} placeholder="Προαιρετικές σημειώσεις..." style={{ ...inputStyle, padding: '8px 10px' }} /></div>
-                      </div>
-
-                      {/* Save / Cancel */}
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={handleSaveMaterial} disabled={savingMat || !matForm.name.trim()}
-                          style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: 'var(--teal)', color: '#fff', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', opacity: savingMat || !matForm.name.trim() ? 0.5 : 1 }}>
-                          {savingMat ? 'Αποθήκευση...' : 'Δημιουργία'}
-                        </button>
-                        <button onClick={() => setMatForm(null)}
-                          style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
-                          Ακύρωση
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
             })()}
 
             {/* Buttons */}

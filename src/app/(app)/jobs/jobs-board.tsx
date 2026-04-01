@@ -1,23 +1,24 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer } from '@/generated/prisma/client';
-import { updateJobStage, updateJobDetails } from './actions';
+import { updateJobStage, updateJobDetails, saveJobStages } from './actions';
 
 type JobQuote = Quote & { customer: Customer | null };
 
-// ─── STAGES ───
-const STAGES = [
+interface StageConfig { id: string; label: string; icon: string; color: string }
+
+const DEFAULT_STAGES: StageConfig[] = [
   { id: 'files', label: 'Αρχεία', icon: 'fa-folder-open', color: '#60a5fa' },
-  { id: 'printing', label: 'Εκτύπωση', icon: 'fa-print', color: 'var(--accent)' },
+  { id: 'printing', label: 'Εκτύπωση', icon: 'fa-print', color: '#f58220' },
   { id: 'cutting', label: 'Κοπή', icon: 'fa-cut', color: '#a78bfa' },
   { id: 'finishing', label: 'Φινίρισμα', icon: 'fa-magic', color: '#f472b6' },
-  { id: 'delivery', label: 'Παράδοση', icon: 'fa-truck', color: 'var(--success)' },
-] as const;
+  { id: 'delivery', label: 'Παράδοση', icon: 'fa-truck', color: '#4ade80' },
+];
 
-type StageId = typeof STAGES[number]['id'];
+type StageId = string;
 
 const PRIORITY_COLORS: Record<string, string> = {
   rush: 'var(--danger)',
@@ -37,8 +38,8 @@ function isOverdue(d: Date | string | null | undefined) {
   return new Date(d) < new Date(new Date().toDateString());
 }
 
-function stageIndex(stage: string | null): number {
-  return STAGES.findIndex(s => s.id === stage);
+function stageIndex(stage: string | null, stages: StageConfig[]): number {
+  return stages.findIndex(s => s.id === stage);
 }
 
 // ─── TOAST ───
@@ -69,7 +70,7 @@ function JobCard({ job, onDragStart, onDetail }: { job: JobQuote; onDragStart: (
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent)' }}>{job.number}</span>
         <span style={{ fontSize: '0.82rem', fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {job.customer?.name || job.customer?.company || '—'}
+          {(job as any).company?.name || job.customer?.name || '—'}
         </span>
         {priority === 'rush' && <i className="fas fa-bolt" style={{ color: 'var(--danger)', fontSize: '0.65rem' }} />}
         {priority === 'urgent' && <i className="fas fa-exclamation-triangle" style={{ color: '#fb923c', fontSize: '0.6rem' }} />}
@@ -101,7 +102,7 @@ function JobCard({ job, onDragStart, onDetail }: { job: JobQuote; onDragStart: (
 }
 
 // ─── DETAIL MODAL ───
-function JobDetailModal({ job, onClose, onUpdate }: { job: JobQuote; onClose: () => void; onUpdate: () => void }) {
+function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQuote; stages: StageConfig[]; onClose: () => void; onUpdate: () => void }) {
   const router = useRouter();
   const [deadline, setDeadline] = useState(job.deadline ? new Date(job.deadline).toISOString().split('T')[0] : '');
   const [priority, setPriority] = useState(job.jobPriority || 'normal');
@@ -109,7 +110,7 @@ function JobDetailModal({ job, onClose, onUpdate }: { job: JobQuote; onClose: ()
   const [saving, setSaving] = useState(false);
 
   const items = (job.items as any[]) || [];
-  const currentStage = stageIndex(job.jobStage);
+  const currentStage = stageIndex(job.jobStage, STAGES);
 
   async function handleSave() {
     setSaving(true);
@@ -129,7 +130,7 @@ function JobDetailModal({ job, onClose, onUpdate }: { job: JobQuote; onClose: ()
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--accent)' }}>{job.number}</span>
-          <span style={{ fontSize: '1.1rem', fontWeight: 700, flex: 1 }}>{job.customer?.name || '—'}</span>
+          <span style={{ fontSize: '1.1rem', fontWeight: 700, flex: 1 }}>{(job as any).company?.name || job.customer?.name || '—'}</span>
           <button onClick={() => router.push(`/quotes/${job.id}`)} style={{
             border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.04)', borderRadius: 8,
             padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', cursor: 'pointer',
@@ -264,15 +265,18 @@ function JobDetailModal({ job, onClose, onUpdate }: { job: JobQuote; onClose: ()
 }
 
 // ─── MAIN BOARD ───
-interface Props { jobs: JobQuote[]; customers: Customer[]; }
+interface Props { jobs: JobQuote[]; customers: Customer[]; stages?: StageConfig[]; }
 
-export function JobsBoard({ jobs: initialJobs }: Props) {
+export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
   const router = useRouter();
   const [jobs, setJobs] = useState(initialJobs);
+  const [STAGES, setSTAGES] = useState<StageConfig[]>(initialStages?.length ? initialStages : DEFAULT_STAGES);
   const [detailJob, setDetailJob] = useState<JobQuote | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [view, setView] = useState<'board' | 'list'>('board');
+  const [editingStages, setEditingStages] = useState(false);
+  const [dragStageIdx, setDragStageIdx] = useState<number | null>(null);
 
   function toast(message: string, type: ToastData['type'] = 'success') {
     const id = ++tId;
@@ -351,7 +355,101 @@ export function JobsBoard({ jobs: initialJobs }: Props) {
             <i className="fas fa-list" style={{ marginRight: 4 }} /> List
           </button>
         </div>
+
+        <button onClick={() => setEditingStages(!editingStages)} title="Ρύθμιση σταδίων"
+          style={{
+            padding: '6px 12px', borderRadius: 8, border: '1px solid var(--glass-border)',
+            background: editingStages ? 'rgba(255,255,255,0.06)' : 'transparent',
+            color: editingStages ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.78rem',
+          }}>
+          <i className="fas fa-cog" />
+        </button>
       </div>
+
+      {/* Stage editor */}
+      {editingStages && (
+        <div style={{ marginBottom: 16, padding: '14px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)' }}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.06em', marginBottom: 10 }}>ΡΥΘΜΙΣΗ ΣΤΑΔΙΩΝ</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            {STAGES.map((stage, idx) => (
+              <div
+                key={stage.id}
+                draggable
+                onDragStart={() => setDragStageIdx(idx)}
+                onDragOver={e => e.preventDefault()}
+                onDrop={() => {
+                  if (dragStageIdx === null || dragStageIdx === idx) return;
+                  const arr = [...STAGES];
+                  const [moved] = arr.splice(dragStageIdx, 1);
+                  arr.splice(idx, 0, moved);
+                  setSTAGES(arr);
+                  setDragStageIdx(null);
+                  saveJobStages(arr);
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8,
+                  background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)',
+                  cursor: 'grab', userSelect: 'none',
+                }}
+              >
+                <i className="fas fa-grip-vertical" style={{ color: '#374151', fontSize: '0.6rem' }} />
+                <i className={`fas ${stage.icon}`} style={{ color: stage.color, fontSize: '0.7rem' }} />
+                <input
+                  value={stage.label}
+                  onChange={e => {
+                    const arr = [...STAGES];
+                    arr[idx] = { ...arr[idx], label: e.target.value };
+                    setSTAGES(arr);
+                  }}
+                  onBlur={() => saveJobStages(STAGES)}
+                  style={{
+                    background: 'transparent', border: 'none', outline: 'none',
+                    color: stage.color, fontSize: '0.78rem', fontWeight: 700,
+                    fontFamily: 'inherit', width: 90,
+                  }}
+                />
+                <input
+                  type="color" value={stage.color}
+                  onChange={e => {
+                    const arr = [...STAGES];
+                    arr[idx] = { ...arr[idx], color: e.target.value };
+                    setSTAGES(arr);
+                    saveJobStages(arr.map((s, i) => i === idx ? { ...s, color: e.target.value } : s));
+                  }}
+                  style={{ width: 20, height: 20, border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
+                  title="Χρώμα"
+                />
+                {STAGES.length > 2 && (
+                  <button onClick={() => {
+                    const arr = STAGES.filter((_, i) => i !== idx);
+                    setSTAGES(arr);
+                    saveJobStages(arr);
+                  }}
+                    style={{ border: 'none', background: 'transparent', color: '#374151', cursor: 'pointer', fontSize: '0.6rem', padding: 2 }}>
+                    <i className="fas fa-times" />
+                  </button>
+                )}
+              </div>
+            ))}
+            <button onClick={() => {
+              const id = `stage_${Date.now()}`;
+              const arr = [...STAGES, { id, label: 'Νέο', icon: 'fa-circle', color: '#94a3b8' }];
+              setSTAGES(arr);
+              saveJobStages(arr);
+            }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 8,
+                border: '1px dashed var(--glass-border)', background: 'transparent',
+                color: 'var(--teal)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+              }}>
+              <i className="fas fa-plus" style={{ fontSize: '0.55rem' }} />Προσθήκη
+            </button>
+          </div>
+          <div style={{ fontSize: '0.65rem', color: '#475569' }}>
+            <i className="fas fa-grip-vertical" style={{ marginRight: 4 }} />Σύρετε για αναδιάταξη · κλικ στο όνομα για μετονομασία · κλικ στο χρώμα για αλλαγή
+          </div>
+        </div>
+      )}
 
       {/* Unassigned bar */}
       {unassigned.length > 0 && (
@@ -366,7 +464,7 @@ export function JobsBoard({ jobs: initialJobs }: Props) {
                 background: 'rgba(255,255,255,0.03)', cursor: 'grab', fontSize: '0.78rem', fontWeight: 600,
               }}>
                 <span style={{ color: 'var(--accent)', marginRight: 6 }}>{j.number}</span>
-                {j.customer?.name || '—'}
+                {(j as any).company?.name || j.customer?.name || '—'}
               </div>
             ))}
           </div>
@@ -437,7 +535,7 @@ export function JobsBoard({ jobs: initialJobs }: Props) {
                 return (
                   <tr key={j.id} onClick={() => setDetailJob(j)} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--accent)' }}>{j.number}</td>
-                    <td style={{ padding: '10px 12px' }}>{j.customer?.name || '—'}</td>
+                    <td style={{ padding: '10px 12px' }}>{(j as any).company?.name || j.customer?.name || '—'}</td>
                     <td style={{ padding: '10px 12px' }}>
                       {stage ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 600, color: stage.color }}>
@@ -465,6 +563,7 @@ export function JobsBoard({ jobs: initialJobs }: Props) {
       {detailJob && (
         <JobDetailModal
           job={detailJob}
+          stages={STAGES}
           onClose={() => setDetailJob(null)}
           onUpdate={() => {
             setDetailJob(null);

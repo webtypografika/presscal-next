@@ -14,7 +14,7 @@ export async function getJobs() {
       deletedAt: null,
       status: { in: ['approved', 'partial', 'completed'] },
     },
-    include: { customer: true },
+    include: { customer: true, company: true },
     orderBy: [{ deadline: 'asc' }, { createdAt: 'desc' }],
   });
 }
@@ -60,13 +60,35 @@ export async function updateJobDetails(quoteId: string, data: {
 // ─── PROMOTE QUOTE TO JOB ───
 
 export async function promoteToJob(quoteId: string) {
+  // Get first stage from org settings, fallback to 'files'
+  const org = await prisma.org.findUnique({ where: { id: ORG_ID }, select: { jobStages: true } });
+  const stages = (org?.jobStages as any[]) || [];
+  const firstStage = stages[0]?.id || 'files';
   await prisma.quote.update({
     where: { id: quoteId },
-    data: {
-      jobStage: 'files',
-      jobStageUpdatedAt: new Date(),
-    },
+    data: { jobStage: firstStage, jobStageUpdatedAt: new Date() },
   });
   revalidatePath('/jobs');
   revalidatePath('/quotes');
+}
+
+// ─── JOB STAGES (customizable) ───
+
+const DEFAULT_STAGES = [
+  { id: 'files', label: 'Αρχεία', icon: 'fa-folder-open', color: '#60a5fa' },
+  { id: 'printing', label: 'Εκτύπωση', icon: 'fa-print', color: '#f58220' },
+  { id: 'cutting', label: 'Κοπή', icon: 'fa-cut', color: '#a78bfa' },
+  { id: 'finishing', label: 'Φινίρισμα', icon: 'fa-magic', color: '#f472b6' },
+  { id: 'delivery', label: 'Παράδοση', icon: 'fa-truck', color: '#4ade80' },
+];
+
+export async function getJobStages() {
+  const org = await prisma.org.findUnique({ where: { id: ORG_ID }, select: { jobStages: true } });
+  return (org?.jobStages as any[]) || DEFAULT_STAGES;
+}
+
+export async function saveJobStages(stages: { id: string; label: string; icon: string; color: string }[]) {
+  await prisma.org.update({ where: { id: ORG_ID }, data: { jobStages: stages as any } });
+  revalidatePath('/jobs');
+  revalidatePath('/');
 }

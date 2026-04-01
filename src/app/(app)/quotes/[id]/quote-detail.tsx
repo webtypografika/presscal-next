@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import type { Quote, Customer, Material, Org } from '@/generated/prisma/client';
+import type { Quote, Customer, Company, Material, Org } from '@/generated/prisma/client';
 import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer } from '../actions';
 
-type QuoteWithCustomer = Quote & { customer: Customer | null };
+type QuoteWithCustomer = Quote & { customer: Customer | null; company: Company | null };
 
 // ─── TOAST ───
 type ToastType = 'success' | 'error' | 'info';
@@ -156,7 +156,8 @@ function aiToItem(ai: any) {
 }
 
 // ─── MAIN COMPONENT ───
-interface Props { quote: QuoteWithCustomer; customers: Customer[]; elorusConfigured?: boolean; elorusSlug?: string; materials?: Material[]; org?: Pick<Org, 'legalName' | 'afm' | 'doy' | 'address' | 'city' | 'postalCode' | 'phone' | 'email'> | null; }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface Props { quote: QuoteWithCustomer; customers: any[]; elorusConfigured?: boolean; elorusSlug?: string; materials?: Material[]; org?: Pick<Org, 'legalName' | 'afm' | 'doy' | 'address' | 'city' | 'postalCode' | 'phone' | 'email'> | null; }
 
 export function QuoteDetail({ quote: initial, customers, elorusConfigured, elorusSlug, materials = [], org }: Props) {
   const router = useRouter();
@@ -166,7 +167,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [notes, setNotes] = useState(initial.notes ?? '');
   const [vatRate, setVatRate] = useState(initial.vatRate ?? 24);
   const [toasts, setToasts] = useState<ToastData[]>([]);
-  const [customerId, setCustomerId] = useState(initial.customerId ?? '');
+  const [customerId, setCustomerId] = useState(initial.companyId ?? initial.customerId ?? '');
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
@@ -187,8 +188,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const totalProfit = subtotal - totalCost;
 
   const st = STATUS_MAP[quote.status] ?? STATUS_MAP.draft;
-  const selectedCustomer = customers.find(c => c.id === customerId) ?? quote.customer;
-  const customerName = selectedCustomer?.name ?? selectedCustomer?.company ?? '—';
+  const selectedCompany = customers.find((c: any) => c.id === customerId) ?? quote.company;
+  const selectedCustomer = selectedCompany; // backward compat alias
+  const primaryContact = selectedCompany?.companyContacts?.find((cc: any) => cc.isPrimary)?.contact;
+  const customerName = selectedCompany?.name ?? quote.customer?.name ?? '—';
 
   // Autosave with debounce (1s after last change)
   const mountedRef = useRef(false);
@@ -246,7 +249,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   async function save() {
     setSaving(true);
     try {
-      const result = await updateQuote(quote.id, { customerId: customerId || null, title: title || null, notes: notes || null, items, subtotal, vatRate, vatAmount, grandTotal, totalCost, totalProfit });
+      const result = await updateQuote(quote.id, { companyId: customerId || null, title: title || null, notes: notes || null, items, subtotal, vatRate, vatAmount, grandTotal, totalCost, totalProfit });
       setQuote(prev => ({ ...prev, ...result }));
       setDirty(false);
     } catch (e) { toast('Σφάλμα αποθήκευσης: ' + (e as Error).message, 'error'); }
@@ -422,14 +425,14 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 12 }}>
             <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{quote.number}</span>
-            {selectedCustomer?.company && <span>{selectedCustomer.company}</span>}
-            {selectedCustomer?.email && <span>{selectedCustomer.email}</span>}
-            {selectedCustomer?.phone && <span>{selectedCustomer.phone}</span>}
+            {primaryContact && <span><i className="fas fa-user" style={{ fontSize: '0.6rem', marginRight: 3 }} />{primaryContact.name}</span>}
+            {selectedCompany?.email && <span>{selectedCompany.email}</span>}
+            {selectedCompany?.phone && <span>{selectedCompany.phone}</span>}
             <span>{new Date(quote.date).toLocaleDateString('el-GR')}</span>
-            {(selectedCustomer as any)?.folderPath && (
+            {selectedCompany?.folderPath && (
               <a
-                href={`presscal-fh://open-folder?path=${encodeURIComponent((selectedCustomer as any).folderPath)}${selectedCustomer?.email ? `&email=${encodeURIComponent(selectedCustomer.email)}` : ''}`}
-                title={(selectedCustomer as any).folderPath}
+                href={`presscal-fh://open-folder?path=${encodeURIComponent(selectedCompany.folderPath)}${selectedCompany?.email ? `&email=${encodeURIComponent(selectedCompany.email)}` : ''}`}
+                title={selectedCompany.folderPath}
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 4,
                   color: '#f58220', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600,
@@ -790,9 +793,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           key={customerId}
           quoteId={quote.id}
           quoteNumber={quote.number}
-          customerEmail={(selectedCustomer as any)?.email ?? ''}
+          customerEmail={primaryContact?.email || selectedCompany?.email || ''}
           customerName={customerName}
           grandTotal={grandTotal}
+          companyContacts={selectedCompany?.companyContacts || []}
           linkedEmails={quote.linkedEmails as string[] || []}
           onClose={() => setShowSendModal(false)}
           onSent={() => {
@@ -1265,7 +1269,7 @@ function EmailPanel({ quoteId, linkedEmails, threadId, customerEmail, onEmailLin
                   <i className="fas fa-download" style={{ fontSize: '0.45rem', opacity: 0.4 }} />
                 </button>
                 <a
-                  href={`presscal-fh://attachment?messageId=${att.emailId}&attId=${att.id}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}&filename=${encodeURIComponent(att.filename)}`}
+                  href={`presscal-fh://attachment?messageId=${att.emailId}&attId=${att.id}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}&filename=${encodeURIComponent(att.filename)}&quoteId=${quoteId}`}
                   title="Open in File Helper"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 5,
@@ -1353,7 +1357,7 @@ function EmailPanel({ quoteId, linkedEmails, threadId, customerEmail, onEmailLin
                           <i className="fas fa-download" style={{ fontSize: '0.5rem', opacity: 0.5 }} />
                         </button>
                         <a
-                          href={`presscal-fh://attachment?messageId=${em.id}&attId=${att.id}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}&filename=${encodeURIComponent(att.filename)}`}
+                          href={`presscal-fh://attachment?messageId=${em.id}&attId=${att.id}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}&filename=${encodeURIComponent(att.filename)}&quoteId=${quoteId}`}
                           onClick={e => e.stopPropagation()}
                           title="Open in File Helper"
                           style={{
@@ -1728,12 +1732,13 @@ function ReplyPanel({ customerEmail, threadId, quoteNumber, toast }: {
 // ═══════════════════════════════════════════════════════
 // SEND QUOTE MODAL
 // ═══════════════════════════════════════════════════════
-function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, grandTotal, linkedEmails, onClose, onSent, toast }: {
+function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, grandTotal, companyContacts, linkedEmails, onClose, onSent, toast }: {
   quoteId: string;
   quoteNumber: string;
   customerEmail: string;
   customerName: string;
   grandTotal: number;
+  companyContacts?: any[];
   linkedEmails?: string[];
   onClose: () => void;
   onSent: () => void;
@@ -1741,6 +1746,11 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
 }) {
   const [to, setTo] = useState(customerEmail);
   const [cc, setCc] = useState('');
+
+  // Suggest CC from other company contacts (not the primary "to")
+  const ccSuggestions = (companyContacts || [])
+    .map((cc: any) => cc.contact)
+    .filter((c: any) => c?.email && c.email.toLowerCase() !== customerEmail.toLowerCase());
   const [lang, setLang] = useState<'el' | 'en'>('el');
   const [customMessage, setCustomMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -1820,7 +1830,34 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
 
         {/* CC */}
         <label style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>CC (προαιρετικό)</label>
-        <input value={cc} onChange={e => setCc(e.target.value)} placeholder="cc@example.com" style={{ ...inp, marginBottom: 10 }} />
+        <input value={cc} onChange={e => setCc(e.target.value)} placeholder="cc@example.com" style={{ ...inp, marginBottom: ccSuggestions.length > 0 ? 6 : 10 }} />
+        {ccSuggestions.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+            {ccSuggestions.map((contact: any) => {
+              const alreadyInCc = cc.toLowerCase().includes(contact.email.toLowerCase());
+              return (
+                <button
+                  key={contact.id}
+                  onClick={() => {
+                    if (alreadyInCc) return;
+                    setCc(prev => prev ? `${prev}, ${contact.email}` : contact.email);
+                  }}
+                  style={{
+                    padding: '3px 10px', borderRadius: 12, border: '1px solid var(--glass-border)',
+                    background: alreadyInCc ? 'color-mix(in srgb, var(--teal) 12%, transparent)' : 'transparent',
+                    color: alreadyInCc ? 'var(--teal)' : '#94a3b8',
+                    fontSize: '0.72rem', cursor: alreadyInCc ? 'default' : 'pointer', fontFamily: 'inherit',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <i className={`fas ${alreadyInCc ? 'fa-check' : 'fa-plus'}`} style={{ fontSize: '0.55rem' }} />
+                  {contact.name} · {contact.email}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Language */}
         <label style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Γλώσσα</label>
@@ -1870,7 +1907,7 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
 // CUSTOMER PICKER — dropdown to select/change customer
 // ═══════════════════════════════════════════════════════
 function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose, toast }: {
-  customers: Customer[];
+  customers: any[];
   currentId: string;
   linkedEmails: string[];
   onSelect: (id: string) => void;
@@ -1969,10 +2006,13 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
     }
   }
 
-  const filtered = customers.filter(c => {
+  const filtered = customers.filter((c: any) => {
     if (!search) return true;
     const s = search.toLowerCase();
-    return c.name.toLowerCase().includes(s) || (c.company || '').toLowerCase().includes(s) || (c.email || '').toLowerCase().includes(s);
+    const contactMatch = c.companyContacts?.some((cc: any) =>
+      cc.contact?.name?.toLowerCase().includes(s) || cc.contact?.email?.toLowerCase().includes(s)
+    );
+    return c.name.toLowerCase().includes(s) || (c.email || '').toLowerCase().includes(s) || (c.afm || '').includes(s) || contactMatch;
   });
 
   return (
@@ -1987,14 +2027,23 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
         <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
             <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{currentCustomer.name}</div>
-            {currentCustomer.company && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2 }}>{currentCustomer.company}</div>}
+            {currentCustomer.companyContacts?.find((cc: any) => cc.isPrimary)?.contact && (
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                <i className="fas fa-user" style={{ fontSize: '0.6rem', marginRight: 4 }} />
+                {currentCustomer.companyContacts.find((cc: any) => cc.isPrimary).contact.name}
+                {currentCustomer.companyContacts.find((cc: any) => cc.isPrimary).contact.email && (
+                  <span style={{ marginLeft: 6 }}>{currentCustomer.companyContacts.find((cc: any) => cc.isPrimary).contact.email}</span>
+                )}
+              </div>
+            )}
             {currentCustomer.email && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 1 }}>{currentCustomer.email}</div>}
             {currentCustomer.phone && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 1 }}>{currentCustomer.phone}</div>}
-            {(currentCustomer as any).folderPath && (
+            {currentCustomer.afm && <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 1 }}>ΑΦΜ {currentCustomer.afm}</div>}
+            {currentCustomer.folderPath && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <i className="fas fa-folder" style={{ fontSize: '0.6rem', color: '#f58220' }} />
                 <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {(currentCustomer as any).folderPath}
+                  {currentCustomer.folderPath}
                 </span>
               </div>
             )}
@@ -2104,11 +2153,14 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
                     {c.name}
                     {c.id === currentId && <i className="fas fa-check" style={{ marginLeft: 6, fontSize: '0.65rem', color: 'var(--success)' }} />}
                   </div>
-                  {(c.company || c.email) && (
+                  {(c.email || c.companyContacts?.length > 0) && (
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 1 }}>
-                      {c.company && <span>{c.company}</span>}
-                      {c.company && c.email && <span> · </span>}
+                      {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name && (
+                        <span><i className="fas fa-user" style={{ fontSize: '0.55rem', marginRight: 3 }} />{c.companyContacts.find((cc: any) => cc.isPrimary).contact.name}</span>
+                      )}
+                      {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name && c.email && <span> · </span>}
                       {c.email && <span>{c.email}</span>}
+                      {c.afm && <span> · ΑΦΜ {c.afm}</span>}
                     </div>
                   )}
                 </div>
@@ -2143,7 +2195,7 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
               <i className="fas fa-arrow-left" />
             </button>
             <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>
-              {mode === 'new' ? 'Νέος Πελάτης' : 'Επεξεργασία Πελάτη'}
+              {mode === 'new' ? 'Νέα Εταιρεία' : 'Επεξεργασία Εταιρείας'}
             </span>
           </div>
           <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto' }}>

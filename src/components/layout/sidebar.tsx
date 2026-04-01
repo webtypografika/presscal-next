@@ -28,7 +28,7 @@ const NAV_ITEMS = [
   { href: '/email', icon: Mail, labelEl: 'Email', labelEn: 'Email' },
   { href: '/machines', icon: Printer, labelEl: 'Μηχανήματα', labelEn: 'Machines' },
   { href: '/inventory', icon: Warehouse, labelEl: 'Αποθήκη', labelEn: 'Inventory' },
-  { href: '/customers', icon: Users, labelEl: 'Πελάτες', labelEn: 'Customers' },
+  { href: '/companies', icon: Users, labelEl: 'Επαφές', labelEn: 'Contacts' },
   { href: '/products', icon: Package, labelEl: 'Προϊόντα', labelEn: 'Products' },
   { href: '/postpress', icon: Scissors, labelEl: 'Μεταφορές', labelEn: 'Postpress' },
   { href: '/settings', icon: Settings, labelEl: 'Ρυθμίσεις', labelEn: 'Settings' },

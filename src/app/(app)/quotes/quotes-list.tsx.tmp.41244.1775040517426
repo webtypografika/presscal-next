@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fuzzyMatch } from '@/lib/search';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer } from '@/generated/prisma/client';
@@ -52,14 +51,16 @@ function ToastContainer({ toasts, onRemove }: { toasts: ToastData[]; onRemove: (
 
 // ─── KANBAN COLUMNS ───
 const KB_COLUMNS = [
-  { id: 'editing', label: 'Σε Επεξεργασία', statuses: ['draft', 'new', 'editing', 'revision'], color: 'var(--accent)', icon: 'fa-pen' },
+  { id: 'new', label: 'Νέες', statuses: ['draft', 'new'], color: 'var(--blue)', icon: 'fa-envelope' },
+  { id: 'editing', label: 'Σε Επεξεργασία', statuses: ['editing', 'revision'], color: 'var(--accent)', icon: 'fa-pen' },
   { id: 'sent', label: 'Εστάλησαν', statuses: ['sent'], color: '#60a5fa', icon: 'fa-paper-plane' },
-  { id: 'approved', label: 'Εγκρίθηκαν', statuses: ['approved', 'partial', 'completed'], color: 'var(--success)', icon: 'fa-check' },
+  { id: 'approved', label: 'Εγκρίθηκαν', statuses: ['approved', 'partial'], color: 'var(--success)', icon: 'fa-check' },
+  { id: 'completed', label: 'Ολοκληρωμένες', statuses: ['completed'], color: 'var(--teal)', icon: 'fa-flag-checkered' },
   { id: 'rejected', label: 'Απορρίφθηκαν', statuses: ['rejected', 'cancelled'], color: 'var(--danger)', icon: 'fa-times' },
 ] as const;
 
 type KbColId = typeof KB_COLUMNS[number]['id'];
-const COL_TO_STATUS: Record<KbColId, string> = { editing: 'draft', sent: 'sent', approved: 'approved', rejected: 'rejected' };
+const COL_TO_STATUS: Record<KbColId, string> = { new: 'new', editing: 'editing', sent: 'sent', approved: 'approved', completed: 'completed', rejected: 'rejected' };
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Πρόχειρη', new: 'Νέα', editing: 'Σε Επεξ.', revision: 'Αναθεώρηση',
@@ -94,8 +95,7 @@ function aiToItem(ai: any) {
 }
 
 // ─── MAIN ───
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { quotes: QuoteWithCustomer[]; customers: any[]; }
+interface Props { quotes: QuoteWithCustomer[]; customers: Customer[]; }
 
 export function QuotesList({ quotes: initialQuotes, customers: initialCustomers }: Props) {
   const router = useRouter();
@@ -120,9 +120,11 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
   // Filter
   const kanbanQuotes = quotes.filter(q => {
     if (search) {
-      return fuzzyMatch(q.number, search) ||
-        fuzzyMatch((q as any).company?.name || q.customer?.name || '', search) ||
-        fuzzyMatch(q.title || '', search);
+      const s = search.toLowerCase();
+      return q.number.toLowerCase().includes(s) ||
+        (q.customer?.name || '').toLowerCase().includes(s) ||
+        (q.customer?.company || '').toLowerCase().includes(s) ||
+        (q.title || '').toLowerCase().includes(s);
     }
     return true;
   });
@@ -243,7 +245,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
                   <div style={{ textAlign: 'center', padding: '16px 0', fontSize: '0.92rem', color: 'var(--text-muted)', opacity: 0.4 }}>—</div>
                 )}
                 {colQuotes.map(q => {
-                  const name = (q as any).company?.name ?? q.customer?.name ?? (q as any).company?.email ?? q.customer?.email ?? '—';
+                  const name = q.customer?.name ?? q.customer?.company ?? '—';
                   const items = Array.isArray(q.items) ? q.items as any[] : [];
                   const desc = q.title || q.description || items.map((i: any) => i.name).filter(Boolean).join(' · ') || '';
                   return (
@@ -355,7 +357,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
 
 // ─── QUICK NEW QUOTE (minimal modal — just pick customer, then redirect to full page) ───
 function QuickNewQuote({ customers, onClose, onCreated, onCustomerCreated, toast }: {
-  customers: any[];
+  customers: Customer[];
   onClose: () => void;
   onCreated: (q: Quote) => void;
   onCustomerCreated: (c: Customer) => void;
@@ -373,28 +375,14 @@ function QuickNewQuote({ customers, onClose, onCreated, onCustomerCreated, toast
 
   const inp = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: '0.92rem', width: '100%', outline: 'none' } as const;
 
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const filteredCustomers = custSearch.trim()
+    ? customers.filter(c => {
+        const q = custSearch.toLowerCase();
+        return c.name.toLowerCase().includes(q) || (c.company?.toLowerCase().includes(q)) || (c.email?.toLowerCase().includes(q)) || (c.phone?.toLowerCase().includes(q));
+      })
+    : customers;
 
-  // Server-side search with debounce
-  useEffect(() => {
-    if (!custSearch.trim()) { setSearchResults([]); return; }
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const { getCompaniesForQuotes } = await import('./actions');
-        const results = await getCompaniesForQuotes(custSearch.trim());
-        setSearchResults(results as any);
-      } finally { setSearching(false); }
-    }, 300);
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
-  }, [custSearch]);
-
-  const filteredCustomers = custSearch.trim() ? searchResults : customers;
-
-  const selectedCustomer = [...customers, ...searchResults].find(c => c.id === customerId);
+  const selectedCustomer = customers.find(c => c.id === customerId);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -408,7 +396,7 @@ function QuickNewQuote({ customers, onClose, onCreated, onCustomerCreated, toast
   async function create() {
     setSaving(true);
     try {
-      const q = await createQuote({ companyId: customerId || undefined, title: title || undefined, items: [emptyItem()] });
+      const q = await createQuote({ customerId: customerId || undefined, title: title || undefined, items: [emptyItem()] });
       onCreated(q);
     } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); }
     finally { setSaving(false); }
@@ -451,7 +439,7 @@ function QuickNewQuote({ customers, onClose, onCreated, onCustomerCreated, toast
               }}
             >
               <span style={{ color: selectedCustomer ? 'var(--text)' : '#64748b' }}>
-                {selectedCustomer ? selectedCustomer.name : 'Αναζήτηση εταιρείας...'}
+                {selectedCustomer ? `${selectedCustomer.name}${selectedCustomer.company ? ` · ${selectedCustomer.company}` : ''}` : 'Αναζήτηση πελάτη...'}
               </span>
               <i className={`fas fa-chevron-${custDropOpen ? 'up' : 'down'}`} style={{ fontSize: '0.6rem', color: '#64748b' }} />
             </div>
@@ -467,8 +455,8 @@ function QuickNewQuote({ customers, onClose, onCreated, onCustomerCreated, toast
           {custDropOpen && (
             <div style={{
               position: 'absolute', top: '100%', left: 0, right: 44, marginTop: 4, zIndex: 10,
-              background: 'rgb(20, 30, 55)', border: '1px solid var(--border)',
-              borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+              borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.4)',
               overflow: 'hidden',
             }}>
               <div style={{ padding: 8 }}>
@@ -515,11 +503,9 @@ function QuickNewQuote({ customers, onClose, onCreated, onCustomerCreated, toast
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{c.name}</div>
-                      {(c.email || c.afm || c.companyContacts?.length > 0) && (
+                      {(c.company || c.email) && (
                         <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name}
-                          {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name && c.email ? ' · ' : ''}{c.email}
-                          {c.afm ? ` · ΑΦΜ ${c.afm}` : ''}
+                          {c.company}{c.company && c.email ? ' · ' : ''}{c.email}
                         </div>
                       )}
                     </div>

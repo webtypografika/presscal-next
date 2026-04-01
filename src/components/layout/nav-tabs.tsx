@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 const TABS = [
   { href: '/', icon: 'fa-th-large', label: 'Dashboard' },
   { href: '/calculator', icon: 'fa-calculator', label: 'Κοστολογηση' },
-  { href: '/customers', icon: 'fa-users', label: 'Πελατες' },
+  { href: '/companies', icon: 'fa-address-book', label: 'Επαφες' },
   { href: '/quotes', icon: 'fa-file-invoice', label: 'Προσφορες' },
   { href: '/email', icon: 'fa-envelope', label: 'Emails' },
   { href: '/jobs', icon: 'fa-tasks', label: 'Εργασιες' },

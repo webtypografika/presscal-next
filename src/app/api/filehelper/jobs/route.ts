@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const jobs = await (prisma as any).quote.findMany({
     where,
-    include: { customer: { select: { name: true } } },
+    include: { customer: { select: { name: true } }, company: { select: { name: true } } },
     orderBy: [
       { jobPriority: 'asc' },
       { deadline: 'asc' }
