@@ -150,6 +150,11 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   const rawCellH = trimH + bleed * 2;
   const { w: pw, h: ph } = printable(area);
 
+  // When forcing, ignore machine margins — use full paper
+  const isForced = !!(forceUps || forceCols || forceRows);
+  const fitW = isForced ? area.paperW : pw;
+  const fitH = isForced ? area.paperH : ph;
+
   // Normalize rotation to 0-359
   const rot = ((rotation || 0) % 360 + 360) % 360;
   // 90°-ish or 270°-ish: cells are placed rotated (swap W↔H)
@@ -167,13 +172,16 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     rows = forceRows;
   } else if (forceCols) {
     cols = forceCols;
-    rows = fitCount(ph, cellH, gutter);
+    rows = fitCount(fitH, cellH, gutter);
   } else if (forceRows) {
     rows = forceRows;
-    cols = fitCount(pw, cellW, gutter);
+    cols = fitCount(fitW, cellW, gutter);
   } else if (forceUps) {
-    cols = fitCount(pw, cellW, gutter);
-    rows = fitCount(ph, cellH, gutter);
+    cols = fitCount(fitW, cellW, gutter);
+    rows = fitCount(fitH, cellH, gutter);
+    // If nothing fits naturally, force at least 1×1
+    if (cols === 0) cols = 1;
+    if (rows === 0) rows = 1;
     while (cols * rows > forceUps && cols > 1) cols--;
     while (cols * rows > forceUps && rows > 1) rows--;
   } else {
@@ -200,9 +208,9 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
 
   const rawSheets = Math.ceil(qty / ups);
 
-  // Center grid in printable area
-  const cenOffX = area.marginLeft + (pw - usedW) / 2;
-  const cenOffY = area.marginTop + (ph - usedH) / 2;
+  // Center grid in printable area (when forced, use full paper)
+  const cenOffX = isForced ? (area.paperW - usedW) / 2 : area.marginLeft + (pw - usedW) / 2;
+  const cenOffY = isForced ? (area.paperH - usedH) / 2 : area.marginTop + (ph - usedH) / 2;
   const cells = buildCells(
     cols, rows, actualCellW, actualCellH, gutter,
     cenOffX, cenOffY,

@@ -59,6 +59,10 @@ export interface CostInput {
     bladeLife?: number;        // cuts per blade (default 2000)
     hourlyCost?: number;       // € per hour machine cost
     minCharge?: number;        // minimum charge €
+    // Quantity discount
+    discountStep?: number;     // qty step for discount
+    discountPct?: number;      // % per step
+    discountMax?: number;      // max discount %
   };
   lamination?: {
     mode: 'roll' | 'pouch';
@@ -104,17 +108,32 @@ export interface CostInput {
   productPricing?: {
     // Offset product
     charge_per_color?: number;     // € per color setup
-    min_charge?: number;           // € minimum charge
     extra_pantone?: number;        // € per PMS color
     extra_varnish?: number;        // € varnish surcharge
     hourly_enabled?: boolean;
     hourly_rate?: number;          // € profit/hour
-    // Digital product
-    price_color?: number;          // € per page (color)
-    price_bw?: number;             // € per page (BW)
+    // Shared: quantity discount (both offset & digital)
+    discount_enabled?: boolean;
     discount_step_qty?: number;    // qty for discount step
     discount_step_pct?: number;    // % discount per step
     discount_max?: number;         // % max discount
+    // Digital product
+    price_color?: number;          // € per page (color)
+    price_bw?: number;             // € per page (BW)
+  };
+
+  // Per-job overrides
+  overrides?: {
+    paperPriceOverride?: number;    // €/sheet override
+    plateDiscount?: number;         // % discount on plates
+    hourlyOverride?: number;        // €/h override for product pricing
+    guillotineDiscount?: number;    // % discount on guillotine charge
+    lamDiscount?: number;           // % discount on lamination charge
+    bindingDiscount?: number;       // % discount on binding charge
+    extraPerPiece?: number;         // € extra per piece
+    extraPerSheet?: number;         // € extra per sheet
+    extraPerFace?: number;          // € extra per face
+    extraFixed?: number;            // € extra fixed
   };
 }
 
@@ -610,9 +629,13 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
   }
 
   // ── Roller recovery ──
+  // rollerCount = rollers PER TOWER, multiply by towers used (frontColors passes)
+  // Each tower's rollers wear independently per sheet
   let rollerCost = 0;
   if (specs.rollerCount && specs.rollerCost && specs.rollerLife && specs.rollerLife > 0) {
-    rollerCost = totalSheets * totalPasses * (specs.rollerCount * specs.rollerCost / specs.rollerLife);
+    const towersUsed = frontColors + backColors; // each color = 1 tower
+    const costPerImpression = specs.rollerCount * specs.rollerCost / specs.rollerLife;
+    rollerCost = totalSheets * costPerImpression * towersUsed;
   }
 
   // ── Chemicals: wash + IPA ──
@@ -627,10 +650,22 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
     washCost = washPasses * (washMl / 1000) * (inkCleaner + waterCleaner);
     chemicalCost += washCost;
   }
-  // IPA (alcohol for dampening)
+  // IPA (alcohol for dampening) — auto-calculated from machine format + towers
   const runHours = totalSheets * totalPasses / (specs.speed || 5000);
-  if (specs.ipaMlPerHour && specs.ipaCpl) {
-    ipaCost = runHours * (specs.ipaMlPerHour / 1000) * specs.ipaCpl;
+  const ipaPricePerLiter = specs.ipaCpl || 0;
+  if (ipaPricePerLiter > 0) {
+    // Fountain solution consumption (L/h) based on machine format (for 4 towers)
+    const maxLS = Math.max(input.machineMaxW, input.machineMaxH);
+    const baseFountainLph = maxLS >= 900 ? 10    // B1 (70×100)
+                          : maxLS >= 650 ? 6.5   // B2 (50×70)
+                          :                4;    // B3 (35×50)
+    // Scale by actual towers (base = 4)
+    const towers = specs.towers || 4;
+    const fountainLph = baseFountainLph * (towers / 4);
+    // IPA = 5% of fountain solution (modern reduced-alcohol standard)
+    const ipaPercent = 5;
+    const ipaMlPerHour = fountainLph * 1000 * (ipaPercent / 100);
+    ipaCost = runHours * (ipaMlPerHour / 1000) * ipaPricePerLiter;
     chemicalCost += ipaCost;
   }
 
@@ -669,8 +704,12 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
       waterCleanerCpl: specs.waterCleanerCpl,
       washMl: specs.washMlPerLiter,
       ipa: ipaCost,
-      ipaMlH: specs.ipaMlPerHour,
-      ipaCpl: specs.ipaCpl,
+      ipaMlH: ipaPricePerLiter > 0 ? (() => {
+        const maxLS = Math.max(input.machineMaxW, input.machineMaxH);
+        const baseLph = maxLS >= 900 ? 10 : maxLS >= 650 ? 6.5 : 4;
+        return Math.round(baseLph * ((specs.towers || 4) / 4) * 1000 * 0.05);
+      })() : 0,
+      ipaCpl: ipaPricePerLiter,
       runHours,
       total: chemicalCost,
     },
@@ -791,6 +830,13 @@ function calcGuillotineCost(input: CostInput, totalSheets: number): number {
   const chTime   = cp.totalMins * (g.ratePerMinute ?? 0);
   let charge = setupCost + chCut + chWeight + chStack + chTime;
 
+  // Quantity discount
+  if (g.discountStep && g.discountPct && totalSheets > g.discountStep) {
+    const steps = Math.floor(totalSheets / g.discountStep) - 1;
+    const discountPct = Math.min(steps * g.discountPct, g.discountMax || 50);
+    charge *= (1 - discountPct / 100);
+  }
+
   if ((g.minCharge ?? 0) > 0 && charge < g.minCharge!) {
     charge = g.minCharge!;
   }
@@ -849,6 +895,10 @@ export function calculateCost(input: CostInput): CalculatorResult {
 
   // Paper
   const paper = calcPaperCost(input, totalMachineSheets);
+  // Paper price override
+  if (input.overrides?.paperPriceOverride != null && input.overrides.paperPriceOverride > 0) {
+    paper.cost = paper.totalStockSheets * input.overrides.paperPriceOverride;
+  }
 
   // Print
   const costPrint = input.machineCat === 'digital'
@@ -859,9 +909,9 @@ export function calculateCost(input: CostInput): CalculatorResult {
   const costGuillotine = calcGuillotineCost(input, totalMachineSheets);
   const costLamination = calcLaminationCost(input, totalMachineSheets);
   const costBinding = calcBindingCost(input);
-  const costFinishing = costGuillotine + costLamination + costBinding;
+  const costFinishing = costLamination + costBinding;
 
-  // Total cost
+  // Total cost (guillotine has no material cost — charge goes straight to profit)
   const totalCost = paper.cost + costPrint + costFinishing;
 
   // Revenue (apply markups from profile)
@@ -909,7 +959,7 @@ export function calculateCost(input: CostInput): CalculatorResult {
     productDetail.push({ label: `${totalFaces} όψεις × €${pricePerPage} × ${sheetMult}`, value: baseRevenue });
 
     // Quantity discount
-    if (pp.discount_step_qty && pp.discount_step_pct && input.qty > pp.discount_step_qty) {
+    if (pp.discount_enabled && pp.discount_step_qty && pp.discount_step_pct && input.qty > pp.discount_step_qty) {
       const steps = Math.floor(input.qty / pp.discount_step_qty) - 1;
       const discountPct = Math.min(steps * pp.discount_step_pct, pp.discount_max || 50);
       const discountAmt = productRevenue * (discountPct / 100);
@@ -950,14 +1000,23 @@ export function calculateCost(input: CostInput): CalculatorResult {
       productRevenue += pp.extra_varnish;
       productDetail.push({ label: 'Βερνίκι', value: pp.extra_varnish });
     }
+    // Quantity discount
+    if (pp.discount_enabled && pp.discount_step_qty && pp.discount_step_pct && input.qty > pp.discount_step_qty) {
+      const steps = Math.floor(input.qty / pp.discount_step_qty) - 1;
+      const discountPct = Math.min(steps * pp.discount_step_pct, pp.discount_max || 50);
+      const discountAmt = productRevenue * (discountPct / 100);
+      productRevenue -= discountAmt;
+      productDetail.push({ label: `Έκπτωση ${discountPct}%`, value: -discountAmt });
+    }
     // Hourly profit
     if (pp.hourly_enabled && pp.hourly_rate) {
       const oSpecs = input.specs as OffsetSpecs;
       const runHours = totalMachineSheets / (oSpecs.speed || 5000);
       const setupHours = (oSpecs.setupMin || 15) / 60;
-      const hourlyAmt = (runHours + setupHours) * pp.hourly_rate;
+      const totalHours = runHours + setupHours;
+      const hourlyAmt = totalHours * pp.hourly_rate;
       productRevenue += hourlyAmt;
-      productDetail.push({ label: `Hourly (${Math.round((runHours + setupHours) * 60)}')`, value: hourlyAmt });
+      productDetail.push({ label: `Hourly (${Math.round(totalHours * 60)}' × €${pp.hourly_rate}/h)`, value: hourlyAmt });
     }
     chargePrint = Math.max(productRevenue + costPrint, costPrint);
     productPricingApplied = true;
@@ -969,7 +1028,28 @@ export function calculateCost(input: CostInput): CalculatorResult {
     );
   }
 
-  const sellPrice = chargePaper + chargePrint + chargeFinishing;
+  // ─── APPLY OVERRIDES ───
+  const ov = input.overrides;
+  let adjChargeGuillotine = chargeGuillotine;
+  let adjChargeLamination = chargeLamination;
+  let adjChargeBinding = chargeBinding;
+  let extraCharges = 0;
+
+  if (ov) {
+    if (ov.guillotineDiscount) adjChargeGuillotine *= (1 - ov.guillotineDiscount / 100);
+    if (ov.lamDiscount) adjChargeLamination *= (1 - ov.lamDiscount / 100);
+    if (ov.bindingDiscount) adjChargeBinding *= (1 - ov.bindingDiscount / 100);
+    if (ov.extraPerPiece) extraCharges += ov.extraPerPiece * input.qty;
+    if (ov.extraPerSheet) extraCharges += ov.extraPerSheet * totalMachineSheets;
+    if (ov.extraPerFace) {
+      const faces = input.sides === 2 ? totalMachineSheets * 2 : totalMachineSheets;
+      extraCharges += ov.extraPerFace * faces;
+    }
+    if (ov.extraFixed) extraCharges += ov.extraFixed;
+  }
+
+  const adjChargeFinishing = adjChargeGuillotine + adjChargeLamination + adjChargeBinding;
+  const sellPrice = chargePaper + chargePrint + adjChargeFinishing + extraCharges;
   const profitAmount = sellPrice - totalCost;
   const pricePerPiece = input.qty > 0 ? sellPrice / input.qty : 0;
 
@@ -994,9 +1074,10 @@ export function calculateCost(input: CostInput): CalculatorResult {
     costLamination,
     costBinding,
     totalCost,
-    chargeFinishing,
-    chargeLamination,
-    chargeGuillotine,
+    chargeFinishing: adjChargeFinishing,
+    chargeLamination: adjChargeLamination,
+    chargeGuillotine: adjChargeGuillotine,
+    extraCharges,
     profitAmount,
     sellPrice,
     pricePerPiece,

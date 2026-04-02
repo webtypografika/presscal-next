@@ -111,6 +111,15 @@ model Org {
   // Job stages (customizable)
   jobStages    Json?    // [{id: string, label: string, icon: string, color: string}]
 
+  // Courier integration
+  courierProvider      String?  // 'nexday' (future: 'acs', 'speedex' etc.)
+  courierApiKey        String?  // Bearer token
+  courierSenderName    String?
+  courierSenderPhone   String?
+  courierSenderAddress String?
+  courierSenderCity    String?
+  courierSenderZip     String?
+
   // AADE credentials (for AFM lookup)
   aadeUsername  String?
   aadePassword  String?
@@ -540,6 +549,12 @@ model Quote {
   elorusInvoiceId  String?
   elorusInvoiceUrl String?
   elorusContactId  String?
+
+  // Courier
+  courierVoucherId  String?
+  courierProvider   String?   // 'nexday'
+  courierStatus     String?
+  courierStatusAt   DateTime?
 
   // Company profile snapshot (for approval page branding)
   companyProfile   Json?

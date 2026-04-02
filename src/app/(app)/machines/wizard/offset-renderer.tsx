@@ -300,7 +300,6 @@ function StepInks({ data, onChange }: { data: Data; onChange: OnChange }) {
             <ConsumableSlot label="IPA" conType="chemical" conModule="offset"
               costField="chem_alcohol_c" idField="chem_alcohol_consumable_id" nameField="chem_alcohol_consumable_name"
               data={data} onChange={onChange} />
-            <Field label="Κατανάλωση (ml/ώρα)"><NumInput value={data.off_chem_fountain_ml_h} onChange={(v) => onChange('off_chem_fountain_ml_h', v)} /></Field>
           </>
         )}
       </WizSection>

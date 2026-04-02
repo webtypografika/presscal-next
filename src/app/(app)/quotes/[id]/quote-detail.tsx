@@ -56,45 +56,83 @@ function initials(name: string): string {
 /** Build calculator URL from quote item data */
 function calcUrl(item: Record<string, unknown>, quoteId: string) {
   const p = new URLSearchParams();
-  const ai = item.aiParsed as Record<string, unknown> | undefined;
+  const cd = item.calcData as Record<string, unknown> | undefined;
 
-  // Dimensions: parse "210×297mm", "21x29.7cm", "A4", etc.
-  const dimStr = (ai?.dimensions as string) || '';
-  const dimMatch = dimStr.match(/([\d.]+)\s*[x×]\s*([\d.]+)\s*(cm|mm)?/i);
-  if (dimMatch) {
-    let w = parseFloat(dimMatch[1]);
-    let h = parseFloat(dimMatch[2]);
-    if (dimMatch[3]?.toLowerCase() === 'cm') { w *= 10; h *= 10; }
-    p.set('w', String(Math.round(w)));
-    p.set('h', String(Math.round(h)));
+  // ─── If calcData exists (previously costed), pass all specs for full restore ───
+  if (cd?.machineId) {
+    // Job
+    if (cd.width) p.set('w', String(cd.width));
+    if (cd.height) p.set('h', String(cd.height));
+    if (cd.qty) p.set('qty', String(cd.qty));
+    if (cd.sides) p.set('sides', String(cd.sides));
+    if (cd.pages) p.set('pages', String(cd.pages));
+    if (cd.archetype) p.set('archetype', cd.archetype as string);
+    // Machine & paper
+    p.set('machineId', cd.machineId as string);
+    if (cd.paperId) p.set('paperId', cd.paperId as string);
+    if (cd.productId) p.set('productId', cd.productId as string);
+    if (cd.feedEdge) p.set('feedEdge', cd.feedEdge as string);
+    if (cd.machineSheetW) p.set('machineSheetW', String(cd.machineSheetW));
+    if (cd.machineSheetH) p.set('machineSheetH', String(cd.machineSheetH));
+    // Color
+    if (cd.colorMode) p.set('colorMode', cd.colorMode as string);
+    if (cd.bleed != null) p.set('bleed', String(cd.bleed));
+    if (cd.coverageLevel) p.set('coverageLevel', cd.coverageLevel as string);
+    if (cd.offsetFrontCmyk != null) p.set('colorsF', String(cd.offsetFrontCmyk));
+    if (cd.offsetBackCmyk != null) p.set('colorsB', String(cd.offsetBackCmyk));
+    if (cd.offsetFrontPms) p.set('pmsFront', String(cd.offsetFrontPms));
+    if (cd.offsetBackPms) p.set('pmsBack', String(cd.offsetBackPms));
+    if (cd.offsetOilVarnish) p.set('oilVarnish', '1');
+    // Imposition
+    if (cd.impositionMode) p.set('impoMode', cd.impositionMode as string);
+    if (cd.impoRotation) p.set('impoRotation', String(cd.impoRotation));
+    if (cd.impoGutter) p.set('impoGutter', String(cd.impoGutter));
+    if (cd.impoForceUps) p.set('impoForceUps', String(cd.impoForceUps));
+    if (cd.impoForceCols) p.set('impoForceCols', String(cd.impoForceCols));
+    if (cd.impoForceRows) p.set('impoForceRows', String(cd.impoForceRows));
+    if (cd.impoDuplexOrient) p.set('impoDuplexOrient', cd.impoDuplexOrient as string);
+    if (cd.impoTurnType) p.set('impoTurnType', cd.impoTurnType as string);
+    if (cd.wasteFixed) p.set('wasteFixed', String(cd.wasteFixed));
+    // Finishing
+    if (cd.guillotineId) p.set('guillotineId', cd.guillotineId as string);
+    if (cd.lamMachineId) p.set('lamMachineId', cd.lamMachineId as string);
+    if (cd.lamFilmId) p.set('lamFilmId', cd.lamFilmId as string);
+    if (cd.lamSides) p.set('lamSides', String(cd.lamSides));
+    if (cd.bindingType) p.set('bindingType', cd.bindingType as string);
+    if (cd.bindingMachineId) p.set('bindingMachineId', cd.bindingMachineId as string);
+    if (cd.overrides && Object.values(cd.overrides as Record<string, unknown>).some(v => v != null && v !== 0)) {
+      p.set('overrides', JSON.stringify(cd.overrides));
+    }
+  } else {
+    // ─── No calcData: use AI-parsed + linkedFile hints (first-time costing) ───
+    const ai = item.aiParsed as Record<string, unknown> | undefined;
+    const dimStr = (ai?.dimensions as string) || '';
+    const dimMatch = dimStr.match(/([\d.]+)\s*[x×]\s*([\d.]+)\s*(cm|mm)?/i);
+    if (dimMatch) {
+      let w = parseFloat(dimMatch[1]);
+      let h = parseFloat(dimMatch[2]);
+      if (dimMatch[3]?.toLowerCase() === 'cm') { w *= 10; h *= 10; }
+      p.set('w', String(Math.round(w)));
+      p.set('h', String(Math.round(h)));
+    }
+    const qty = (ai?.quantity as number) || (item.qty as number) || 0;
+    if (qty > 0) p.set('qty', String(qty));
+    const colorsStr = (ai?.colors as string) || '';
+    const colMatch = colorsStr.match(/(\d+)\s*\/\s*(\d+)/);
+    if (colMatch) {
+      const back = parseInt(colMatch[2]);
+      p.set('sides', back > 0 ? '2' : '1');
+      p.set('colorsF', colMatch[1]);
+      p.set('colorsB', colMatch[2]);
+    }
+    if (ai?.paperType) p.set('paper', ai.paperType as string);
+    if (ai?.finishing && Array.isArray(ai.finishing) && ai.finishing.length) {
+      p.set('finishing', (ai.finishing as string[]).join(','));
+    }
+    if (ai?.description) p.set('desc', ai.description as string);
   }
 
-  // Quantity
-  const qty = (ai?.quantity as number) || (item.qty as number) || 0;
-  if (qty > 0) p.set('qty', String(qty));
-
-  // Colors → sides: "4/4" = 2 sides, "4/0" = 1 side
-  const colorsStr = (ai?.colors as string) || '';
-  const colMatch = colorsStr.match(/(\d+)\s*\/\s*(\d+)/);
-  if (colMatch) {
-    const back = parseInt(colMatch[2]);
-    p.set('sides', back > 0 ? '2' : '1');
-    p.set('colorsF', colMatch[1]);
-    p.set('colorsB', colMatch[2]);
-  }
-
-  // Paper type hint
-  if (ai?.paperType) p.set('paper', ai.paperType as string);
-
-  // Finishing hints
-  if (ai?.finishing && Array.isArray(ai.finishing) && ai.finishing.length) {
-    p.set('finishing', (ai.finishing as string[]).join(','));
-  }
-
-  // Description for display
-  if (ai?.description) p.set('desc', ai.description as string);
-
-  // Linked file data — overrides AI-parsed dimensions
+  // Linked file data — always apply (overrides dimensions)
   const lf = item.linkedFile as Record<string, unknown> | undefined;
   if (lf) {
     if (lf.width && lf.height) {
@@ -157,9 +195,9 @@ function aiToItem(ai: any) {
 
 // ─── MAIN COMPONENT ───
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { quote: QuoteWithCustomer; customers: any[]; elorusConfigured?: boolean; elorusSlug?: string; materials?: Material[]; org?: Pick<Org, 'legalName' | 'afm' | 'doy' | 'address' | 'city' | 'postalCode' | 'phone' | 'email'> | null; }
+interface Props { quote: QuoteWithCustomer; customers: any[]; elorusConfigured?: boolean; elorusSlug?: string; courierConfigured?: boolean; materials?: Material[]; org?: Pick<Org, 'legalName' | 'afm' | 'doy' | 'address' | 'city' | 'postalCode' | 'phone' | 'email'> | null; }
 
-export function QuoteDetail({ quote: initial, customers, elorusConfigured, elorusSlug, materials = [], org }: Props) {
+export function QuoteDetail({ quote: initial, customers, elorusConfigured, elorusSlug, courierConfigured, materials = [], org }: Props) {
   const router = useRouter();
   const [quote, setQuote] = useState(initial);
   const [items, setItems] = useState<any[]>(() => Array.isArray(initial.items) && (initial.items as any[]).length > 0 ? initial.items as any[] : []);
@@ -172,6 +210,9 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [saving, setSaving] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showCourierModal, setShowCourierModal] = useState(false);
+  const [courierVoucher, setCourierVoucher] = useState(quote.courierVoucherId || '');
+  const [courierStatus, setCourierStatus] = useState(quote.courierStatus || '');
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
 
@@ -533,6 +574,46 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           )
         )}
 
+        {/* Courier */}
+        {courierConfigured && (
+          courierVoucher ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
+                background: 'color-mix(in srgb, #10b981 12%, transparent)',
+                border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
+                color: '#10b981',
+              }}>
+                <i className="fas fa-truck" style={{ fontSize: '0.6rem' }} /> {courierVoucher}
+                {courierStatus && <span style={{ fontSize: '0.68rem', color: '#64748b', marginLeft: 4 }}>· {courierStatus}</span>}
+              </span>
+              <button onClick={async () => {
+                const res = await fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'trackVoucher', quoteId: quote.id }) }).then(r => r.json());
+                if (res.ok) setCourierStatus(res.status);
+              }} title="Ανανέωση status" style={{ border: 'none', background: 'transparent', color: '#10b981', cursor: 'pointer', fontSize: '0.7rem', padding: '4px' }}>
+                <i className="fas fa-sync-alt" />
+              </button>
+              <button onClick={async () => {
+                const res = await fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'printVoucher', quoteId: quote.id, type: 'a6' }) });
+                if (res.ok) { const blob = await res.blob(); window.open(URL.createObjectURL(blob)); }
+              }} title="Εκτύπωση A6" style={{ border: 'none', background: 'transparent', color: '#10b981', cursor: 'pointer', fontSize: '0.7rem', padding: '4px' }}>
+                <i className="fas fa-print" />
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setShowCourierModal(true)} style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
+              background: 'color-mix(in srgb, #10b981 12%, transparent)',
+              border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
+              color: '#10b981', cursor: 'pointer',
+            }}>
+              <i className="fas fa-truck" style={{ fontSize: '0.6rem' }} /> Αποστολή
+            </button>
+          )
+        )}
+
         {/* Order papers */}
         {items.some(i => i.calcData?.paperName) && (
           <button onClick={() => setShowOrderModal(true)} style={{
@@ -631,14 +712,19 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 </div>
               )}
               {item.calcData?.paperName && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px', marginTop: -2 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px', marginTop: -2, flexWrap: 'wrap' }}>
                   <i className="fas fa-scroll" style={{ fontSize: '0.5rem', color: 'var(--teal)' }} />
                   <span style={{ fontSize: '0.68rem', color: 'var(--teal)' }}>{item.calcData.paperName}</span>
-                  {item.calcData.sheets && (
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{item.calcData.sheets} φύλλα</span>
+                  {item.calcData.sides && (
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{item.calcData.sides === 2 ? '2 όψεις' : '1 όψη'}</span>
                   )}
-                  {item.calcData.machineName && (
-                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{item.calcData.machineName}</span>
+                  {(item.calcData.offsetFrontCmyk != null || item.calcData.colorMode) && (
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                      {item.calcData.colorMode === 'bw' ? 'B/W' : `${item.calcData.offsetFrontCmyk ?? 4}/${item.calcData.offsetBackCmyk ?? 0}`}
+                    </span>
+                  )}
+                  {item.calcData.archetype && (
+                    <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{item.calcData.archetype}</span>
                   )}
                   {items.some(i => i.id !== item.id && !i.calcData?.machineId) && (
                     <button
@@ -699,8 +785,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 
         {/* Totals row */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 85px 85px 85px',
-          gap: 0, padding: '10px 10px', background: 'rgba(255,255,255,0.015)',
+          display: 'grid', gridTemplateColumns: '1fr auto auto auto',
+          gap: 16, padding: '10px 10px', background: 'rgba(255,255,255,0.015)',
           borderTop: '1px solid var(--border)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text-muted)' }}>
@@ -805,6 +891,21 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             toast('Η προσφορά εστάλη!');
           }}
           toast={toast}
+        />
+      )}
+
+      {/* ─── COURIER VOUCHER MODAL ─── */}
+      {showCourierModal && (
+        <CourierVoucherModal
+          quoteId={quote.id}
+          company={selectedCompany}
+          onClose={() => setShowCourierModal(false)}
+          onCreated={(voucherId) => {
+            setCourierVoucher(voucherId);
+            setCourierStatus('Δημιουργήθηκε');
+            setShowCourierModal(false);
+            toast('Voucher δημιουργήθηκε');
+          }}
         />
       )}
 
@@ -1928,6 +2029,12 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
   const [emailSender, setEmailSender] = useState<{ name: string; email: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Elorus search
+  const [elorusResults, setElorusResults] = useState<{ id: string; display_name: string; company: string; tin: string; email: string }[]>([]);
+  const [elorusLoading, setElorusLoading] = useState(false);
+  const [elorusImporting, setElorusImporting] = useState<string | null>(null);
+  const elorusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const inp: React.CSSProperties = {
     width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
     borderRadius: 6, padding: '7px 10px', color: 'var(--text)', fontSize: '0.85rem', outline: 'none',
@@ -1956,6 +2063,75 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
       })
       .catch(() => {});
   }, [linkedEmails]);
+
+  // Elorus search (debounced)
+  useEffect(() => {
+    if (elorusTimer.current) clearTimeout(elorusTimer.current);
+    if (!search || search.length < 2) { setElorusResults([]); return; }
+    elorusTimer.current = setTimeout(async () => {
+      setElorusLoading(true);
+      try {
+        const res = await fetch('/api/elorus/contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'search', search }),
+        });
+        const data = await res.json();
+        // Filter out contacts already in local DB (by AFM match)
+        const localAfms = new Set(customers.map((c: any) => c.afm).filter(Boolean));
+        setElorusResults((data.contacts || []).filter((e: any) => !e.tin || !localAfms.has(e.tin)));
+      } catch { setElorusResults([]); }
+      finally { setElorusLoading(false); }
+    }, 400);
+    return () => { if (elorusTimer.current) clearTimeout(elorusTimer.current); };
+  }, [search, customers]);
+
+  // Import Elorus contact → create Company via AADE lookup
+  async function importElorus(ec: { id: string; display_name: string; company: string; tin: string; email: string }) {
+    setElorusImporting(ec.id);
+    try {
+      let companyName = ec.company || ec.display_name;
+      let doy = '';
+      let address = '';
+      let city = '';
+      let zip = '';
+      let email = ec.email || '';
+
+      // AADE lookup if we have AFM
+      if (ec.tin && ec.tin.length === 9) {
+        const aadeRes = await fetch('/api/elorus/lookup-afm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ afm: ec.tin }),
+        }).then(r => r.json()).catch(() => ({}));
+        if (aadeRes?.company) companyName = aadeRes.company;
+        if (aadeRes?.doy) doy = aadeRes.doy;
+        if (aadeRes?.address) address = aadeRes.address;
+        if (aadeRes?.city) city = aadeRes.city;
+        if (aadeRes?.zip) zip = aadeRes.zip;
+        if (aadeRes?.email && !email) email = aadeRes.email;
+      }
+
+      // Create Company in DB
+      const { createCompanyFromElorus } = await import('../actions');
+      const company = await createCompanyFromElorus({
+        name: companyName,
+        afm: ec.tin || undefined,
+        doy: doy || undefined,
+        email: email || undefined,
+        address: address || undefined,
+        city: city || undefined,
+        zip: zip || undefined,
+        elorusContactId: ec.id,
+      });
+      toast('Εισαγωγή από Elorus');
+      onSelect(company.id);
+    } catch (e) {
+      toast('Σφάλμα: ' + (e as Error).message, 'error');
+    } finally {
+      setElorusImporting(null);
+    }
+  }
 
   function openNew() {
     setFormName(emailSender?.name || '');
@@ -2180,10 +2356,52 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
                 </button>
               </div>
             ))}
-            {filtered.length === 0 && (
+            {filtered.length === 0 && !elorusResults.length && !elorusLoading && (
               <div style={{ padding: '16px 12px', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center' }}>
                 Κανένα αποτέλεσμα
               </div>
+            )}
+
+            {/* Elorus results */}
+            {(elorusResults.length > 0 || elorusLoading) && (
+              <>
+                <div style={{
+                  padding: '6px 12px', fontSize: '0.7rem', fontWeight: 600, color: '#64748b',
+                  borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
+                  background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <i className="fas fa-cloud-download-alt" style={{ fontSize: '0.6rem' }} />
+                  Elorus
+                  {elorusLoading && <i className="fas fa-spinner fa-spin" style={{ fontSize: '0.55rem', marginLeft: 'auto' }} />}
+                </div>
+                {elorusResults.map(ec => (
+                  <div
+                    key={ec.id}
+                    onClick={() => !elorusImporting && importElorus(ec)}
+                    style={{
+                      padding: '8px 12px', cursor: elorusImporting ? 'wait' : 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      opacity: elorusImporting && elorusImporting !== ec.id ? 0.4 : 1,
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <i className="fas fa-building" style={{ fontSize: '0.65rem', color: '#3b82f6', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                        {ec.company || ec.display_name}
+                        {elorusImporting === ec.id && <i className="fas fa-spinner fa-spin" style={{ marginLeft: 6, fontSize: '0.6rem' }} />}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {ec.tin && <span>ΑΦΜ {ec.tin}</span>}
+                        {ec.tin && ec.email && <span> · </span>}
+                        {ec.email && <span>{ec.email}</span>}
+                      </div>
+                    </div>
+                    <i className="fas fa-plus" style={{ fontSize: '0.55rem', color: 'var(--accent)', flexShrink: 0 }} />
+                  </div>
+                ))}
+              </>
             )}
           </div>
         </>
@@ -2560,5 +2778,118 @@ function ElorusInvoiceModal({ quoteId, quoteNumber, customerName, customerAfm, c
       </div>
     </div>,
     document.body
+  );
+}
+
+// ═══ COURIER VOUCHER MODAL ═══
+function CourierVoucherModal({ quoteId, company, onClose, onCreated }: {
+  quoteId: string;
+  company: any;
+  onClose: () => void;
+  onCreated: (voucherId: string) => void;
+}) {
+  const primaryContact = company?.companyContacts?.find((cc: any) => cc.isPrimary)?.contact;
+  const [name, setName] = useState(company?.name || '');
+  const [phone, setPhone] = useState(primaryContact?.phone || company?.phone || '');
+  const [address, setAddress] = useState(company?.address || '');
+  const [city, setCity] = useState(company?.city || '');
+  const [zip, setZip] = useState(company?.zip || '');
+  const [weight, setWeight] = useState(1);
+  const [cod, setCod] = useState(0);
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const inp: React.CSSProperties = {
+    width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+    borderRadius: 6, padding: '7px 10px', color: 'var(--text)', fontSize: '0.85rem', outline: 'none',
+  };
+
+  async function handleCreate() {
+    if (!name || !phone || !address || !city || !zip) { setError('Συμπληρώστε όλα τα πεδία'); return; }
+    setBusy(true); setError('');
+    const res = await fetch('/api/courier', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createVoucher', quoteId,
+        receiverName: name, receiverPhone: phone,
+        receiverAddress: address, receiverCity: city, receiverZip: zip,
+        weight, cod: cod > 0 ? cod : undefined, notes,
+      }),
+    }).then(r => r.json());
+    setBusy(false);
+    if (res.ok) onCreated(res.voucherId);
+    else setError(res.error || 'Σφάλμα');
+  }
+
+  return createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: '#141e37', border: '1px solid var(--border)', borderRadius: 14, width: 420, padding: '20px 24px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h2 style={{ fontSize: '1rem', fontWeight: 600, margin: 0 }}>
+            <i className="fas fa-truck" style={{ marginRight: 8, color: '#10b981' }} />Αποστολή Courier
+          </h2>
+          <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '1rem' }}>
+            <i className="fas fa-times" />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>Παραλήπτης *</label>
+            <input value={name} onChange={e => setName(e.target.value)} style={inp} />
+          </div>
+          <div>
+            <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>Τηλέφωνο *</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} style={inp} />
+          </div>
+          <div>
+            <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>Διεύθυνση *</label>
+            <input value={address} onChange={e => setAddress(e.target.value)} style={inp} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>Πόλη *</label>
+              <input value={city} onChange={e => setCity(e.target.value)} style={inp} />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>ΤΚ *</label>
+              <input value={zip} onChange={e => setZip(e.target.value)} style={inp} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>Βάρος (kg)</label>
+              <input type="number" value={weight} onChange={e => setWeight(Number(e.target.value))} min={1} style={inp} />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>Αντικαταβολή €</label>
+              <input type="number" value={cod} onChange={e => setCod(Number(e.target.value))} min={0} step={0.01} style={inp} />
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>Σημειώσεις</label>
+            <input value={notes} onChange={e => setNotes(e.target.value)} style={inp} />
+          </div>
+        </div>
+
+        {error && <div style={{ marginTop: 10, fontSize: '0.78rem', color: '#ef4444' }}>{error}</div>}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem' }}>
+            Ακύρωση
+          </button>
+          <button onClick={handleCreate} disabled={busy} style={{
+            padding: '8px 20px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            background: '#10b981', color: '#fff', fontSize: '0.82rem', fontWeight: 600,
+            opacity: busy ? 0.5 : 1,
+          }}>
+            {busy ? <><i className="fas fa-spinner fa-spin" /> Δημιουργία...</> : <><i className="fas fa-truck" /> Δημιουργία Voucher</>}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }

@@ -355,6 +355,36 @@ export async function createCustomer(data: {
   return { id: company.id, name: company.name, company: company.name, email: company.email };
 }
 
+export async function createCompanyFromElorus(data: {
+  name: string;
+  afm?: string;
+  doy?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  zip?: string;
+  elorusContactId?: string;
+}) {
+  const company = await prisma.company.create({
+    data: {
+      orgId: ORG_ID,
+      name: data.name,
+      afm: data.afm || null,
+      doy: data.doy || null,
+      email: data.email || null,
+      phone: data.phone || null,
+      address: data.address || null,
+      city: data.city || null,
+      zip: data.zip || null,
+      elorusContactId: data.elorusContactId || null,
+    },
+  });
+  revalidatePath('/quotes');
+  revalidatePath('/companies');
+  return { id: company.id, name: company.name };
+}
+
 export async function updateCustomer(id: string, data: Record<string, unknown>) {
   // Try updating as Company first (new model), fall back to old Customer
   try {

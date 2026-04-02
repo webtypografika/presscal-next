@@ -442,16 +442,20 @@ function ProductModal({ product, onSave, onClose }: ProductModalProps) {
   // Offset
   const offData = (product?.offset as Record<string, unknown>) || {};
   const [offChargePerColor, setOffChargePerColor] = useState<number>((offData.charge_per_color as number) || 0);
-  const [offMinCharge, setOffMinCharge] = useState<number>((offData.min_charge as number) || 25);
   const [offExtraPantone, setOffExtraPantone] = useState<number>((offData.extra_pantone as number) || 0);
   const [offExtraVarnish, setOffExtraVarnish] = useState<number>((offData.extra_varnish as number) || 0);
   const [offHourlyEnabled, setOffHourlyEnabled] = useState<boolean>(Boolean(offData.hourly_enabled));
   const [offHourlyRate, setOffHourlyRate] = useState<number>((offData.hourly_rate as number) || 0);
+  const [offDiscountEnabled, setOffDiscountEnabled] = useState<boolean>(Boolean(offData.discount_enabled));
+  const [offDiscountStepQty, setOffDiscountStepQty] = useState<number>((offData.discount_step_qty as number) || 500);
+  const [offDiscountStepPct, setOffDiscountStepPct] = useState<number>((offData.discount_step_pct as number) || 0);
+  const [offDiscountMax, setOffDiscountMax] = useState<number>((offData.discount_max as number) || 30);
 
   // Digital
   const digData = (product?.digital as Record<string, unknown>) || {};
   const [digPriceColor, setDigPriceColor] = useState<number>((digData.price_color as number) || 0.10);
   const [digPriceBw, setDigPriceBw] = useState<number>((digData.price_bw as number) || 0.03);
+  const [digDiscountEnabled, setDigDiscountEnabled] = useState<boolean>(Boolean(digData.discount_enabled ?? true));
   const [digDiscountStepQty, setDigDiscountStepQty] = useState<number>((digData.discount_step_qty as number) || 50);
   const [digDiscountStepPct, setDigDiscountStepPct] = useState<number>((digData.discount_step_pct as number) || 0);
   const [digDiscountMax, setDigDiscountMax] = useState<number>((digData.discount_max as number) || 30);
@@ -476,16 +480,19 @@ function ProductModal({ product, onSave, onClose }: ProductModalProps) {
       customMult: archetype === 'custom' ? customMult : undefined,
       offset: {
         charge_per_color: offChargePerColor,
-        min_charge: offMinCharge,
         extra_pantone: offExtraPantone,
         extra_varnish: offExtraVarnish,
         hourly_enabled: offHourlyEnabled,
         hourly_rate: offHourlyRate,
-        scales: (offData.scales as unknown[]) || [],
+        discount_enabled: offDiscountEnabled,
+        discount_step_qty: offDiscountStepQty,
+        discount_step_pct: offDiscountStepPct,
+        discount_max: offDiscountMax,
       },
       digital: {
         price_color: digPriceColor,
         price_bw: digPriceBw,
+        discount_enabled: digDiscountEnabled,
         discount_step_qty: digDiscountStepQty,
         discount_step_pct: digDiscountStepPct,
         discount_max: digDiscountMax,
@@ -581,21 +588,15 @@ function ProductModal({ product, onSave, onClose }: ProductModalProps) {
                 border: 'none', cursor: 'pointer', background: 'transparent',
                 borderBottom: `2px solid ${offTab === t ? '#f59e0b' : 'transparent'}`,
                 color: offTab === t ? '#f59e0b' : '#94a3b8', transition: 'all 0.2s',
-              }}>{t === 'basic' ? 'Βασικά' : 'Κλίμακες'}</button>
+              }}>{t === 'basic' ? 'Βασικά' : 'Έκπτωση'}</button>
             ))}
           </div>
           <div style={{ padding: 14 }}>
             {offTab === 'basic' && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                  <div>
-                    <label style={{ ...labelStyle, color: '#f59e0b' }}>Χρέωση/Χρώμα €</label>
-                    <input type="number" value={offChargePerColor} onChange={e => setOffChargePerColor(Number(e.target.value))} min={0} step={0.5} style={inputStyle} />
-                  </div>
-                  <div>
-                    <label style={{ ...labelStyle, color: '#f59e0b' }}>Ελάχιστη Χρέωση €</label>
-                    <input type="number" value={offMinCharge} onChange={e => setOffMinCharge(Number(e.target.value))} min={0} step={0.5} style={inputStyle} />
-                  </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ ...labelStyle, color: '#f59e0b' }}>Χρέωση/Χρώμα €</label>
+                  <input type="number" value={offChargePerColor} onChange={e => setOffChargePerColor(Number(e.target.value))} min={0} step={0.5} style={inputStyle} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                   <div>
@@ -622,10 +623,26 @@ function ProductModal({ product, onSave, onClose }: ProductModalProps) {
               </>
             )}
             {offTab === 'scales' && (
-              <div style={{ textAlign: 'center', padding: 20, color: '#64748b', fontSize: '0.78rem' }}>
-                <i className="fas fa-layer-group" style={{ fontSize: '1.5rem', marginBottom: 8, display: 'block', color: '#f59e0b' }} />
-                Κλίμακες ποσότητας — σύντομα
-              </div>
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <input type="checkbox" checked={offDiscountEnabled} onChange={e => setOffDiscountEnabled(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                  <label style={{ ...labelStyle, color: '#f59e0b', margin: 0 }}>Έκπτωση Ποσότητας</label>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, opacity: offDiscountEnabled ? 1 : 0.35, pointerEvents: offDiscountEnabled ? 'auto' : 'none' }}>
+                  <div>
+                    <label style={{ ...labelStyle, color: '#94a3b8', fontSize: '0.6rem' }}>Βήμα (τεμ.)</label>
+                    <input type="number" value={offDiscountStepQty} onChange={e => setOffDiscountStepQty(Number(e.target.value))} min={1} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, color: '#94a3b8', fontSize: '0.6rem' }}>Μείωση %</label>
+                    <input type="number" value={offDiscountStepPct} onChange={e => setOffDiscountStepPct(Number(e.target.value))} min={0} max={50} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ ...labelStyle, color: '#94a3b8', fontSize: '0.6rem' }}>Max %</label>
+                    <input type="number" value={offDiscountMax} onChange={e => setOffDiscountMax(Number(e.target.value))} min={0} max={90} style={inputStyle} />
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -675,8 +692,11 @@ function ProductModal({ product, onSave, onClose }: ProductModalProps) {
             )}
             {digTab === 'discount' && (
               <>
-                <label style={{ ...labelStyle, color: '#3b82f6', marginBottom: 10 }}>Έκπτωση Ποσότητας</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <input type="checkbox" checked={digDiscountEnabled} onChange={e => setDigDiscountEnabled(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                  <label style={{ ...labelStyle, color: '#3b82f6', margin: 0 }}>Έκπτωση Ποσότητας</label>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, opacity: digDiscountEnabled ? 1 : 0.35, pointerEvents: digDiscountEnabled ? 'auto' : 'none' }}>
                   <div>
                     <label style={{ ...labelStyle, color: '#94a3b8', fontSize: '0.6rem' }}>Βήμα (τεμ.)</label>
                     <input type="number" value={digDiscountStepQty} onChange={e => setDigDiscountStepQty(Number(e.target.value))} min={1} style={inputStyle} />

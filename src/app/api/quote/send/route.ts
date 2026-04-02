@@ -88,8 +88,8 @@ export async function POST(req: NextRequest) {
     // Format currency
     const fmt = (n: number) => new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(n);
 
-    // Base URL for approve landing page
-    const baseUrl = process.env.NEXTAUTH_URL || req.nextUrl.origin;
+    // Base URL for approve landing page — prefer explicit public URL, then Vercel, then request origin
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : req.nextUrl.origin);
     const approveAllUrl = `${baseUrl}/api/quote/approve?quoteId=${quoteId}`;
 
     // Build HTML email

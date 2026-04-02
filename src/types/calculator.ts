@@ -32,6 +32,8 @@ export interface CalculatorInput {
   impoGutter: number;
   impoBleed: number;
   impoForceUps?: number;
+  impoForceCols?: number;
+  impoForceRows?: number;
   impoTurnType?: WorkTurnType;
   impoCropMarks: boolean;
 
@@ -54,6 +56,20 @@ export interface CalculatorInput {
   lamSides?: 1 | 2;
   bindingType?: '' | 'staple' | 'glue' | 'spiral';
   bindingMachineId?: UUID;
+
+  // Per-job overrides
+  overrides?: {
+    paperPriceOverride?: number;
+    plateDiscount?: number;
+    hourlyOverride?: number;
+    guillotineDiscount?: number;
+    lamDiscount?: number;
+    bindingDiscount?: number;
+    extraPerPiece?: number;
+    extraPerSheet?: number;
+    extraPerFace?: number;
+    extraFixed?: number;
+  };
 }
 
 export interface CalculatorResult {
@@ -79,6 +95,7 @@ export interface CalculatorResult {
   chargeFinishing: number;
   chargeLamination: number;
   chargeGuillotine: number;
+  extraCharges: number;
   profitAmount: number;
   sellPrice: number;
   pricePerPiece: number;

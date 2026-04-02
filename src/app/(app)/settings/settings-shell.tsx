@@ -303,6 +303,7 @@ export function SettingsShell({ org }: { org: Org }) {
       {tab === 'integrations' && (
         <div className="panel" style={{ maxWidth: 700 }}>
           <ElorusSettings org={org} inputCls={inputCls} />
+          <CourierSettings inputCls={inputCls} />
 
           <Section icon="fa-envelope" iconColor="#ea4335" title="GMAIL — ΑΠΟΣΤΟΛΗ EMAIL">
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
@@ -698,6 +699,79 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
               background: '#4f46e5', color: '#fff', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
               opacity: busy ? 0.5 : 1,
             }}>{busy ? 'Σύνδεση...' : 'Σύνδεση με Elorus'}</button>
+            {msg && <span style={{ fontSize: '0.72rem', color: msg.includes('!') ? 'var(--success)' : '#ef4444', fontWeight: 600 }}>{msg}</span>}
+          </div>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ═══ COURIER SETTINGS ═══
+function CourierSettings({ inputCls }: { inputCls: string }) {
+  const [connected, setConnected] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [apiKeyMasked, setApiKeyMasked] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [loaded, setLoaded] = useState(false);
+
+  useState(() => {
+    fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get' }) })
+      .then(r => r.json())
+      .then(d => {
+        setConnected(d.connected);
+        setApiKeyMasked(d.apiKeyMasked || '');
+        setLoaded(true);
+      }).catch(() => setLoaded(true));
+  });
+
+  async function handleSave() {
+    setBusy(true); setMsg('');
+    const res = await fetch('/api/courier', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'save', apiKey }),
+    }).then(r => r.json());
+    setBusy(false);
+    if (res.ok) { setMsg('Συνδέθηκε!'); setConnected(true); setApiKeyMasked('••••' + apiKey.slice(-4)); setApiKey(''); }
+    else setMsg(res.error || 'Σφάλμα');
+  }
+
+  async function handleDisconnect() {
+    setBusy(true);
+    await fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'disconnect' }) });
+    setConnected(false); setApiKeyMasked(''); setApiKey('');
+    setBusy(false); setMsg('');
+  }
+
+  if (!loaded) return null;
+
+  return (
+    <Section icon="fa-truck" iconColor="#10b981" title="COURIER — ΑΠΟΣΤΟΛΕΣ">
+      {connected ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <i className="fas fa-check-circle" style={{ color: 'var(--success)' }} />
+          <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>NexDay (Hermes)</span>
+          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{apiKeyMasked}</span>
+          <span style={{ fontSize: '0.65rem', color: '#64748b' }}>· Στοιχεία αποστολέα από Προφίλ Εταιρείας</span>
+          <button onClick={handleDisconnect} disabled={busy} style={{
+            marginLeft: 'auto', border: 'none', background: 'transparent',
+            color: '#ef4444', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600,
+          }}>Αποσύνδεση</button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Συνδέστε τον λογαριασμό NexDay (Hermes) για αποστολή vouchers. Τα στοιχεία αποστολέα λαμβάνονται από το Προφίλ Εταιρείας.</div>
+          <div>
+            <label style={{ fontSize: '0.68rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>API Key</label>
+            <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="NexDay Bearer Token" className={inputCls} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={handleSave} disabled={busy || !apiKey} style={{
+              padding: '8px 16px', borderRadius: 8, border: 'none', cursor: apiKey ? 'pointer' : 'not-allowed',
+              background: apiKey ? '#10b981' : 'var(--border)', color: '#fff', fontSize: '0.78rem', fontWeight: 600,
+              opacity: busy ? 0.5 : 1,
+            }}>{busy ? 'Σύνδεση...' : 'Σύνδεση'}</button>
             {msg && <span style={{ fontSize: '0.72rem', color: msg.includes('!') ? 'var(--success)' : '#ef4444', fontWeight: 600 }}>{msg}</span>}
           </div>
         </div>

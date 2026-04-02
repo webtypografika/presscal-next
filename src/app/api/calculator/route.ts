@@ -63,7 +63,7 @@ function mapDigitalSpecs(raw: Record<string, unknown>): DigitalSpecs {
 function mapOffsetSpecs(raw: Record<string, unknown>): OffsetSpecs {
   return {
     towers: (raw.off_towers as number) || 4,
-    speed: (raw.off_speed as number) || (raw.off_common_speed as number) || 5000,
+    speed: (raw.off_common_speed as number) || (raw.off_speed as number) || 5000,
     perfecting: !!raw.off_perfecting,
     hasVarnishTower: !!raw.off_has_varnish_tower,
     varnishType: (raw.off_varnish_type as OffsetSpecs['varnishType']) || undefined,
@@ -82,8 +82,8 @@ function mapOffsetSpecs(raw: Record<string, unknown>): OffsetSpecs {
     inkCleanerCpl: (raw.chem_wash_ink_c as number) || undefined,
     waterCleanerCpl: (raw.chem_wash_water_c as number) || undefined,
     washMlPerLiter: (raw.off_chem_wash_ml as number) || undefined,
-    ipaMlPerHour: (raw.off_chem_fountain_ml_h as number) || undefined,
-    ipaCpl: (raw.chem_alcohol_c as number) || undefined,
+    ipaMlPerHour: undefined, // auto-calculated from machine format + towers
+    ipaCpl: (raw.chem_alcohol_c as number) || undefined, // fallback, overridden by consumable
     varnishGm2: (raw.off_varnish_gm2 as number) || undefined,
     coatingGm2: (raw.off_coating_gm2 as number) || undefined,
     coatingPricePerKg: (raw.off_coating_c as number) || undefined,
@@ -138,6 +138,10 @@ export async function POST(req: NextRequest) {
           bladeLife: gSpecs.blade_life || 2000,
           hourlyCost: gSpecs.hourly_cost,
           minCharge: guill.minCharge || 0,
+          // Quantity discount
+          discountStep: gSpecs.discount_step,
+          discountPct: gSpecs.discount_pct,
+          discountMax: gSpecs.discount_max,
         };
       }
     }
@@ -325,12 +329,42 @@ export async function POST(req: NextRequest) {
         // Chemicals
         const chems = cons.filter(c => c.conType === 'chemical');
         for (const c of chems) {
-          const cpl = ((c.costPerBase || 0) as number) || ((c.unitSize as number) ? ((c.costPerUnit || 0) as number) / (c.unitSize as number) : 0);
+          // Cost per liter: prefer costPerUnit/unitSize (e.g. €56/30lt), fallback to costPerBase (already per liter)
+          const unitSize = (c.unitSize as number) || 0;
+          const cpl = unitSize > 0 && (c.costPerUnit as number) > 0
+            ? (c.costPerUnit as number) / unitSize
+            : ((c.costPerBase || 0) as number);
           if (cpl <= 0) continue;
           const name = ((c.name as string) || '').toLowerCase();
           if (name.includes('wash') && name.includes('ink') || name.includes('mrc')) os.inkCleanerCpl = cpl;
           else if (name.includes('wash') && name.includes('water') || name.includes('hpl')) os.waterCleanerCpl = cpl;
           else if (name.includes('alcohol') || name.includes('ipa') || name.includes('isopropyl')) os.ipaCpl = cpl;
+        }
+        // If no IPA consumable found on machine, look in warehouse
+        if (!chems.some(c => {
+          const n = ((c.name as string) || '').toLowerCase();
+          return n.includes('alcohol') || n.includes('ipa') || n.includes('isopropyl');
+        })) {
+          const warehouseIpa = await prisma.consumable.findFirst({
+            where: {
+              orgId: ORG_ID, deletedAt: null, conType: 'chemical',
+              name: { contains: 'ipa', mode: 'insensitive' },
+            },
+            select: { costPerBase: true, costPerUnit: true, unitSize: true },
+          }) || await prisma.consumable.findFirst({
+            where: {
+              orgId: ORG_ID, deletedAt: null, conType: 'chemical',
+              name: { contains: 'alcohol', mode: 'insensitive' },
+            },
+            select: { costPerBase: true, costPerUnit: true, unitSize: true },
+          });
+          if (warehouseIpa) {
+            const us = (warehouseIpa.unitSize as number) || 0;
+            const wCpl = us > 0 && (warehouseIpa.costPerUnit as number) > 0
+              ? (warehouseIpa.costPerUnit as number) / us
+              : ((warehouseIpa.costPerBase || 0) as number);
+            if (wCpl > 0) os.ipaCpl = wCpl;
+          }
         }
       }
     }
@@ -365,6 +399,8 @@ export async function POST(req: NextRequest) {
       gutter: body.impoGutter || 0,
       area,
       forceUps: body.impoForceUps,
+      forceCols: body.impoForceCols,
+      forceRows: body.impoForceRows,
       rotation: body.impoRotation,
       turnType: body.impoTurnType,
     };
@@ -421,23 +457,32 @@ export async function POST(req: NextRequest) {
       offsetOilVarnish: body.offsetOilVarnish,
       productPricing: productPricing ? {
         charge_per_color: productPricing.charge_per_color as number,
-        min_charge: productPricing.min_charge as number,
         extra_pantone: productPricing.extra_pantone as number,
         extra_varnish: productPricing.extra_varnish as number,
         hourly_enabled: productPricing.hourly_enabled as boolean,
         hourly_rate: productPricing.hourly_rate as number,
         price_color: productPricing.price_color as number,
         price_bw: productPricing.price_bw as number,
+        discount_enabled: productPricing.discount_enabled as boolean,
         discount_step_qty: productPricing.discount_step_qty as number,
         discount_step_pct: productPricing.discount_step_pct as number,
         discount_max: productPricing.discount_max as number,
       } : undefined,
+      // Overrides
+      overrides: body.overrides || undefined,
     };
 
     const result = calculateCost(costInput);
     if (lamWarnings.length > 0) result.lamWarnings = lamWarnings;
 
-    return Response.json({ imposition, result, debug: { machineCat, productPricing: productPricing?.name } });
+    // Inject debug into result so it's always visible
+    (result as any)._dbg = {
+      productName: productPricing?.name ?? null,
+      offHourlyRate: productPricing?.hourly_rate ?? null,
+      offHourlyEnabled: productPricing?.hourly_enabled ?? null,
+      speedUsed: (machineSpecs as any).speed ?? null,
+    };
+    return Response.json({ imposition, result, debug: { machineCat } });
   } catch (err) {
     console.error('Calculator API error:', err);
     return Response.json(

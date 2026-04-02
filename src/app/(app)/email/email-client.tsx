@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { GmailMessageMeta, GmailFullMessage, GmailLabel } from '@/lib/gmail';
 import { parseAddress, getInitials, avatarColor, timeAgo, formatDate, formatSize, attIconClass } from '@/lib/email-utils';
-import { createQuote, updateQuote, linkEmailToQuote, getCustomers } from '../quotes/actions';
+import { createQuote, updateQuote, linkEmailToQuote } from '../quotes/actions';
 
 // ─── TYPES ───
 type Folder = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all';
@@ -198,9 +198,10 @@ export default function EmailClient() {
       const senderName = parseAddress(detail.from).name || senderEmail;
       const emailBody = detail.textBody || detail.htmlBody || '';
 
-      // Match customer
-      const customers = await getCustomers();
-      const matched = customers.find(c => c.email?.toLowerCase() === senderEmail.toLowerCase());
+      // Match contact → company via new model
+      const matchRes = await fetch(`/api/email/match-customer?email=${encodeURIComponent(senderEmail)}`).then(r => r.json()).catch(() => ({}));
+      const companyId = matchRes?.companies?.[0]?.id || undefined;
+      const contactId = matchRes?.contact?.id || undefined;
 
       // AI parse + create quote in parallel
       const [aiRes, q] = await Promise.all([
@@ -210,7 +211,8 @@ export default function EmailClient() {
           body: JSON.stringify({ emailBody, subject: detail.subject, senderEmail }),
         }).then(r => r.json()).catch(() => null),
         createQuote({
-          customerId: matched?.id || undefined,
+          companyId,
+          recipientContactIds: contactId ? [contactId] : undefined,
           title: detail.subject || undefined,
           description: `Email από: ${senderName}`,
         }),
