@@ -13,6 +13,7 @@ async function check() {
   const withItems = quotes.filter((q: any) => q.items.length > 0);
 
   const org = await prisma.org.findFirst();
+  if (!org) { console.error('No org found'); return; }
   const companies = await prisma.company.findMany({
     where: { orgId: org.id, deletedAt: null },
     select: { id: true, name: true, email: true },
