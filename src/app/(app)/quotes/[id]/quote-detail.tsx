@@ -412,6 +412,14 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
     transitions.push({ label: 'Απορρίφθηκε', status: 'rejected', icon: 'fa-times', color: 'var(--danger)' });
   }
   if (quote.status === 'approved') transitions.push({ label: 'Ολοκληρώθηκε', status: 'completed', icon: 'fa-flag-checkered', color: 'var(--success)' });
+  // Archive — available for draft/editing/sent (not approved, which has "Ολοκληρώθηκε")
+  if (['draft', 'new', 'editing', 'revision', 'sent'].includes(quote.status)) {
+    transitions.push({ label: 'Αρχειοθέτηση', status: 'cancelled', icon: 'fa-archive', color: '#64748b' });
+  }
+  // Unarchive — restore from archive
+  if (['completed', 'rejected', 'cancelled'].includes(quote.status)) {
+    transitions.push({ label: 'Επαναφορά', status: 'draft', icon: 'fa-undo', color: 'var(--accent)' });
+  }
 
   const inp = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: '0.92rem', outline: 'none' } as const;
   const numInp = { ...inp, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const };

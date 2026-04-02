@@ -164,7 +164,8 @@ input[type="number"] { -moz-appearance: textfield; }
   background: var(--accent);
 }
 
-/* Quote card delete button — show on hover */
-.quote-card-hover:hover button[title="Διαγραφή"] {
-  opacity: 1 !important;
-}
+/* Quote card — swap date for action buttons on hover */
+.card-actions { display: none !important; }
+.card-date { display: inline !important; }
+.quote-card-hover:hover .card-actions { display: flex !important; }
+.quote-card-hover:hover .card-date { display: none !important; }

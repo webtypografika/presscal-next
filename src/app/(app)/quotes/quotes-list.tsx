@@ -54,12 +54,14 @@ function ToastContainer({ toasts, onRemove }: { toasts: ToastData[]; onRemove: (
 const KB_COLUMNS = [
   { id: 'editing', label: 'Σε Επεξεργασία', statuses: ['draft', 'new', 'editing', 'revision'], color: 'var(--accent)', icon: 'fa-pen' },
   { id: 'sent', label: 'Εστάλησαν', statuses: ['sent'], color: '#60a5fa', icon: 'fa-paper-plane' },
-  { id: 'approved', label: 'Εγκρίθηκαν', statuses: ['approved', 'partial', 'completed'], color: 'var(--success)', icon: 'fa-check' },
-  { id: 'rejected', label: 'Απορρίφθηκαν', statuses: ['rejected', 'cancelled'], color: 'var(--danger)', icon: 'fa-times' },
+  { id: 'approved', label: 'Εγκρίθηκαν', statuses: ['approved', 'partial'], color: 'var(--success)', icon: 'fa-check' },
 ] as const;
 
+// Archived statuses — hidden from kanban
+const ARCHIVED_STATUSES = ['completed', 'rejected', 'cancelled'];
+
 type KbColId = typeof KB_COLUMNS[number]['id'];
-const COL_TO_STATUS: Record<KbColId, string> = { editing: 'draft', sent: 'sent', approved: 'approved', rejected: 'rejected' };
+const COL_TO_STATUS: Record<KbColId, string> = { editing: 'draft', sent: 'sent', approved: 'approved' };
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Πρόχειρη', new: 'Νέα', editing: 'Σε Επεξ.', revision: 'Αναθεώρηση',
@@ -105,6 +107,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [showNewQuote, setShowNewQuote] = useState(false);
   const [showEmailQuote, setShowEmailQuote] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
   useEffect(() => { setQuotes(initialQuotes); }, [initialQuotes]);
@@ -117,8 +120,9 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  // Filter
+  // Filter — exclude archived from kanban
   const kanbanQuotes = quotes.filter(q => {
+    if (ARCHIVED_STATUSES.includes(q.status)) return false;
     if (search) {
       return fuzzyMatch(q.number, search) ||
         fuzzyMatch((q as any).company?.name || q.customer?.name || '', search) ||
@@ -126,6 +130,9 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
     }
     return true;
   });
+
+  const archivedQuotes = quotes.filter(q => ARCHIVED_STATUSES.includes(q.status))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   function getColumnQuotes(col: typeof KB_COLUMNS[number]) {
     return kanbanQuotes
@@ -176,6 +183,16 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Αναζήτηση..."
               style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 8, padding: '7px 10px 7px 28px', color: 'var(--text)', fontSize: '0.92rem', width: 180, outline: 'none' }} />
           </div>
+          <button onClick={() => setShowArchive(v => !v)} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: showArchive ? 'rgba(255,255,255,0.06)' : 'transparent',
+            border: '1px solid var(--border)',
+            color: showArchive ? 'var(--text)' : 'var(--text-muted)',
+            padding: '8px 14px', borderRadius: 8,
+            fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+          }}>
+            <i className="fas fa-archive" style={{ fontSize: '0.72rem' }} /> Αρχείο {archivedQuotes.length > 0 && <span style={{ fontSize: '0.68rem', opacity: 0.6 }}>({archivedQuotes.length})</span>}
+          </button>
           <button onClick={() => setShowEmailQuote(true)} style={{
             display: 'flex', alignItems: 'center', gap: 6,
             background: 'color-mix(in srgb, var(--violet) 12%, transparent)',
@@ -198,7 +215,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
       </div>
 
       {/* ─── KANBAN ─── */}
-      <div style={{
+      {!showArchive && <div style={{
         display: 'grid',
         gridTemplateColumns: `repeat(${KB_COLUMNS.length}, 1fr)`,
         gap: 10,
@@ -258,47 +275,73 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
                         padding: '8px 10px', borderRadius: 8,
                         border: '1px solid var(--border)', marginBottom: 5,
                         cursor: 'pointer', transition: 'background 0.15s',
-                        background: 'transparent', position: 'relative',
+                        background: 'transparent',
                       }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.025)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
-                      {/* Delete button */}
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (!confirm(`Διαγραφή ${q.number};`)) return;
-                          try {
-                            await deleteQuote(q.id);
-                            setQuotes(prev => prev.filter(x => x.id !== q.id));
-                            toast('Η προσφορά διαγράφηκε');
-                          } catch { toast('Σφάλμα διαγραφής', 'error'); }
-                        }}
-                        style={{
-                          position: 'absolute', top: 6, right: 6,
-                          width: 22, height: 22, borderRadius: 6,
-                          border: 'none', background: 'transparent',
-                          color: 'var(--text-muted)', cursor: 'pointer',
-                          fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          opacity: 0, transition: 'opacity 0.15s, color 0.15s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
-                        title="Διαγραφή"
-                      >
-                        <i className="fas fa-trash" />
-                      </button>
+                      {/* Row 1: number + date (date replaced by actions on hover) */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--accent)', opacity: 0.8 }}>{q.number}</span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent)', opacity: 0.8 }}>{q.number}</span>
                         <span style={{ flex: 1 }} />
-                        <span style={{ fontSize: '0.92rem', color: 'var(--text-muted)' }}>
+                        <span className="card-date" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                           {new Date(q.date).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' })}
                         </span>
+                        <div className="card-actions" style={{ display: 'flex', gap: 2 }}>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await updateQuoteStatus(q.id, 'cancelled');
+                                setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, status: 'cancelled' } : x));
+                                toast('Αρχειοθετήθηκε');
+                              } catch { toast('Σφάλμα', 'error'); }
+                            }}
+                            style={{
+                              width: 24, height: 20, borderRadius: 4,
+                              border: 'none', background: 'transparent',
+                              color: '#64748b', cursor: 'pointer',
+                              fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(100,116,139,0.2)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                            title="Αρχειοθέτηση"
+                          >
+                            <i className="fas fa-archive" />
+                          </button>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!confirm(`Διαγραφή ${q.number};`)) return;
+                              try {
+                                await deleteQuote(q.id);
+                                setQuotes(prev => prev.filter(x => x.id !== q.id));
+                                toast('Διαγράφηκε');
+                              } catch { toast('Σφάλμα', 'error'); }
+                            }}
+                            style={{
+                              width: 24, height: 20, borderRadius: 4,
+                              border: 'none', background: 'transparent',
+                              color: '#64748b', cursor: 'pointer',
+                              fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = 'transparent'; }}
+                            title="Διαγραφή"
+                          >
+                            <i className="fas fa-trash" />
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.92rem', fontWeight: 600, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
-                      {desc && <div style={{ fontSize: '0.92rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>{desc}</div>}
-                      <div style={{ fontSize: '0.92rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums', textAlign: 'right' }}>
-                        {formatCurrency(q.grandTotal)}
+                      {/* Row 2: customer */}
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+                      {/* Row 3: description + amount */}
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        {desc && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{desc}</div>}
+                        {!desc && <span style={{ flex: 1 }} />}
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                          {q.grandTotal > 0 ? formatCurrency(q.grandTotal) : ''}
+                        </span>
                       </div>
                     </div>
                   );
@@ -318,7 +361,49 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
             </div>
           );
         })}
-      </div>
+      </div>}
+
+      {/* ─── ARCHIVE ─── */}
+      {showArchive && (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', height: 'calc(100vh - 210px)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)' }}>
+            <i className="fas fa-archive" style={{ fontSize: '0.72rem', color: '#64748b' }} />
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#64748b' }}>Αρχείο</span>
+            <span style={{ fontSize: '0.72rem', color: '#475569' }}>{archivedQuotes.length} προσφορές</span>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {archivedQuotes.length === 0 && (
+              <div style={{ padding: '20px 14px', textAlign: 'center', fontSize: '0.82rem', color: '#475569' }}>
+                Δεν υπάρχουν αρχειοθετημένες προσφορές
+              </div>
+            )}
+            {archivedQuotes.map(q => {
+              const name = (q as any).company?.name ?? q.customer?.name ?? '—';
+              return (
+                <div key={q.id} onClick={() => router.push(`/quotes/${q.id}`)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                  className="quote-card-hover"
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <span style={{
+                    fontSize: '0.65rem', fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                    background: q.status === 'completed' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                    color: q.status === 'completed' ? 'var(--success)' : 'var(--danger)',
+                  }}>{STATUS_LABEL[q.status] || q.status}</span>
+                  <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600, width: 120 }}>{q.number}</span>
+                  <span style={{ fontSize: '0.82rem', flex: 1 }}>{name}</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(q.grandTotal)}</span>
+                  <span style={{ fontSize: '0.68rem', color: '#475569' }}>{new Date(q.date).toLocaleDateString('el-GR')}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ─── NEW QUOTE MODAL (quick create) ─── */}
       {showNewQuote && (
