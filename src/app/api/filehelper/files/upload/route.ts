@@ -103,14 +103,31 @@ export async function POST(req: NextRequest) {
     const calcParams = new URLSearchParams()
     calcParams.set('filePath', webPath)
     calcParams.set('fileName', file.name)
-    if (quoteId) calcParams.set('quoteId', quoteId)
+    const resolvedQuoteId = target === 'quote' ? targetId : quoteId
+    if (resolvedQuoteId) calcParams.set('quoteId', resolvedQuoteId)
     if (itemId) calcParams.set('itemId', itemId)
+
+    // Resolve customer folder path
+    let customerFolderPath: string | null = null
+    try {
+      const resolvedQId = target === 'quote' ? targetId : quoteId
+      if (resolvedQId) {
+        const q = await prisma.quote.findUnique({ where: { id: resolvedQId }, include: { customer: true } })
+        if (q?.customer && (q.customer as any).folderPath) {
+          customerFolderPath = (q.customer as any).folderPath
+        }
+      } else if (target === 'customer') {
+        const c = await (prisma as any).customer.findUnique({ where: { id: targetId } })
+        if (c?.folderPath) customerFolderPath = c.folderPath
+      }
+    } catch {}
 
     return NextResponse.json({
       ok: true,
       fileLink,
       filePath: webPath,
       fileName: file.name,
+      customerFolderPath,
       calculatorUrl: `/calculator?${calcParams.toString()}`,
     })
   } catch (e) {

@@ -202,8 +202,8 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
         display: 'grid',
         gridTemplateColumns: `repeat(${KB_COLUMNS.length}, 1fr)`,
         gap: 10,
-        minHeight: 'calc(100vh - 210px)',
-        alignItems: 'start',
+        height: 'calc(100vh - 210px)',
+        alignItems: 'stretch',
       }}>
         {KB_COLUMNS.map(col => {
           const colQuotes = getColumnQuotes(col);
@@ -221,6 +221,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
                 borderRadius: 12,
                 transition: 'border-color 0.2s, background 0.15s',
                 overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
               }}
             >
               {/* Column header */}
@@ -238,7 +239,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers 
               </div>
 
               {/* Cards */}
-              <div style={{ padding: '4px 6px 6px', minHeight: 50 }}>
+              <div style={{ padding: '4px 6px 6px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {colQuotes.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '16px 0', fontSize: '0.92rem', color: 'var(--text-muted)', opacity: 0.4 }}>—</div>
                 )}

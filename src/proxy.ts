@@ -10,6 +10,7 @@ export async function proxy(req: NextRequest) {
     pathname.startsWith('/_next') ||
     pathname === '/favicon.ico' ||
     pathname.startsWith('/uploads') ||
+    pathname.startsWith('/storage') ||
     pathname.endsWith('.png') ||
     pathname.endsWith('.jpg') ||
     pathname.endsWith('.svg')

@@ -1,0 +1,1037 @@
+// PressCal Pro — Cost Engine
+// Ported from mod_sheet.js — 6 cost models: simple_in, simple_out, precision, indigo, riso, offset
+// Pure functions: take data as arguments, return cost breakdowns
+
+import type { CalculatorResult } from '@/types/calculator';
+import type { DigitalSpecs, OffsetSpecs } from '@/types/machine';
+import type { ImpositionResult } from '@/types/calculator';
+import { cutsPerStockSheet } from './imposition';
+
+// ─── INPUT TYPES ───
+
+export interface CostInput {
+  // Machine
+  machineCat: 'digital' | 'offset';
+  machineMaxW: number;
+  machineMaxH: number;
+  specs: DigitalSpecs | OffsetSpecs;
+  tacLimit?: number;           // TAC limit % (default 280)
+  feedEdge?: 'sef' | 'lef';    // feed direction
+  machineMaxDim?: number;       // machine's absolute max dimension (LS) for wear threshold
+  feedLength?: number;          // pre-computed: how far paper travels (mm)
+  includeDepreciation: boolean;
+  machineCost?: number;
+  machineLifetimePasses?: number;
+
+  // Paper
+  paperW: number;         // stock sheet mm
+  paperH: number;         // stock sheet mm
+  paperCostPerUnit: number;
+  paperGsm: number;
+
+  // Job
+  qty: number;
+  sides: 1 | 2;
+  colorMode: 'color' | 'bw';
+  wasteFixed: number;       // extra machine sheets (φύλλα μοντάζ)
+  coverageLevel: 'low' | 'mid' | 'high' | 'pdf';
+  coveragePdf?: { c: number; m: number; y: number; k: number };
+
+  // Imposition result
+  imposition: ImpositionResult;
+
+  // Finishing
+  guillotine?: {
+    // 4-channel charge rates (from machine setup — additive)
+    ratePerCut?: number;       // € per cut
+    rateWeight?: number;       // € per 1000 sheets @100gsm
+    ratePerStack?: number;     // € per stack
+    ratePerMinute?: number;    // € per minute
+    // Machine specs for 3-pass model
+    liftH?: number;            // stack height cm
+    secsPerCut?: number;       // seconds per cut (default 20)
+    secsPerStack?: number;     // seconds per stack handling (default 90)
+    coated?: boolean;          // paper coated?
+    trimCuts?: number;         // trim cuts (default 4)
+    // Cost fields
+    setupCost?: number;        // € flat setup
+    sharpPrice?: number;       // € per blade sharpening
+    bladeLife?: number;        // cuts per blade (default 2000)
+    hourlyCost?: number;       // € per hour machine cost
+    minCharge?: number;        // minimum charge €
+  };
+  lamination?: {
+    mode: 'roll' | 'pouch';
+    filmCostPerSqm: number;       // roll: cost €/m²
+    filmSellPerSqm?: number;      // roll: sell €/m² (from material, overrides lamMarkup)
+    machineSetupCost: number;
+    sides: 1 | 2;
+    dualRoll?: boolean;            // roll: 2 rolls = both sides in one pass
+    // Pouch-specific
+    pouchCostPerPiece?: number;   // cost €/piece
+    pouchSellPerPiece?: number;   // sell €/piece (from material, overrides lamMarkup)
+    pouchW?: number;              // pouch width (mm)
+    pouchH?: number;              // pouch height (mm)
+    sealMargin?: number;          // mm — sheet must be smaller by this on each side
+    maxW?: number;                // machine opening (mm)
+  };
+  binding?: {
+    type: 'staple' | 'glue' | 'spiral';
+    costPerUnit: number;
+    setupCost: number;
+  };
+
+  // Profile markups
+  paperMarkup: number;       // %
+  printMarkup: number;       // %
+  guillotineMarkup: number;  // %
+  lamMarkup: number;         // %
+  bindingMarkup: number;     // %
+  minChargePrint?: number;
+  minChargeGuillotine?: number;
+  minChargeLam?: number;
+  minChargeBinding?: number;
+
+  // Offset-specific
+  offsetFrontCmyk?: number;
+  offsetBackCmyk?: number;
+  offsetFrontPms?: number;
+  offsetBackPms?: number;
+  offsetOilVarnish?: boolean;
+  offsetCoating?: boolean;
+
+  // Product pricing (overrides profile markups when present)
+  productPricing?: {
+    // Offset product
+    charge_per_color?: number;     // € per color setup
+    extra_pantone?: number;        // € per PMS color
+    extra_varnish?: number;        // € varnish surcharge
+    hourly_enabled?: boolean;
+    hourly_rate?: number;          // € profit/hour
+    // Shared: quantity discount (both offset & digital)
+    discount_enabled?: boolean;
+    discount_step_qty?: number;    // qty for discount step
+    discount_step_pct?: number;    // % discount per step
+    discount_max?: number;         // % max discount
+    // Digital product
+    price_color?: number;          // € per page (color)
+    price_bw?: number;             // € per page (BW)
+  };
+}
+
+// ─── COVERAGE (TAC-based) ───
+// Pills represent Total Area Coverage (sum of all channels).
+// Engine divides by 4 to get per-channel coverage.
+// Default machine TAC limit: 280% (digital), 300% (indigo)
+
+const TAC_PILLS: Record<string, number> = { low: 0.20, mid: 1.00, high: 3.00, pdf: 1.0 };
+// low=20% TAC (÷4=5%/ch — text), mid=100% TAC (÷4=25%/ch — graphics), high=300% TAC (÷4=75%/ch — heavy photos)
+const DEFAULT_TAC_LIMIT = 2.80; // 280%
+
+// ─── AREA HELPERS ───
+
+/** A4 area in mm² */
+const A4_AREA = 210 * 297;
+
+/** Stepped wear multiplier based on feed length (how far drum rotates).
+ *  Canvas: left edge = feed side (paper enters from left).
+ *  Feed length = vizW = the horizontal dimension the drum prints across.
+ *  LEF: long edge enters (left), drum prints across long side → feed = LS
+ *  SEF: short edge enters (left), drum prints across short side → feed = SS
+ *  Drum threshold: machineMax/2 → half rotation = A4, full = A3 */
+function wearMult(feedLen: number, machineMaxDim: number): number {
+  // feedLen = how far paper travels (pre-computed by caller)
+  // machineMaxDim/2 = half drum rotation threshold
+  const halfDrum = machineMaxDim / 2;
+  if (feedLen <= halfDrum) return 1;  // half rotation → A4
+  return 2;                           // full rotation → A3
+}
+
+/** Print area ratio to A4 for toner/ink — based on actual piece area,
+ *  not full machine sheet */
+function inkAreaMult(impo: { ups: number; pieceW: number; pieceH: number }): number {
+  return (impo.ups * impo.pieceW * impo.pieceH) / A4_AREA;
+}
+
+/** Discrete size category (for CPC models that use tiered pricing) */
+function sheetSizeCategory(feedLen: number, machineMaxDim: number): 'a4' | 'a3' {
+  const halfDrum = machineMaxDim / 2;
+  if (feedLen <= halfDrum) return 'a4';
+  return 'a3';
+}
+
+/** Get CPC for a given size & color mode */
+function getCpc(specs: DigitalSpecs, feedLen: number, machineMaxDim: number, colorMode: 'color' | 'bw'): number {
+  const size = sheetSizeCategory(feedLen, machineMaxDim);
+  if (colorMode === 'color') {
+    return size === 'a4' ? (specs.clickA4Color || 0) : (specs.clickA3Color || 0);
+  }
+  return size === 'a4' ? (specs.clickA4Bw || 0) : (specs.clickA3Bw || 0);
+}
+
+/** Coverage per channel.
+ *  Pills: TAC ÷ 4 (uniform distribution).
+ *  PDF: per-channel data, capped to machine TAC limit. */
+function channelCoverage(
+  channel: 'c' | 'm' | 'y' | 'k',
+  coverageLevel: string,
+  coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
+): number {
+  if (coverageLevel === 'pdf' && coveragePdf) {
+    const limit = tacLimit || DEFAULT_TAC_LIMIT;
+    const actualTac = coveragePdf.c + coveragePdf.m + coveragePdf.y + coveragePdf.k;
+    if (actualTac > limit) {
+      // Scale down proportionally to respect TAC limit
+      return coveragePdf[channel] * (limit / actualTac);
+    }
+    return coveragePdf[channel];
+  }
+  // Pills: TAC value ÷ 4 channels
+  const tac = TAC_PILLS[coverageLevel] ?? 1.00;
+  return tac / 4;
+}
+
+// ─── MODEL 1: SIMPLE_IN — CPC only ───
+// Click cost includes everything (toner bundled). Vendor charges fixed per click.
+
+function digitalSimpleIn(
+  specs: DigitalSpecs,
+  totalSheets: number,
+  sides: 1 | 2,
+  colorMode: 'color' | 'bw',
+  feedLen: number,
+  machineMaxDim: number,
+): { total: number; tonerOnly: number } {
+  const cpc = getCpc(specs, feedLen, machineMaxDim, colorMode);
+  const duplexMult = sides === 2 ? (specs.duplexClickMultiplier || 2) : 1;
+  const total = totalSheets * cpc * duplexMult;
+  return { total, tonerOnly: 0 }; // toner bundled in CPC
+}
+
+// ─── MODEL 2: SIMPLE_OUT — CPC + separate toner ───
+// Base CPC + toner cost with coverage multiplier per channel
+
+function digitalSimpleOut(
+  specs: DigitalSpecs,
+  totalSheets: number,
+  sides: 1 | 2,
+  colorMode: 'color' | 'bw',
+  coverageLevel: string,
+  inkMult: number,
+  feedLen: number,
+  machineMaxDim: number,
+  coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
+): { total: number; tonerOnly: number } {
+  const { total: cpcCost } = digitalSimpleIn(specs, totalSheets, sides, colorMode, feedLen, machineMaxDim);
+  const faces = sides === 2 ? totalSheets * 2 : totalSheets;
+
+  let tonerPerFace = 0;
+  if (colorMode === 'color') {
+    const channels: Array<{ yield: ConsumableYield | undefined; ch: 'c' | 'm' | 'y' | 'k' }> = [
+      { yield: specs.tonerC, ch: 'c' },
+      { yield: specs.tonerM, ch: 'm' },
+      { yield: specs.tonerY, ch: 'y' },
+      { yield: specs.tonerK, ch: 'k' },
+    ];
+    for (const { yield: toner, ch } of channels) {
+      if (toner && toner.yield > 0) {
+        const cov = channelCoverage(ch, coverageLevel, coveragePdf, tacLimit) / 0.05; // normalize to 5% base
+        tonerPerFace += (toner.cost / toner.yield) * cov;
+      }
+    }
+  } else {
+    if (specs.tonerK && specs.tonerK.yield > 0) {
+      const cov = channelCoverage('k', coverageLevel, coveragePdf, tacLimit) / 0.05;
+      tonerPerFace = (specs.tonerK.cost / specs.tonerK.yield) * cov;
+    }
+  }
+
+  const tonerTotal = faces * tonerPerFace * inkMult;
+  return { total: cpcCost + tonerTotal, tonerOnly: tonerTotal };
+}
+
+type ConsumableYield = { yield: number; cost: number };
+
+// ─── MODEL 3: PRECISION — Full consumable breakdown ───
+// Per-channel toner + drums + developer + corona + fuser + belt + waste
+
+function digitalPrecision(
+  specs: DigitalSpecs,
+  totalSheets: number,
+  sides: 1 | 2,
+  colorMode: 'color' | 'bw',
+  coverageLevel: string,
+  inkMult: number,
+  wMult: number,
+  coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
+): { total: number; tonerOnly: number } {
+  const faces = sides === 2 ? totalSheets * 2 : totalSheets;
+
+  // ── Toner cost (coverage-dependent) ──
+  let tonerPerFace = 0;
+  if (colorMode === 'color') {
+    const channels: Array<{ yield: ConsumableYield | undefined; ch: 'c' | 'm' | 'y' | 'k' }> = [
+      { yield: specs.tonerC, ch: 'c' },
+      { yield: specs.tonerM, ch: 'm' },
+      { yield: specs.tonerY, ch: 'y' },
+      { yield: specs.tonerK, ch: 'k' },
+    ];
+    for (const { yield: toner, ch } of channels) {
+      if (toner && toner.yield > 0) {
+        const cov = channelCoverage(ch, coverageLevel, coveragePdf, tacLimit) / 0.05;
+        tonerPerFace += (toner.cost / toner.yield) * cov;
+      }
+    }
+  } else {
+    if (specs.tonerK && specs.tonerK.yield > 0) {
+      const cov = channelCoverage('k', coverageLevel, coveragePdf, tacLimit) / 0.05;
+      tonerPerFace = (specs.tonerK.cost / specs.tonerK.yield) * cov;
+    }
+  }
+
+  // Extra / specialty colors
+  if (specs.extraColors) {
+    for (const extra of specs.extraColors) {
+      if (extra.yield > 0) {
+        tonerPerFace += extra.cost / extra.yield;
+      }
+    }
+  }
+
+  const tonerTotal = faces * tonerPerFace * inkMult;
+
+  // ── Drums (non-coverage, per face) ──
+  let drumPerFace = 0;
+  if (colorMode === 'color') {
+    const drums = [specs.drumC, specs.drumM, specs.drumY, specs.drumK].filter(Boolean) as ConsumableYield[];
+    for (const d of drums) {
+      if (d.yield > 0) drumPerFace += d.cost / d.yield;
+    }
+    // Extra station drums
+    if (specs.drumExtra) {
+      for (const d of specs.drumExtra) {
+        if (d.yield > 0) drumPerFace += d.cost / d.yield;
+      }
+    }
+  } else {
+    if (specs.drumK && specs.drumK.yield > 0) {
+      drumPerFace = specs.drumK.cost / specs.drumK.yield;
+    }
+  }
+
+  // ── Developer (non-coverage, skip if integrated) ──
+  let devPerFace = 0;
+  if (specs.developerType !== 'integrated') {
+    if (colorMode === 'color') {
+      const devs = [specs.developerC, specs.developerM, specs.developerY, specs.developerK].filter(Boolean) as ConsumableYield[];
+      for (const d of devs) {
+        if (d.yield > 0) devPerFace += d.cost / d.yield;
+      }
+    } else {
+      if (specs.developerK && specs.developerK.yield > 0) {
+        devPerFace = specs.developerK.cost / specs.developerK.yield;
+      }
+    }
+  }
+
+  // ── Corona (non-coverage, per station) ──
+  let coronaPerFace = 0;
+  if (specs.hasChargeCoronas && specs.coronaCost && specs.coronaLife && specs.coronaLife > 0) {
+    const stations = colorMode === 'color' ? specs.colorStations : 1;
+    coronaPerFace = (specs.coronaCost * stations) / specs.coronaLife;
+  }
+
+  // ── Fuser, Belt, Waste (non-coverage, single unit each) ──
+  let sharedPerFace = 0;
+  if (specs.fuserCost && specs.fuserLife && specs.fuserLife > 0) {
+    sharedPerFace += specs.fuserCost / specs.fuserLife;
+  }
+  if (specs.beltCost && specs.beltLife && specs.beltLife > 0) {
+    sharedPerFace += specs.beltCost / specs.beltLife;
+  }
+  if (specs.wasteCost && specs.wasteLife && specs.wasteLife > 0) {
+    sharedPerFace += specs.wasteCost / specs.wasteLife;
+  }
+
+  const nonTonerPerFace = drumPerFace + devPerFace + coronaPerFace + sharedPerFace;
+
+  // Store per-item breakdown for dev panel
+  const _precisionItems: Array<{ label: string; perA4: number }> = [];
+  const addItem = (label: string, cy: ConsumableYield | undefined) => {
+    if (cy && cy.yield > 0) _precisionItems.push({ label, perA4: cy.cost / cy.yield });
+  };
+  if (colorMode === 'color') {
+    addItem('Drum C', specs.drumC); addItem('Drum M', specs.drumM);
+    addItem('Drum Y', specs.drumY); addItem('Drum K', specs.drumK);
+  } else {
+    addItem('Drum K', specs.drumK);
+  }
+  if (specs.developerType !== 'integrated') {
+    if (colorMode === 'color') {
+      addItem('Dev C', specs.developerC); addItem('Dev M', specs.developerM);
+      addItem('Dev Y', specs.developerY); addItem('Dev K', specs.developerK);
+    } else {
+      addItem('Dev K', specs.developerK);
+    }
+  }
+  if (specs.hasChargeCoronas && coronaPerFace > 0) _precisionItems.push({ label: `Corona ×${colorMode === 'color' ? specs.colorStations : 1}`, perA4: coronaPerFace });
+  if (specs.fuserCost && specs.fuserLife && specs.fuserLife > 0) _precisionItems.push({ label: 'Fuser', perA4: specs.fuserCost / specs.fuserLife });
+  if (specs.beltCost && specs.beltLife && specs.beltLife > 0) _precisionItems.push({ label: 'Belt', perA4: specs.beltCost / specs.beltLife });
+  if (specs.wasteCost && specs.wasteLife && specs.wasteLife > 0) _precisionItems.push({ label: 'Waste', perA4: specs.wasteCost / specs.wasteLife });
+  const nonTonerTotal = faces * nonTonerPerFace * wMult;
+
+  return {
+    total: tonerTotal + nonTonerTotal,
+    tonerOnly: tonerTotal,
+    precisionItems: _precisionItems as unknown,
+    nonTonerPerA4: nonTonerPerFace as unknown,
+  } as { total: number; tonerOnly: number };
+}
+
+// ─── MODEL 4: INDIGO — Liquid ink ───
+// Ink (coverage-dependent) + impression charge + blanket + PIP
+
+function digitalIndigo(
+  specs: DigitalSpecs,
+  totalSheets: number,
+  sides: 1 | 2,
+  colorMode: 'color' | 'bw',
+  coverageLevel: string,
+  inkMult: number,
+  wMult: number,
+  coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
+): { total: number; tonerOnly: number } {
+  const faces = sides === 2 ? totalSheets * 2 : totalSheets;
+
+  // Impressions per side based on color mode
+  const modes = specs.indigoColorModes || { cmyk: 4, epm: 3, ovg: 7, bw: 1 };
+  const impsPerSide = colorMode === 'bw' ? modes.bw : modes.cmyk;
+
+  // Ink cost (coverage-dependent) — TAC ÷ 4 for pills, avg of channels for PDF
+  const avgCov = coverageLevel === 'pdf' && coveragePdf
+    ? Math.min(coveragePdf.c + coveragePdf.m + coveragePdf.y + coveragePdf.k, tacLimit || DEFAULT_TAC_LIMIT) / 4
+    : (TAC_PILLS[coverageLevel] ?? 1.00) / 4;
+  const inkPerFace = (specs.inkCostPerMl || 0) * avgCov * inkMult;
+  const inkTotal = faces * inkPerFace;
+
+  // Impression charge (flat per impression)
+  const impCharge = (specs.impressionCharge || 0) * faces * impsPerSide;
+
+  // Blanket wear
+  let blanketCost = 0;
+  if (specs.blanketCostIndigo && specs.blanketLifeIndigo && specs.blanketLifeIndigo > 0) {
+    blanketCost = faces * impsPerSide * (specs.blanketCostIndigo / specs.blanketLifeIndigo) * wMult;
+  }
+
+  // PIP (Photo Imaging Plate)
+  let pipCost = 0;
+  if (specs.pipCost && specs.pipLife && specs.pipLife > 0) {
+    pipCost = faces * impsPerSide * (specs.pipCost / specs.pipLife) * wMult;
+  }
+
+  const total = inkTotal + impCharge + blanketCost + pipCost;
+  return { total, tonerOnly: inkTotal };
+}
+
+// ─── MODEL 5: RISO — Per-color cartridge ───
+// All cost is coverage-dependent (cartridge = ink consumption)
+
+function digitalRiso(
+  specs: DigitalSpecs,
+  totalSheets: number,
+  sides: 1 | 2,
+  colorMode: 'color' | 'bw',
+  coverageLevel: string,
+  inkMult: number,
+  coveragePdf?: { c: number; m: number; y: number; k: number },
+  tacLimit?: number,
+): { total: number; tonerOnly: number } {
+  const faces = sides === 2 ? totalSheets * 2 : totalSheets;
+
+  let costPerFace = 0;
+  if (colorMode === 'color') {
+    const carts: Array<{ cart: ConsumableYield | undefined; ch: 'c' | 'm' | 'y' | 'k' }> = [
+      { cart: specs.cartridgeC, ch: 'c' },
+      { cart: specs.cartridgeM, ch: 'm' },
+      { cart: specs.cartridgeY, ch: 'y' },
+      { cart: specs.cartridgeK, ch: 'k' },
+    ];
+    for (const { cart, ch } of carts) {
+      if (cart && cart.yield > 0) {
+        const cov = channelCoverage(ch, coverageLevel, coveragePdf, tacLimit) / 0.05;
+        costPerFace += (cart.cost / cart.yield) * cov;
+      }
+    }
+    // Optional gray
+    if (specs.cartridgeGray && specs.cartridgeGray.yield > 0) {
+      costPerFace += specs.cartridgeGray.cost / specs.cartridgeGray.yield;
+    }
+  } else {
+    if (specs.cartridgeK && specs.cartridgeK.yield > 0) {
+      const cov = channelCoverage('k', coverageLevel, coveragePdf, tacLimit) / 0.05;
+      costPerFace = (specs.cartridgeK.cost / specs.cartridgeK.yield) * cov;
+    }
+  }
+
+  const total = faces * costPerFace * inkMult;
+  return { total, tonerOnly: total }; // all ink-based
+}
+
+// ─── DIGITAL DISPATCHER ───
+
+function calcDigitalCost(input: CostInput, totalSheets: number): number {
+  const specs = input.specs as DigitalSpecs;
+  const impo = input.imposition;
+  let result: { total: number; tonerOnly: number };
+
+  // Use pre-computed feedLength from API (no local re-derivation)
+  const mMax = input.machineMaxDim || Math.max(input.machineMaxW, input.machineMaxH);
+  const fLen = input.feedLength || Math.max(input.machineMaxW, input.machineMaxH);
+  // Drum rotation wear mult: feed ≤ machineMax/2 → ×1 (half rotation), else ×2 (full)
+  const wMult = wearMult(fLen, mMax);
+  // Ink/toner area mult: actual print area vs A4
+  const iMult = inkAreaMult(impo);
+
+  switch (specs.costMode) {
+    case 'simple_in':
+      result = digitalSimpleIn(specs, totalSheets, input.sides, input.colorMode, fLen, mMax);
+      break;
+    case 'simple_out':
+      result = digitalSimpleOut(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, fLen, mMax, input.coveragePdf, input.tacLimit);
+      break;
+    case 'precision':
+      result = digitalPrecision(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, wMult, input.coveragePdf, input.tacLimit);
+      break;
+    case 'indigo':
+      result = digitalIndigo(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, wMult, input.coveragePdf, input.tacLimit);
+      break;
+    case 'riso':
+      result = digitalRiso(specs, totalSheets, input.sides, input.colorMode, input.coverageLevel, iMult, input.coveragePdf, input.tacLimit);
+      break;
+    default:
+      result = digitalSimpleIn(specs, totalSheets, input.sides, input.colorMode, fLen, mMax);
+  }
+
+  let printCost = result.total;
+  let depCost = 0;
+  let zoneMarkupPct = 0;
+
+  // Depreciation
+  if (input.includeDepreciation && input.machineCost && input.machineLifetimePasses) {
+    const totalFaces = input.sides === 2 ? totalSheets * 2 : totalSheets;
+    const depPerFace = input.machineCost / input.machineLifetimePasses;
+    depCost = totalFaces * depPerFace;
+    printCost += depCost;
+  }
+
+  // Speed zone markup (heavier paper = slower = more expensive)
+  if (specs.speedZones && input.paperGsm) {
+    const zone = specs.speedZones.find(z => input.paperGsm >= z.gsmFrom && input.paperGsm <= z.gsmTo);
+    if (zone && zone.markup > 0) {
+      zoneMarkupPct = zone.markup;
+      printCost *= (1 + zone.markup / 100);
+    }
+  }
+
+  // Store breakdown for dev panel
+  const totalFaces = input.sides === 2 ? totalSheets * 2 : totalSheets;
+  (input as unknown as Record<string, unknown>)._digitalBreakdown = {
+    model: specs.costMode,
+    faces: totalFaces,
+    wearMult: wMult,
+    inkAreaMult: iMult,
+    toner: result.tonerOnly,
+    consumables: result.total - result.tonerOnly,
+    depreciation: depCost,
+    zoneMarkup: zoneMarkupPct,
+    total: printCost,
+    precisionItems: (result as Record<string, unknown>).precisionItems || [],
+    nonTonerPerA4: (result as Record<string, unknown>).nonTonerPerA4 || 0,
+  };
+
+  return printCost;
+}
+
+// ─── OFFSET COST MODEL ───
+// Plates + blanket wear + ink (per-channel) + chemicals + rollers + varnish/coating + hourly
+
+function calcOffsetCost(input: CostInput, totalSheets: number): number {
+  const specs = input.specs as OffsetSpecs;
+
+  const frontColors = (input.offsetFrontCmyk ?? 4) + (input.offsetFrontPms ?? 0);
+  const backColors = input.sides === 2 ? (input.offsetBackCmyk ?? 4) + (input.offsetBackPms ?? 0) : 0;
+  const totalColors = frontColors + backColors;
+
+  // No colors = no printing
+  if (totalColors === 0) return 0;
+
+  // Passes calculation
+  const passesPerSide = Math.ceil(frontColors / specs.towers);
+  const backPasses = input.sides === 2 ? Math.ceil(backColors / specs.towers) : 0;
+  const totalPasses = specs.perfecting
+    ? Math.max(passesPerSide, backPasses)
+    : passesPerSide + backPasses;
+
+  // ── Plates ──
+  const plateCost = (specs.includePlates !== false)
+    ? totalColors * specs.plateCost
+    : 0;
+
+  // ── Blanket wear (coverage-aware) ──
+  const blanketCost = specs.blanketLife > 0
+    ? totalSheets * totalPasses * (specs.blanketCost / specs.blanketLife)
+    : 0;
+
+  // ── Ink cost (per-channel, area-based — actual print area, not full sheet) ──
+  const printAreaM2 = (input.imposition.ups * input.imposition.pieceW * input.imposition.pieceH) / 1_000_000;
+  const sheetAreaM2 = (input.machineMaxW * input.machineMaxH) / 1_000_000;
+  const inkGm2 = specs.inkGm2 || 1.5;
+  const inkPricePerKg = specs.inkPricePerKg || 25;
+
+  let inkCost: number;
+  if (input.coverageLevel === 'pdf' && input.coveragePdf) {
+    // Per-channel ink cost from PDF coverage
+    const { c, m, y, k } = input.coveragePdf;
+    const channelCoverages = [c, m, y, k];
+    const frontInkPerSheet = channelCoverages.reduce((sum, cov) => {
+      return sum + printAreaM2 * inkGm2 * cov * (inkPricePerKg / 1000);
+    }, 0);
+    // Simplified: same ink for back if duplex
+    const backInkPerSheet = input.sides === 2 ? frontInkPerSheet : 0;
+    inkCost = totalSheets * (frontInkPerSheet + backInkPerSheet);
+  } else {
+    // Preset coverage: TAC ÷ 4 per channel
+    const coverageMult = (TAC_PILLS[input.coverageLevel] ?? 1.00) / 4;
+    const inkPerSheet = printAreaM2 * inkGm2 * coverageMult * totalColors * (inkPricePerKg / 1000);
+    inkCost = totalSheets * inkPerSheet;
+  }
+
+  // ── Roller recovery ──
+  let rollerCost = 0;
+  if (specs.rollerCount && specs.rollerCost && specs.rollerLife && specs.rollerLife > 0) {
+    rollerCost = totalSheets * totalPasses * (specs.rollerCount * specs.rollerCost / specs.rollerLife);
+  }
+
+  // ── Chemicals: wash + IPA ──
+  let chemicalCost = 0;
+  let washCost = 0;
+  let ipaCost = 0;
+  const washPasses = specs.washPassesPerRun || 0;
+  if (washPasses > 0) {
+    const inkCleaner = specs.inkCleanerCpl || 0;
+    const waterCleaner = specs.waterCleanerCpl || 0;
+    const washMl = specs.washMlPerLiter || 100;
+    washCost = washPasses * (washMl / 1000) * (inkCleaner + waterCleaner);
+    chemicalCost += washCost;
+  }
+  // IPA (alcohol for dampening)
+  const runHours = totalSheets * totalPasses / (specs.speed || 5000);
+  if (specs.ipaMlPerHour && specs.ipaCpl) {
+    ipaCost = runHours * (specs.ipaMlPerHour / 1000) * specs.ipaCpl;
+    chemicalCost += ipaCost;
+  }
+
+  // ── Varnish ──
+  let varnishCost = 0;
+  if (input.offsetOilVarnish && specs.hasVarnishTower) {
+    const vGm2 = specs.varnishGm2 || inkGm2;
+    const vPrice = specs.varnishPricePerKg || inkPricePerKg;
+    varnishCost = totalSheets * sheetAreaM2 * vGm2 * (vPrice / 1000);
+  }
+
+  // ── Coating (aqueous/UV) ──
+  let coatingCost = 0;
+  if (input.offsetCoating && specs.coatingGm2 && specs.coatingPricePerKg) {
+    coatingCost = totalSheets * sheetAreaM2 * specs.coatingGm2 * (specs.coatingPricePerKg / 1000);
+  }
+
+  // ── Run time ──
+  const setupMin = specs.setupMin || 15;
+  const sheetsPerHour = specs.speed || 5000;
+  const totalHours = (setupMin / 60) + runHours;
+  const hourlyCost = totalHours * specs.hourCost;
+
+  const total = plateCost + blanketCost + inkCost + rollerCost + chemicalCost + varnishCost + coatingCost + hourlyCost;
+
+  // Store breakdown for dev panel
+  (input as unknown as Record<string, unknown>)._offsetBreakdown = {
+    plates: { colors: totalColors, cost: specs.plateCost, total: plateCost },
+    blanket: { sheets: totalSheets, passes: totalPasses, life: specs.blanketLife, total: blanketCost },
+    ink: { printAreaM2, coverage: input.coverageLevel, gm2: inkGm2, priceKg: inkPricePerKg, total: inkCost, source: specs.inkPricePerKg ? 'αποθήκη' : 'default €25' },
+    rollers: { total: rollerCost },
+    chemicals: {
+      wash: washCost,
+      washPasses,
+      inkCleanerCpl: specs.inkCleanerCpl,
+      waterCleanerCpl: specs.waterCleanerCpl,
+      washMl: specs.washMlPerLiter,
+      ipa: ipaCost,
+      ipaMlH: specs.ipaMlPerHour,
+      ipaCpl: specs.ipaCpl,
+      runHours,
+      total: chemicalCost,
+    },
+    varnish: { total: varnishCost },
+    coating: { total: coatingCost },
+    hourly: { setupMin, runHours, hourRate: specs.hourCost, total: hourlyCost },
+  };
+
+  return total;
+}
+
+// ─── PAPER COST ───
+
+function calcPaperCost(input: CostInput, totalMachineSheets: number): { totalStockSheets: number; cost: number } {
+  const cuts = cutsPerStockSheet(
+    input.paperW, input.paperH,
+    input.machineMaxW, input.machineMaxH,
+  );
+  const totalStockSheets = Math.ceil(totalMachineSheets / cuts);
+  return {
+    totalStockSheets,
+    cost: totalStockSheets * input.paperCostPerUnit,
+  };
+}
+
+// ─── FINISHING COSTS ───
+
+// ── 3-PASS GUILLOTINE CUT MODEL ──
+// Pass 1 — Τρίμμα: trimCuts × αρχικές στίβες
+// Pass 2 — 1η διαχωριστική: κοπές × αρχικές στίβες → strips
+// Pass 3 — 2η διαχωριστική: κοπές × νέες στίβες (strips re-stacked)
+interface CutModelResult {
+  totalCuts: number;
+  totalStacks: number;
+  totalSecs: number;
+  totalMins: number;
+  sheetsPerStack: number;
+}
+
+function calc3PassCuts(
+  rows: number, cols: number, totalSheets: number,
+  gsm: number, coated: boolean, trimCuts: number,
+  liftH: number, secsPerCut: number, secsPerStack: number,
+): CutModelResult {
+  // Paper thickness (mm) — coated is denser
+  const bulkFactor = coated ? 1.0 : 1.25;
+  const thick = gsm * bulkFactor / 1000;
+  const liftMM = liftH * 10; // cm → mm
+  const sheetsPerStack = Math.max(1, Math.floor(liftMM / thick));
+  const stacks1 = totalSheets > 0 ? Math.ceil(totalSheets / sheetsPerStack) : 1;
+
+  // 1-up: only trim
+  if (rows <= 1 && cols <= 1) {
+    const p1c = trimCuts * stacks1;
+    const secs = p1c * secsPerCut + stacks1 * secsPerStack;
+    return { totalCuts: p1c, totalStacks: stacks1, totalSecs: secs, totalMins: secs / 60, sheetsPerStack };
+  }
+
+  // Cut order: fewer divisions first → fewer strips → easier re-stack
+  let firstCutsN: number, firstStrips: number, secondCutsN: number;
+  if (cols <= rows) {
+    firstCutsN = cols - 1; firstStrips = cols; secondCutsN = rows - 1;
+  } else {
+    firstCutsN = rows - 1; firstStrips = rows; secondCutsN = cols - 1;
+  }
+
+  // Pass 1 — Trim
+  const p1cuts = trimCuts * stacks1;
+  // Pass 2 — 1st separation
+  const p2cuts = firstCutsN * stacks1;
+  // Pass 3 — 2nd separation (re-stacked strips)
+  const fullStacks = stacks1 > 1 ? stacks1 - 1 : 0;
+  let lastStackSheets = totalSheets - fullStacks * sheetsPerStack;
+  if (lastStackSheets <= 0) lastStackSheets = sheetsPerStack;
+
+  const fullStripH = sheetsPerStack * thick;
+  const bundlesPerLiftFull = Math.max(1, Math.floor(liftMM / fullStripH));
+  const liftsFull = fullStacks * Math.ceil(firstStrips / bundlesPerLiftFull);
+
+  const lastStripH = lastStackSheets * thick;
+  const bundlesPerLiftLast = Math.max(1, Math.floor(liftMM / lastStripH));
+  const liftsLast = Math.ceil(firstStrips / bundlesPerLiftLast);
+
+  const stacks3 = liftsFull + liftsLast;
+  const p3cuts = secondCutsN * stacks3;
+
+  const totalHandlings = stacks1 + stacks3;
+  const totalCuts = p1cuts + p2cuts + p3cuts;
+  const totalSecs = totalCuts * secsPerCut + totalHandlings * secsPerStack;
+
+  return { totalCuts, totalStacks: totalHandlings, totalSecs, totalMins: totalSecs / 60, sheetsPerStack };
+}
+
+function calcGuillotineCost(input: CostInput, totalSheets: number): number {
+  if (!input.guillotine) return 0;
+  const g = input.guillotine;
+
+  const rows = input.imposition.rows;
+  const cols = input.imposition.cols;
+
+  // 3-pass realistic cut model
+  const cp = calc3PassCuts(
+    rows, cols, totalSheets,
+    input.paperGsm, g.coated ?? false, g.trimCuts ?? 4,
+    g.liftH ?? 8, g.secsPerCut ?? 20, g.secsPerStack ?? 90,
+  );
+
+  // ── COST (τι μου κοστίζει) ──
+  const setupCost = g.setupCost ?? 0;
+  const bladeCost = cp.totalCuts * ((g.bladeLife ?? 2000) > 0 ? (g.sharpPrice ?? 0) / (g.bladeLife ?? 2000) : 0);
+  const machineCost = (cp.totalSecs / 3600) * (g.hourlyCost ?? 0);
+  const totalCost = setupCost + bladeCost + machineCost;
+
+  // ── CHARGE (τι χρεώνω — 4-channel formula, additive) ──
+  const chCut   = cp.totalCuts * (g.ratePerCut ?? 0);
+  const chWeight = (input.paperGsm / 100) * (g.rateWeight ?? 0) * (totalSheets / 1000);
+  const chStack  = cp.totalStacks * (g.ratePerStack ?? 0);
+  const chTime   = cp.totalMins * (g.ratePerMinute ?? 0);
+  let charge = setupCost + chCut + chWeight + chStack + chTime;
+
+  if ((g.minCharge ?? 0) > 0 && charge < g.minCharge!) {
+    charge = g.minCharge!;
+  }
+
+  // Return the higher of cost and charge (charge is what we bill)
+  return Math.max(totalCost, charge);
+}
+
+function calcLaminationCost(input: CostInput, totalSheets: number): number {
+  if (!input.lamination) return 0;
+  const lam = input.lamination;
+
+  if (lam.mode === 'pouch') {
+    // Pouch: cost per piece × quantity (each finished piece needs one pouch)
+    const pouchCost = (lam.pouchCostPerPiece ?? 0) * input.qty;
+    return pouchCost + lam.machineSetupCost;
+  }
+
+  // Roll lamination
+  const sheetArea = input.machineMaxW * input.machineMaxH / 1_000_000; // m²
+  const faces = lam.sides === 2 ? totalSheets * 2 : totalSheets;
+  const filmCost = faces * sheetArea * lam.filmCostPerSqm;
+
+  return filmCost + lam.machineSetupCost;
+}
+
+function calcBindingCost(input: CostInput): number {
+  if (!input.binding) return 0;
+  const b = input.binding;
+  return b.setupCost + input.qty * b.costPerUnit;
+}
+
+// ─── WASTE ───
+
+function calcWasteSheets(wasteFixed: number): number {
+  return wasteFixed;
+}
+
+// ─── MAIN CALCULATOR ───
+
+export function calculateCost(input: CostInput): CalculatorResult {
+  const impo = input.imposition;
+  const rawMachineSheets = impo.totalSheets || Math.ceil(input.qty / Math.max(impo.ups, 1));
+
+  // Feed length & machine max (used for digital wear/pricing)
+  const mMax = input.machineMaxDim || Math.max(input.machineMaxW, input.machineMaxH);
+  const fLen = input.feedLength ?? (() => {
+    const ss = Math.min(input.machineMaxW, input.machineMaxH);
+    const ls = Math.max(input.machineMaxW, input.machineMaxH);
+    return input.feedEdge === 'lef' ? ss : ls;
+  })();
+
+  // Waste
+  const wasteSheets = calcWasteSheets(input.wasteFixed);
+  const totalMachineSheets = rawMachineSheets + wasteSheets;
+
+  // Paper
+  const paper = calcPaperCost(input, totalMachineSheets);
+
+  // Print
+  const costPrint = input.machineCat === 'digital'
+    ? calcDigitalCost(input, totalMachineSheets)
+    : calcOffsetCost(input, totalMachineSheets);
+
+  // Finishing
+  const costGuillotine = calcGuillotineCost(input, totalMachineSheets);
+  const costLamination = calcLaminationCost(input, totalMachineSheets);
+  const costBinding = calcBindingCost(input);
+  const costFinishing = costLamination + costBinding;
+
+  // Total cost (guillotine has no material cost — charge goes straight to profit)
+  const totalCost = paper.cost + costPrint + costFinishing;
+
+  // Revenue (apply markups from profile)
+  const chargeGuillotine = Math.max(
+    costGuillotine * (1 + input.guillotineMarkup / 100),
+    input.minChargeGuillotine || 0,
+  );
+  const chargeLamination = (() => {
+    if (!input.lamination) return 0;
+    const lam = input.lamination;
+    // If material has its own sell price, use that instead of profile lamMarkup
+    if (lam.mode === 'pouch' && lam.pouchSellPerPiece && lam.pouchSellPerPiece > 0) {
+      const filmRevenue = lam.pouchSellPerPiece * input.qty;
+      const machineCharge = lam.machineSetupCost * (1 + input.lamMarkup / 100);
+      return Math.max(filmRevenue + machineCharge, input.minChargeLam || 0);
+    }
+    if (lam.mode === 'roll' && lam.filmSellPerSqm && lam.filmSellPerSqm > 0) {
+      const sheetArea = input.machineMaxW * input.machineMaxH / 1_000_000;
+      const faces = lam.sides === 2 ? totalMachineSheets * 2 : totalMachineSheets;
+      const filmRevenue = faces * sheetArea * lam.filmSellPerSqm;
+      const machineCharge = lam.machineSetupCost * (1 + input.lamMarkup / 100);
+      return Math.max(filmRevenue + machineCharge, input.minChargeLam || 0);
+    }
+    // Fallback: generic profile markup on total cost
+    return Math.max(costLamination * (1 + input.lamMarkup / 100), input.minChargeLam || 0);
+  })();
+  const chargeBinding = costBinding * (1 + input.bindingMarkup / 100);
+  const chargeFinishing = chargeGuillotine + chargeLamination + chargeBinding;
+
+  const chargePaper = paper.cost * (1 + input.paperMarkup / 100);
+
+  // ─── PRODUCT PRICING (overrides profile print markup if present) ───
+  let chargePrint: number;
+  let productPricingApplied = false;
+  const pp = input.productPricing;
+  const productDetail: Array<{ label: string; value: number }> = [];
+
+  if (pp && input.machineCat === 'digital' && (pp.price_color || pp.price_bw)) {
+    // Digital product: per-page pricing (price defined per A4, scaled by sheet size)
+    const totalFaces = input.sides === 2 ? totalMachineSheets * 2 : totalMachineSheets;
+    const pricePerPage = input.colorMode === 'color' ? (pp.price_color || 0) : (pp.price_bw || 0);
+    const sheetMult = wearMult(fLen, mMax);
+    const baseRevenue = totalFaces * pricePerPage * sheetMult;
+    let productRevenue = baseRevenue;
+    productDetail.push({ label: `${totalFaces} όψεις × €${pricePerPage} × ${sheetMult}`, value: baseRevenue });
+
+    // Quantity discount
+    if (pp.discount_enabled && pp.discount_step_qty && pp.discount_step_pct && input.qty > pp.discount_step_qty) {
+      const steps = Math.floor(input.qty / pp.discount_step_qty) - 1;
+      const discountPct = Math.min(steps * pp.discount_step_pct, pp.discount_max || 50);
+      const discountAmt = productRevenue * (discountPct / 100);
+      productRevenue -= discountAmt;
+      productDetail.push({ label: `Έκπτωση ${discountPct}%`, value: -discountAmt });
+    }
+
+    // Hourly profit
+    if (pp.hourly_enabled && pp.hourly_rate) {
+      const speedPpm = (input.specs as DigitalSpecs).speedPpmColor || 60;
+      const runMinutes = totalFaces / speedPpm;
+      const hourlyAmt = (runMinutes / 60) * pp.hourly_rate;
+      productRevenue += hourlyAmt;
+      productDetail.push({ label: `Hourly (${Math.round(runMinutes)}')`, value: hourlyAmt });
+    }
+
+    chargePrint = Math.max(productRevenue, costPrint);
+    productPricingApplied = true;
+  } else if (pp && input.machineCat === 'offset' && pp.charge_per_color) {
+    // Offset product: per-color charge + extras
+    const frontColors = (input.offsetFrontCmyk ?? 4) + (input.offsetFrontPms ?? 0);
+    const backColors = input.sides === 2 ? (input.offsetBackCmyk ?? 0) + (input.offsetBackPms ?? 0) : 0;
+    const colorRevenue = (frontColors + backColors) * pp.charge_per_color;
+    let productRevenue = colorRevenue;
+    productDetail.push({ label: `${frontColors + backColors} πλάκες × €${pp.charge_per_color}`, value: colorRevenue });
+
+    // PMS surcharge
+    if (pp.extra_pantone) {
+      const pmsCount = (input.offsetFrontPms ?? 0) + (input.offsetBackPms ?? 0);
+      if (pmsCount > 0) {
+        const pmsAmt = pmsCount * pp.extra_pantone;
+        productRevenue += pmsAmt;
+        productDetail.push({ label: `${pmsCount} PMS × €${pp.extra_pantone}`, value: pmsAmt });
+      }
+    }
+    // Varnish surcharge
+    if (pp.extra_varnish && input.offsetOilVarnish) {
+      productRevenue += pp.extra_varnish;
+      productDetail.push({ label: 'Βερνίκι', value: pp.extra_varnish });
+    }
+    // Quantity discount
+    if (pp.discount_enabled && pp.discount_step_qty && pp.discount_step_pct && input.qty > pp.discount_step_qty) {
+      const steps = Math.floor(input.qty / pp.discount_step_qty) - 1;
+      const discountPct = Math.min(steps * pp.discount_step_pct, pp.discount_max || 50);
+      const discountAmt = productRevenue * (discountPct / 100);
+      productRevenue -= discountAmt;
+      productDetail.push({ label: `Έκπτωση ${discountPct}%`, value: -discountAmt });
+    }
+    // Hourly profit
+    if (pp.hourly_enabled && pp.hourly_rate) {
+      const oSpecs = input.specs as OffsetSpecs;
+      const runHours = totalMachineSheets / (oSpecs.speed || 5000);
+      const setupHours = (oSpecs.setupMin || 15) / 60;
+      const hourlyAmt = (runHours + setupHours) * pp.hourly_rate;
+      productRevenue += hourlyAmt;
+      productDetail.push({ label: `Hourly (${Math.round((runHours + setupHours) * 60)}')`, value: hourlyAmt });
+    }
+    chargePrint = Math.max(productRevenue + costPrint, costPrint);
+    productPricingApplied = true;
+  } else {
+    // Default: profile markup
+    chargePrint = Math.max(
+      costPrint * (1 + input.printMarkup / 100),
+      input.minChargePrint || 0,
+    );
+  }
+
+  const sellPrice = chargePaper + chargePrint + chargeFinishing;
+  const profitAmount = sellPrice - totalCost;
+  const pricePerPiece = input.qty > 0 ? sellPrice / input.qty : 0;
+
+
+  // Print model label
+  const printModel = input.machineCat === 'digital'
+    ? `digital/${(input.specs as DigitalSpecs).costMode}`
+    : 'offset';
+
+  return {
+    ups: impo.ups,
+    cols: impo.cols,
+    rows: impo.rows,
+    rawMachineSheets,
+    wasteSheets,
+    totalMachineSheets,
+    totalStockSheets: paper.totalStockSheets,
+    costPaper: paper.cost,
+    costPrint,
+    costFinishing,
+    costGuillotine,
+    costLamination,
+    costBinding,
+    totalCost,
+    chargeFinishing,
+    chargeLamination,
+    chargeGuillotine,
+    profitAmount,
+    sellPrice,
+    pricePerPiece,
+    printModel,
+    printDetail: {
+      areaRatio: impo.ups * impo.pieceW * impo.pieceH / (input.machineMaxW * input.machineMaxH),
+      totalFaces: input.sides === 2 ? totalMachineSheets * 2 : totalMachineSheets,
+      wastePercent: impo.wastePercent,
+      productPricingApplied,
+      costBreakdown: {
+        paperCostPerUnit: input.paperCostPerUnit,
+        paperStockSheets: paper.totalStockSheets,
+        paperCutsPerStock: Math.ceil(totalMachineSheets / paper.totalStockSheets),
+        machineSheets: totalMachineSheets,
+        wasteSheets,
+        printCostRaw: costPrint,
+        printMarkup: input.printMarkup,
+        paperMarkup: input.paperMarkup,
+        chargePaper,
+        chargePrint,
+        chargeBinding,
+        productDetail,
+        printBreakdown: (input as unknown as Record<string, unknown>)._offsetBreakdown
+          || (input as unknown as Record<string, unknown>)._digitalBreakdown
+          || null,
+      },
+    },
+  };
+}

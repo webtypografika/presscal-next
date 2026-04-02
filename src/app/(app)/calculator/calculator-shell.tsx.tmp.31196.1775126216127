@@ -198,147 +198,6 @@ function ModalHead({ icon, iconColor, title, onClose }: { icon: string; iconColo
   );
 }
 
-/* ═══ OVERRIDES POPUP ═══ */
-function OverridesPopup({ overrides, onChange, anchor, onClose }: {
-  overrides: Record<string, number | undefined>;
-  onChange: (key: string, val: number | undefined) => void;
-  anchor: HTMLElement | null;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node) && anchor && !anchor.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [onClose, anchor]);
-
-  const pos = anchor?.getBoundingClientRect();
-  if (!pos) return null;
-
-  const inp: React.CSSProperties = {
-    width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)',
-    borderRadius: 6, padding: '5px 8px', color: 'var(--text)', fontSize: '0.8rem', textAlign: 'right', outline: 'none',
-  };
-  const lbl: React.CSSProperties = { fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 };
-  const section: React.CSSProperties = { marginBottom: 12 };
-  const sectionTitle: React.CSSProperties = { fontSize: '0.65rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 };
-
-  function numInput(key: string, placeholder: string, suffix?: string) {
-    const val = overrides[key];
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <input type="number" value={val ?? ''} placeholder={placeholder}
-          onChange={e => onChange(key, e.target.value ? Number(e.target.value) : undefined)}
-          style={inp} />
-        {suffix && <span style={{ fontSize: '0.65rem', color: '#64748b', flexShrink: 0 }}>{suffix}</span>}
-      </div>
-    );
-  }
-
-  return createPortal(
-    <div ref={ref} style={{
-      position: 'fixed', left: pos.left, top: pos.bottom + 8, transform: 'none',
-      width: 340, maxHeight: 480, overflow: 'auto',
-      background: '#0f172a', border: '1px solid var(--border)', borderRadius: 12,
-      boxShadow: '0 12px 48px rgba(0,0,0,0.6)', zIndex: 9999, padding: '14px 16px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text)' }}>
-          <i className="fas fa-sliders-h" style={{ marginRight: 6, color: 'var(--accent)' }} />Προσαρμογές
-        </span>
-        <button onClick={() => onChange('_reset', undefined)} style={{ border: 'none', background: 'transparent', color: '#f87171', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 600 }}>
-          <i className="fas fa-undo" style={{ marginRight: 3 }} />Reset
-        </button>
-      </div>
-
-      {/* Εκπτώσεις */}
-      <div style={section}>
-        <div style={sectionTitle}><i className="fas fa-percentage" style={{ fontSize: '0.55rem' }} />Εκπτώσεις %</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <div><div style={lbl}>Χαρτί €/φύλλο</div>{numInput('paperPriceOverride', 'auto', '€')}</div>
-          <div><div style={lbl}>Πλάκες</div>{numInput('plateDiscount', '0', '%')}</div>
-          <div><div style={lbl}>Ωριαίο</div>{numInput('hourlyOverride', 'auto', '€/h')}</div>
-          <div><div style={lbl}>Γκιλοτίνα</div>{numInput('guillotineDiscount', '0', '%')}</div>
-          <div><div style={lbl}>Πλαστικοποίηση</div>{numInput('lamDiscount', '0', '%')}</div>
-          <div><div style={lbl}>Βιβλιοδεσία</div>{numInput('bindingDiscount', '0', '%')}</div>
-        </div>
-      </div>
-
-      {/* Extra χρεώσεις */}
-      <div style={section}>
-        <div style={sectionTitle}><i className="fas fa-plus-circle" style={{ fontSize: '0.55rem' }} />Extra Χρεώσεις</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          <div><div style={lbl}>Ανά τεμάχιο</div>{numInput('extraPerPiece', '0', '€')}</div>
-          <div><div style={lbl}>Ανά φύλλο</div>{numInput('extraPerSheet', '0', '€')}</div>
-          <div><div style={lbl}>Ανά όψη</div>{numInput('extraPerFace', '0', '€')}</div>
-          <div><div style={lbl}>Συνολικά</div>{numInput('extraFixed', '0', '€')}</div>
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
-}
-
-/* ═══ HOVER CHIP (cost/profit popup via portal) ═══ */
-function HoverChip({ icon, color, label, rows, total, totalLabel, title }: {
-  icon: string; color: string; label: string; title: string;
-  rows: { label: string; value: number }[];
-  total: number; totalLabel: string;
-}) {
-  const [show, setShow] = useState(false);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
-  const ref = useRef<HTMLSpanElement>(null);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function handleEnter() {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (ref.current) {
-      const r = ref.current.getBoundingClientRect();
-      setPos({ x: r.left + r.width / 2, y: r.top });
-    }
-    setShow(true);
-  }
-  function handleLeave() {
-    hideTimer.current = setTimeout(() => setShow(false), 150);
-  }
-  function popupEnter() { if (hideTimer.current) clearTimeout(hideTimer.current); }
-  function popupLeave() { hideTimer.current = setTimeout(() => setShow(false), 150); }
-
-  const fmt2 = (n: number) => n.toFixed(2);
-  return (
-    <>
-      <span ref={ref} onMouseEnter={handleEnter} onMouseLeave={handleLeave}
-        style={{ fontSize: '0.72rem', color, cursor: 'default', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-        <i className={icon} style={{ fontSize: '0.55rem' }} /><strong>{label}</strong>
-      </span>
-      {show && createPortal(
-        <div onMouseEnter={popupEnter} onMouseLeave={popupLeave} style={{
-          position: 'fixed', left: pos.x, top: pos.y, transform: 'translate(-50%, -100%)',
-          marginTop: -8, padding: '10px 14px', minWidth: 190,
-          background: '#0f172a', border: '1px solid var(--border)', borderRadius: 10,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 9999,
-          display: 'flex', flexDirection: 'column', gap: 5,
-        }}>
-          <div style={{ fontSize: '0.65rem', fontWeight: 700, color, marginBottom: 2 }}>{title}</div>
-          {rows.map((r, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', gap: 16 }}>
-              <span style={{ color: '#94a3b8' }}>{r.label}</span>
-              <strong style={{ color: 'var(--text)' }}>€{fmt2(r.value)}</strong>
-            </div>
-          ))}
-          <div style={{ borderTop: '1px solid var(--border)', marginTop: 2, paddingTop: 4, display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-            <span style={{ color, fontWeight: 600 }}>{totalLabel}</span>
-            <strong style={{ color }}>€{fmt2(total)}</strong>
-          </div>
-        </div>,
-        document.body,
-      )}
-    </>
-  );
-}
-
 /* ═══ PILL BUTTON ═══ */
 function Pill({ active, onClick, children, color }: { active?: boolean; onClick: () => void; children: React.ReactNode; color?: string }) {
   const c = color || 'var(--accent)';
@@ -545,23 +404,6 @@ export default function CalculatorShell() {
   // Waste (φύλλα μοντάζ)
   const [wasteFixed, setWasteFixed] = useState(0);
 
-  // Overrides & Discounts
-  const [showOverrides, setShowOverrides] = useState(false);
-  const overridesBtnRef = useRef<HTMLSpanElement>(null);
-  const [overrides, setOverrides] = useState<{
-    paperPriceOverride?: number;    // €/φύλλο override
-    plateDiscount?: number;         // % έκπτωση πλάκες
-    hourlyOverride?: number;        // €/h override
-    guillotineDiscount?: number;    // % έκπτωση γκιλοτίνα
-    lamDiscount?: number;           // % έκπτωση πλαστικοποίηση
-    bindingDiscount?: number;       // % έκπτωση βιβλιοδεσία
-    extraPerPiece?: number;         // € extra ανά τεμάχιο
-    extraPerSheet?: number;         // € extra ανά φύλλο
-    extraPerFace?: number;          // € extra ανά όψη
-    extraFixed?: number;            // € extra συνολικά
-  }>({});
-  const hasOverrides = Object.values(overrides).some(v => v !== undefined && v !== 0);
-
   // PDF
   const [pdf, setPdf] = useState<ParsedPDF | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -670,8 +512,6 @@ export default function CalculatorShell() {
     if (pages) updates.pages = parseInt(pages);
     const archetype = searchParams.get('archetype');
     if (archetype) updates.archetype = archetype as JobData['archetype'];
-    const productId = searchParams.get('productId');
-    if (productId) updates.productId = productId;
     const bleedParam = searchParams.get('bleed');
     if (bleedParam) { updates.bleed = parseFloat(bleedParam); updates.bleedOn = true; }
     setJob(prev => ({ ...prev, ...updates }));
@@ -757,12 +597,6 @@ export default function CalculatorShell() {
         binding: (bindType || prev.binding) as FinishData['binding'],
         bindingMachineId: bindMachId || prev.bindingMachineId,
       }));
-    }
-
-    // ─── Overrides ───
-    const ovParam = searchParams.get('overrides');
-    if (ovParam) {
-      try { setOverrides(JSON.parse(ovParam)); } catch {}
     }
 
     // ─── Quote link ───
@@ -907,9 +741,7 @@ export default function CalculatorShell() {
     forceCols: impoForceCols || undefined,
     forceRows: impoForceRows || undefined,
     rotation: impoRotation || (job.rotation ? 90 : 0),
-    pages: (job.archetype === 'booklet' || impoMode === 'booklet') ? job.pages
-      : (job.archetype === 'perfect_bound' || impoMode === 'perfect_bound') ? job.bodyPages
-      : undefined,
+    pages: job.archetype === 'booklet' ? job.pages : job.archetype === 'perfect_bound' ? job.bodyPages : undefined,
     paperThickness: pbPaperThickness,
     turnType: impoTurnType,
     // Cut & Stack
@@ -940,13 +772,8 @@ export default function CalculatorShell() {
   const machineSetupMin = machine?.cat === 'offset'
     ? (specs.off_setup_min as number) || 15
     : (specs.warmup_minutes as number) || 5;
-  // Offset: passes = ceil(frontColors/towers) + ceil(backColors/towers) for sheetwise
-  const offTowers = (specs.off_towers as number) || 4;
-  const offFrontColors = color.platesFront + color.pmsFront;
-  const offBackColors = job.sides === 2 ? color.platesBack + color.pmsBack : 0;
-  const offPasses = Math.ceil(offFrontColors / offTowers) + (job.sides === 2 ? Math.ceil(offBackColors / offTowers) : 0);
   const timeMin = machine?.cat === 'offset'
-    ? Math.ceil((sheets * Math.max(offPasses, 1) / runSpeed) * 60 + machineSetupMin)
+    ? Math.ceil((sheets / runSpeed) * 60 + machineSetupMin)
     : Math.ceil(printSheets / runSpeed + machineSetupMin);
 
   // ─── AUTO-CALCULATE ON CHANGES (debounced) ───
@@ -974,10 +801,6 @@ export default function CalculatorShell() {
           impoRotation: impoRotation || (job.rotation ? 90 : 0),
           impoDuplexOrient: impoDuplexOrient,
           impoGutter: impoGutter,
-          pages: (impoMode === 'booklet' || job.archetype === 'booklet') ? job.pages
-            : (impoMode === 'perfect_bound' || job.archetype === 'perfect_bound') ? job.bodyPages
-            : undefined,
-          paperThickness: pbPaperThickness || undefined,
           impoBleed: effectiveBleed,
           impoForceUps: impoForceUps || undefined,
           impoForceCols: impoForceCols || undefined,
@@ -998,8 +821,6 @@ export default function CalculatorShell() {
           lamSides: finish.lamSides,
           bindingType: finish.binding !== 'none' ? finish.binding : '',
           bindingMachineId: finish.bindingMachineId || undefined,
-          // Overrides
-          overrides: hasOverrides ? overrides : undefined,
         }),
       })
         .then(r => r.json())
@@ -1013,7 +834,7 @@ export default function CalculatorShell() {
         .finally(() => setCalculating(false));
     }, 300);
     return () => { if (calcTimer.current) clearTimeout(calcTimer.current); };
-  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, feedEdge, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage, overrides]);
+  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, feedEdge, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage]);
 
   // ─── DISPLAY VALUES ───
   const r = calcResult;
@@ -1153,61 +974,84 @@ export default function CalculatorShell() {
 
           <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0 }} />
 
-          {/* Overrides button */}
-          <span ref={overridesBtnRef} onClick={() => setShowOverrides(v => !v)}
-            style={{
-              fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
-              color: hasOverrides ? 'var(--accent)' : '#64748b',
-              background: hasOverrides ? 'rgba(245,130,32,0.1)' : 'transparent',
-              padding: '3px 8px', borderRadius: 6,
-              border: `1px solid ${hasOverrides ? 'rgba(245,130,32,0.3)' : 'transparent'}`,
-            }}>
-            <i className="fas fa-sliders-h" style={{ fontSize: '0.55rem' }} />
-          </span>
-          {showOverrides && <OverridesPopup
-            overrides={overrides}
-            anchor={overridesBtnRef.current}
-            onChange={(key, val) => {
-              if (key === '_reset') { setOverrides({}); return; }
-              setOverrides(prev => ({ ...prev, [key]: val }));
-            }}
-            onClose={() => setShowOverrides(false)}
-          />}
-
           {/* Κόστος hover */}
-          <HoverChip
-            icon="fas fa-coins" color="#f87171" label={`€${fmt(totalCost)}`}
-            rows={[
-              { label: 'Χαρτί', value: costPaper },
-              { label: 'Εκτύπωση', value: costPrint },
-              ...(costLamination > 0 ? [{ label: 'Πλαστικοποίηση', value: costLamination }] : []),
-              ...((r?.costBinding ?? 0) > 0 ? [{ label: 'Βιβλιοδεσία', value: r?.costBinding ?? 0 }] : []),
-            ]}
-            total={totalCost} totalLabel="Σύνολο" title="ΚΟΣΤΟΣ"
-          />
+          <div style={{ position: 'relative', flexShrink: 0 }} className="hover-popup-trigger">
+            <span style={{ fontSize: '0.72rem', color: '#f87171', cursor: 'default', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <i className="fas fa-coins" style={{ fontSize: '0.55rem' }} />
+              <strong>€{fmt(totalCost)}</strong>
+            </span>
+            <div className="hover-popup" style={{
+              position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+              marginBottom: 8, padding: '10px 14px', minWidth: 180,
+              background: '#0f172a', border: '1px solid var(--border)', borderRadius: 10,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 100,
+              display: 'none', flexDirection: 'column', gap: 5,
+            }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#f87171', marginBottom: 2 }}>ΚΟΣΤΟΣ</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                <span style={{ color: '#94a3b8' }}>Χαρτί</span><strong style={{ color: 'var(--text)' }}>€{fmt(costPaper)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                <span style={{ color: '#94a3b8' }}>Εκτύπωση</span><strong style={{ color: 'var(--text)' }}>€{fmt(costPrint)}</strong>
+              </div>
+              {costLamination > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                <span style={{ color: '#94a3b8' }}>Πλαστικοποίηση</span><strong style={{ color: 'var(--text)' }}>€{fmt(costLamination)}</strong>
+              </div>}
+              {(r?.costBinding ?? 0) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                <span style={{ color: '#94a3b8' }}>Βιβλιοδεσία</span><strong style={{ color: 'var(--text)' }}>€{fmt(r?.costBinding ?? 0)}</strong>
+              </div>}
+              <div style={{ borderTop: '1px solid var(--border)', marginTop: 2, paddingTop: 4, display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                <span style={{ color: '#f87171', fontWeight: 600 }}>Σύνολο</span><strong style={{ color: '#f87171' }}>€{fmt(totalCost)}</strong>
+              </div>
+            </div>
+          </div>
 
           {/* Κέρδος hover */}
-          {(() => {
-            const bd = (r?.printDetail?.costBreakdown ?? {}) as Record<string, unknown>;
-            const chPaper = Number(bd.chargePaper) || 0;
-            const chPrint = Number(bd.chargePrint) || 0;
-            const pPaper = chPaper - costPaper;
-            const pPrint = chPrint - costPrint;
-            const chGuill = r?.chargeGuillotine ?? 0;
-            const pLam = (r?.chargeLamination ?? 0) - costLamination;
-            const pBind = (Number(bd.chargeBinding) || 0) - (r?.costBinding ?? 0);
-            return <HoverChip
-              icon="fas fa-chart-line" color="var(--success)" label={`€${fmt(profitAmount)}`}
-              rows={[
-                ...(pPaper !== 0 ? [{ label: 'Χαρτί', value: pPaper }] : []),
-                { label: 'Εκτύπωση', value: pPrint },
-                ...(chGuill > 0 ? [{ label: 'Γκιλοτίνα', value: chGuill }] : []),
-                ...(pLam !== 0 ? [{ label: 'Πλαστικοποίηση', value: pLam }] : []),
-                ...(pBind !== 0 ? [{ label: 'Βιβλιοδεσία', value: pBind }] : []),
-              ]}
-              total={profitAmount} totalLabel="Σύνολο" title="ΚΕΡΔΟΣ"
-            />;
-          })()}
+          <div style={{ position: 'relative', flexShrink: 0 }} className="hover-popup-trigger">
+            <span style={{ fontSize: '0.72rem', color: 'var(--success)', cursor: 'default', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <i className="fas fa-chart-line" style={{ fontSize: '0.55rem' }} />
+              <strong>€{fmt(profitAmount)}</strong>
+            </span>
+            <div className="hover-popup" style={{
+              position: 'absolute', bottom: '100%', right: 0,
+              marginBottom: 8, padding: '10px 14px', minWidth: 180,
+              background: '#0f172a', border: '1px solid var(--border)', borderRadius: 10,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 100,
+              display: 'none', flexDirection: 'column', gap: 5,
+            }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--success)', marginBottom: 2 }}>ΚΕΡΔΟΣ</div>
+              {r && (() => {
+                const bd = (r.printDetail?.costBreakdown ?? {}) as Record<string, unknown>;
+                const chPaper = Number(bd.chargePaper) || 0;
+                const chPrint = Number(bd.chargePrint) || 0;
+                const pPaper = chPaper - costPaper;
+                const pPrint = chPrint - costPrint;
+                const chGuill = r.chargeGuillotine ?? 0;
+                const pLam = (r.chargeLamination ?? 0) - costLamination;
+                const pBind = (Number(bd.chargeBinding) || 0) - (r.costBinding ?? 0);
+                return <>
+                  {pPaper !== 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                    <span style={{ color: '#94a3b8' }}>Χαρτί</span><strong style={{ color: 'var(--text)' }}>€{fmt(pPaper)}</strong>
+                  </div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                    <span style={{ color: '#94a3b8' }}>Εκτύπωση</span><strong style={{ color: 'var(--text)' }}>€{fmt(pPrint)}</strong>
+                  </div>
+                  {chGuill > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                    <span style={{ color: '#94a3b8' }}>Γκιλοτίνα</span><strong style={{ color: 'var(--text)' }}>€{fmt(chGuill)}</strong>
+                  </div>}
+                  {pLam !== 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                    <span style={{ color: '#94a3b8' }}>Πλαστικοποίηση</span><strong style={{ color: 'var(--text)' }}>€{fmt(pLam)}</strong>
+                  </div>}
+                  {pBind !== 0 && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
+                    <span style={{ color: '#94a3b8' }}>Βιβλιοδεσία</span><strong style={{ color: 'var(--text)' }}>€{fmt(pBind)}</strong>
+                  </div>}
+                </>;
+              })()}
+              <div style={{ borderTop: '1px solid var(--border)', marginTop: 2, paddingTop: 4, display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                <span style={{ color: 'var(--success)', fontWeight: 600 }}>Σύνολο</span><strong style={{ color: 'var(--success)' }}>€{fmt(profitAmount)}</strong>
+              </div>
+            </div>
+          </div>
 
           {lamWarnings.length > 0 && <span style={{ fontSize: '0.68rem', color: '#fca5a5', flexShrink: 0 }}><i className="fas fa-exclamation-triangle" style={{ marginRight: 4 }} />Pouch!</span>}
         </div>
@@ -1265,7 +1109,6 @@ export default function CalculatorShell() {
                 lamSides: finish.lamSides,
                 bindingType: finish.binding !== 'none' ? finish.binding : '',
                 bindingMachineId: finish.bindingMachineId || undefined,
-                overrides: hasOverrides ? overrides : undefined,
               };
               const itemPayload = {
                 id: quoteLink?.itemId || crypto.randomUUID(),
@@ -1416,14 +1259,7 @@ export default function CalculatorShell() {
           <span>sell: <b style={{ color: 'var(--success)' }}>€{calcResult.sellPrice.toFixed(3)}</b></span>
           <span>profit: <b style={{ color: 'var(--success)' }}>€{calcResult.profitAmount.toFixed(3)}</b></span>
           {calcDebug?.productPricingApplied ? <span style={{ color: 'var(--accent)' }}>PRODUCT PRICING ✓</span> : null}
-          {(calcResult as any)?._dbg ? (() => {
-            const d = (calcResult as any)._dbg as Record<string, unknown>;
-            return <>
-              <span>product: <b style={{ color: 'var(--accent)' }}>{String(d?.productName || '—')}</b></span>
-              <span>hourlyRate: <b style={{ color: '#f59e0b' }}>{String(d?.offHourlyRate ?? '—')}</b></span>
-              <span>speed: <b>{String(d?.speedUsed ?? '—')}</b></span>
-            </>;
-          })() : null}
+          {calcDebug?.debug ? <span>product: <b style={{ color: 'var(--accent)' }}>{String((calcDebug.debug as Record<string, unknown>)?.productPricing || '—')}</b></span> : null}
         </div>
       )}
 
@@ -1746,14 +1582,8 @@ export default function CalculatorShell() {
               <MfLabel>ΟΨΕΙΣ</MfLabel>
               <div style={{ marginBottom: 12 }}>
                 {FORCE_DUPLEX.has(impoMode) ? (
-                  <div style={{ fontSize: '0.72rem', color: 'var(--blue)', padding: '6px 0', fontWeight: 600 }}>
-                    <i className="fas fa-lock" style={{ marginRight: 6, fontSize: '0.5rem' }} />Διπλή όψη ({impoMode === 'workturn' ? 'Work&Turn' : impoMode === 'booklet' ? 'Booklet' : 'Perfect Bound'})
-                  </div>
-                ) : machine?.cat === 'offset' ? (
-                  <div style={{ fontSize: '0.72rem', color: job.sides === 2 ? 'var(--blue)' : 'var(--text-muted)', padding: '6px 0', fontWeight: 600 }}>
-                    <i className={job.sides === 2 ? 'fas fa-clone' : 'fas fa-file'} style={{ marginRight: 6, fontSize: '0.6rem' }} />
-                    {job.sides === 2 ? 'Διπλή' : 'Μονή'} όψη
-                    <span style={{ fontSize: '0.58rem', color: '#64748b', fontWeight: 400, marginLeft: 6 }}>(από χρώματα)</span>
+                  <div style={{ fontSize: '0.62rem', color: '#64748b', padding: '6px 0' }}>
+                    <i className="fas fa-lock" style={{ marginRight: 4, fontSize: '0.5rem' }} />Διπλή όψη ({impoMode === 'workturn' ? 'Work&Turn' : impoMode === 'booklet' ? 'Booklet' : 'Perfect Bound'})
                   </div>
                 ) : (
                   <ToggleBar value={String(job.sides)} onChange={(v) => setJob({ ...job, sides: Number(v) as 1 | 2 })} options={[{ v: '1', l: 'Μονή' }, { v: '2', l: 'Διπλή' }]} />
@@ -1783,7 +1613,7 @@ export default function CalculatorShell() {
               </div>
 
               {/* Archetype-specific params */}
-              {(job.archetype === 'booklet' || impoMode === 'booklet') && (
+              {job.archetype === 'booklet' && (
                 <div style={{ marginBottom: 10 }}>
                   <MfLabel>ΣΕΛΙΔΕΣ (×4)</MfLabel>
                   <MfInput value={job.pages ?? ''} onChange={(v) => setJob({ ...job, pages: Number(v) || undefined })} style={{ width: 80, textAlign: 'center' }} />
@@ -1897,10 +1727,7 @@ export default function CalculatorShell() {
                   ].map(p => {
                     const active = color.platesFront === p.f && color.platesBack === p.b;
                     return (
-                      <Pill key={p.l} active={active} onClick={() => {
-                        setColor({ ...color, platesFront: p.f, platesBack: p.b });
-                        if (!FORCE_DUPLEX.has(impoMode)) setJob(prev => ({ ...prev, sides: p.b > 0 ? 2 : 1 }));
-                      }}>{p.l}</Pill>
+                      <Pill key={p.l} active={active} onClick={() => setColor({ ...color, platesFront: p.f, platesBack: p.b })}>{p.l}</Pill>
                     );
                   })}
                 </div>
@@ -2639,7 +2466,7 @@ export default function CalculatorShell() {
                       {p.chemicals?.total > 0 && (<>
                         <DevRow label="Χημικά" value={p.chemicals.total} indent />
                         {p.chemicals.wash > 0 && <DevRow label={`  Wash (${p.chemicals.washPasses}× · ink €${p.chemicals.inkCleanerCpl}/lt + water €${p.chemicals.waterCleanerCpl}/lt · ${p.chemicals.washMl}ml)`} value={p.chemicals.wash} indent />}
-                        {p.chemicals.ipa > 0 && <DevRow label={`  IPA (${p.chemicals.ipaMlH}ml/h · €${Number(p.chemicals.ipaCpl).toFixed(2)}/lt · ${(p.chemicals.runHours * 60).toFixed(0)}')`} value={p.chemicals.ipa} indent />}
+                        {p.chemicals.ipa > 0 && <DevRow label={`  IPA (${p.chemicals.ipaMlH}ml/h · €${p.chemicals.ipaCpl}/lt · ${(p.chemicals.runHours * 60).toFixed(0)}')`} value={p.chemicals.ipa} indent />}
                       </>)}
                       {p.varnish?.total > 0 && <DevRow label="Βερνίκι" value={p.varnish.total} indent />}
                       {p.coating?.total > 0 && <DevRow label="Coating" value={p.coating.total} indent />}

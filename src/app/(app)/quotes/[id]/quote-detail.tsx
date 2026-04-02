@@ -783,6 +783,21 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           </div>
         ))}
 
+        {/* Add item button */}
+        <div style={{ padding: '6px 10px', borderTop: '1px solid var(--border)' }}>
+          <button onClick={() => setItems(prev => [...prev, emptyItem()])} style={{
+            display: 'flex', alignItems: 'center', gap: 5, width: '100%',
+            padding: '6px 10px', borderRadius: 6, border: '1px dashed var(--border)',
+            background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
+            fontSize: '0.78rem', fontWeight: 500, fontFamily: 'inherit',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+          >
+            <i className="fas fa-plus" style={{ fontSize: '0.6rem' }} /> Προσθήκη προϊόντος
+          </button>
+        </div>
+
         {/* Totals row */}
         <div style={{
           display: 'grid', gridTemplateColumns: '1fr auto auto auto',
