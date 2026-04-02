@@ -36,6 +36,8 @@ export interface CalculatorInput {
   impoForceRows?: number;
   impoTurnType?: WorkTurnType;
   impoCropMarks: boolean;
+  pages?: number;
+  paperThickness?: number;
 
   // Offset
   offsetFrontCmyk?: number;
