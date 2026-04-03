@@ -50,26 +50,18 @@ export default function PlateOrderModal({
 
   function buildEmailHtml() {
     const deliveryText = delivery === 'pickup' ? 'Θα παραλάβουμε εμείς.' : 'Παρακαλούμε αποστείλατε.';
-    const colors = ['Cyan', 'Magenta', 'Yellow', 'Black'];
-    const plateRows: string[] = [];
-    for (let i = 0; i < platesFront; i++) plateRows.push(`<tr><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0">Front</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${colors[i] || 'Spot ' + (i+1)}</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${plateSize}</td></tr>`);
-    for (let i = 0; i < platesBack; i++) plateRows.push(`<tr><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0">Back</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${colors[i] || 'Spot ' + (i+1)}</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${plateSize}</td></tr>`);
+    const backText = platesBack > 0 ? ` + ${platesBack} πίσω` : '';
 
     return `
 <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:500px">
-  <h2 style="color:#1e293b;font-size:18px;margin:0 0 12px">Τσίγκοι — ${totalPlates} τεμ.</h2>
-  <p style="color:#64748b;font-size:13px;margin:0 0 16px">${machineName} · ${plateSize}</p>
-  <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-    <thead><tr style="background:#f8fafc">
-      <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">ΠΛΕΥΡΑ</th>
-      <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">ΧΡΩΜΑ</th>
-      <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">ΜΕΓΕΘΟΣ</th>
-    </tr></thead>
-    <tbody>${plateRows.join('')}</tbody>
-  </table>
-  <p style="font-size:14px;color:#1e293b;font-weight:600">${deliveryText}</p>
-  ${notes ? `<p style="font-size:13px;color:#78350f;background:#fffbeb;padding:10px 14px;border-radius:6px;border:1px solid #fde68a">${notes}</p>` : ''}
-  <p style="font-size:12px;color:#94a3b8;margin-top:20px">Το αρχείο μοντάζ είναι συνημμένο.</p>
+  <h2 style="color:#1e293b;font-size:18px;margin:0 0 16px">Εκτύπωση Τσίγκων</h2>
+  <div style="background:#f8fafc;border-radius:8px;padding:16px 20px;margin-bottom:16px">
+    <div style="font-size:28px;font-weight:800;color:#f58220;margin-bottom:4px">${totalPlates} τσίγκοι</div>
+    <div style="font-size:14px;color:#475569">${platesFront} μπροστά${backText} · ${plateSize}</div>
+  </div>
+  <p style="font-size:14px;color:#1e293b;font-weight:600;margin:0 0 8px">${deliveryText}</p>
+  ${notes ? `<p style="font-size:13px;color:#78350f;background:#fffbeb;padding:10px 14px;border-radius:6px;border:1px solid #fde68a;margin:8px 0">${notes}</p>` : ''}
+  <p style="font-size:12px;color:#94a3b8;margin-top:16px">Το αρχείο μοντάζ είναι συνημμένο.</p>
 </div>`;
   }
 
