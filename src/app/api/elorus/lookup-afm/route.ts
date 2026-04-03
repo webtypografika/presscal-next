@@ -19,7 +19,7 @@ function buildSoap12Envelope(username: string, password: string, callerAfm: stri
   xmlns:srvc="http://rgwspublic2/RgWsPublic2Service"
   xmlns:typ="http://rgwspublic2/RgWsPublic2">
   <env:Header>
-    <srvc:RgWsPublic2InputHeader>
+    <srvc:RgWsPublic2InputHeader env:mustUnderstand="true">
       <typ:pUsernameToken>
         <typ:pUsername>${username}</typ:pUsername>
         <typ:pPassword>${password}</typ:pPassword>
@@ -91,6 +91,8 @@ export async function POST(req: NextRequest) {
     }
 
     const soapBody = buildSoap12Envelope(org.aadeUsername, org.aadePassword, org.aadeAfm, afm);
+    console.log('AADE request — user:', org.aadeUsername, 'callerAfm:', org.aadeAfm, 'lookupAfm:', afm);
+    console.log('AADE SOAP body:', soapBody.slice(0, 600));
     const aadeRes = await fetch(AADE_URL, {
       method: 'POST',
       headers: {
@@ -127,6 +129,7 @@ export async function POST(req: NextRequest) {
       firm_act_descr: extractXmlValue(xml, 'firm_act_descr'),
       elorusContactId: elorusContactId as string | null,
       _debug_xml: xml.slice(0, 800),
+      _debug_creds: `user=${org.aadeUsername ? org.aadeUsername.slice(0, 3) + '***' : 'EMPTY'} afm=${org.aadeAfm || 'EMPTY'} pass=${org.aadePassword ? '***set***' : 'EMPTY'}`,
     };
 
     // Step 3: Create or update Elorus contact with AADE data
