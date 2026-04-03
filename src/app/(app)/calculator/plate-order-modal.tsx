@@ -60,7 +60,14 @@ export default function PlateOrderModal({
 
       if (attachPdf) {
         const pdfBytes = await exportImpositionPDF(exportOptions);
-        pdfBase64 = Buffer.from(pdfBytes as Uint8Array).toString('base64');
+        const bytes = pdfBytes as Uint8Array;
+        // Vercel serverless limit ~4.5MB; base64 expands ~33%
+        if (bytes.length > 3_000_000) {
+          setError('Το PDF είναι πολύ μεγάλο (' + (bytes.length / 1_000_000).toFixed(1) + 'MB). Αποεπιλέξτε "Επισύναψη PDF" ή χρησιμοποιήστε μικρότερο αρχείο.');
+          setSending(false);
+          return;
+        }
+        pdfBase64 = Buffer.from(bytes).toString('base64');
         pdfFileName = (exportOptions.sourceFileName || 'imposition').replace(/\.pdf$/i, '') + '_plates.pdf';
       }
 
@@ -92,7 +99,9 @@ export default function PlateOrderModal({
           pdfFileName,
         }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any;
+      try { data = JSON.parse(text); } catch { throw new Error(res.status === 413 ? 'Το PDF είναι πολύ μεγάλο. Αποεπιλέξτε "Επισύναψη imposition PDF" ή χρησιμοποιήστε μικρότερο αρχείο.' : `Σφάλμα: ${text.slice(0, 100)}`); }
       if (!res.ok) throw new Error(data.error || 'Σφάλμα αποστολής');
       onSent();
     } catch (e) { setError((e as Error).message); }

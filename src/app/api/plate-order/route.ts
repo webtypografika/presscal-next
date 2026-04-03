@@ -6,6 +6,8 @@ import { authOptions } from '@/lib/auth';
 import { getGmailToken, sendGmail } from '@/lib/gmail';
 import { prisma } from '@/lib/db';
 
+export const maxDuration = 30;
+
 const ORG_ID = 'default-org';
 
 interface PlateItem {
