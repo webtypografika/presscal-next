@@ -737,12 +737,6 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
                     <i className="fas fa-check-circle" style={{ marginRight: 4 }} />Συνδέθηκε με Elorus
                   </div>
                 )}
-                {afmResult._debug_xml && (
-                  <details style={{ marginTop: 8 }}>
-                    <summary style={{ fontSize: '0.62rem', color: '#475569', cursor: 'pointer' }}>Debug XML</summary>
-                    <pre style={{ fontSize: '0.58rem', color: '#64748b', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 150, overflow: 'auto', marginTop: 4 }}>{afmResult._debug_xml}</pre>
-                  </details>
-                )}
               </div>
             )}
           </>)}

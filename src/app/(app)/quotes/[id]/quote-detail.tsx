@@ -281,7 +281,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       if (i !== idx) return item;
       const u = { ...item, [field]: value };
       if (field === 'qty' || field === 'unitPrice') { u.finalPrice = (u.qty || 0) * (u.unitPrice || 0); u.profit = u.finalPrice - (u.cost || 0); }
-      if (field === 'finalPrice') u.profit = (u.finalPrice || 0) - (u.cost || 0);
+      if (field === 'finalPrice') { u.unitPrice = (u.qty || 0) > 0 ? Math.round(((u.finalPrice || 0) / u.qty) * 1000) / 1000 : 0; u.profit = (u.finalPrice || 0) - (u.cost || 0); }
       if (field === 'cost') u.profit = (u.finalPrice || 0) - (u.cost || 0);
       return u;
     }));

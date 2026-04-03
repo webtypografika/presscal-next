@@ -105,7 +105,6 @@ export async function POST(req: NextRequest) {
     }
 
     const xml = await aadeRes.text();
-    console.log('AADE raw XML (first 1000):', xml.slice(0, 1000));
 
     // Check for AADE errors — try both prefixed and unprefixed
     const errorCode = extractXmlValue(xml, 'error_code');
@@ -125,8 +124,6 @@ export async function POST(req: NextRequest) {
       postal_area_description: extractXmlValue(xml, 'postal_area_description'),
       firm_act_descr: extractXmlValue(xml, 'firm_act_descr'),
       elorusContactId: elorusContactId as string | null,
-      _debug_xml: xml.slice(0, 2000),
-      _debug_parsed: `onomasia=[${extractXmlValue(xml, 'onomasia')}] doy=[${extractXmlValue(xml, 'doy_descr')}] addr=[${extractXmlValue(xml, 'postal_address')}] city=[${extractXmlValue(xml, 'postal_area_description')}]`,
     };
 
     // Step 3: Create or update Elorus contact with AADE data
