@@ -61,6 +61,7 @@ const TABS = [
   { id: 'sheet', label: 'Χαρτιά', icon: 'fa-file', color: 'var(--blue)' },
   { id: 'consumable-offset', label: 'Offset Αναλώσιμα', icon: 'fa-industry', color: 'var(--violet)' },
   { id: 'consumable-digital', label: 'Digital Αναλώσιμα', icon: 'fa-print', color: 'var(--accent)' },
+  { id: 'plate-orders', label: 'Παραγγελίες Τσίγκων', icon: 'fa-layer-group', color: 'var(--amber)' },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -120,10 +121,24 @@ export function InventoryList({ materials, consumables, org }: Props) {
   const dimOptions = [...new Set(sheets.filter(m => m.width && m.height).map(m => `${m.width}×${m.height}`))].sort();
   const gramOptions = [...new Set(sheets.map(m => m.thickness).filter(Boolean))].sort((a, b) => (a as number) - (b as number)) as number[];
 
+  const [plateOrders, setPlateOrders] = useState<any[]>([]);
+  const [plateOrdersLoaded, setPlateOrdersLoaded] = useState(false);
+
+  // Fetch plate orders when tab is active
+  useEffect(() => {
+    if (tab === 'plate-orders' && !plateOrdersLoaded) {
+      fetch('/api/plate-order').then(r => r.ok ? r.json() : []).then(data => {
+        setPlateOrders(data);
+        setPlateOrdersLoaded(true);
+      }).catch(() => setPlateOrdersLoaded(true));
+    }
+  }, [tab, plateOrdersLoaded]);
+
   const counts: Record<TabId, number> = {
     'sheet': sheets.length,
     'consumable-offset': offsetCons.length,
     'consumable-digital': digitalCons.length,
+    'plate-orders': plateOrders.length,
   };
 
   // Stats
@@ -383,6 +398,8 @@ export function InventoryList({ materials, consumables, org }: Props) {
           onEdit={setEditMaterialId}
           onDelete={deleteMaterial}
         />
+      ) : tab === 'plate-orders' ? (
+        <PlateOrdersPanel orders={plateOrders} onUpdate={() => setPlateOrdersLoaded(false)} />
       ) : (
         <ConsumableTable items={filtered as ConsumableWithMachine[]} onEdit={setEditConsumableId} onDelete={deleteConsumable} />
       )}
@@ -1069,6 +1086,155 @@ function ConsumableTable({ items, onEdit, onDelete }: { items: ConsumableWithMac
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ─── PLATE ORDERS PANEL ───
+const STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
+  draft: { bg: 'rgba(100,116,139,0.12)', fg: '#94a3b8', label: 'Πρόχειρο' },
+  sent: { bg: 'rgba(59,130,246,0.12)', fg: '#60a5fa', label: 'Εστάλη' },
+  received: { bg: 'rgba(34,197,94,0.12)', fg: '#4ade80', label: 'Παρελήφθη' },
+  cancelled: { bg: 'rgba(239,68,68,0.12)', fg: '#f87171', label: 'Ακυρώθηκε' },
+};
+
+function PlateOrdersPanel({ orders, onUpdate }: { orders: any[]; onUpdate: () => void }) {
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [updating, setUpdating] = useState<string | null>(null);
+
+  const filtered = statusFilter === 'all' ? orders : orders.filter((o: any) => o.status === statusFilter);
+
+  async function updateStatus(id: string, status: string) {
+    setUpdating(id);
+    try {
+      await fetch('/api/plate-order', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      onUpdate();
+    } catch { /* ignore */ }
+    finally { setUpdating(null); }
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center' }}>
+        <i className="fas fa-layer-group" style={{ fontSize: '2.5rem', color: 'var(--text-muted)', opacity: 0.2 }} />
+        <p style={{ marginTop: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Δεν υπάρχουν παραγγελίες τσίγκων</p>
+        <p style={{ color: '#475569', fontSize: '0.75rem' }}>Χρησιμοποιήστε το κουμπί "Τσίγκοι" στον Calculator (offset)</p>
+      </div>
+    );
+  }
+
+  const statusCounts: Record<string, number> = {};
+  for (const o of orders) statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+
+  return (
+    <div>
+      {/* Status filter */}
+      <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2, marginBottom: 16, width: 'fit-content' }}>
+        <button onClick={() => setStatusFilter('all')} style={{
+          padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: '0.78rem', fontWeight: 600,
+          cursor: 'pointer', fontFamily: 'inherit',
+          color: statusFilter === 'all' ? 'var(--amber)' : '#64748b',
+          background: statusFilter === 'all' ? 'rgba(245,158,11,0.12)' : 'transparent',
+        }}>Όλα <span style={{ opacity: 0.5, marginLeft: 4 }}>{orders.length}</span></button>
+        {Object.entries(STATUS_COLORS).map(([key, s]) => statusCounts[key] ? (
+          <button key={key} onClick={() => setStatusFilter(key)} style={{
+            padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: '0.78rem', fontWeight: 600,
+            cursor: 'pointer', fontFamily: 'inherit',
+            color: statusFilter === key ? s.fg : '#64748b',
+            background: statusFilter === key ? s.bg : 'transparent',
+          }}>{s.label} <span style={{ opacity: 0.5, marginLeft: 4 }}>{statusCounts[key]}</span></button>
+        ) : null)}
+      </div>
+
+      {/* Order cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {filtered.map((order: any) => {
+          const items = (order.items || []) as any[];
+          const st = STATUS_COLORS[order.status] || STATUS_COLORS.draft;
+          const isService = order.orderType === 'platemaker_service';
+          const date = new Date(order.sentAt || order.createdAt);
+
+          return (
+            <div key={order.id} className="card" style={{ padding: '16px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: '50%',
+                    background: 'color-mix(in srgb, var(--amber) 10%, transparent)',
+                    border: '2px solid color-mix(in srgb, var(--amber) 30%, transparent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'var(--amber)', fontSize: '0.85rem',
+                  }}>
+                    <i className={`fas ${isService ? 'fa-paper-plane' : 'fa-box'}`} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>{order.supplierName}</div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                      {date.toLocaleDateString('el-GR')} · {items.length} τσίγκ{items.length === 1 ? 'ος' : 'οι'}
+                      {isService ? ' · Service' : ' · Υλικό'}
+                    </div>
+                  </div>
+                </div>
+                <span style={{
+                  padding: '4px 12px', borderRadius: 6,
+                  background: st.bg, color: st.fg,
+                  fontSize: '0.72rem', fontWeight: 700,
+                }}>{st.label}</span>
+              </div>
+
+              {order.jobDescription && (
+                <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: 8, padding: '6px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)' }}>
+                  <i className="fas fa-info-circle" style={{ marginRight: 6, color: '#64748b' }} />{order.jobDescription}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {items.map((item: any, i: number) => (
+                  <span key={i} style={{
+                    padding: '4px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+                    background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', color: '#cbd5e1',
+                  }}>
+                    {item.name} · {item.plateSize}{item.color ? ` · ${item.color}` : ''}
+                  </span>
+                ))}
+              </div>
+
+              {order.pdfFileName && (
+                <div style={{ fontSize: '0.7rem', color: 'var(--teal)', marginBottom: 4 }}>
+                  <i className="fas fa-file-pdf" style={{ marginRight: 4 }} />{order.pdfFileName}
+                </div>
+              )}
+              {order.notes && (
+                <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: 8 }}>
+                  <i className="fas fa-sticky-note" style={{ marginRight: 4 }} />{order.notes}
+                </div>
+              )}
+
+              {order.status === 'sent' && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={() => updateStatus(order.id, 'received')} disabled={updating === order.id}
+                    style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: 'color-mix(in srgb, #22c55e 12%, transparent)', color: '#4ade80', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: updating === order.id ? 0.5 : 1 }}>
+                    <i className="fas fa-check" style={{ marginRight: 4 }} />Παρελήφθη
+                  </button>
+                  <button onClick={() => updateStatus(order.id, 'cancelled')} disabled={updating === order.id}
+                    style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: 'rgba(239,68,68,0.08)', color: '#f87171', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: updating === order.id ? 0.5 : 1 }}>
+                    <i className="fas fa-times" style={{ marginRight: 4 }} />Ακύρωση
+                  </button>
+                </div>
+              )}
+              {order.status === 'received' && order.receivedAt && (
+                <div style={{ fontSize: '0.68rem', color: '#4ade80' }}>
+                  <i className="fas fa-check-circle" style={{ marginRight: 4 }} />Παρελήφθη {new Date(order.receivedAt).toLocaleDateString('el-GR')}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
