@@ -726,7 +726,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
             )}
             {afmResult && (
               <div style={{ padding: '10px 12px', borderRadius: 8, marginBottom: 10, background: 'color-mix(in srgb, var(--teal) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--teal) 20%, transparent)' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--teal)', marginBottom: 4 }}>{afmResult.onomasia || afmResult.commer_title}</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--teal)', marginBottom: 4 }}>{afmResult.onomasia || afmResult.commer_title || '(κενή επωνυμία)'}</div>
                 <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {afmResult.doy_descr && <span><i className="fas fa-building" style={{ marginRight: 4 }} />{afmResult.doy_descr}</span>}
                   {afmResult.postal_address && <span><i className="fas fa-map-marker-alt" style={{ marginRight: 4 }} />{afmResult.postal_address}</span>}
@@ -736,6 +736,12 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
                   <div style={{ marginTop: 6, fontSize: '0.68rem', color: 'var(--teal)' }}>
                     <i className="fas fa-check-circle" style={{ marginRight: 4 }} />Συνδέθηκε με Elorus
                   </div>
+                )}
+                {afmResult._debug_xml && (
+                  <details style={{ marginTop: 8 }}>
+                    <summary style={{ fontSize: '0.62rem', color: '#475569', cursor: 'pointer' }}>Debug XML</summary>
+                    <pre style={{ fontSize: '0.58rem', color: '#64748b', whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 150, overflow: 'auto', marginTop: 4 }}>{afmResult._debug_xml}</pre>
+                  </details>
                 )}
               </div>
             )}

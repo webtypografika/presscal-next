@@ -106,6 +106,7 @@ export async function POST(req: NextRequest) {
     }
 
     const xml = await aadeRes.text();
+    console.log('AADE raw XML (first 1000):', xml.slice(0, 1000));
 
     // Check for AADE errors
     const errorDescr = extractXmlValue(xml, 'error_descr');
@@ -124,6 +125,7 @@ export async function POST(req: NextRequest) {
       postal_area_description: extractXmlValue(xml, 'postal_area_description'),
       firm_act_descr: extractXmlValue(xml, 'firm_act_descr'),
       elorusContactId: elorusContactId as string | null,
+      _debug_xml: xml.slice(0, 800),
     };
 
     // Step 3: Create or update Elorus contact with AADE data
