@@ -1416,8 +1416,8 @@ export default function CalculatorShell() {
         <PlateOrderModal
           platesFront={color.platesFront}
           platesBack={color.platesBack}
-          machineMaxLS={machine.maxLS || 0}
-          machineMaxSS={machine.maxSS || 0}
+          paperW={impo.paperW}
+          paperH={impo.paperH}
           machineName={machine.name}
           jobDescription={`${job.width}x${job.height}mm · ${job.qty} τεμ · ${machine.name} · ${paper?.name || ''}`}
           exportOptions={{

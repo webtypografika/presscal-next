@@ -12,8 +12,8 @@ interface PlateSupplier { name: string; email: string }
 interface Props {
   platesFront: number;
   platesBack: number;
-  machineMaxLS: number;
-  machineMaxSS: number;
+  paperW: number;
+  paperH: number;
   machineName: string;
   jobDescription: string;
   exportOptions: ExportOptions;
@@ -22,7 +22,7 @@ interface Props {
 }
 
 export default function PlateOrderModal({
-  platesFront, platesBack, machineMaxLS, machineMaxSS,
+  platesFront, platesBack, paperW, paperH,
   machineName, jobDescription, exportOptions, onClose, onSent,
 }: Props) {
   const [suppliers, setSuppliers] = useState<PlateSupplier[]>([]);
@@ -34,7 +34,7 @@ export default function PlateOrderModal({
   const [sendStatus, setSendStatus] = useState('');
   const [error, setError] = useState('');
 
-  const plateSize = `${Math.round(machineMaxSS)}×${Math.round(machineMaxLS)}mm`;
+  const plateSize = `${Math.round(paperW)}×${Math.round(paperH)}mm`;
   const totalPlates = platesFront + platesBack;
   const pdfFileName = (exportOptions.sourceFileName || 'imposition').replace(/\.pdf$/i, '') + '_plates.pdf';
 
@@ -102,10 +102,10 @@ export default function PlateOrderModal({
 
       // Step 3: Record order in our DB (small payload, no PDF)
       setSendStatus('Καταγραφή...');
-      const colors = ['Cyan', 'Magenta', 'Yellow', 'Black'];
-      const items: any[] = [];
-      for (let i = 0; i < platesFront; i++) items.push({ name: `Front ${colors[i] || `Spot ${i+1}`}`, plateSize, qty: 1, color: colors[i] || `PMS ${i+1}` });
-      for (let i = 0; i < platesBack; i++) items.push({ name: `Back ${colors[i] || `Spot ${i+1}`}`, plateSize, qty: 1, color: colors[i] || `PMS ${i+1}` });
+      const items = [
+        { name: 'Μπροστά', plateSize, qty: platesFront },
+        ...(platesBack > 0 ? [{ name: 'Πίσω', plateSize, qty: platesBack }] : []),
+      ];
 
       await fetch('/api/plate-order', {
         method: 'POST',
