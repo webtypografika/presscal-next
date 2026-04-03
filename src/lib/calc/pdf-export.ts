@@ -107,6 +107,9 @@ export interface ExportOptions {
 
   // PDF page orientation info (for rotation detection)
   pdfPageSizes?: Array<{ trimW: number; trimH: number }>;
+
+  // Source filename for export naming
+  sourceFileName?: string;
 }
 
 interface EmbeddedPageInfo {
@@ -1874,7 +1877,11 @@ export async function downloadImpositionPDF(options: ExportOptions, filename?: s
       : impo.mode === 'gangrun' ? 'gangrun_' + impo.ups + 'pos'
       : impo.mode === 'stepmulti' ? 'step_' + (impo.blocks?.length || 0) + 'blk'
       : impo.mode;
-    filename = `imposed_${jobSize}_${paperSize}_${modeLabel}.pdf`;
+    // Use source PDF filename (without extension) as base, fallback to 'imposed'
+    const baseName = options.sourceFileName
+      ? options.sourceFileName.replace(/\.pdf$/i, '')
+      : 'imposed';
+    filename = `${baseName}_${jobSize}_${paperSize}_${modeLabel}.pdf`;
   }
 
   a.download = filename;

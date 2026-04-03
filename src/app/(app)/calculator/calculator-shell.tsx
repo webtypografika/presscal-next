@@ -1332,6 +1332,7 @@ export default function CalculatorShell() {
                 imposition: impo,
                 pdfBytes: pdf?.bytes,
                 pdfPageSizes: pdf?.pageSizes?.map(p => ({ trimW: p.trimW, trimH: p.trimH })),
+                sourceFileName: pdf?.fileName,
                 machineCat: machine.cat as 'digital' | 'offset',
                 machineName: machine.name,
                 paperName: paper?.name,
