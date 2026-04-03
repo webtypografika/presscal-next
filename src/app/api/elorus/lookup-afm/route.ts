@@ -15,29 +15,26 @@ function elorusHeaders(apiKey: string, orgId: string) {
 
 function buildSoap12Envelope(username: string, password: string, callerAfm: string, lookupAfm: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope"
-  xmlns:srvc="http://rgwspublic2/RgWsPublic2Service"
-  xmlns:typ="http://rgwspublic2/RgWsPublic2">
-  <env:Header>
-    <srvc:RgWsPublic2InputHeader env:mustUnderstand="true">
-      <typ:pUsernameToken>
-        <typ:pUsername>${username}</typ:pUsername>
-        <typ:pPassword>${password}</typ:pPassword>
-      </typ:pUsernameToken>
-      <typ:pCalledby>
-        <typ:pAfm>${callerAfm}</typ:pAfm>
-      </typ:pCalledby>
-    </srvc:RgWsPublic2InputHeader>
-  </env:Header>
-  <env:Body>
-    <srvc:rgWsPublic2AfmMethod>
-      <srvc:INPUT_REC>
-        <typ:afm_called_by>${callerAfm}</typ:afm_called_by>
-        <typ:afm_called_for>${lookupAfm}</typ:afm_called_for>
-      </srvc:INPUT_REC>
-    </srvc:rgWsPublic2AfmMethod>
-  </env:Body>
-</env:Envelope>`;
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:rgws="http://rgwspublic2/RgWsPublic2Service"
+  xmlns:rg="http://rgwspublic2/RgWsPublic2">
+  <soap:Header>
+    <wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
+      <wsse:UsernameToken>
+        <wsse:Username>${username}</wsse:Username>
+        <wsse:Password>${password}</wsse:Password>
+      </wsse:UsernameToken>
+    </wsse:Security>
+  </soap:Header>
+  <soap:Body>
+    <rgws:rgWsPublic2AfmMethod>
+      <rgws:INPUT_REC>
+        <rg:afm_called_by>${callerAfm}</rg:afm_called_by>
+        <rg:afm_called_for>${lookupAfm}</rg:afm_called_for>
+      </rgws:INPUT_REC>
+    </rgws:rgWsPublic2AfmMethod>
+  </soap:Body>
+</soap:Envelope>`;
 }
 
 function extractXmlValue(xml: string, tag: string): string {
@@ -91,15 +88,14 @@ export async function POST(req: NextRequest) {
     }
 
     const soapBody = buildSoap12Envelope(org.aadeUsername, org.aadePassword, org.aadeAfm, afm);
-    const basicAuth = Buffer.from(`${org.aadeUsername}:${org.aadePassword}`).toString('base64');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     const aadeRes = await fetch(AADE_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/soap+xml;charset=UTF-8',
-        'Authorization': `Basic ${basicAuth}`,
-      },
+      headers: { 'Content-Type': 'application/soap+xml; charset=utf-8' },
       body: soapBody,
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
 
     if (!aadeRes.ok) {
       const errBody = await aadeRes.text().catch(() => '');
