@@ -124,8 +124,7 @@ export async function POST(req: NextRequest) {
       postal_area_description: extractXmlValue(xml, 'postal_area_description'),
       firm_act_descr: extractXmlValue(xml, 'firm_act_descr'),
       elorusContactId: elorusContactId as string | null,
-      _debug_xml: xml.slice(0, 800),
-      _debug_creds: `user=${org.aadeUsername ? org.aadeUsername.slice(0, 3) + '***' : 'EMPTY'} afm=${org.aadeAfm || 'EMPTY'} pass=${org.aadePassword ? '***set***' : 'EMPTY'}`,
+      _debug_xml: xml.slice(0, 2000),
     };
 
     // Step 3: Create or update Elorus contact with AADE data
