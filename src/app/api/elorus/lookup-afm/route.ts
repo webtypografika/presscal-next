@@ -91,12 +91,12 @@ export async function POST(req: NextRequest) {
     }
 
     const soapBody = buildSoap12Envelope(org.aadeUsername, org.aadePassword, org.aadeAfm, afm);
-    console.log('AADE request — user:', org.aadeUsername, 'callerAfm:', org.aadeAfm, 'lookupAfm:', afm);
-    console.log('AADE SOAP body:', soapBody.slice(0, 600));
+    const basicAuth = Buffer.from(`${org.aadeUsername}:${org.aadePassword}`).toString('base64');
     const aadeRes = await fetch(AADE_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/soap+xml;charset=UTF-8',
+        'Authorization': `Basic ${basicAuth}`,
       },
       body: soapBody,
     });
