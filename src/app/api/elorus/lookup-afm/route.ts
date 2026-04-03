@@ -15,29 +15,29 @@ function elorusHeaders(apiKey: string, orgId: string) {
 
 function buildSoap12Envelope(username: string, password: string, callerAfm: string, lookupAfm: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
-  xmlns:rgws="http://gr/gsis/rgwspublic/RgWsPublic2.wsdl"
-  xmlns:rgt="http://gr/gsis/rgwspublic/RgWsPublic2Types.xsd">
-  <soap:Header>
-    <rgws:RgWsPublic2InputHeader>
-      <rgt:pUsernameToken>
-        <rgt:pUsername>${username}</rgt:pUsername>
-        <rgt:pPassword>${password}</rgt:pPassword>
-      </rgt:pUsernameToken>
-      <rgt:pCalledby>
-        <rgt:pAfm>${callerAfm}</rgt:pAfm>
-      </rgt:pCalledby>
-    </rgws:RgWsPublic2InputHeader>
-  </soap:Header>
-  <soap:Body>
-    <rgws:rgWsPublic2AfmMethod>
-      <rgws:INPUT_REC>
-        <rgt:afm_called_by>${callerAfm}</rgt:afm_called_by>
-        <rgt:afm_called_for>${lookupAfm}</rgt:afm_called_for>
-      </rgws:INPUT_REC>
-    </rgws:rgWsPublic2AfmMethod>
-  </soap:Body>
-</soap:Envelope>`;
+<env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope"
+  xmlns:srvc="http://rgwspublic2/RgWsPublic2Service"
+  xmlns:typ="http://rgwspublic2/RgWsPublic2">
+  <env:Header>
+    <srvc:RgWsPublic2InputHeader>
+      <typ:pUsernameToken>
+        <typ:pUsername>${username}</typ:pUsername>
+        <typ:pPassword>${password}</typ:pPassword>
+      </typ:pUsernameToken>
+      <typ:pCalledby>
+        <typ:pAfm>${callerAfm}</typ:pAfm>
+      </typ:pCalledby>
+    </srvc:RgWsPublic2InputHeader>
+  </env:Header>
+  <env:Body>
+    <srvc:rgWsPublic2AfmMethod>
+      <srvc:INPUT_REC>
+        <typ:afm_called_by>${callerAfm}</typ:afm_called_by>
+        <typ:afm_called_for>${lookupAfm}</typ:afm_called_for>
+      </srvc:INPUT_REC>
+    </srvc:rgWsPublic2AfmMethod>
+  </env:Body>
+</env:Envelope>`;
 }
 
 function extractXmlValue(xml: string, tag: string): string {
@@ -108,9 +108,10 @@ export async function POST(req: NextRequest) {
     const xml = await aadeRes.text();
     console.log('AADE raw XML (first 1000):', xml.slice(0, 1000));
 
-    // Check for AADE errors
+    // Check for AADE errors — try both prefixed and unprefixed
+    const errorCode = extractXmlValue(xml, 'error_code');
     const errorDescr = extractXmlValue(xml, 'error_descr');
-    if (errorDescr) {
+    if (errorDescr && errorCode && errorCode !== '0') {
       return NextResponse.json({ error: `ΑΑΔΕ: ${errorDescr}` }, { status: 400 });
     }
 
