@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { getJobs, getJobStages } from './actions';
 import { JobsBoard } from './jobs-board';
 
