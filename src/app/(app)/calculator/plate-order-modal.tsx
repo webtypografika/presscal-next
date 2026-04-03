@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { downloadImpositionPDF } from '@/lib/calc/pdf-export';
+import { exportImpositionPDF } from '@/lib/calc/pdf-export';
 import type { ExportOptions } from '@/lib/calc/pdf-export';
+
+const FIREBASE_SEND = 'https://us-central1-presscal.cloudfunctions.net/claudeMachineSpecs/sendQuote';
 
 interface PlateSupplier { name: string; email: string }
 
@@ -28,8 +30,8 @@ export default function PlateOrderModal({
   const [supplierEmail, setSupplierEmail] = useState('');
   const [delivery, setDelivery] = useState<'pickup' | 'deliver'>('pickup');
   const [notes, setNotes] = useState('');
-  const [step, setStep] = useState<'form' | 'done'>('form');
-  const [downloading, setDownloading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState('');
   const [error, setError] = useState('');
 
   const plateSize = `${Math.round(machineMaxSS)}×${Math.round(machineMaxLS)}mm`;
@@ -46,44 +48,68 @@ export default function PlateOrderModal({
     }).catch(() => {});
   }, []);
 
-  // Build Gmail compose URL
-  function getGmailUrl() {
+  function buildEmailHtml() {
     const deliveryText = delivery === 'pickup' ? 'Θα παραλάβουμε εμείς.' : 'Παρακαλούμε αποστείλατε.';
-    const body = [
-      `Τσίγκοι: ${totalPlates} (${platesFront} μπροστά${platesBack > 0 ? `, ${platesBack} πίσω` : ''})`,
-      `Μέγεθος: ${plateSize}`,
-      `Μηχανή: ${machineName}`,
-      '',
-      deliveryText,
-      notes ? `\nΣημειώσεις: ${notes}` : '',
-      '',
-      '⚠ Το αρχείο μοντάζ (PDF) είναι συνημμένο.',
-    ].filter(Boolean).join('\n');
+    const colors = ['Cyan', 'Magenta', 'Yellow', 'Black'];
+    const plateRows: string[] = [];
+    for (let i = 0; i < platesFront; i++) plateRows.push(`<tr><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0">Front</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${colors[i] || 'Spot ' + (i+1)}</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${plateSize}</td></tr>`);
+    for (let i = 0; i < platesBack; i++) plateRows.push(`<tr><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0">Back</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${colors[i] || 'Spot ' + (i+1)}</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:center">${plateSize}</td></tr>`);
 
-    const subject = `Τσίγκοι ${totalPlates}x ${plateSize} — ${machineName}`;
-    return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(supplierEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    return `
+<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:500px">
+  <h2 style="color:#1e293b;font-size:18px;margin:0 0 12px">Τσίγκοι — ${totalPlates} τεμ.</h2>
+  <p style="color:#64748b;font-size:13px;margin:0 0 16px">${machineName} · ${plateSize}</p>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+    <thead><tr style="background:#f8fafc">
+      <th style="padding:8px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">ΠΛΕΥΡΑ</th>
+      <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">ΧΡΩΜΑ</th>
+      <th style="padding:8px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">ΜΕΓΕΘΟΣ</th>
+    </tr></thead>
+    <tbody>${plateRows.join('')}</tbody>
+  </table>
+  <p style="font-size:14px;color:#1e293b;font-weight:600">${deliveryText}</p>
+  ${notes ? `<p style="font-size:13px;color:#78350f;background:#fffbeb;padding:10px 14px;border-radius:6px;border:1px solid #fde68a">${notes}</p>` : ''}
+  <p style="font-size:12px;color:#94a3b8;margin-top:20px">Το αρχείο μοντάζ είναι συνημμένο.</p>
+</div>`;
   }
 
   async function handleSend() {
     if (!supplierEmail) { setError('Εισάγετε email τσιγκογράφου'); return; }
-    setError('');
+    setSending(true); setError(''); setSendStatus('Δημιουργία PDF...');
 
-    // Step 1: Download PDF
-    setDownloading(true);
     try {
-      await downloadImpositionPDF(exportOptions, pdfFileName);
-    } catch (e) {
-      setError('PDF error: ' + (e as Error).message);
-      setDownloading(false);
-      return;
-    }
-    setDownloading(false);
+      // Step 1: Generate PDF client-side
+      const pdfBytes = await exportImpositionPDF(exportOptions);
+      const bytes = new Uint8Array(pdfBytes as unknown as ArrayBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const pdfBase64 = btoa(binary);
 
-    // Step 2: Open Gmail compose
-    window.open(getGmailUrl(), '_blank');
+      // Step 2: Send via Firebase Cloud Function (no Vercel limit)
+      setSendStatus('Αποστολή email...');
+      const subject = `Τσίγκοι ${totalPlates}x ${plateSize} — ${pdfFileName}`;
+      const res = await fetch(FIREBASE_SEND, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: supplierEmail,
+          subject,
+          quoteHtml: buildEmailHtml(),
+          attachments: [{
+            filename: pdfFileName,
+            content: pdfBase64,
+            contentType: 'application/pdf',
+          }],
+        }),
+      });
 
-    // Step 3: Record the order (small JSON, no PDF)
-    try {
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Email αποτυχία: ${text.slice(0, 150)}`);
+      }
+
+      // Step 3: Record order in our DB (small payload, no PDF)
+      setSendStatus('Καταγραφή...');
       const colors = ['Cyan', 'Magenta', 'Yellow', 'Black'];
       const items: any[] = [];
       for (let i = 0; i < platesFront; i++) items.push({ name: `Front ${colors[i] || `Spot ${i+1}`}`, plateSize, qty: 1, color: colors[i] || `PMS ${i+1}` });
@@ -101,10 +127,12 @@ export default function PlateOrderModal({
           notes,
           pdfFileName,
         }),
-      });
-    } catch { /* order record is best-effort */ }
+      }).catch(() => {});
 
-    setStep('done');
+      onSent();
+      onClose();
+    } catch (e) { setError((e as Error).message); }
+    finally { setSending(false); setSendStatus(''); }
   }
 
   const inp: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: '0.88rem', width: '100%', outline: 'none', fontFamily: 'inherit' };
@@ -162,110 +190,75 @@ export default function PlateOrderModal({
           </div>
         </div>
 
-        {step === 'form' && (<>
-          {/* Supplier */}
-          <label style={lbl}>Τσιγκογράφος</label>
-          {suppliers.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-              {suppliers.map(s => (
-                <button key={s.name} onClick={() => { setSupplierName(s.name); setSupplierEmail(s.email); }} style={{
-                  padding: '6px 14px', borderRadius: 7, border: '1.5px solid',
-                  borderColor: supplierName === s.name ? 'var(--amber)' : 'var(--glass-border)',
-                  background: supplierName === s.name ? 'color-mix(in srgb, var(--amber) 10%, transparent)' : 'transparent',
-                  color: supplierName === s.name ? 'var(--amber)' : '#94a3b8',
-                  fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-                }}>{s.name}</button>
-              ))}
-            </div>
-          )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-            <input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Επωνυμία" style={inp} />
-            <input value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="email@platemaker.gr" style={inp} />
-          </div>
-
-          {/* Delivery */}
-          <label style={lbl}>Παράδοση</label>
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2, marginBottom: 14, width: 'fit-content' }}>
-            {([['pickup', 'Παραλαβή'], ['deliver', 'Αποστολή']] as const).map(([v, l]) => (
-              <button key={v} onClick={() => setDelivery(v)} style={{
-                padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: '0.78rem', fontWeight: 600,
-                cursor: 'pointer', fontFamily: 'inherit',
-                color: delivery === v ? 'var(--accent)' : '#64748b',
-                background: delivery === v ? 'rgba(245,130,32,0.12)' : 'transparent',
-              }}>{l}</button>
+        {/* Supplier */}
+        <label style={lbl}>Τσιγκογράφος</label>
+        {suppliers.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+            {suppliers.map(s => (
+              <button key={s.name} onClick={() => { setSupplierName(s.name); setSupplierEmail(s.email); }} style={{
+                padding: '6px 14px', borderRadius: 7, border: '1.5px solid',
+                borderColor: supplierName === s.name ? 'var(--amber)' : 'var(--glass-border)',
+                background: supplierName === s.name ? 'color-mix(in srgb, var(--amber) 10%, transparent)' : 'transparent',
+                color: supplierName === s.name ? 'var(--amber)' : '#94a3b8',
+                fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+              }}>{s.name}</button>
             ))}
           </div>
+        )}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+          <input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Επωνυμία" style={inp} />
+          <input value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="email@platemaker.gr" style={inp} />
+        </div>
 
-          {/* Notes */}
-          <label style={lbl}>Σημειώσεις</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Προαιρετικές σημειώσεις..." rows={2}
-            style={{ ...inp, resize: 'vertical', marginBottom: 16 }} />
-
-          {error && (
-            <div style={{ padding: '8px 12px', borderRadius: 6, marginBottom: 12, background: 'color-mix(in srgb, #ef4444 10%, transparent)', border: '1px solid color-mix(in srgb, #ef4444 25%, transparent)', color: '#fca5a5', fontSize: '0.78rem' }}>
-              <i className="fas fa-exclamation-triangle" style={{ marginRight: 6 }} />{error}
-            </div>
-          )}
-
-          {/* Info */}
-          <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 14, padding: '8px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)' }}>
-            <i className="fas fa-info-circle" style={{ marginRight: 6, color: 'var(--blue)' }} />
-            Θα κατέβει το PDF και θα ανοίξει Gmail για να το επισυνάψετε.
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button onClick={onClose} style={{
-              padding: '9px 18px', borderRadius: 8, border: '1px solid var(--border)',
-              background: 'transparent', color: 'var(--text-muted)', fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit',
-            }}>Ακύρωση</button>
-            <button onClick={handleSend} disabled={downloading || !supplierEmail} style={{
-              padding: '9px 22px', borderRadius: 8, border: 'none',
-              background: 'var(--amber)', color: '#fff', fontSize: '0.88rem', fontWeight: 700,
+        {/* Delivery */}
+        <label style={lbl}>Παράδοση</label>
+        <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2, marginBottom: 14, width: 'fit-content' }}>
+          {([['pickup', 'Παραλαβή'], ['deliver', 'Αποστολή']] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setDelivery(v)} style={{
+              padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: '0.78rem', fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit',
-              opacity: downloading || !supplierEmail ? 0.5 : 1,
-              boxShadow: '0 4px 16px rgba(245,158,11,0.3)',
-            }}>
-              {downloading
-                ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Δημιουργία PDF...</>
-                : <><i className="fas fa-paper-plane" style={{ marginRight: 6 }} />PDF + Gmail</>
-              }
-            </button>
-          </div>
-        </>)}
+              color: delivery === v ? 'var(--accent)' : '#64748b',
+              background: delivery === v ? 'rgba(245,130,32,0.12)' : 'transparent',
+            }}>{l}</button>
+          ))}
+        </div>
 
-        {step === 'done' && (<>
-          <div style={{ padding: '16px', borderRadius: 10, background: 'color-mix(in srgb, #22c55e 8%, transparent)', border: '1px solid color-mix(in srgb, #22c55e 20%, transparent)', marginBottom: 16, textAlign: 'center' }}>
-            <i className="fas fa-check-circle" style={{ fontSize: '1.5rem', color: '#4ade80', marginBottom: 8, display: 'block' }} />
-            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#4ade80', marginBottom: 4 }}>Το PDF κατέβηκε, το Gmail άνοιξε</div>
-            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-              Σύρετε το αρχείο <strong style={{ color: '#e2e8f0' }}>{pdfFileName}</strong> στο Gmail και πατήστε Αποστολή.
-            </div>
-          </div>
+        {/* Notes */}
+        <label style={lbl}>Σημειώσεις</label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Προαιρετικές σημειώσεις..." rows={2}
+          style={{ ...inp, resize: 'vertical', marginBottom: 16 }} />
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button onClick={async () => {
-              try { await downloadImpositionPDF(exportOptions, pdfFileName); } catch { /* ignore */ }
-            }} style={{
-              padding: '9px 16px', borderRadius: 8, border: '1.5px solid color-mix(in srgb, var(--teal) 30%, transparent)',
-              background: 'color-mix(in srgb, var(--teal) 8%, transparent)', color: 'var(--teal)',
-              fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              <i className="fas fa-download" style={{ marginRight: 6 }} />Ξανά PDF
-            </button>
-            <button onClick={() => window.open(getGmailUrl(), '_blank')} style={{
-              padding: '9px 16px', borderRadius: 8, border: '1.5px solid color-mix(in srgb, var(--blue) 30%, transparent)',
-              background: 'color-mix(in srgb, var(--blue) 8%, transparent)', color: 'var(--blue)',
-              fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              <i className="fas fa-envelope" style={{ marginRight: 6 }} />Ξανά Gmail
-            </button>
-            <button onClick={() => { onSent(); onClose(); }} style={{
-              padding: '9px 18px', borderRadius: 8, border: 'none',
-              background: 'var(--amber)', color: '#fff', fontSize: '0.88rem', fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}>Κλείσιμο</button>
+        {/* Error */}
+        {error && (
+          <div style={{ padding: '8px 12px', borderRadius: 6, marginBottom: 12, background: 'color-mix(in srgb, #ef4444 10%, transparent)', border: '1px solid color-mix(in srgb, #ef4444 25%, transparent)', color: '#fca5a5', fontSize: '0.78rem' }}>
+            <i className="fas fa-exclamation-triangle" style={{ marginRight: 6 }} />{error}
           </div>
-        </>)}
+        )}
+
+        {/* Sending status */}
+        {sending && sendStatus && (
+          <div style={{ padding: '8px 12px', borderRadius: 6, marginBottom: 12, background: 'color-mix(in srgb, var(--blue) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--blue) 20%, transparent)', color: 'var(--blue)', fontSize: '0.78rem' }}>
+            <i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />{sendStatus}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} disabled={sending} style={{
+            padding: '9px 18px', borderRadius: 8, border: '1px solid var(--border)',
+            background: 'transparent', color: 'var(--text-muted)', fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit',
+          }}>Ακύρωση</button>
+          <button onClick={handleSend} disabled={sending || !supplierEmail} style={{
+            padding: '9px 22px', borderRadius: 8, border: 'none',
+            background: 'var(--amber)', color: '#fff', fontSize: '0.88rem', fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'inherit',
+            opacity: sending || !supplierEmail ? 0.5 : 1,
+            boxShadow: '0 4px 16px rgba(245,158,11,0.3)',
+          }}>
+            <i className="fas fa-paper-plane" style={{ marginRight: 6 }} />
+            {sending ? 'Αποστολή...' : 'Αποστολή'}
+          </button>
+        </div>
       </div>
     </div>,
     document.body
