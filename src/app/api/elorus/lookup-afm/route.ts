@@ -15,29 +15,29 @@ function elorusHeaders(apiKey: string, orgId: string) {
 
 function buildSoapEnvelope(username: string, password: string, callerAfm: string, lookupAfm: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:rgws="http://gr/gsis/rgwspublic/RgWsPublic2.wsdl"
-  xmlns:rgt="http://gr/gsis/rgwspublic/RgWsPublic2Types.xsd">
-  <soap:Header>
-    <rgws:RgWsPublic2InputHeader>
-      <rgt:pUsernameToken>
-        <rgt:pUsername>${username}</rgt:pUsername>
-        <rgt:pPassword>${password}</rgt:pPassword>
-      </rgt:pUsernameToken>
-      <rgt:pCalledby>
-        <rgt:pAfm>${callerAfm}</rgt:pAfm>
-      </rgt:pCalledby>
-    </rgws:RgWsPublic2InputHeader>
-  </soap:Header>
-  <soap:Body>
-    <rgws:rgWsPublic2AfmMethod>
-      <rgws:INPUT_REC>
-        <rgt:afm_called_by/>
-        <rgt:afm_called_for>${lookupAfm}</rgt:afm_called_for>
-      </rgws:INPUT_REC>
-    </rgws:rgWsPublic2AfmMethod>
-  </soap:Body>
-</soap:Envelope>`;
+<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:ns="http://gr/gsis/rgwspublic/RgWsPublic2.wsdl"
+  xmlns:xsd="http://gr/gsis/rgwspublic/RgWsPublic2Types.xsd">
+  <env:Header>
+    <ns:RgWsPublic2InputHeader>
+      <xsd:pUsernameToken>
+        <xsd:pUsername>${username}</xsd:pUsername>
+        <xsd:pPassword>${password}</xsd:pPassword>
+      </xsd:pUsernameToken>
+      <xsd:pCalledby>
+        <xsd:pAfm>${callerAfm}</xsd:pAfm>
+      </xsd:pCalledby>
+    </ns:RgWsPublic2InputHeader>
+  </env:Header>
+  <env:Body>
+    <ns:rgWsPublic2AfmMethod>
+      <ns:INPUT_REC>
+        <xsd:afm_called_by>${callerAfm}</xsd:afm_called_by>
+        <xsd:afm_called_for>${lookupAfm}</xsd:afm_called_for>
+      </ns:INPUT_REC>
+    </ns:rgWsPublic2AfmMethod>
+  </env:Body>
+</env:Envelope>`;
 }
 
 function extractXmlValue(xml: string, tag: string): string {
@@ -93,7 +93,10 @@ export async function POST(req: NextRequest) {
     const soapBody = buildSoapEnvelope(org.aadeUsername, org.aadePassword, org.aadeAfm, afm);
     const aadeRes = await fetch(AADE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/soap+xml; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/xml;charset=UTF-8',
+        'SOAPAction': '',
+      },
       body: soapBody,
     });
 
