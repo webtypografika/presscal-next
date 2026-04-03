@@ -11,6 +11,7 @@ import DuplexNavigator from './signature-navigator';
 import { parsePDF } from '@/lib/calc/pdf-utils';
 import type { ParsedPDF } from '@/lib/calc/pdf-utils';
 import { downloadImpositionPDF } from '@/lib/calc/pdf-export';
+import PlateOrderModal from './plate-order-modal';
 
 /* ═══════════════════════════════════════════════════
    PressCal Calculator — Draft H (Live Engine)
@@ -570,6 +571,7 @@ export default function CalculatorShell() {
   const [calcResult, setCalcResult] = useState<CalculatorResult | null>(null);
   const [calcDebug, setCalcDebug] = useState<Record<string, unknown> | null>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [showPlateOrder, setShowPlateOrder] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const calcTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1386,6 +1388,17 @@ export default function CalculatorShell() {
           }} title="Εξαγωγή imposition PDF">
             <i className="fas fa-file-pdf" /> PDF
           </button>
+          {machine.cat === 'offset' && (color.platesFront + color.platesBack) > 0 && (
+            <button onClick={() => setShowPlateOrder(true)} style={{
+              padding: '7px 10px', borderRadius: 7,
+              background: 'rgba(255,255,255,0.06)', color: 'var(--amber)', border: '1px solid color-mix(in srgb, var(--amber) 25%, transparent)',
+              fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5,
+              transition: 'all 0.2s', flexShrink: 0,
+            }} title="Παραγγελία τσίγκων">
+              <i className="fas fa-layer-group" /> Τσίγκοι
+            </button>
+          )}
           <button onClick={() => setShowDebug(d => !d)} style={{
             padding: '7px 8px', borderRadius: 7, border: `1px solid ${showDebug ? 'var(--accent)' : 'var(--glass-border)'}`,
             background: showDebug ? 'rgba(245,130,32,0.08)' : 'rgba(255,255,255,0.04)',
@@ -1397,6 +1410,37 @@ export default function CalculatorShell() {
         </div>
         {calculating && <i className="fas fa-spinner fa-spin" style={{ color: 'var(--accent)', fontSize: '0.7rem', flexShrink: 0 }} />}
       </div>
+
+      {/* ═══ PLATE ORDER MODAL ═══ */}
+      {showPlateOrder && impo && (
+        <PlateOrderModal
+          platesFront={color.platesFront}
+          platesBack={color.platesBack}
+          machineMaxLS={machine.maxLS || 0}
+          machineMaxSS={machine.maxSS || 0}
+          machineName={machine.name}
+          jobDescription={`${job.width}x${job.height}mm · ${job.qty} τεμ · ${machine.name} · ${paper?.name || ''}`}
+          exportOptions={{
+            imposition: impo,
+            pdfBytes: pdf?.bytes,
+            pdfPageSizes: pdf?.pageSizes?.map(p => ({ trimW: p.trimW, trimH: p.trimH })),
+            sourceFileName: pdf?.fileName,
+            machineCat: 'offset',
+            machineName: machine.name,
+            paperName: paper?.name,
+            jobW: job.width,
+            jobH: job.height,
+            bleed: effectiveBleed,
+            showCropMarks: impoCropMarks,
+            showRegistration: true,
+            isDuplex: job.sides === 2,
+            duplexOrient: impoDuplexOrient,
+            rotation: impoRotation,
+          }}
+          onClose={() => setShowPlateOrder(false)}
+          onSent={() => { setShowPlateOrder(false); }}
+        />
+      )}
 
       {/* ═══ DEBUG PANEL ═══ */}
       {showDebug && calcResult && (

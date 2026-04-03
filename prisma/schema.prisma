@@ -137,6 +137,7 @@ model Org {
   quotes           Quote[]
   products         Product[]
   fileLinks        FileLink[]
+  plateOrders      PlateOrder[]
 }
 
 // ─── MACHINES (Digital / Offset / Plotter) ───
@@ -301,6 +302,41 @@ model Consumable {
   @@index([orgId, conType])
   @@index([orgId, conModule])
   @@index([orgId, machineId])
+  @@index([orgId, deletedAt])
+}
+
+// ─── PLATE ORDERS (Platemaker service & blank plate material) ───
+model PlateOrder {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  orderType String   // 'platemaker_service' | 'plate_material'
+  status    String   @default("sent") // 'draft' | 'sent' | 'received' | 'cancelled'
+
+  // Supplier
+  supplierName  String
+  supplierEmail String?
+
+  // Items: [{name, plateSize, qty, color}] or [{name, size, qty}]
+  items     Json     @default("[]")
+
+  // Plate service: job info + PDF
+  jobDescription String?
+  pdfFileName    String?
+
+  // Cost
+  totalCost Float?
+  notes     String   @default("")
+
+  sentAt     DateTime?
+  receivedAt DateTime?
+  deletedAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([orgId, status])
+  @@index([orgId, orderType])
   @@index([orgId, deletedAt])
 }
 

@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
       conType: true,
       color: true,
       supplier: true,
+      supplierEmail: true,
       unit: true,
       unitSize: true,
       costPerUnit: true,
