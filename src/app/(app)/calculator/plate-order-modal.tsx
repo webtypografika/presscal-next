@@ -5,10 +5,7 @@ import { createPortal } from 'react-dom';
 import { downloadImpositionPDF } from '@/lib/calc/pdf-export';
 import type { ExportOptions } from '@/lib/calc/pdf-export';
 
-interface PlateSupplier {
-  name: string;
-  email: string;
-}
+interface PlateSupplier { name: string; email: string }
 
 interface Props {
   platesFront: number;
@@ -31,45 +28,68 @@ export default function PlateOrderModal({
   const [supplierEmail, setSupplierEmail] = useState('');
   const [delivery, setDelivery] = useState<'pickup' | 'deliver'>('pickup');
   const [notes, setNotes] = useState('');
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [step, setStep] = useState<'form' | 'done'>('form');
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
 
   const plateSize = `${Math.round(machineMaxSS)}×${Math.round(machineMaxLS)}mm`;
   const totalPlates = platesFront + platesBack;
+  const pdfFileName = (exportOptions.sourceFileName || 'imposition').replace(/\.pdf$/i, '') + '_plates.pdf';
 
-  // Load plate suppliers from consumables
   useEffect(() => {
     fetch('/api/consumables?conType=plate').then(r => r.ok ? r.json() : []).then((items: any[]) => {
       const unique = new Map<string, string>();
-      for (const c of items) {
-        if (c.supplier && c.supplierEmail) unique.set(c.supplier, c.supplierEmail);
-      }
+      for (const c of items) if (c.supplier && c.supplierEmail) unique.set(c.supplier, c.supplierEmail);
       const list = Array.from(unique, ([name, email]) => ({ name, email }));
       setSuppliers(list);
       if (list.length === 1) { setSupplierName(list[0].name); setSupplierEmail(list[0].email); }
     }).catch(() => {});
   }, []);
 
-  async function send() {
+  // Build Gmail compose URL
+  function getGmailUrl() {
+    const deliveryText = delivery === 'pickup' ? 'Θα παραλάβουμε εμείς.' : 'Παρακαλούμε αποστείλατε.';
+    const body = [
+      `Τσίγκοι: ${totalPlates} (${platesFront} μπροστά${platesBack > 0 ? `, ${platesBack} πίσω` : ''})`,
+      `Μέγεθος: ${plateSize}`,
+      `Μηχανή: ${machineName}`,
+      '',
+      deliveryText,
+      notes ? `\nΣημειώσεις: ${notes}` : '',
+      '',
+      '⚠ Το αρχείο μοντάζ (PDF) είναι συνημμένο.',
+    ].filter(Boolean).join('\n');
+
+    const subject = `Τσίγκοι ${totalPlates}x ${plateSize} — ${machineName}`;
+    return `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(supplierEmail)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
+  async function handleSend() {
     if (!supplierEmail) { setError('Εισάγετε email τσιγκογράφου'); return; }
-    setSending(true); setError('');
+    setError('');
+
+    // Step 1: Download PDF
+    setDownloading(true);
+    try {
+      await downloadImpositionPDF(exportOptions, pdfFileName);
+    } catch (e) {
+      setError('PDF error: ' + (e as Error).message);
+      setDownloading(false);
+      return;
+    }
+    setDownloading(false);
+
+    // Step 2: Open Gmail compose
+    window.open(getGmailUrl(), '_blank');
+
+    // Step 3: Record the order (small JSON, no PDF)
     try {
       const colors = ['Cyan', 'Magenta', 'Yellow', 'Black'];
-      const items = [];
-      if (platesFront > 0) {
-        for (let i = 0; i < platesFront; i++) {
-          items.push({ name: `Front ${colors[i] || `Spot ${i + 1}`}`, plateSize, qty: 1, color: colors[i] || `PMS ${i + 1}` });
-        }
-      }
-      if (platesBack > 0) {
-        for (let i = 0; i < platesBack; i++) {
-          items.push({ name: `Back ${colors[i] || `Spot ${i + 1}`}`, plateSize, qty: 1, color: colors[i] || `PMS ${i + 1}` });
-        }
-      }
+      const items: any[] = [];
+      for (let i = 0; i < platesFront; i++) items.push({ name: `Front ${colors[i] || `Spot ${i+1}`}`, plateSize, qty: 1, color: colors[i] || `PMS ${i+1}` });
+      for (let i = 0; i < platesBack; i++) items.push({ name: `Back ${colors[i] || `Spot ${i+1}`}`, plateSize, qty: 1, color: colors[i] || `PMS ${i+1}` });
 
-      // Send order email (without PDF — user downloads separately)
-      const res = await fetch('/api/plate-order', {
+      await fetch('/api/plate-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -78,17 +98,13 @@ export default function PlateOrderModal({
           supplierEmail,
           items,
           jobDescription,
-          delivery,
           notes,
+          pdfFileName,
         }),
       });
-      const text = await res.text();
-      let data: any;
-      try { data = JSON.parse(text); } catch { throw new Error(`Σφάλμα: ${text.slice(0, 150)}`); }
-      if (!res.ok) throw new Error(data.error || 'Σφάλμα αποστολής');
-      setSent(true);
-    } catch (e) { setError((e as Error).message); }
-    finally { setSending(false); }
+    } catch { /* order record is best-effort */ }
+
+    setStep('done');
   }
 
   const inp: React.CSSProperties = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: '0.88rem', width: '100%', outline: 'none', fontFamily: 'inherit' };
@@ -102,7 +118,7 @@ export default function PlateOrderModal({
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        width: 460, background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+        width: 440, background: 'var(--bg-elevated)', border: '1px solid var(--border)',
         borderRadius: 14, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
       }}>
         {/* Header */}
@@ -146,99 +162,110 @@ export default function PlateOrderModal({
           </div>
         </div>
 
-        {/* Supplier */}
-        <label style={lbl}>Τσιγκογράφος</label>
-        {suppliers.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-            {suppliers.map(s => (
-              <button key={s.name} onClick={() => { setSupplierName(s.name); setSupplierEmail(s.email); }} style={{
-                padding: '6px 14px', borderRadius: 7, border: '1.5px solid',
-                borderColor: supplierName === s.name ? 'var(--amber)' : 'var(--glass-border)',
-                background: supplierName === s.name ? 'color-mix(in srgb, var(--amber) 10%, transparent)' : 'transparent',
-                color: supplierName === s.name ? 'var(--amber)' : '#94a3b8',
-                fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                transition: 'all 0.15s',
-              }}>
-                {s.name}
-              </button>
+        {step === 'form' && (<>
+          {/* Supplier */}
+          <label style={lbl}>Τσιγκογράφος</label>
+          {suppliers.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+              {suppliers.map(s => (
+                <button key={s.name} onClick={() => { setSupplierName(s.name); setSupplierEmail(s.email); }} style={{
+                  padding: '6px 14px', borderRadius: 7, border: '1.5px solid',
+                  borderColor: supplierName === s.name ? 'var(--amber)' : 'var(--glass-border)',
+                  background: supplierName === s.name ? 'color-mix(in srgb, var(--amber) 10%, transparent)' : 'transparent',
+                  color: supplierName === s.name ? 'var(--amber)' : '#94a3b8',
+                  fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                }}>{s.name}</button>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
+            <input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Επωνυμία" style={inp} />
+            <input value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="email@platemaker.gr" style={inp} />
+          </div>
+
+          {/* Delivery */}
+          <label style={lbl}>Παράδοση</label>
+          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2, marginBottom: 14, width: 'fit-content' }}>
+            {([['pickup', 'Παραλαβή'], ['deliver', 'Αποστολή']] as const).map(([v, l]) => (
+              <button key={v} onClick={() => setDelivery(v)} style={{
+                padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: '0.78rem', fontWeight: 600,
+                cursor: 'pointer', fontFamily: 'inherit',
+                color: delivery === v ? 'var(--accent)' : '#64748b',
+                background: delivery === v ? 'rgba(245,130,32,0.12)' : 'transparent',
+              }}>{l}</button>
             ))}
           </div>
-        ) : null}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
-          <input value={supplierName} onChange={e => setSupplierName(e.target.value)} placeholder="Επωνυμία" style={inp} />
-          <input value={supplierEmail} onChange={e => setSupplierEmail(e.target.value)} placeholder="email@platemaker.gr" style={inp} />
-        </div>
 
-        {/* Delivery */}
-        <label style={lbl}>Παράδοση</label>
-        <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2, marginBottom: 14, width: 'fit-content' }}>
-          {([['pickup', 'Παραλαβή'], ['deliver', 'Αποστολή']] as const).map(([v, l]) => (
-            <button key={v} onClick={() => setDelivery(v)} style={{
-              padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: '0.78rem', fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
-              color: delivery === v ? 'var(--accent)' : '#64748b',
-              background: delivery === v ? 'rgba(245,130,32,0.12)' : 'transparent',
-              transition: 'all 0.2s',
-            }}>{l}</button>
-          ))}
-        </div>
+          {/* Notes */}
+          <label style={lbl}>Σημειώσεις</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Προαιρετικές σημειώσεις..." rows={2}
+            style={{ ...inp, resize: 'vertical', marginBottom: 16 }} />
 
-        {/* Download PDF button */}
-        <button onClick={async () => {
-          try {
-            const fn = (exportOptions.sourceFileName || 'imposition').replace(/\.pdf$/i, '') + '_plates.pdf';
-            await downloadImpositionPDF(exportOptions, fn);
-          } catch (e) { setError('PDF error: ' + (e as Error).message); }
-        }} style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 8,
-          border: '1.5px solid color-mix(in srgb, var(--teal) 30%, transparent)',
-          background: 'color-mix(in srgb, var(--teal) 8%, transparent)',
-          color: 'var(--teal)',
-          fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-          marginBottom: 14, transition: 'all 0.2s',
-        }}>
-          <i className="fas fa-file-pdf" style={{ fontSize: '0.7rem' }} />
-          Κατέβασμα imposition PDF
-        </button>
+          {error && (
+            <div style={{ padding: '8px 12px', borderRadius: 6, marginBottom: 12, background: 'color-mix(in srgb, #ef4444 10%, transparent)', border: '1px solid color-mix(in srgb, #ef4444 25%, transparent)', color: '#fca5a5', fontSize: '0.78rem' }}>
+              <i className="fas fa-exclamation-triangle" style={{ marginRight: 6 }} />{error}
+            </div>
+          )}
 
-        {/* Notes */}
-        <label style={lbl}>Σημειώσεις</label>
-        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Προαιρετικές σημειώσεις..." rows={2}
-          style={{ ...inp, resize: 'vertical', marginBottom: 16 }} />
-
-        {/* Error */}
-        {error && (
-          <div style={{ padding: '8px 12px', borderRadius: 6, marginBottom: 12, background: 'color-mix(in srgb, #ef4444 10%, transparent)', border: '1px solid color-mix(in srgb, #ef4444 25%, transparent)', color: '#fca5a5', fontSize: '0.78rem' }}>
-            <i className="fas fa-exclamation-triangle" style={{ marginRight: 6 }} />{error}
+          {/* Info */}
+          <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 14, padding: '8px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)' }}>
+            <i className="fas fa-info-circle" style={{ marginRight: 6, color: 'var(--blue)' }} />
+            Θα κατέβει το PDF και θα ανοίξει Gmail για να το επισυνάψετε.
           </div>
-        )}
 
-        {/* Success */}
-        {sent && (
-          <div style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 14, background: 'color-mix(in srgb, #22c55e 10%, transparent)', border: '1px solid color-mix(in srgb, #22c55e 25%, transparent)', color: '#4ade80', fontSize: '0.82rem', fontWeight: 600 }}>
-            <i className="fas fa-check-circle" style={{ marginRight: 6 }} />
-            Email εστάλη στον {supplierName || supplierEmail}. Κατεβάστε το PDF και επισυνάψτε το στο reply ή στείλτε το ξεχωριστά.
-          </div>
-        )}
-
-        {/* Actions */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={() => { onClose(); if (sent) onSent(); }} style={{
-            padding: '9px 18px', borderRadius: 8, border: '1px solid var(--border)',
-            background: 'transparent', color: 'var(--text-muted)', fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit',
-          }}>{sent ? 'Κλείσιμο' : 'Ακύρωση'}</button>
-          {!sent && (
-            <button onClick={send} disabled={sending || !supplierEmail} style={{
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={onClose} style={{
+              padding: '9px 18px', borderRadius: 8, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-muted)', fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit',
+            }}>Ακύρωση</button>
+            <button onClick={handleSend} disabled={downloading || !supplierEmail} style={{
               padding: '9px 22px', borderRadius: 8, border: 'none',
               background: 'var(--amber)', color: '#fff', fontSize: '0.88rem', fontWeight: 700,
               cursor: 'pointer', fontFamily: 'inherit',
-              opacity: sending || !supplierEmail ? 0.5 : 1,
+              opacity: downloading || !supplierEmail ? 0.5 : 1,
               boxShadow: '0 4px 16px rgba(245,158,11,0.3)',
             }}>
-              {sending ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Αποστολή...</> : <><i className="fas fa-paper-plane" style={{ marginRight: 6 }} />Αποστολή email</>}
+              {downloading
+                ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Δημιουργία PDF...</>
+                : <><i className="fas fa-paper-plane" style={{ marginRight: 6 }} />PDF + Gmail</>
+              }
             </button>
-          )}
-        </div>
+          </div>
+        </>)}
+
+        {step === 'done' && (<>
+          <div style={{ padding: '16px', borderRadius: 10, background: 'color-mix(in srgb, #22c55e 8%, transparent)', border: '1px solid color-mix(in srgb, #22c55e 20%, transparent)', marginBottom: 16, textAlign: 'center' }}>
+            <i className="fas fa-check-circle" style={{ fontSize: '1.5rem', color: '#4ade80', marginBottom: 8, display: 'block' }} />
+            <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#4ade80', marginBottom: 4 }}>Το PDF κατέβηκε, το Gmail άνοιξε</div>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+              Σύρετε το αρχείο <strong style={{ color: '#e2e8f0' }}>{pdfFileName}</strong> στο Gmail και πατήστε Αποστολή.
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={async () => {
+              try { await downloadImpositionPDF(exportOptions, pdfFileName); } catch { /* ignore */ }
+            }} style={{
+              padding: '9px 16px', borderRadius: 8, border: '1.5px solid color-mix(in srgb, var(--teal) 30%, transparent)',
+              background: 'color-mix(in srgb, var(--teal) 8%, transparent)', color: 'var(--teal)',
+              fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              <i className="fas fa-download" style={{ marginRight: 6 }} />Ξανά PDF
+            </button>
+            <button onClick={() => window.open(getGmailUrl(), '_blank')} style={{
+              padding: '9px 16px', borderRadius: 8, border: '1.5px solid color-mix(in srgb, var(--blue) 30%, transparent)',
+              background: 'color-mix(in srgb, var(--blue) 8%, transparent)', color: 'var(--blue)',
+              fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              <i className="fas fa-envelope" style={{ marginRight: 6 }} />Ξανά Gmail
+            </button>
+            <button onClick={() => { onSent(); onClose(); }} style={{
+              padding: '9px 18px', borderRadius: 8, border: 'none',
+              background: 'var(--amber)', color: '#fff', fontSize: '0.88rem', fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}>Κλείσιμο</button>
+          </div>
+        </>)}
       </div>
     </div>,
     document.body
