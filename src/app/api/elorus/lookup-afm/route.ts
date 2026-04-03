@@ -38,7 +38,8 @@ function buildSoap12Envelope(username: string, password: string, callerAfm: stri
 }
 
 function extractXmlValue(xml: string, tag: string): string {
-  const re = new RegExp(`<[^:]*:?${tag}[^>]*>([^<]*)<`, 'i');
+  // Match <tag>value</tag> or <prefix:tag>value</prefix:tag> — exact tag name with boundary
+  const re = new RegExp(`<(?:[^:>]*:)?${tag}(?=[\\s>/])(?:\\s[^>]*)?>([^<]+)</`, 'i');
   const m = xml.match(re);
   return m ? m[1].trim() : '';
 }
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest) {
       firm_act_descr: extractXmlValue(xml, 'firm_act_descr'),
       elorusContactId: elorusContactId as string | null,
       _debug_xml: xml.slice(0, 2000),
+      _debug_parsed: `onomasia=[${extractXmlValue(xml, 'onomasia')}] doy=[${extractXmlValue(xml, 'doy_descr')}] addr=[${extractXmlValue(xml, 'postal_address')}] city=[${extractXmlValue(xml, 'postal_area_description')}]`,
     };
 
     // Step 3: Create or update Elorus contact with AADE data
