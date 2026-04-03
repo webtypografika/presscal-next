@@ -2037,7 +2037,8 @@ export default function CalculatorShell() {
                 <Pill active={!finish.lamMachineId} onClick={() => setFinish({ ...finish, lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς' })} color="var(--teal)">Χωρίς</Pill>
                 {laminators.map((l) => (
                   <Pill key={l.id} active={finish.lamMachineId === l.id} onClick={() => {
-                    setFinish({ ...finish, lamMachineId: l.id, lamName: l.name, lamFilmId: films[0]?.id || '' });
+                    const dualRoll = (l.specs as Record<string, unknown>)?.dual_roll;
+                    setFinish({ ...finish, lamMachineId: l.id, lamName: l.name, lamFilmId: films[0]?.id || '', lamSides: dualRoll === '1' || dualRoll === 1 ? 2 : 1 });
                   }} color="var(--teal)">{l.name}</Pill>
                 ))}
               </div>

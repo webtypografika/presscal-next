@@ -242,10 +242,23 @@ export async function POST(req: NextRequest) {
       });
       if (bindMachine) {
         const bSpecs = (bindMachine.specs as Record<string, number>) || {};
+        // staple has price_booklet / price_pad; glue_bind & spiral have price_per_unit
+        const isBookletMode = body.impositionMode === 'booklet';
+        const pricePerUnit = bSpecs.price_booklet && isBookletMode
+          ? bSpecs.price_booklet
+          : bSpecs.price_pad || bSpecs.price_per_unit || bSpecs.costPerUnit || 0;
+        // Discount logic (same pattern as guillotine)
+        let discount = 0;
+        if (bSpecs.discount_step && bSpecs.discount_pct && body.qty > bSpecs.discount_step) {
+          const steps = Math.floor(body.qty / bSpecs.discount_step);
+          discount = Math.min(steps * bSpecs.discount_pct, bSpecs.discount_max || 100);
+        }
+        const effectivePrice = pricePerUnit * (1 - discount / 100);
         bindData = {
           type: body.bindingType as 'staple' | 'glue' | 'spiral',
-          costPerUnit: bSpecs.costPerUnit || 0,
+          pricePerUnit: effectivePrice,
           setupCost: bindMachine.setupCost || 0,
+          minCharge: bindMachine.minCharge || 0,
         };
       }
     }

@@ -81,8 +81,9 @@ export interface CostInput {
   };
   binding?: {
     type: 'staple' | 'glue' | 'spiral';
-    costPerUnit: number;
+    pricePerUnit: number;   // sell price per unit (already discounted)
     setupCost: number;
+    minCharge: number;
   };
 
   // Profile markups
@@ -863,10 +864,11 @@ function calcLaminationCost(input: CostInput, totalSheets: number): number {
   return filmCost + lam.machineSetupCost;
 }
 
-function calcBindingCost(input: CostInput): number {
+function calcBindingCharge(input: CostInput): number {
   if (!input.binding) return 0;
   const b = input.binding;
-  return b.setupCost + input.qty * b.costPerUnit;
+  const raw = b.setupCost + input.qty * b.pricePerUnit;
+  return Math.max(raw, b.minCharge);
 }
 
 // ─── WASTE ───
@@ -908,7 +910,7 @@ export function calculateCost(input: CostInput): CalculatorResult {
   // Finishing
   const costGuillotine = calcGuillotineCost(input, totalMachineSheets);
   const costLamination = calcLaminationCost(input, totalMachineSheets);
-  const costBinding = calcBindingCost(input);
+  const costBinding = 0; // binding has sell price, not material cost
   const costFinishing = costLamination + costBinding;
 
   // Total cost (guillotine has no material cost — charge goes straight to profit)
@@ -938,7 +940,8 @@ export function calculateCost(input: CostInput): CalculatorResult {
     // Fallback: generic profile markup on total cost
     return Math.max(costLamination * (1 + input.lamMarkup / 100), input.minChargeLam || 0);
   })();
-  const chargeBinding = costBinding * (1 + input.bindingMarkup / 100);
+  // Binding: pricePerUnit is already the sell price — no markup needed
+  const chargeBinding = calcBindingCharge(input);
   const chargeFinishing = chargeGuillotine + chargeLamination + chargeBinding;
 
   const chargePaper = paper.cost * (1 + input.paperMarkup / 100);

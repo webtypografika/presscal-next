@@ -1,8 +1,126 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { PostpressMachine, Material } from '@/generated/prisma/client';
+
+// ─── SAFE MATH EVALUATOR (no eval) ───
+interface Token { type: string; v?: string | number }
+
+function tokenize(expr: string): Token[] {
+  const tokens: Token[] = [];
+  let i = 0;
+  while (i < expr.length) {
+    if (/\s/.test(expr[i])) { i++; continue; }
+    if (/\d|\./.test(expr[i])) {
+      let n = '';
+      while (i < expr.length && /[\d.]/.test(expr[i])) n += expr[i++];
+      tokens.push({ type: 'num', v: parseFloat(n) });
+      continue;
+    }
+    if (/[a-zA-Z_α-ωΑ-Ω]/.test(expr[i])) {
+      let id = '';
+      while (i < expr.length && /[a-zA-Z0-9_α-ωΑ-Ω]/.test(expr[i])) id += expr[i++];
+      tokens.push({ type: 'id', v: id });
+      continue;
+    }
+    if ('+-*/%^'.includes(expr[i])) { tokens.push({ type: 'op', v: expr[i++] }); continue; }
+    if (expr[i] === '(') { tokens.push({ type: '(' }); i++; continue; }
+    if (expr[i] === ')') { tokens.push({ type: ')' }); i++; continue; }
+    if (expr[i] === ',') { tokens.push({ type: ',' }); i++; continue; }
+    throw new Error(`Μη έγκυρος χαρακτήρας: "${expr[i]}"`);
+  }
+  return tokens;
+}
+
+const MATH_FNS: Record<string, (...args: number[]) => number> = {
+  min: (...a) => Math.min(...a), max: (...a) => Math.max(...a),
+  ceil: (x) => Math.ceil(x), floor: (x) => Math.floor(x), round: (x) => Math.round(x),
+  abs: (x) => Math.abs(x), sqrt: (x) => Math.sqrt(x), pow: (a, b) => Math.pow(a, b),
+};
+
+function safeEval(expr: string, vars: Record<string, number>): number {
+  if (!expr.trim()) return 0;
+  const tokens = tokenize(expr);
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const eat = () => tokens[pos++];
+
+  function parseExpr(): number { return parseAdd(); }
+  function parseAdd(): number {
+    let left = parseMul();
+    while (peek()?.type === 'op' && (peek()!.v === '+' || peek()!.v === '-')) {
+      const op = eat().v; const right = parseMul();
+      left = op === '+' ? left + right : left - right;
+    }
+    return left;
+  }
+  function parseMul(): number {
+    let left = parsePow();
+    while (peek()?.type === 'op' && (peek()!.v === '*' || peek()!.v === '/' || peek()!.v === '%')) {
+      const op = eat().v; const right = parsePow();
+      left = op === '*' ? left * right : op === '/' ? (right === 0 ? 0 : left / right) : left % right;
+    }
+    return left;
+  }
+  function parsePow(): number {
+    let left = parseUnary();
+    while (peek()?.type === 'op' && peek()!.v === '^') { eat(); left = Math.pow(left, parseUnary()); }
+    return left;
+  }
+  function parseUnary(): number {
+    if (peek()?.type === 'op' && peek()!.v === '-') { eat(); return -parseAtom(); }
+    if (peek()?.type === 'op' && peek()!.v === '+') { eat(); return parseAtom(); }
+    return parseAtom();
+  }
+  function parseAtom(): number {
+    const t = peek();
+    if (!t) throw new Error('Μη αναμενόμενο τέλος');
+    if (t.type === 'num') { eat(); return t.v as number; }
+    if (t.type === '(') { eat(); const v = parseExpr(); if (peek()?.type === ')') eat(); return v; }
+    if (t.type === 'id') {
+      const name = t.v as string; eat();
+      // Function call?
+      if (peek()?.type === '(') {
+        eat();
+        const args: number[] = [];
+        if (peek()?.type !== ')') {
+          args.push(parseExpr());
+          while (peek()?.type === ',') { eat(); args.push(parseExpr()); }
+        }
+        if (peek()?.type === ')') eat();
+        const fn = MATH_FNS[name.toLowerCase()];
+        if (!fn) throw new Error(`Άγνωστη συνάρτηση: ${name}`);
+        return fn(...args);
+      }
+      // Variable
+      if (name in vars) return vars[name];
+      throw new Error(`Άγνωστη μεταβλητή: ${name}`);
+    }
+    throw new Error(`Μη αναμενόμενο: ${JSON.stringify(t)}`);
+  }
+  const result = parseExpr();
+  if (!isFinite(result)) return 0;
+  return result;
+}
+
+// ─── FORMULA BUILDER TYPES ───
+interface FormulaParam { id: string; name: string; label: string; value: number; unit: string }
+interface FormulaRow { id: string; name: string; label: string; expression: string; isFinal: boolean }
+interface FormulaBuilderData { params: FormulaParam[]; formulas: FormulaRow[] }
+
+const BUILTIN_VARS: { name: string; label: string; icon: string; color: string }[] = [
+  { name: 'qty', label: 'Ποσότητα', icon: 'fa-cubes', color: 'var(--blue)' },
+  { name: 'sheets', label: 'Φύλλα', icon: 'fa-file', color: 'var(--teal)' },
+  { name: 'copies', label: 'Αντίτυπα', icon: 'fa-copy', color: 'var(--violet)' },
+  { name: 'area_m2', label: 'Εμβαδόν (m²)', icon: 'fa-vector-square', color: 'var(--amber)' },
+  { name: 'weight_kg', label: 'Βάρος (kg)', icon: 'fa-weight-hanging', color: '#f472b6' },
+];
+
+const emptyFormulaBuilder = (): FormulaBuilderData => ({
+  params: [{ id: crypto.randomUUID(), name: 'rate', label: 'Τιμή/τεμ', value: 0.05, unit: '€/τεμ' }],
+  formulas: [{ id: crypto.randomUUID(), name: 'cost', label: 'Κόστος', expression: 'qty * rate', isFinal: true }],
+});
 import { createPostpressMachine, updatePostpressMachine, deletePostpressMachine, getLamMaterials, createLamMaterial } from './actions';
 
 // ─── 3-PASS CUT MODEL (client-side for examples) ───
@@ -81,11 +199,25 @@ const SPEC_FIELDS: Record<string, SpecField[]> = {
   // laminator specs are rendered dynamically based on lam_mode — see LAMINATOR_SPECS below
   laminator: [],
   fold: [
+    { key: '_label', label: 'ΠΡΟΔΙΑΓΡΑΦΕΣ' },
     { key: 'plates', label: 'Πλάκες', unit: '' },
     { key: 'max_w', label: 'Μέγιστο πλάτος', unit: 'mm' },
+    { key: '_label', label: 'ΤΙΜΟΛΟΓΗΣΗ' },
+    { key: 'price_per_unit', label: 'Τιμή', unit: '€/τεμ' },
+    { key: '_label', label: 'ΕΚΠΤΩΣΗ ΠΟΣΟΤΗΤΑΣ' },
+    { key: 'discount_step', label: 'Βήμα (τεμ.)', unit: 'τεμ' },
+    { key: 'discount_pct', label: 'Μείωση %', unit: '%' },
+    { key: 'discount_max', label: 'Max %', unit: '%' },
   ],
   gathering: [
+    { key: '_label', label: 'ΠΡΟΔΙΑΓΡΑΦΕΣ' },
     { key: 'stations', label: 'Σταθμοί', unit: '' },
+    { key: '_label', label: 'ΤΙΜΟΛΟΓΗΣΗ' },
+    { key: 'price_per_unit', label: 'Τιμή', unit: '€/τεμ' },
+    { key: '_label', label: 'ΕΚΠΤΩΣΗ ΠΟΣΟΤΗΤΑΣ' },
+    { key: 'discount_step', label: 'Βήμα (τεμ.)', unit: 'τεμ' },
+    { key: 'discount_pct', label: 'Μείωση %', unit: '%' },
+    { key: 'discount_max', label: 'Max %', unit: '%' },
   ],
   staple: [
     { key: '_label', label: 'ΧΡΟΝΟΙ ΠΑΡΑΓΩΓΗΣ' },
@@ -120,7 +252,12 @@ const SPEC_FIELDS: Record<string, SpecField[]> = {
     { key: 'discount_pct', label: 'Μείωση %', unit: '%' },
     { key: 'discount_max', label: 'Max %', unit: '%' },
   ],
-  custom: [],
+  custom: [
+    { key: '_label', label: 'ΕΚΠΤΩΣΗ ΠΟΣΟΤΗΤΑΣ' },
+    { key: 'discount_step', label: 'Βήμα (τεμ.)', unit: 'τεμ' },
+    { key: 'discount_pct', label: 'Μείωση %', unit: '%' },
+    { key: 'discount_max', label: 'Max %', unit: '%' },
+  ],
 };
 
 // ─── FORM STATE ───
@@ -152,7 +289,13 @@ const emptyForm = (subtype = 'guillotine'): FormState => ({
 function machineToForm(m: PostpressMachine): FormState {
   const specs = (m.specs ?? {}) as Record<string, unknown>;
   const specStrings: Record<string, string> = {};
-  for (const [k, v] of Object.entries(specs)) specStrings[k] = v != null ? String(v) : '';
+  for (const [k, v] of Object.entries(specs)) {
+    if (k === 'formula_builder' && typeof v === 'object') {
+      specStrings[k] = JSON.stringify(v);
+    } else {
+      specStrings[k] = v != null ? String(v) : '';
+    }
+  }
   return {
     id: m.id,
     name: m.name,
@@ -205,6 +348,8 @@ export function PostpressList({ machines }: Props) {
   const [filter, setFilter] = useState<string>('all');
   const [editing, setEditing] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [formulaBuilder, setFormulaBuilder] = useState<FormulaBuilderData | null>(null);
+  const formulaRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // Lamination materials
   const [lamMaterials, setLamMaterials] = useState<Material[]>([]);
@@ -216,6 +361,21 @@ export function PostpressList({ machines }: Props) {
     if (editing && (editing.subtype === 'laminator' || editing.subtype === 'lam_roll' || editing.subtype === 'lam_sheet')) {
       getLamMaterials().then(setLamMaterials);
     }
+  }, [editing?.subtype, editing?.id]);
+
+  // Initialize formula builder when editing a custom machine
+  useEffect(() => {
+    if (editing?.subtype === 'custom') {
+      const raw = editing.specs.formula_builder;
+      if (raw) {
+        try { setFormulaBuilder(JSON.parse(raw)); } catch { setFormulaBuilder(emptyFormulaBuilder()); }
+      } else {
+        setFormulaBuilder(emptyFormulaBuilder());
+      }
+    } else {
+      setFormulaBuilder(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing?.subtype, editing?.id]);
 
   const handleSaveMaterial = useCallback(async () => {
@@ -302,9 +462,14 @@ export function PostpressList({ machines }: Props) {
     if (!editing || !editing.name.trim()) return;
     setSaving(true);
     try {
-      const numSpecs: Record<string, number> = {};
+      const numSpecs: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(editing.specs)) {
-        if (v !== '') numSpecs[k] = parseFloat(v) || 0;
+        if (k === 'formula_builder') continue; // handled separately
+        if (v !== '') numSpecs[k] = parseFloat(v as string) || 0;
+      }
+      // Merge formula builder for custom subtype
+      if (editing.subtype === 'custom' && formulaBuilder) {
+        numSpecs.formula_builder = formulaBuilder;
       }
       const payload = {
         name: editing.name.trim(),
@@ -326,7 +491,7 @@ export function PostpressList({ machines }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [editing]);
+  }, [editing, formulaBuilder]);
 
   // Shared input style
   const inputStyle: React.CSSProperties = {
@@ -470,6 +635,19 @@ export function PostpressList({ machines }: Props) {
                     {specs.seal_margin ? ` · ${specs.seal_margin}mm seal` : ''}
                   </p>
                 )}
+                {/* Custom formula summary */}
+                {machine.subtype === 'custom' && specs.formula_builder && (() => {
+                  const fb = specs.formula_builder as unknown as FormulaBuilderData;
+                  if (!fb?.formulas) return null;
+                  const finalF = fb.formulas.find(f => f.isFinal);
+                  return (
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: 2 }}>
+                      <i className="fas fa-function" style={{ marginRight: 4, fontSize: '0.6rem', color: 'var(--violet)' }} />
+                      {fb.params?.length || 0} παράμ. · {fb.formulas.length} τύπ{fb.formulas.length === 1 ? 'ος' : 'οι'}
+                      {finalF ? <span style={{ color: 'var(--accent)' }}> · {finalF.label || finalF.name}</span> : null}
+                    </p>
+                  );
+                })()}
 
                 {/* Actions */}
                 <div className="pp-card-actions" style={{ position: 'absolute', right: 12, top: 12, display: 'flex', gap: 4, opacity: 0, transition: 'opacity 0.2s' }}>
@@ -906,6 +1084,317 @@ export function PostpressList({ machines }: Props) {
                   )}
                 </div>
               ));
+            })()}
+
+            {/* ── FORMULA BUILDER (custom) ── */}
+            {editing.subtype === 'custom' && formulaBuilder && (() => {
+              const fb = formulaBuilder;
+              const updateFB = (patch: Partial<FormulaBuilderData>) => setFormulaBuilder({ ...fb, ...patch });
+
+              // Helper: insert variable name at cursor in a formula input
+              const insertVar = (formulaId: string, varName: string) => {
+                const el = formulaRefs.current[formulaId];
+                if (el) {
+                  const s = el.selectionStart ?? el.value.length;
+                  const e = el.selectionEnd ?? s;
+                  const before = el.value.slice(0, s);
+                  const after = el.value.slice(e);
+                  const pad = (str: string, pos: number) => (pos > 0 && !/[\s(+\-*/%^,]$/.test(str)) ? ' ' : '';
+                  const newExpr = before + pad(before, s) + varName + pad(after, 0) + after;
+                  updateFB({ formulas: fb.formulas.map(f => f.id === formulaId ? { ...f, expression: newExpr } : f) });
+                  setTimeout(() => { const np = s + varName.length + (pad(before, s) ? 1 : 0); el.setSelectionRange(np, np); el.focus(); }, 10);
+                } else {
+                  // Fallback: append
+                  updateFB({ formulas: fb.formulas.map(f => f.id === formulaId ? { ...f, expression: (f.expression ? f.expression + ' ' : '') + varName } : f) });
+                }
+              };
+
+              // Build variable context for live preview
+              const sampleVars: Record<string, number> = { qty: 1000, sheets: 500, copies: 1000, area_m2: 0.21, weight_kg: 12.5 };
+              for (const p of fb.params) if (p.name) sampleVars[p.name] = p.value;
+
+              // Evaluate formulas in order for preview
+              const formulaResults: { value: number | null; error: string | null }[] = fb.formulas.map(f => {
+                try {
+                  const v = safeEval(f.expression, sampleVars);
+                  if (f.name) sampleVars[f.name] = v;
+                  return { value: v, error: null };
+                } catch (err) {
+                  return { value: null, error: (err as Error).message };
+                }
+              });
+
+              // Available vars for each formula
+              const availableVars = (upToIdx: number) => {
+                const vars: { name: string; label: string; icon: string; color: string; type: string }[] =
+                  BUILTIN_VARS.map(b => ({ name: b.name, label: b.label, icon: b.icon, color: b.color, type: 'builtin' }));
+                for (const p of fb.params) if (p.name) vars.push({ name: p.name, label: p.label || p.name, icon: 'fa-sliders-h', color: 'var(--blue)', type: 'param' });
+                for (let i = 0; i < upToIdx; i++) {
+                  const f = fb.formulas[i];
+                  if (f.name) vars.push({ name: f.name, label: f.label || f.name, icon: 'fa-function', color: 'var(--violet)', type: 'formula' });
+                }
+                return vars;
+              };
+
+              const chipStyle = (color: string, active = false): React.CSSProperties => ({
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '4px 10px', borderRadius: 7,
+                border: `1.5px solid color-mix(in srgb, ${color} ${active ? '50%' : '25%'}, transparent)`,
+                background: `color-mix(in srgb, ${color} ${active ? '12%' : '5%'}, transparent)`,
+                color: active ? color : '#94a3b8',
+                fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+                fontFamily: "'DM Mono', monospace",
+                transition: 'all 0.15s', whiteSpace: 'nowrap',
+              });
+
+              const sectionDivider = (label: string, color: string, icon: string) => (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 22, marginBottom: 12 }}>
+                  <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
+                  <i className={`fas ${icon}`} style={{ fontSize: '0.6rem', color }} />
+                  <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', color }}>{label}</span>
+                  <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
+                </div>
+              );
+
+              return (<>
+                {/* ── BUILT-IN VARIABLES REFERENCE ── */}
+                {sectionDivider('ΜΕΤΑΒΛΗΤΕΣ ΣΥΣΤΗΜΑΤΟΣ', '#64748b', 'fa-microchip')}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {BUILTIN_VARS.map(b => (
+                    <div key={b.name} style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '6px 12px', borderRadius: 8,
+                      background: `color-mix(in srgb, ${b.color} 8%, transparent)`,
+                      border: `1px solid color-mix(in srgb, ${b.color} 20%, transparent)`,
+                    }}>
+                      <i className={`fas ${b.icon}`} style={{ fontSize: '0.6rem', color: b.color }} />
+                      <span style={{ fontSize: '0.72rem', fontWeight: 600, color: b.color, fontFamily: "'DM Mono', monospace" }}>{b.name}</span>
+                      <span style={{ fontSize: '0.62rem', color: '#64748b' }}>{b.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <p style={{ fontSize: '0.62rem', color: '#475569', marginBottom: 0 }}>
+                  Αυτές οι μεταβλητές έρχονται αυτόματα από τον Calculator — χρησιμοποιήστε τες στους τύπους.
+                </p>
+
+                {/* ── PARAMETERS ── */}
+                {sectionDivider('ΠΑΡΑΜΕΤΡΟΙ ΜΗΧΑΝΗΣ', 'var(--blue)', 'fa-sliders-h')}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {fb.params.map((p, pi) => (
+                    <div key={p.id} style={{
+                      display: 'grid', gridTemplateColumns: '120px 1fr 80px 100px 32px', gap: 8, alignItems: 'center',
+                      padding: '10px 12px', borderRadius: 10,
+                      background: 'rgba(255,255,255,0.02)',
+                      borderLeft: '3px solid var(--blue)',
+                      border: '1px solid var(--glass-border)', borderLeftWidth: 3, borderLeftColor: 'var(--blue)',
+                    }}>
+                      <input
+                        value={p.name} placeholder="name"
+                        onChange={e => {
+                          const name = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+                          updateFB({ params: fb.params.map((x, i) => i === pi ? { ...x, name } : x) });
+                        }}
+                        style={{ ...inputStyle, padding: '7px 8px', fontSize: '0.82rem', fontFamily: "'DM Mono', monospace", color: 'var(--blue)' }}
+                      />
+                      <input
+                        value={p.label} placeholder="Ετικέτα"
+                        onChange={e => updateFB({ params: fb.params.map((x, i) => i === pi ? { ...x, label: e.target.value } : x) })}
+                        style={{ ...inputStyle, padding: '7px 8px', fontSize: '0.82rem' }}
+                      />
+                      <input
+                        type="number" step="any" value={p.value} placeholder="0"
+                        onChange={e => updateFB({ params: fb.params.map((x, i) => i === pi ? { ...x, value: parseFloat(e.target.value) || 0 } : x) })}
+                        style={{ ...inputStyle, padding: '7px 8px', fontSize: '0.82rem', textAlign: 'right', fontWeight: 700, color: 'var(--accent)' }}
+                      />
+                      <input
+                        value={p.unit} placeholder="μονάδα"
+                        onChange={e => updateFB({ params: fb.params.map((x, i) => i === pi ? { ...x, unit: e.target.value } : x) })}
+                        style={{ ...inputStyle, padding: '7px 8px', fontSize: '0.72rem', color: '#64748b' }}
+                      />
+                      <button
+                        onClick={() => updateFB({ params: fb.params.filter((_, i) => i !== pi) })}
+                        style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: '0.75rem', padding: 4 }}
+                        title="Διαγραφή"
+                      >
+                        <i className="fas fa-trash" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => updateFB({ params: [...fb.params, { id: crypto.randomUUID(), name: '', label: '', value: 0, unit: '' }] })}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                      borderRadius: 8, border: '1.5px dashed var(--glass-border)',
+                      background: 'transparent', color: 'var(--blue)',
+                      fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      width: 'fit-content',
+                    }}
+                  >
+                    <i className="fas fa-plus" style={{ fontSize: '0.65rem' }} /> Νέα παράμετρος
+                  </button>
+                </div>
+
+                {/* ── FORMULAS ── */}
+                {sectionDivider('ΤΥΠΟΙ ΥΠΟΛΟΓΙΣΜΟΥ', 'var(--accent)', 'fa-function')}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {fb.formulas.map((f, fi) => {
+                    const vars = availableVars(fi);
+                    const result = formulaResults[fi];
+                    const isFinal = f.isFinal;
+                    return (
+                      <div key={f.id} style={{
+                        padding: '14px 14px 12px', borderRadius: 12,
+                        background: isFinal ? 'color-mix(in srgb, var(--accent) 5%, rgba(255,255,255,0.02))' : 'rgba(255,255,255,0.02)',
+                        border: `1.5px solid ${isFinal ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'var(--glass-border)'}`,
+                        borderLeftWidth: 3, borderLeftColor: isFinal ? 'var(--accent)' : 'var(--violet)',
+                      }}>
+                        {/* Top row: name, label, final toggle, delete */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr auto auto', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                          <input
+                            value={f.name} placeholder="name"
+                            onChange={e => {
+                              const name = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+                              updateFB({ formulas: fb.formulas.map((x, i) => i === fi ? { ...x, name } : x) });
+                            }}
+                            style={{ ...inputStyle, padding: '7px 8px', fontSize: '0.82rem', fontFamily: "'DM Mono', monospace", color: 'var(--violet)' }}
+                          />
+                          <input
+                            value={f.label} placeholder="Ετικέτα (π.χ. Κόστος εργασίας)"
+                            onChange={e => updateFB({ formulas: fb.formulas.map((x, i) => i === fi ? { ...x, label: e.target.value } : x) })}
+                            style={{ ...inputStyle, padding: '7px 8px', fontSize: '0.82rem' }}
+                          />
+                          <button
+                            onClick={() => updateFB({ formulas: fb.formulas.map((x, i) => ({ ...x, isFinal: i === fi })) })}
+                            title={isFinal ? 'Τελικό κόστος' : 'Ορισμός ως τελικό κόστος'}
+                            style={{
+                              background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
+                              color: isFinal ? 'var(--accent)' : '#475569', fontSize: '0.85rem',
+                              transition: 'color 0.2s',
+                            }}
+                          >
+                            <i className={`fas fa-star`} />
+                          </button>
+                          {fb.formulas.length > 1 && (
+                            <button
+                              onClick={() => {
+                                const updated = fb.formulas.filter((_, i) => i !== fi);
+                                if (f.isFinal && updated.length > 0) updated[updated.length - 1].isFinal = true;
+                                updateFB({ formulas: updated });
+                              }}
+                              style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: '0.75rem', padding: 4 }}
+                            >
+                              <i className="fas fa-trash" />
+                            </button>
+                          )}
+                        </div>
+                        {/* Variable chips toolbar */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                          {vars.map(v => (
+                            <button key={v.name} onClick={() => insertVar(f.id, v.name)} style={chipStyle(v.color, true)}>
+                              <i className={`fas ${v.icon}`} style={{ fontSize: '0.55rem' }} />
+                              {v.name}
+                            </button>
+                          ))}
+                          {/* Math functions */}
+                          {['min', 'max', 'ceil', 'floor', 'round'].map(fn => (
+                            <button key={fn} onClick={() => insertVar(f.id, fn + '()')} style={chipStyle('#64748b')}>
+                              ƒ {fn}
+                            </button>
+                          ))}
+                        </div>
+                        {/* Expression input */}
+                        <div style={{ position: 'relative' }}>
+                          <span style={{
+                            position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                            fontSize: '0.85rem', fontWeight: 700, color: '#475569', pointerEvents: 'none',
+                          }}>=</span>
+                          <input
+                            ref={el => { formulaRefs.current[f.id] = el; }}
+                            value={f.expression} placeholder="π.χ. qty * rate + setup"
+                            onChange={e => updateFB({ formulas: fb.formulas.map((x, i) => i === fi ? { ...x, expression: e.target.value } : x) })}
+                            style={{
+                              ...inputStyle, padding: '10px 12px 10px 24px',
+                              fontSize: '0.88rem', fontFamily: "'DM Mono', monospace",
+                              color: result?.error ? '#f87171' : isFinal ? 'var(--accent)' : '#e2e8f0',
+                              borderColor: result?.error ? 'color-mix(in srgb, #ef4444 40%, transparent)' : isFinal ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--glass-border)',
+                            }}
+                          />
+                        </div>
+                        {/* Result / Error */}
+                        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {result?.error ? (
+                            <span style={{ fontSize: '0.7rem', color: '#f87171' }}>
+                              <i className="fas fa-exclamation-triangle" style={{ marginRight: 4 }} />{result.error}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.72rem', color: isFinal ? 'var(--accent)' : '#64748b' }}>
+                              {isFinal && <i className="fas fa-coins" style={{ marginRight: 4, fontSize: '0.6rem' }} />}
+                              {f.label || f.name || 'αποτέλεσμα'} = <strong style={{ color: isFinal ? 'var(--accent)' : '#e2e8f0', fontSize: isFinal ? '0.85rem' : '0.72rem' }}>{(result?.value ?? 0).toFixed(2)}€</strong>
+                              {!isFinal && <span style={{ color: '#475569' }}> (sample: qty=1000)</span>}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <button
+                    onClick={() => updateFB({ formulas: [...fb.formulas, { id: crypto.randomUUID(), name: '', label: '', expression: '', isFinal: false }] })}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
+                      borderRadius: 8, border: '1.5px dashed var(--glass-border)',
+                      background: 'transparent', color: 'var(--violet)',
+                      fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      width: 'fit-content',
+                    }}
+                  >
+                    <i className="fas fa-plus" style={{ fontSize: '0.65rem' }} /> Νέος τύπος
+                  </button>
+                </div>
+
+                {/* ── LIVE PREVIEW ── */}
+                {sectionDivider('ΔΟΚΙΜΑΣΤΙΚΟΣ ΥΠΟΛΟΓΙΣΜΟΣ', 'var(--accent)', 'fa-flask')}
+                <div style={{
+                  padding: '14px 16px', borderRadius: 12,
+                  background: 'color-mix(in srgb, var(--accent) 4%, rgba(255,255,255,0.02))',
+                  border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+                }}>
+                  <div style={{ fontSize: '0.68rem', color: '#64748b', marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                    {BUILTIN_VARS.map(b => (
+                      <span key={b.name}><strong style={{ color: b.color }}>{b.name}</strong>={sampleVars[b.name] ?? 0}</span>
+                    ))}
+                    {fb.params.filter(p => p.name).map(p => (
+                      <span key={p.id}><strong style={{ color: 'var(--blue)' }}>{p.name}</strong>={p.value}{p.unit ? ` ${p.unit}` : ''}</span>
+                    ))}
+                  </div>
+                  {fb.formulas.map((f, fi) => {
+                    const r = formulaResults[fi];
+                    return (
+                      <div key={f.id} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '6px 0',
+                        borderBottom: fi < fb.formulas.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {f.isFinal && <i className="fas fa-star" style={{ fontSize: '0.55rem', color: 'var(--accent)' }} />}
+                          <span style={{ fontSize: '0.78rem', color: f.isFinal ? 'var(--accent)' : '#94a3b8', fontWeight: f.isFinal ? 700 : 500 }}>{f.label || f.name || '—'}</span>
+                          <span style={{ fontSize: '0.68rem', color: '#475569', fontFamily: "'DM Mono', monospace" }}>{f.expression}</span>
+                        </div>
+                        {r?.error ? (
+                          <span style={{ fontSize: '0.72rem', color: '#f87171' }}>Σφάλμα</span>
+                        ) : (
+                          <span style={{
+                            fontSize: f.isFinal ? '1rem' : '0.82rem',
+                            fontWeight: f.isFinal ? 800 : 600,
+                            color: f.isFinal ? 'var(--accent)' : '#e2e8f0',
+                          }}>
+                            {(r?.value ?? 0).toFixed(2)}€
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>);
             })()}
 
             {/* ── LINKED MATERIALS (laminator) ── */}
