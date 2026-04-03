@@ -54,31 +54,7 @@ export async function POST(req: NextRequest) {
     const userId = (session?.user as Record<string, unknown>)?.id as string;
     if (!userId) return NextResponse.json({ error: 'Δεν είστε συνδεδεμένος' }, { status: 401 });
 
-    // Accept both FormData (with PDF file) and JSON
-    const contentType = req.headers.get('content-type') || '';
-    let body: PlateOrderPayload;
-    let pdfBuffer: Buffer | null = null;
-
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
-      body = {
-        orderType: (formData.get('orderType') as string || 'platemaker_service') as PlateOrderPayload['orderType'],
-        supplierName: formData.get('supplierName') as string || '',
-        supplierEmail: formData.get('supplierEmail') as string || '',
-        items: JSON.parse(formData.get('items') as string || '[]'),
-        jobDescription: formData.get('jobDescription') as string || undefined,
-        notes: formData.get('notes') as string || undefined,
-        delivery: (formData.get('delivery') as string || undefined) as PlateOrderPayload['delivery'],
-      };
-      const pdfFile = formData.get('pdf') as File | null;
-      if (pdfFile) {
-        pdfBuffer = Buffer.from(await pdfFile.arrayBuffer());
-        body.pdfFileName = pdfFile.name;
-        body.pdfBase64 = pdfBuffer.toString('base64');
-      }
-    } else {
-      body = await req.json() as PlateOrderPayload;
-    }
+    const body = await req.json() as PlateOrderPayload;
 
     const org = await prisma.org.findUnique({ where: { id: ORG_ID } });
 

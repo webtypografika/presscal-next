@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { exportImpositionPDF } from '@/lib/calc/pdf-export';
+import { downloadImpositionPDF } from '@/lib/calc/pdf-export';
 import type { ExportOptions } from '@/lib/calc/pdf-export';
 
 interface PlateSupplier {
@@ -29,10 +29,10 @@ export default function PlateOrderModal({
   const [suppliers, setSuppliers] = useState<PlateSupplier[]>([]);
   const [supplierName, setSupplierName] = useState('');
   const [supplierEmail, setSupplierEmail] = useState('');
-  const [attachPdf, setAttachPdf] = useState(true);
   const [delivery, setDelivery] = useState<'pickup' | 'deliver'>('pickup');
   const [notes, setNotes] = useState('');
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
 
   const plateSize = `${Math.round(machineMaxSS)}×${Math.round(machineMaxLS)}mm`;
@@ -68,29 +68,25 @@ export default function PlateOrderModal({
         }
       }
 
-      // Use FormData to avoid JSON body size limits
-      const formData = new FormData();
-      formData.append('orderType', 'platemaker_service');
-      formData.append('supplierName', supplierName || supplierEmail);
-      formData.append('supplierEmail', supplierEmail);
-      formData.append('items', JSON.stringify(items));
-      formData.append('jobDescription', jobDescription);
-      formData.append('delivery', delivery);
-      formData.append('notes', notes);
-
-      if (attachPdf) {
-        const pdfBytes = await exportImpositionPDF(exportOptions);
-        const fileName = (exportOptions.sourceFileName || 'imposition').replace(/\.pdf$/i, '') + '_plates.pdf';
-        const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
-        formData.append('pdf', blob, fileName);
-      }
-
-      const res = await fetch('/api/plate-order', { method: 'POST', body: formData });
+      // Send order email (without PDF — user downloads separately)
+      const res = await fetch('/api/plate-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderType: 'platemaker_service',
+          supplierName: supplierName || supplierEmail,
+          supplierEmail,
+          items,
+          jobDescription,
+          delivery,
+          notes,
+        }),
+      });
       const text = await res.text();
       let data: any;
       try { data = JSON.parse(text); } catch { throw new Error(`Σφάλμα: ${text.slice(0, 150)}`); }
       if (!res.ok) throw new Error(data.error || 'Σφάλμα αποστολής');
-      onSent();
+      setSent(true);
     } catch (e) { setError((e as Error).message); }
     finally { setSending(false); }
   }
@@ -187,17 +183,22 @@ export default function PlateOrderModal({
           ))}
         </div>
 
-        {/* Attach PDF toggle */}
-        <button onClick={() => setAttachPdf(!attachPdf)} style={{
+        {/* Download PDF button */}
+        <button onClick={async () => {
+          try {
+            const fn = (exportOptions.sourceFileName || 'imposition').replace(/\.pdf$/i, '') + '_plates.pdf';
+            await downloadImpositionPDF(exportOptions, fn);
+          } catch (e) { setError('PDF error: ' + (e as Error).message); }
+        }} style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 8,
-          border: `1.5px solid ${attachPdf ? 'var(--teal)' : 'var(--glass-border)'}`,
-          background: attachPdf ? 'color-mix(in srgb, var(--teal) 8%, transparent)' : 'transparent',
-          color: attachPdf ? 'var(--teal)' : '#64748b',
+          border: '1.5px solid color-mix(in srgb, var(--teal) 30%, transparent)',
+          background: 'color-mix(in srgb, var(--teal) 8%, transparent)',
+          color: 'var(--teal)',
           fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
           marginBottom: 14, transition: 'all 0.2s',
         }}>
-          <i className={`fas ${attachPdf ? 'fa-check-circle' : 'fa-circle'}`} style={{ fontSize: '0.7rem' }} />
-          Επισύναψη imposition PDF
+          <i className="fas fa-file-pdf" style={{ fontSize: '0.7rem' }} />
+          Κατέβασμα imposition PDF
         </button>
 
         {/* Notes */}
@@ -212,21 +213,31 @@ export default function PlateOrderModal({
           </div>
         )}
 
+        {/* Success */}
+        {sent && (
+          <div style={{ padding: '12px 14px', borderRadius: 8, marginBottom: 14, background: 'color-mix(in srgb, #22c55e 10%, transparent)', border: '1px solid color-mix(in srgb, #22c55e 25%, transparent)', color: '#4ade80', fontSize: '0.82rem', fontWeight: 600 }}>
+            <i className="fas fa-check-circle" style={{ marginRight: 6 }} />
+            Email εστάλη στον {supplierName || supplierEmail}. Κατεβάστε το PDF και επισυνάψτε το στο reply ή στείλτε το ξεχωριστά.
+          </div>
+        )}
+
         {/* Actions */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={onClose} style={{
+          <button onClick={() => { onClose(); if (sent) onSent(); }} style={{
             padding: '9px 18px', borderRadius: 8, border: '1px solid var(--border)',
             background: 'transparent', color: 'var(--text-muted)', fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit',
-          }}>Ακύρωση</button>
-          <button onClick={send} disabled={sending || !supplierEmail} style={{
-            padding: '9px 22px', borderRadius: 8, border: 'none',
-            background: 'var(--amber)', color: '#fff', fontSize: '0.88rem', fontWeight: 700,
-            cursor: 'pointer', fontFamily: 'inherit',
-            opacity: sending || !supplierEmail ? 0.5 : 1,
-            boxShadow: '0 4px 16px rgba(245,158,11,0.3)',
-          }}>
-            {sending ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Αποστολή...</> : <><i className="fas fa-paper-plane" style={{ marginRight: 6 }} />Αποστολή</>}
-          </button>
+          }}>{sent ? 'Κλείσιμο' : 'Ακύρωση'}</button>
+          {!sent && (
+            <button onClick={send} disabled={sending || !supplierEmail} style={{
+              padding: '9px 22px', borderRadius: 8, border: 'none',
+              background: 'var(--amber)', color: '#fff', fontSize: '0.88rem', fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+              opacity: sending || !supplierEmail ? 0.5 : 1,
+              boxShadow: '0 4px 16px rgba(245,158,11,0.3)',
+            }}>
+              {sending ? <><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Αποστολή...</> : <><i className="fas fa-paper-plane" style={{ marginRight: 6 }} />Αποστολή email</>}
+            </button>
+          )}
         </div>
       </div>
     </div>,
