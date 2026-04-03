@@ -93,12 +93,14 @@ export async function POST(req: NextRequest) {
     const soapBody = buildSoapEnvelope(org.aadeUsername, org.aadePassword, org.aadeAfm, afm);
     const aadeRes = await fetch(AADE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/xml; charset=utf-8', SOAPAction: '' },
+      headers: { 'Content-Type': 'application/soap+xml; charset=utf-8' },
       body: soapBody,
     });
 
     if (!aadeRes.ok) {
-      return NextResponse.json({ error: `ΑΑΔΕ σφάλμα: ${aadeRes.status}` }, { status: 500 });
+      const errBody = await aadeRes.text().catch(() => '');
+      console.error('AADE error:', aadeRes.status, errBody.slice(0, 500));
+      return NextResponse.json({ error: `ΑΑΔΕ σφάλμα: ${aadeRes.status} — ${aadeRes.statusText}` }, { status: 500 });
     }
 
     const xml = await aadeRes.text();
