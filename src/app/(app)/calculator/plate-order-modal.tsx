@@ -55,22 +55,6 @@ export default function PlateOrderModal({
     if (!supplierEmail) { setError('Εισάγετε email τσιγκογράφου'); return; }
     setSending(true); setError('');
     try {
-      let pdfBase64: string | undefined;
-      let pdfFileName: string | undefined;
-
-      if (attachPdf) {
-        const pdfBytes = await exportImpositionPDF(exportOptions);
-        const bytes = pdfBytes as Uint8Array;
-        // Vercel serverless limit ~4.5MB; base64 expands ~33%
-        if (bytes.length > 3_000_000) {
-          setError('Το PDF είναι πολύ μεγάλο (' + (bytes.length / 1_000_000).toFixed(1) + 'MB). Αποεπιλέξτε "Επισύναψη PDF" ή χρησιμοποιήστε μικρότερο αρχείο.');
-          setSending(false);
-          return;
-        }
-        pdfBase64 = Buffer.from(bytes).toString('base64');
-        pdfFileName = (exportOptions.sourceFileName || 'imposition').replace(/\.pdf$/i, '') + '_plates.pdf';
-      }
-
       const colors = ['Cyan', 'Magenta', 'Yellow', 'Black'];
       const items = [];
       if (platesFront > 0) {
@@ -84,24 +68,27 @@ export default function PlateOrderModal({
         }
       }
 
-      const res = await fetch('/api/plate-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderType: 'platemaker_service',
-          supplierName: supplierName || supplierEmail,
-          supplierEmail,
-          items,
-          jobDescription,
-          delivery,
-          notes,
-          pdfBase64,
-          pdfFileName,
-        }),
-      });
+      // Use FormData to avoid JSON body size limits
+      const formData = new FormData();
+      formData.append('orderType', 'platemaker_service');
+      formData.append('supplierName', supplierName || supplierEmail);
+      formData.append('supplierEmail', supplierEmail);
+      formData.append('items', JSON.stringify(items));
+      formData.append('jobDescription', jobDescription);
+      formData.append('delivery', delivery);
+      formData.append('notes', notes);
+
+      if (attachPdf) {
+        const pdfBytes = await exportImpositionPDF(exportOptions);
+        const fileName = (exportOptions.sourceFileName || 'imposition').replace(/\.pdf$/i, '') + '_plates.pdf';
+        const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
+        formData.append('pdf', blob, fileName);
+      }
+
+      const res = await fetch('/api/plate-order', { method: 'POST', body: formData });
       const text = await res.text();
       let data: any;
-      try { data = JSON.parse(text); } catch { throw new Error(res.status === 413 ? 'Το PDF είναι πολύ μεγάλο. Αποεπιλέξτε "Επισύναψη imposition PDF" ή χρησιμοποιήστε μικρότερο αρχείο.' : `Σφάλμα: ${text.slice(0, 100)}`); }
+      try { data = JSON.parse(text); } catch { throw new Error(`Σφάλμα: ${text.slice(0, 150)}`); }
       if (!res.ok) throw new Error(data.error || 'Σφάλμα αποστολής');
       onSent();
     } catch (e) { setError((e as Error).message); }
