@@ -13,6 +13,10 @@ export async function getJobs() {
       orgId: ORG_ID,
       deletedAt: null,
       status: { in: ['approved', 'partial', 'completed'] },
+      OR: [
+        { approvedAt: { not: null } },
+        { jobStage: { not: null } },
+      ],
     },
     include: { customer: true, company: true },
     orderBy: [{ deadline: 'asc' }, { createdAt: 'desc' }],
@@ -33,9 +37,6 @@ export async function updateJobStage(quoteId: string, stage: string) {
     data.jobStage = 'delivery';
   }
   await prisma.quote.update({ where: { id: quoteId }, data });
-  revalidatePath('/jobs');
-  revalidatePath('/quotes');
-  revalidatePath('/');
 }
 
 // ─── UPDATE JOB DETAILS ───
