@@ -438,16 +438,17 @@ export async function updateCustomer(id: string, data: Record<string, unknown>) 
 
 export async function saveEmailAttachments(quoteId: string, messageIds: string[]) {
   try {
+    console.log('[saveEmailAttachments] start, quoteId:', quoteId, 'messages:', messageIds.length);
     // Find a user with Google OAuth in this org
     const account = await prisma.account.findFirst({
       where: { provider: 'google', user: { orgId: ORG_ID } },
       select: { userId: true },
     });
-    if (!account) return { saved: 0 };
+    if (!account) { console.log('[saveEmailAttachments] no google account found'); return { saved: 0 }; }
 
     const { getGmailToken, getMessage, getAttachment } = await import('@/lib/gmail');
     const token = await getGmailToken(account.userId);
-    if (!token) return { saved: 0 };
+    if (!token) { console.log('[saveEmailAttachments] no gmail token'); return { saved: 0 }; }
 
     const fs = await import('fs/promises');
     const path = await import('path');
@@ -500,11 +501,29 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
           fileLinks.push({ name: safeName, path: webPath, type: ext, size: buffer.length });
           saved++;
         }
-      } catch { /* skip failed message */ }
+      } catch (e) { console.error('[saveEmailAttachments] message error:', (e as Error).message); }
     }
 
+    console.log('[saveEmailAttachments] done, saved:', saved);
     return { saved, files: fileLinks };
-  } catch {
+  } catch (e) {
+    console.error('[saveEmailAttachments] fatal error:', (e as Error).message);
     return { saved: 0 };
   }
+}
+
+// ─── GET LINKED EMAIL MAP ───
+
+export async function getLinkedEmailMap(): Promise<Record<string, string>> {
+  const quotes = await prisma.quote.findMany({
+    where: { orgId: ORG_ID, deletedAt: null, linkedEmails: { isEmpty: false } },
+    select: { number: true, linkedEmails: true },
+  });
+  const map: Record<string, string> = {};
+  for (const q of quotes) {
+    for (const emailId of (q.linkedEmails || [])) {
+      map[emailId] = q.number;
+    }
+  }
+  return map;
 }

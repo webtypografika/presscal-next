@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { GmailMessageMeta, GmailFullMessage, GmailLabel } from '@/lib/gmail';
 import { parseAddress, getInitials, avatarColor, timeAgo, formatDate, formatSize, attIconClass } from '@/lib/email-utils';
-import { createQuote, updateQuote, linkEmailToQuote } from '../quotes/actions';
+import { createQuote, updateQuote, linkEmailToQuote, getLinkedEmailMap } from '../quotes/actions';
 
 // ─── TYPES ───
 type Folder = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all';
@@ -35,6 +35,7 @@ export default function EmailClient() {
   const [nextPage, setNextPage] = useState<string | undefined>();
   const [creatingQuote, setCreatingQuote] = useState(false);
   const [matchedCustomer, setMatchedCustomer] = useState<any>(null);
+  const [linkedEmailMap, setLinkedEmailMap] = useState<Record<string, string>>({}); // emailId → quoteNumber
   const [customerLoading, setCustomerLoading] = useState(false);
 
   // ─── FETCH MESSAGES ───
@@ -88,6 +89,7 @@ export default function EmailClient() {
 
   // ─── INITIAL LOAD ───
   useEffect(() => { fetchMessages(folder); }, [folder, fetchMessages]);
+  useEffect(() => { getLinkedEmailMap().then(setLinkedEmailMap).catch(() => {}); }, []);
 
   // ─── SELECT EMAIL ───
   function handleSelect(id: string) {
@@ -387,7 +389,14 @@ export default function EmailClient() {
                       <span style={{ fontSize: '0.82rem', fontWeight: isUnread ? 800 : 600, color: isUnread ? 'var(--text)' : 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sender.name}</span>
                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>{timeAgo(email.date)}</span>
                     </div>
-                    <p style={{ fontSize: '0.78rem', fontWeight: isUnread ? 700 : 500, color: isUnread ? 'var(--text)' : 'var(--text-muted)', margin: '2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.subject || '(χωρις θεμα)'}</p>
+                    <p style={{ fontSize: '0.78rem', fontWeight: isUnread ? 700 : 500, color: isUnread ? 'var(--text)' : 'var(--text-muted)', margin: '2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {email.subject || '(χωρις θεμα)'}
+                      {linkedEmailMap[email.id] && (
+                        <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                          {linkedEmailMap[email.id]}
+                        </span>
+                      )}
+                    </p>
                     <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.snippet}</p>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
