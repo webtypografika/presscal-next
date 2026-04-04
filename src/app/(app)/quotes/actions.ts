@@ -482,6 +482,16 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
           const ext = safeName.split('.').pop()?.toLowerCase() || '';
           const webPath = `/storage/quotes/${quoteId}/${safeName}`;
 
+          // Generate base64 thumbnail for images
+          let thumbnail: string | null = null;
+          const imageExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
+          if (imageExts.has(ext)) {
+            const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+            const b64Data = buffer.toString('base64');
+            const candidate = `data:${mime};base64,${b64Data}`;
+            if (candidate.length <= 200_000) thumbnail = candidate;
+          }
+
           // Create FileLink record
           const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { orgId: true } });
           if (quote) {
@@ -494,6 +504,7 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
                 fileSize: buffer.length,
                 source: 'email',
                 quoteId,
+                thumbnail,
               },
             });
           }
