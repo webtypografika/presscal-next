@@ -275,6 +275,7 @@ export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
   const [STAGES, setSTAGES] = useState<StageConfig[]>(initialStages?.length ? initialStages : DEFAULT_STAGES);
   const [detailJob, setDetailJob] = useState<JobQuote | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const dragIdRef = useRef<string | null>(null);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [view, setView] = useState<'board' | 'list'>('board');
   const [editingStages, setEditingStages] = useState(false);
@@ -287,27 +288,31 @@ export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
 
   // ─── DRAG & DROP ───
   function handleDragStart(e: React.DragEvent, id: string) {
+    dragIdRef.current = id;
     setDragId(id);
+    e.dataTransfer.setData('text/plain', id);
     e.dataTransfer.effectAllowed = 'move';
   }
 
   async function handleDrop(e: React.DragEvent, stageId: string) {
     e.preventDefault();
-    if (!dragId) return;
-    const job = jobs.find(j => j.id === dragId);
+    const droppedId = dragIdRef.current || e.dataTransfer.getData('text/plain');
+    if (!droppedId) return;
+    const job = jobs.find(j => j.id === droppedId);
     if (!job) return;
 
     // Optimistic update
-    setJobs(prev => prev.map(j => j.id === dragId ? { ...j, jobStage: stageId, jobStageUpdatedAt: new Date() } as any : j));
+    setJobs(prev => prev.map(j => j.id === droppedId ? { ...j, jobStage: stageId, jobStageUpdatedAt: new Date() } as any : j));
+    dragIdRef.current = null;
     setDragId(null);
 
     try {
-      await updateJobStage(dragId, stageId);
+      await updateJobStage(droppedId, stageId);
       const stageLabel = STAGES.find(s => s.id === stageId)?.label || stageId;
       toast(`${job.number} → ${stageLabel}`);
     } catch {
       // Revert
-      setJobs(prev => prev.map(j => j.id === dragId ? job : j));
+      setJobs(prev => prev.map(j => j.id === droppedId ? job : j));
       toast('Σφάλμα ενημέρωσης', 'error');
     }
   }
