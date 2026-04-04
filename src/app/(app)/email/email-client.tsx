@@ -66,6 +66,12 @@ export default function EmailClient() {
     setDetailError(null);
     try {
       const res = await fetch(`/api/email/messages/${id}`);
+      if (!res.ok) {
+        const text = await res.text();
+        try { const j = JSON.parse(text); setDetailError(j.error || `HTTP ${res.status}`); } catch { setDetailError(`HTTP ${res.status}`); }
+        setDetail(null);
+        return;
+      }
       const data = await res.json();
       if (data.error) { setDetailError(data.error); setDetail(null); }
       else setDetail(data);
