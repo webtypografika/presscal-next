@@ -48,7 +48,8 @@ let tId = 0;
 
 // ─── JOB CARD ───
 function JobCard({ job, onDragStart, onDetail }: { job: JobQuote; onDragStart: (e: React.DragEvent, id: string) => void; onDetail: (j: JobQuote) => void }) {
-  const items = (job.items as any[]) || [];
+  const raw = job.items;
+  const items: any[] = Array.isArray(raw) ? raw : typeof raw === 'string' ? (() => { try { const p = JSON.parse(raw); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
   const itemCount = items.length;
   const desc = items.map((i: any) => i.name).filter(Boolean).slice(0, 2).join(', ');
   const overdue = isOverdue(job.deadline);
@@ -109,7 +110,8 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
   const [notes, setNotes] = useState(job.jobNotes || '');
   const [saving, setSaving] = useState(false);
 
-  const items = (job.items as any[]) || [];
+  const rawItems = job.items;
+  const items: any[] = Array.isArray(rawItems) ? rawItems : typeof rawItems === 'string' ? (() => { try { const p = JSON.parse(rawItems); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
   const currentStage = stageIndex(job.jobStage, STAGES);
 
   async function handleSave() {
