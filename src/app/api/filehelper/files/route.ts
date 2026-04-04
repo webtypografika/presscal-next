@@ -21,7 +21,29 @@ export async function GET(req: NextRequest) {
     take: 100
   })
 
-  return NextResponse.json(links)
+  // Include folder path when querying by quoteId
+  let folderPath: string | null = null
+  if (quoteId) {
+    const quote = await prisma.quote.findUnique({
+      where: { id: quoteId },
+      select: { jobFolderPath: true, number: true, title: true, company: { select: { name: true, folderPath: true } } },
+    })
+    if (quote?.jobFolderPath) {
+      folderPath = quote.jobFolderPath
+    } else {
+      // Compute on the fly from org settings
+      const { buildJobFolderPath } = await import('@/lib/job-folder')
+      folderPath = buildJobFolderPath({
+        globalRoot: auth.org.jobFolderRoot || null,
+        companyFolderPath: quote?.company?.folderPath || null,
+        companyName: quote?.company?.name || 'Πελάτης',
+        quoteNumber: quote?.number || '',
+        quoteTitle: quote?.title || null,
+      })
+    }
+  }
+
+  return NextResponse.json({ files: links, folderPath })
 }
 
 // POST /api/filehelper/files/link — Create a file link
