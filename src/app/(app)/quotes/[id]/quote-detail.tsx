@@ -683,6 +683,65 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         </button>
       </div>
 
+      {/* ═══ FILES BAR ═══ */}
+      {(quote as any).fileLinks?.length > 0 && (
+        <div style={{
+          display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center',
+          padding: '8px 12px', marginBottom: 8, borderRadius: 10,
+          background: 'rgba(245,130,32,0.04)', border: '1px solid rgba(245,130,32,0.15)',
+        }}>
+          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f58220', display: 'flex', alignItems: 'center', gap: 4, marginRight: 4 }}>
+            <i className="fas fa-folder-open" style={{ fontSize: '0.6rem' }} /> Αρχεία
+          </span>
+          {((quote as any).fileLinks as any[]).map((fl: any) => (
+            <span key={fl.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
+              <a
+                href={fl.filePath}
+                target="_blank"
+                title="Preview"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '4px 8px', borderRadius: '6px 0 0 6px',
+                  border: '1px solid var(--border)', borderRight: 'none',
+                  background: 'rgba(255,255,255,0.03)', fontSize: '0.72rem', color: 'var(--text-dim)',
+                  textDecoration: 'none', cursor: 'pointer',
+                }}
+              >
+                <i className={`fas ${attIcon(fl.fileName)}`} style={{ fontSize: '0.6rem' }} />
+                <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fl.fileName}</span>
+              </a>
+              <a
+                href={fl.filePath}
+                download={fl.fileName}
+                title="Download"
+                style={{
+                  display: 'flex', alignItems: 'center',
+                  padding: '4px 6px',
+                  border: '1px solid var(--border)', borderRight: 'none',
+                  background: 'rgba(255,255,255,0.03)', fontSize: '0.6rem', color: 'var(--text-muted)',
+                  textDecoration: 'none', cursor: 'pointer',
+                }}
+              >
+                <i className="fas fa-download" />
+              </a>
+              <a
+                href={`presscal-fh://open-file?path=${encodeURIComponent(fl.filePath)}&quoteId=${quote.id}`}
+                title="Open in File Helper"
+                style={{
+                  display: 'flex', alignItems: 'center',
+                  padding: '4px 6px', borderRadius: '0 6px 6px 0',
+                  border: '1px solid var(--border)',
+                  background: 'rgba(255,255,255,0.03)', fontSize: '0.6rem', color: '#f58220',
+                  textDecoration: 'none', cursor: 'pointer',
+                }}
+              >
+                <i className="fas fa-external-link-alt" />
+              </a>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* ═══ ITEMS TABLE ═══ */}
       <div style={{
         borderRadius: 10, border: '1px solid var(--border)',

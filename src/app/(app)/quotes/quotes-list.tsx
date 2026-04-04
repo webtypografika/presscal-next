@@ -5,7 +5,7 @@ import { fuzzyMatch } from '@/lib/search';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer } from '@/generated/prisma/client';
-import { createQuote, updateQuote, updateQuoteStatus, deleteQuote, createCustomer, createCompanyQuick, createCompanyFromElorus, linkEmailToQuote } from './actions';
+import { createQuote, updateQuote, updateQuoteStatus, deleteQuote, createCustomer, createCompanyQuick, createCompanyFromElorus, linkEmailToQuote, saveEmailAttachments } from './actions';
 
 type QuoteWithCustomer = Quote & { customer: Customer | null };
 
@@ -885,8 +885,9 @@ function NewQuoteFromEmail({ customers, onClose, onCreated, toast }: {
         }),
       ]);
 
-      // 3. Link email
+      // 3. Link email + save attachments to storage
       await linkEmailToQuote(q.id, msg.id, msg.threadId);
+      saveEmailAttachments(q.id, [msg.id]); // fire-and-forget
 
       // 4. If AI parsed items, save them to the quote
       if (aiRes?.success && aiRes.items?.length > 0) {

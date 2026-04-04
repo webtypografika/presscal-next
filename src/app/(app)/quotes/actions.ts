@@ -44,6 +44,9 @@ export async function getQuote(id: string) {
         include: { contact: true },
       },
       customer: true,
+      fileLinks: {
+        orderBy: { createdAt: 'desc' },
+      },
     },
   });
 }
@@ -428,5 +431,79 @@ export async function updateCustomer(id: string, data: Record<string, unknown>) 
     const customer = await prisma.customer.update({ where: { id }, data: data as any });
     revalidatePath('/quotes');
     return customer;
+  }
+}
+
+// ─── SAVE EMAIL ATTACHMENTS TO STORAGE ───
+
+export async function saveEmailAttachments(quoteId: string, messageIds: string[]) {
+  try {
+    const { getServerSession } = await import('next-auth');
+    const { authOptions } = await import('@/lib/auth');
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as Record<string, unknown>)?.id as string;
+    if (!userId) return { saved: 0 };
+
+    const { getGmailToken, getMessage, getAttachment } = await import('@/lib/gmail');
+    const token = await getGmailToken(userId);
+    if (!token) return { saved: 0 };
+
+    const fs = await import('fs/promises');
+    const path = await import('path');
+
+    const dir = path.join(process.cwd(), 'public', 'storage', 'quotes', quoteId);
+    await fs.mkdir(dir, { recursive: true });
+
+    let saved = 0;
+    const fileLinks: { name: string; path: string; type: string; size: number }[] = [];
+
+    for (const msgId of messageIds) {
+      try {
+        const msg = await getMessage(token, msgId);
+        if (!msg.attachments?.length) continue;
+
+        for (const att of msg.attachments) {
+          if (!att.id || !att.filename) continue;
+
+          // Sanitize filename
+          const safeName = att.filename.replace(/[<>:"|?*]/g, '_');
+          const filePath = path.join(dir, safeName);
+
+          // Skip if already exists
+          try { await fs.access(filePath); continue; } catch { /* doesn't exist, good */ }
+
+          // Download from Gmail
+          const b64 = await getAttachment(token, msgId, att.id);
+          const buffer = Buffer.from(b64, 'base64');
+          await fs.writeFile(filePath, buffer);
+
+          const ext = safeName.split('.').pop()?.toLowerCase() || '';
+          const webPath = `/storage/quotes/${quoteId}/${safeName}`;
+
+          // Create FileLink record
+          const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { orgId: true } });
+          if (quote) {
+            await prisma.fileLink.create({
+              data: {
+                orgId: quote.orgId,
+                fileName: safeName,
+                filePath: webPath,
+                fileType: ext,
+                fileSize: buffer.length,
+                source: 'email',
+                quoteId,
+              },
+            });
+          }
+
+          fileLinks.push({ name: safeName, path: webPath, type: ext, size: buffer.length });
+          saved++;
+        }
+      } catch { /* skip failed message */ }
+    }
+
+    return { saved, files: fileLinks };
+  } catch {
+    return { saved: 0 };
   }
 }
