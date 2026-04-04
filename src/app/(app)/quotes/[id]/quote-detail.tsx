@@ -385,6 +385,11 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             pricePerUnit,
             profitAmount,
             sheets: totalSheets,
+            machineSheets: r.totalMachineSheets ?? 0,
+            ups: r.ups ?? 0,
+            cols: r.cols ?? 0,
+            rows: r.rows ?? 0,
+            paperCutsPerStock: r.printDetail?.costBreakdown?.paperCutsPerStock ?? 1,
           },
         };
       }

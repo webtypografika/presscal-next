@@ -191,16 +191,99 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
           })}
         </div>
 
-        {/* Items */}
+        {/* Items with technical specs */}
         {items.length > 0 && (
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: '0.05em' }}>ΠΡΟΙΟΝΤΑ</div>
-            {items.map((item: any, i: number) => (
-              <div key={i} style={{ fontSize: '0.82rem', padding: '5px 0', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8 }}>
-                <span style={{ flex: 1 }}>{item.name || '—'}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>×{item.qty}</span>
-              </div>
-            ))}
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, letterSpacing: '0.05em' }}>ΠΡΟΙΟΝΤΑ</div>
+            {items.map((item: any, i: number) => {
+              const cd = item.calcData;
+              return (
+                <div key={i} style={{
+                  padding: '12px 14px', marginBottom: 8, borderRadius: 10,
+                  background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)',
+                }}>
+                  {/* Name + qty */}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: cd ? 10 : 0 }}>
+                    <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 700 }}>{item.name || '—'}</span>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent)' }}>×{item.qty}</span>
+                  </div>
+
+                  {cd && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      {/* Εκτύπωση */}
+                      <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.1)' }}>
+                        <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--blue)', letterSpacing: '0.05em', marginBottom: 6 }}>ΕΚΤΥΠΩΣΗ</div>
+                        {cd.machineName && (
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
+                            <i className="fas fa-print" style={{ fontSize: '0.55rem', color: 'var(--accent)', marginRight: 4 }} />{cd.machineName}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
+                          {cd.sides && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{cd.sides === 2 ? '2 όψεις' : '1 όψη'}</span>
+                          )}
+                          {(cd.offsetFrontCmyk != null || cd.colorMode) && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--blue)', fontWeight: 600 }}>
+                              {cd.colorMode === 'bw' ? 'B/W' : cd.colorMode || `${cd.offsetFrontCmyk || 0}+${cd.offsetFrontPms || 0}/${cd.offsetBackCmyk || 0}+${cd.offsetBackPms || 0}`}
+                            </span>
+                          )}
+                          {cd.offsetOilVarnish && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Βερνίκι</span>
+                          )}
+                        </div>
+                        {(cd.machineSheets > 0 || cd.sheets > 0) && (
+                          <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--blue)', marginTop: 6 }}>
+                            {cd.machineSheets > 0 ? `${cd.machineSheets} τυπ. φύλλα` : `${cd.sheets} φύλλα`}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Χαρτί & Μοντάζ */}
+                      <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(20,184,166,0.06)', border: '1px solid rgba(20,184,166,0.1)' }}>
+                        <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--teal)', letterSpacing: '0.05em', marginBottom: 6 }}>ΧΑΡΤΙ & ΜΟΝΤΑΖ</div>
+                        {cd.paperName && (
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
+                            <i className="fas fa-scroll" style={{ fontSize: '0.55rem', color: 'var(--teal)', marginRight: 4 }} />{cd.paperName}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
+                          {cd.width && cd.height && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>τελικό {cd.width}×{cd.height}mm</span>
+                          )}
+                          {cd.machineSheetW && cd.machineSheetH && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>φύλλο {cd.machineSheetW}×{cd.machineSheetH}mm</span>
+                          )}
+                          {cd.impositionMode && (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--violet)', fontWeight: 600 }}>
+                              {cd.impositionMode}{cd.ups ? ` ${cd.ups}-up` : ''}{cd.cols && cd.rows ? ` (${cd.cols}×${cd.rows})` : ''}
+                            </span>
+                          )}
+                        </div>
+                        {cd.sheets > 0 && (
+                          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--teal)' }}>
+                              {cd.sheets} φύλλα αποθ.
+                            </span>
+                            {cd.paperCutsPerStock > 1 && (
+                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <i className="fas fa-cut" style={{ fontSize: '0.5rem' }} /> {cd.paperCutsPerStock} κοπές/φύλλο
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {item.linkedFile && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 8, padding: '5px 8px', borderRadius: 6, background: 'rgba(245,130,32,0.06)' }}>
+                      <i className="fas fa-paperclip" style={{ fontSize: '0.55rem', color: '#f58220' }} />
+                      <span style={{ fontSize: '0.72rem', color: '#f58220', fontWeight: 600 }}>{item.linkedFile.name}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -269,8 +352,51 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
           </div>
         </div>
 
-        {/* Save */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          {(job as any).elorusInvoiceUrl ? (
+            <a href={(job as any).elorusInvoiceUrl} target="_blank" rel="noreferrer" style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '7px 14px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
+              background: 'color-mix(in srgb, var(--success) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--success) 25%, transparent)',
+              color: 'var(--success)', textDecoration: 'none',
+            }}>
+              <i className="fas fa-check" style={{ fontSize: '0.55rem' }} /> Τιμολόγιο
+            </a>
+          ) : (
+            <button onClick={() => router.push(`/quotes/${job.id}`)} style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '7px 14px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
+              background: 'color-mix(in srgb, #818cf8 12%, transparent)',
+              border: '1px solid color-mix(in srgb, #818cf8 25%, transparent)',
+              color: '#a5b4fc', cursor: 'pointer',
+            }}>
+              <i className="fas fa-file-invoice-dollar" style={{ fontSize: '0.55rem' }} /> Τιμολόγηση
+            </button>
+          )}
+          {(job as any).courierVoucherId ? (
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '7px 14px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
+              background: 'color-mix(in srgb, #10b981 12%, transparent)',
+              border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
+              color: '#10b981',
+            }}>
+              <i className="fas fa-truck" style={{ fontSize: '0.55rem' }} /> {(job as any).courierVoucherId}
+            </span>
+          ) : (
+            <button onClick={() => router.push(`/quotes/${job.id}`)} style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '7px 14px', borderRadius: 8, fontSize: '0.75rem', fontWeight: 600,
+              background: 'color-mix(in srgb, #10b981 12%, transparent)',
+              border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
+              color: '#10b981', cursor: 'pointer',
+            }}>
+              <i className="fas fa-truck" style={{ fontSize: '0.55rem' }} /> Voucher
+            </button>
+          )}
+          <div style={{ flex: 1 }} />
           <button onClick={handleSave} disabled={saving} style={{
             padding: '8px 20px', borderRadius: 8, border: 'none',
             background: 'var(--accent)', color: '#fff', fontSize: '0.82rem', fontWeight: 700,

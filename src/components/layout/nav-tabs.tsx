@@ -11,7 +11,6 @@ const TABS = [
   { href: '/email', icon: 'fa-envelope', label: 'Emails' },
   { href: '/jobs', icon: 'fa-tasks', label: 'Εργασιες' },
   { href: '/calendar', icon: 'fa-calendar-alt', label: 'Ημερολογιο' },
-  { href: '/folders', icon: 'fa-folder-open', label: 'Folders' },
 ];
 
 const DOCK_ITEMS = [
@@ -25,9 +24,9 @@ export function NavTabs() {
   const pathname = usePathname();
 
   return (
-    <div style={{ width: '100%', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', height: 46, background: 'rgba(10,18,36,0.85)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)', borderRadius: 14, padding: '0 12px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', marginBottom: 16 }}>
+    <div style={{ width: '100%', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', height: 46, background: 'transparent', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)', borderRadius: 14, padding: '0 12px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', marginBottom: 16 }}>
       {/* Main tabs — left */}
-      <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 3 }}>
+      <div style={{ display: 'flex', gap: 2, borderRadius: 10, padding: 3 }}>
         {TABS.map((tab) => {
           const isActive = tab.href === '/' ? pathname === '/' : pathname.startsWith(tab.href);
           return (
@@ -37,7 +36,7 @@ export function NavTabs() {
               style={{
                 padding: '7px 16px',
                 borderRadius: 8,
-                fontSize: '1rem',
+                fontSize: '0.82rem',
                 fontWeight: 600,
                 color: isActive ? 'var(--accent)' : 'var(--text-muted)',
                 background: isActive ? 'rgba(245,130,32,0.12)' : 'transparent',

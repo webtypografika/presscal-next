@@ -49,37 +49,28 @@ export function Topbar() {
         <img src="/logo-presscal.png" alt="PressCal" style={{ height: 64 }} />
       </div>
 
-      {/* Center: Date + Weather + Forecast — exact D-hybrid styles */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {/* Date box */}
-        <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: 10, padding: '6px 14px', display: 'flex', alignItems: 'baseline', gap: 6, fontSize: '0.88rem', color: 'var(--text-dim)' }}>
-          <span style={{ fontWeight: 600, fontSize: '0.78rem', color: 'var(--text-muted)' }}>{DAYS_GR[now.getDay()]}</span>
-          <span style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--accent)' }}>{now.getDate()}</span>
-          <span>{MONTHS_GR[now.getMonth()]} {now.getFullYear()}</span>
+      {/* Center: Date + Weather compact */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: 10, padding: '4px 10px' }}>
+        {/* Today */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 10, borderRight: '1px solid var(--glass-border)' }}>
+          <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)' }}>{DAYS_GR[now.getDay()]}</span>
+          <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--accent)' }}>{now.getDate()}</span>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>{MONTHS_GR[now.getMonth()]}</span>
+          {weather && (
+            <>
+              <span style={{ fontSize: '1rem' }}>{weather.icon}</span>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-dim)' }}>{weather.temp}°</span>
+            </>
+          )}
         </div>
-
-        {/* Today weather */}
-        {weather && (
-          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: 10, padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: 'var(--text-dim)' }}>
-            <span style={{ fontSize: '1.2rem' }}>{weather.icon}</span>
-            <span style={{ fontWeight: 700 }}>{weather.temp}°C</span>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}><i className="fas fa-droplet" style={{ fontSize: '0.6rem', color: 'var(--blue)' }} /> {weather.humidity}%</span>
+        {/* Forecast inline */}
+        {weather?.forecast.map(f => (
+          <div key={f.day} style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '0 6px', borderRight: '1px solid var(--glass-border)' }}>
+            <span style={{ fontSize: '0.55rem', fontWeight: 700, color: 'var(--text-muted)' }}>{f.day}</span>
+            <span style={{ fontSize: '0.78rem' }}>{f.icon}</span>
+            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-dim)' }}>{f.temp}°</span>
           </div>
-        )}
-
-        {/* Forecast */}
-        {weather && weather.forecast.length > 0 && (
-          <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: 10, padding: '6px 14px', display: 'flex', gap: 8 }}>
-            {weather.forecast.map(f => (
-              <div key={f.day} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-                <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' as const }}>{f.day}</span>
-                <span style={{ fontSize: '0.9rem' }}>{f.icon}</span>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-dim)' }}>{f.temp}°</span>
-                <span style={{ fontSize: '0.52rem', color: 'var(--text-muted)' }}><i className="fas fa-droplet" style={{ fontSize: '0.45rem', color: 'var(--blue)' }} /> {f.hum}%</span>
-              </div>
-            ))}
-          </div>
-        )}
+        ))}
       </div>
 
       {/* Right: icons — exact D-hybrid styles */}

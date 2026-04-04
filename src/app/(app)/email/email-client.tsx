@@ -389,13 +389,13 @@ export default function EmailClient() {
                       <span style={{ fontSize: '0.82rem', fontWeight: isUnread ? 800 : 600, color: isUnread ? 'var(--text)' : 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sender.name}</span>
                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>{timeAgo(email.date)}</span>
                     </div>
-                    <p style={{ fontSize: '0.78rem', fontWeight: isUnread ? 700 : 500, color: isUnread ? 'var(--text)' : 'var(--text-muted)', margin: '2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {email.subject || '(χωρις θεμα)'}
+                    <p style={{ fontSize: '0.78rem', fontWeight: isUnread ? 700 : 500, color: isUnread ? 'var(--text)' : 'var(--text-muted)', margin: '2px 0', display: 'flex', alignItems: 'center', gap: 5 }}>
                       {linkedEmailMap[email.id] && (
                         <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
                           {linkedEmailMap[email.id]}
                         </span>
                       )}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.subject || '(χωρις θεμα)'}</span>
                     </p>
                     <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.snippet}</p>
                   </div>
