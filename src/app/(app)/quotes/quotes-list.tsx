@@ -887,7 +887,7 @@ function NewQuoteFromEmail({ customers, onClose, onCreated, toast }: {
 
       // 3. Link email + save attachments to storage
       await linkEmailToQuote(q.id, msg.id, msg.threadId);
-      saveEmailAttachments(q.id, [msg.id]); // fire-and-forget
+      await saveEmailAttachments(q.id, [msg.id]);
 
       // 4. If AI parsed items, save them to the quote
       if (aiRes?.success && aiRes.items?.length > 0) {

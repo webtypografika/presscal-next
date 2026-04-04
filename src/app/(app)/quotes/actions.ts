@@ -438,14 +438,15 @@ export async function updateCustomer(id: string, data: Record<string, unknown>) 
 
 export async function saveEmailAttachments(quoteId: string, messageIds: string[]) {
   try {
-    const { getServerSession } = await import('next-auth');
-    const { authOptions } = await import('@/lib/auth');
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as Record<string, unknown>)?.id as string;
-    if (!userId) return { saved: 0 };
+    // Find a user with Google OAuth in this org
+    const account = await prisma.account.findFirst({
+      where: { provider: 'google', user: { orgId: ORG_ID } },
+      select: { userId: true },
+    });
+    if (!account) return { saved: 0 };
 
     const { getGmailToken, getMessage, getAttachment } = await import('@/lib/gmail');
-    const token = await getGmailToken(userId);
+    const token = await getGmailToken(account.userId);
     if (!token) return { saved: 0 };
 
     const fs = await import('fs/promises');
