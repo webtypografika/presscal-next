@@ -59,6 +59,17 @@ export async function POST(req: NextRequest) {
     const webPath = `/storage/${subDir}/${filename}`
     const fileType = ext.replace('.', '')
 
+    // Generate base64 thumbnail for images
+    let thumbnail: string | null = null
+    const imageExts = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'])
+    if (imageExts.has(ext)) {
+      const b64 = Buffer.from(bytes).toString('base64')
+      const mime = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg'
+      thumbnail = `data:${mime};base64,${b64}`
+      // Cap at ~200KB to avoid bloating the DB
+      if (thumbnail.length > 200_000) thumbnail = null
+    }
+
     // Create FileLink record
     const fileLink = await (prisma as any).fileLink.create({
       data: {
@@ -71,6 +82,7 @@ export async function POST(req: NextRequest) {
         quoteId: target === 'quote' ? targetId : (quoteId || null),
         customerId: target === 'customer' ? targetId : null,
         notes: notes || null,
+        thumbnail,
       }
     })
 
