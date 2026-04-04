@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer } from '@/generated/prisma/client';
@@ -273,6 +273,10 @@ export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
   const router = useRouter();
   const [jobs, setJobs] = useState(initialJobs);
   const [STAGES, setSTAGES] = useState<StageConfig[]>(initialStages?.length ? initialStages : DEFAULT_STAGES);
+
+  // Sync server data when it changes (after revalidatePath)
+  useEffect(() => { setJobs(initialJobs); }, [initialJobs]);
+  useEffect(() => { if (initialStages?.length) setSTAGES(initialStages); }, [initialStages]);
   const [detailJob, setDetailJob] = useState<JobQuote | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const dragIdRef = useRef<string | null>(null);
