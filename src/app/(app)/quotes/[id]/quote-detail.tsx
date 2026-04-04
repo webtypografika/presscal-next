@@ -684,30 +684,48 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       </div>
 
       {/* ═══ FILES BAR ═══ */}
-      {(quote as any).fileLinks?.length > 0 && (
-        <div style={{
-          display: 'flex', gap: 8, alignItems: 'center',
-          padding: '8px 14px', marginBottom: 8, borderRadius: 10,
-          background: 'rgba(245,130,32,0.04)', border: '1px solid rgba(245,130,32,0.15)',
-        }}>
-          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f58220' }}>
-            <i className="fas fa-paperclip" style={{ fontSize: '0.6rem', marginRight: 4 }} />
-            {((quote as any).fileLinks as any[]).length} αρχεία
-          </span>
-          <a
-            href={`presscal-fh://download-to-folder?quoteId=${quote.id}`}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 14px', borderRadius: 8,
-              background: '#f58220', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
-              textDecoration: 'none', cursor: 'pointer',
-            }}
-          >
-            <i className="fas fa-folder-open" style={{ fontSize: '0.6rem' }} />
-            Άνοιγμα στο Helper
-          </a>
-        </div>
-      )}
+      {(quote as any).fileLinks?.length > 0 && (() => {
+        const hasCompanyFolder = !!(selectedCompany as any)?.folderPath;
+        return (
+          <div style={{
+            display: 'flex', gap: 8, alignItems: 'center',
+            padding: '8px 14px', marginBottom: 8, borderRadius: 10,
+            background: 'rgba(245,130,32,0.04)', border: '1px solid rgba(245,130,32,0.15)',
+          }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f58220' }}>
+              <i className="fas fa-paperclip" style={{ fontSize: '0.6rem', marginRight: 4 }} />
+              {((quote as any).fileLinks as any[]).length} αρχεία
+            </span>
+            <a
+              href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=global`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 14px', borderRadius: 8,
+                background: '#f58220', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
+                textDecoration: 'none', cursor: 'pointer',
+              }}
+            >
+              <i className="fas fa-folder-open" style={{ fontSize: '0.6rem' }} />
+              Φάκελος Εργασιών
+            </a>
+            {hasCompanyFolder && (
+              <a
+                href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 14px', borderRadius: 8,
+                  border: '1px solid #f58220', background: 'transparent',
+                  color: '#f58220', fontSize: '0.75rem', fontWeight: 700,
+                  textDecoration: 'none', cursor: 'pointer',
+                }}
+              >
+                <i className="fas fa-user-folder" style={{ fontSize: '0.6rem' }} />
+                Φάκελος Πελάτη
+              </a>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ═══ ITEMS TABLE ═══ */}
       <div style={{

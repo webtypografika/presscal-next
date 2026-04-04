@@ -23,22 +23,21 @@ export async function GET(req: NextRequest) {
 
   // Include folder path when querying by quoteId
   let folderPath: string | null = null
+  const target = params.get('target') // 'global' | 'customer'
   if (quoteId) {
     const quote = await prisma.quote.findUnique({
       where: { id: quoteId },
-      select: { jobFolderPath: true, number: true, title: true, company: { select: { name: true, folderPath: true } } },
+      select: { number: true, title: true, company: { select: { name: true, folderPath: true } } },
     })
-    if (quote?.jobFolderPath) {
-      folderPath = quote.jobFolderPath
-    } else {
-      // Compute on the fly from org settings
+    if (quote) {
       const { buildJobFolderPath } = await import('@/lib/job-folder')
+      const useCustomerFolder = target === 'customer' && quote.company?.folderPath
       folderPath = buildJobFolderPath({
         globalRoot: auth.org.jobFolderRoot || null,
-        companyFolderPath: quote?.company?.folderPath || null,
-        companyName: quote?.company?.name || 'Πελάτης',
-        quoteNumber: quote?.number || '',
-        quoteTitle: quote?.title || null,
+        companyFolderPath: useCustomerFolder ? quote.company!.folderPath : null,
+        companyName: quote.company?.name || 'Πελάτης',
+        quoteNumber: quote.number,
+        quoteTitle: quote.title,
       })
     }
   }
