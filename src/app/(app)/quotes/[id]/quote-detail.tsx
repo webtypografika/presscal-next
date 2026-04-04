@@ -888,9 +888,9 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                       background: 'rgba(255,255,255,0.02)',
                     }}>
                       {/* Thumbnail / icon */}
-                      <a href={fl.filePath} target="_blank" style={{ display: 'block', height: 80, background: 'rgba(0,0,0,0.15)', position: 'relative', overflow: 'hidden' }}>
-                        {isImage ? (
-                          <img src={fl.filePath} alt={fl.fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <a href={`presscal-fh://open-file?path=${encodeURIComponent(fl.filePath)}&quoteId=${quote.id}`} style={{ display: 'block', height: 80, background: 'rgba(0,0,0,0.15)', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
+                        {fl.thumbnail ? (
+                          <img src={fl.thumbnail} alt={fl.fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                             <i className={`fas ${attIcon(fl.fileName)}`} style={{ fontSize: '1.5rem', color: '#f58220', opacity: 0.6 }} />
