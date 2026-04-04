@@ -141,6 +141,7 @@ model Org {
   products         Product[]
   fileLinks        FileLink[]
   plateOrders      PlateOrder[]
+  calendarEvents   CalendarEvent[]
 }
 
 // ─── MACHINES (Digital / Offset / Plotter) ───
@@ -465,6 +466,7 @@ model Company {
   companyContacts CompanyContact[]
   quotes          Quote[]
   fileLinks       FileLink[]
+  calendarEvents  CalendarEvent[]
 
   deletedAt DateTime?
   createdAt DateTime @default(now())
@@ -493,6 +495,7 @@ model Contact {
   // Relations
   companyContacts CompanyContact[]
   quoteRecipients QuoteRecipient[]
+  calendarEvents  CalendarEvent[]
 
   deletedAt DateTime?
   createdAt DateTime @default(now())
@@ -610,6 +613,7 @@ model Quote {
 
   fileLinks       FileLink[]
   quoteRecipients QuoteRecipient[]
+  calendarEvents  CalendarEvent[]
 
   @@index([orgId, status])
   @@index([orgId, companyId])
@@ -661,6 +665,39 @@ model FileLink {
   updatedAt DateTime @updatedAt
 
   @@index([orgId])
+  @@index([quoteId])
+  @@index([companyId])
+}
+
+// ─── CALENDAR EVENTS ───
+model CalendarEvent {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  title     String
+  type      String   @default("appointment")  // 'appointment' | 'task' | 'deadline' | 'reminder'
+  startAt   DateTime
+  endAt     DateTime?
+  allDay    Boolean  @default(false)
+  color     String?
+
+  // Links (optional)
+  quoteId   String?
+  quote     Quote?   @relation(fields: [quoteId], references: [id])
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
+
+  notes     String   @default("")
+  completed Boolean  @default(false)
+
+  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId, startAt])
   @@index([quoteId])
   @@index([companyId])
 }
