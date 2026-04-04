@@ -327,9 +327,9 @@ export function SettingsShell({ org }: { org: Org }) {
             </Field>
           </Section>
 
-          <Section icon="fa-folder-open" iconColor="#f58220" title="FILE HELPER — DESKTOP APP">
+          <Section icon="fa-folder-open" iconColor="#f58220" title="PRESSKIT — DESKTOP APP">
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
-              API key για σύνδεση με την desktop εφαρμογή File Helper (preview, preflight, διαχείριση αρχείων).
+              API key για σύνδεση με την desktop εφαρμογή PressKit (preview, preflight, διαχείριση αρχείων).
             </p>
             <Field label="API Key">
               <div style={{ display: 'flex', gap: 6 }}>
@@ -369,7 +369,7 @@ export function SettingsShell({ org }: { org: Org }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} />
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  Βάλε αυτό το key στο File Helper app: Settings → PressCal → API Key
+                  Βάλε αυτό το key στο PressKit app: Settings → PressCal → API Key
                 </span>
               </div>
             )}

@@ -905,7 +905,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                           }}>
                             <i className="fas fa-download" />
                           </a>
-                          <a href={`presscal-fh://open-file?path=${encodeURIComponent(fl.filePath)}&quoteId=${quote.id}`} title="Helper" style={{
+                          <a href={`presscal-fh://open-file?path=${encodeURIComponent(fl.filePath)}&quoteId=${quote.id}`} title="PressKit" style={{
                             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             padding: '3px', borderRadius: 4, border: '1px solid var(--border)',
                             color: '#f58220', fontSize: '0.6rem', textDecoration: 'none',
@@ -1503,7 +1503,7 @@ function EmailPanel({ quoteId, linkedEmails, threadId, customerEmail, onEmailLin
                 </button>
                 <a
                   href={`presscal-fh://attachment?messageId=${att.emailId}&attId=${att.id}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}&filename=${encodeURIComponent(att.filename)}&quoteId=${quoteId}`}
-                  title="Open in File Helper"
+                  title="Open in PressKit"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 5,
                     padding: '3px 8px', borderRadius: '0 5px 5px 0',
@@ -1515,7 +1515,7 @@ function EmailPanel({ quoteId, linkedEmails, threadId, customerEmail, onEmailLin
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent'; }}
                 >
                   <i className="fas fa-external-link-alt" style={{ fontSize: '0.55rem' }} />
-                  <span style={{ fontSize: '1rem' }}>Helper</span>
+                  <span style={{ fontSize: '1rem' }}>PressKit</span>
                 </a>
               </span>
             ))}
@@ -1592,7 +1592,7 @@ function EmailPanel({ quoteId, linkedEmails, threadId, customerEmail, onEmailLin
                         <a
                           href={`presscal-fh://attachment?messageId=${em.id}&attId=${att.id}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}&filename=${encodeURIComponent(att.filename)}&quoteId=${quoteId}`}
                           onClick={e => e.stopPropagation()}
-                          title="Open in File Helper"
+                          title="Open in PressKit"
                           style={{
                             display: 'flex', alignItems: 'center', gap: 5,
                             padding: '4px 10px', borderRadius: '0 6px 6px 0',
@@ -1604,7 +1604,7 @@ function EmailPanel({ quoteId, linkedEmails, threadId, customerEmail, onEmailLin
                           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; }}
                         >
                           <i className="fas fa-external-link-alt" style={{ fontSize: '0.55rem' }} />
-                          <span style={{ fontSize: '1rem' }}>Helper</span>
+                          <span style={{ fontSize: '1rem' }}>PressKit</span>
                         </a>
                       </span>
                     ))}
@@ -2574,11 +2574,11 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
                 <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.65rem' }} />Φάκελος Πελάτη
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input value={formFolder} onChange={e => setFormFolder(e.target.value)} placeholder="Paste path ή επιλογή μέσω Helper →" style={{ ...inp, flex: 1, fontFamily: 'monospace', fontSize: '0.8rem' }} />
+                <input value={formFolder} onChange={e => setFormFolder(e.target.value)} placeholder="Paste path ή επιλογή μέσω PressKit →" style={{ ...inp, flex: 1, fontFamily: 'monospace', fontSize: '0.8rem' }} />
                 {mode === 'edit' && editId && (
                   <a
                     href={`presscal-fh://pick-folder?customerId=${editId}`}
-                    title="Επιλογή μέσω File Helper"
+                    title="Επιλογή μέσω PressKit"
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       padding: '7px 10px', borderRadius: 6,

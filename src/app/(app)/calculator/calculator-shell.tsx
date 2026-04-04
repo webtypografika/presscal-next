@@ -1080,7 +1080,7 @@ export default function CalculatorShell() {
               color: '#f58220', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
             }}
           >
-            <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} /> Άνοιγμα στο Helper
+            <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} /> Άνοιγμα στο PressKit
           </a>
         </div>
       )}
