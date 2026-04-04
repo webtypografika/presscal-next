@@ -168,11 +168,28 @@ export async function updateQuoteStatus(id: string, status: string) {
 
   // Auto-promote to first job stage when approved
   if (status === 'approved') {
-    const org = await prisma.org.findUnique({ where: { id: ORG_ID }, select: { jobStages: true } });
+    const org = await prisma.org.findUnique({ where: { id: ORG_ID }, select: { jobStages: true, jobFolderRoot: true } });
     const stages = (org?.jobStages as any[]) || [];
     const firstStage = stages[0]?.id || 'files';
     data.jobStage = firstStage;
     data.jobStageUpdatedAt = new Date();
+    data.approvedAt = new Date();
+
+    // Compute job folder path
+    const quote = await prisma.quote.findUnique({
+      where: { id },
+      select: { number: true, title: true, company: { select: { name: true, folderPath: true } } },
+    });
+    if (quote) {
+      const { buildJobFolderPath } = await import('@/lib/job-folder');
+      data.jobFolderPath = buildJobFolderPath({
+        globalRoot: org?.jobFolderRoot || null,
+        companyFolderPath: quote.company?.folderPath || null,
+        companyName: quote.company?.name || 'Πελάτης',
+        quoteNumber: quote.number,
+        quoteTitle: quote.title,
+      });
+    }
   }
 
   await prisma.quote.update({ where: { id }, data });

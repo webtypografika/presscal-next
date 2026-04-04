@@ -493,6 +493,21 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 Φάκελος
               </a>
             )}
+            {(quote as any).jobFolderPath && (
+              <a
+                href={`presscal-fh://open-folder?path=${encodeURIComponent((quote as any).jobFolderPath)}`}
+                title={(quote as any).jobFolderPath}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  color: 'var(--teal)', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600,
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                <i className="fas fa-briefcase" style={{ fontSize: '0.65rem' }} />
+                Εργασία
+              </a>
+            )}
           </div>
 
           {/* Customer picker dropdown */}

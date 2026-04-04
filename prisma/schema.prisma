@@ -111,6 +111,9 @@ model Org {
   // Job stages (customizable)
   jobStages    Json?    // [{id: string, label: string, icon: string, color: string}]
 
+  // Job folder settings
+  jobFolderRoot String?  // Global root path e.g. "D:\\Εργασίες"
+
   // Courier integration
   courierProvider      String?  // 'nexday' (future: 'acs', 'speedex' etc.)
   courierApiKey        String?  // Bearer token
@@ -565,6 +568,7 @@ model Quote {
   // Job board
   jobStage          String?   // 'files' | 'printing' | 'cutting' | 'finishing' | 'delivery'
   jobStageUpdatedAt DateTime?
+  jobFolderPath     String?   // Resolved local path (set on approval)
   deadline          DateTime?
   jobPriority       String?   // 'normal' | 'urgent' | 'rush'
   jobNotes          String?

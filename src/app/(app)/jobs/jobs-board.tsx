@@ -84,6 +84,16 @@ function JobCard({ job, onDragStart, onDetail }: { job: JobQuote; onDragStart: (
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        {job.jobFolderPath && (
+          <a
+            href={`presscal-fh://open-folder?path=${encodeURIComponent(job.jobFolderPath)}`}
+            onClick={e => e.stopPropagation()}
+            title={job.jobFolderPath}
+            style={{ color: 'var(--teal)', fontSize: '0.6rem', opacity: 0.7 }}
+          >
+            <i className="fas fa-folder-open" />
+          </a>
+        )}
         {job.deadline && (
           <span style={{
             fontSize: '0.65rem', fontWeight: 600,
@@ -139,6 +149,15 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
           }}>
             <i className="fas fa-file-invoice" style={{ marginRight: 4 }} /> Προσφορά
           </button>
+          {job.jobFolderPath && (
+            <a href={`presscal-fh://open-folder?path=${encodeURIComponent(job.jobFolderPath)}`} style={{
+              border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.04)', borderRadius: 8,
+              padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--teal)', cursor: 'pointer',
+              textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4,
+            }}>
+              <i className="fas fa-folder-open" /> Φάκελος
+            </a>
+          )}
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}>&times;</button>
         </div>
 

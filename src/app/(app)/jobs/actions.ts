@@ -35,6 +35,13 @@ export async function updateJobStage(quoteId: string, stage: string) {
     data.status = 'completed';
     data.completedAt = new Date();
     data.jobStage = 'delivery';
+
+    // Move job folder to archive
+    const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { jobFolderPath: true } });
+    if (quote?.jobFolderPath && !quote.jobFolderPath.includes('_Archive')) {
+      const { toArchivePath } = await import('@/lib/job-folder');
+      data.jobFolderPath = toArchivePath(quote.jobFolderPath);
+    }
   }
   await prisma.quote.update({ where: { id: quoteId }, data });
 }

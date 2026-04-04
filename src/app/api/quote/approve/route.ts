@@ -162,10 +162,35 @@ export async function POST(req: NextRequest) {
     const someApproved = updatedItems.some(i => i.status === 'approved');
     const newStatus = allApproved ? 'approved' : someApproved ? 'partial' : quote.status;
 
-    await prisma.quote.update({
-      where: { id: quoteId },
-      data: { items: updatedItems as any, status: newStatus },
-    });
+    const data: Record<string, unknown> = { items: updatedItems as any, status: newStatus };
+
+    // Auto-promote to job on full approval
+    if (allApproved && quote.status !== 'approved') {
+      const org = quote.org;
+      const stages = (org?.jobStages as any[]) || [];
+      const firstStage = stages[0]?.id || 'files';
+      data.jobStage = firstStage;
+      data.jobStageUpdatedAt = new Date();
+      data.approvedAt = new Date();
+
+      // Compute job folder path
+      const fullQuote = await prisma.quote.findUnique({
+        where: { id: quoteId },
+        select: { number: true, title: true, company: { select: { name: true, folderPath: true } } },
+      });
+      if (fullQuote) {
+        const { buildJobFolderPath } = await import('@/lib/job-folder');
+        data.jobFolderPath = buildJobFolderPath({
+          globalRoot: (org as any)?.jobFolderRoot || null,
+          companyFolderPath: fullQuote.company?.folderPath || null,
+          companyName: fullQuote.company?.name || 'Πελάτης',
+          quoteNumber: fullQuote.number,
+          quoteTitle: fullQuote.title,
+        });
+      }
+    }
+
+    await prisma.quote.update({ where: { id: quoteId }, data });
 
     const orgName = quote.org?.legalName || quote.org?.name || 'PressCal';
 

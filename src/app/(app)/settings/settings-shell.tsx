@@ -59,6 +59,9 @@ export function SettingsShell({ org }: { org: Org }) {
   const [apiGemini, setApiGemini] = useState(org.apiGemini ?? '');
   const [apiFilehelper, setApiFilehelper] = useState(org.apiFilehelper ?? '');
 
+  // Job folders
+  const [jobFolderRoot, setJobFolderRoot] = useState(org.jobFolderRoot ?? '');
+
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -88,6 +91,7 @@ export function SettingsShell({ org }: { org: Org }) {
       phone: phone || null, email: email || null, website: website || null,
       quoteTerms: JSON.stringify(quoteTerms.filter(t => t.trim())),
       apiGmail: apiGmail || null, apiGemini: apiGemini || null, apiFilehelper: apiFilehelper || null,
+      jobFolderRoot: jobFolderRoot || null,
     });
     setSaving(false);
     if (result.ok) {
@@ -369,6 +373,45 @@ export function SettingsShell({ org }: { org: Org }) {
                 </span>
               </div>
             )}
+          </Section>
+
+          <Section icon="fa-folder-tree" iconColor="var(--teal)" title="ΦΑΚΕΛΟΣ ΕΡΓΑΣΙΩΝ">
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+              Τοπικός φάκελος για αυτόματη δημιουργία υποφακέλων ανά εργασία. Αν ο πελάτης έχει δικό του φάκελο, χρησιμοποιείται αυτός.
+            </p>
+            <Field label="Global Root Path">
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  className={inputCls}
+                  type="text"
+                  value={jobFolderRoot}
+                  onChange={e => setJobFolderRoot(e.target.value)}
+                  placeholder="D:\Εργασίες"
+                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.72rem' }}
+                />
+                <a
+                  href="presscal-fh://pick-folder?target=jobFolderRoot"
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                    background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
+                    cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                >
+                  <i className="fas fa-folder-open" /> Επιλογή
+                </a>
+              </div>
+            </Field>
+            <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: 4, lineHeight: 1.6 }}>
+              <i className="fas fa-info-circle" style={{ marginRight: 4, color: 'var(--teal)' }} />
+              Κάθε εγκεκριμένη προσφορά δημιουργεί υποφάκελο: <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 4px', borderRadius: 4 }}>[QT-2026-001] Πελάτης - Τίτλος</code>
+              <br />
+              <i className="fas fa-info-circle" style={{ marginRight: 4, color: 'var(--teal)' }} />
+              Αν ο πελάτης έχει φάκελο (στις Εταιρείες), ο υποφάκελος πάει εκεί αντί εδώ.
+              <br />
+              <i className="fas fa-info-circle" style={{ marginRight: 4, color: 'var(--teal)' }} />
+              Όταν η εργασία ολοκληρωθεί, ο φάκελος μετακινείται σε <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 4px', borderRadius: 4 }}>_Archive</code>
+            </div>
           </Section>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20 }}>
