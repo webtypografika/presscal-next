@@ -212,6 +212,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showCourierModal, setShowCourierModal] = useState(false);
   const [courierVoucher, setCourierVoucher] = useState(quote.courierVoucherId || '');
+  const [leftTab, setLeftTab] = useState<'email' | 'files'>((quote as any).fileLinks?.length > 0 ? 'files' : 'email');
   const [courierStatus, setCourierStatus] = useState(quote.courierStatus || '');
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -523,157 +524,86 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           )}
         </div>
 
-        {/* Status progress bar */}
-        <div style={{ width: 120, marginRight: 8 }}>
-          <div style={{ height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${progressPct}%`, background: st.color, borderRadius: 2, transition: 'width 0.4s ease' }} />
-          </div>
-        </div>
-
-        {/* Grand total */}
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: '1.1rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--accent)' }}>{formatCurrency(grandTotal)}</div>
-          <div style={{ fontSize: '0.78rem', color: totalProfit >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 500 }}>
-            Κέρδος {formatCurrency(totalProfit)}
-          </div>
-        </div>
+        {/* Quick actions */}
+        {courierConfigured && !courierVoucher && (
+          <button onClick={() => setShowCourierModal(true)} style={{
+            padding: '6px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600,
+            background: 'color-mix(in srgb, #10b981 12%, transparent)',
+            border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
+            color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <i className="fas fa-truck" style={{ fontSize: '0.55rem' }} /> Voucher
+          </button>
+        )}
+        {courierVoucher && (
+          <span style={{
+            padding: '6px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600,
+            background: 'color-mix(in srgb, #10b981 12%, transparent)',
+            border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
+            color: '#10b981', display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <i className="fas fa-truck" style={{ fontSize: '0.55rem' }} /> {courierVoucher}
+          </span>
+        )}
+        {elorusConfigured && !quote.elorusInvoiceId && (
+          <button onClick={() => setShowInvoiceModal(true)} style={{
+            padding: '6px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600,
+            background: 'color-mix(in srgb, #818cf8 15%, transparent)',
+            border: '1px solid color-mix(in srgb, #818cf8 30%, transparent)',
+            color: '#a5b4fc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <i className="fas fa-file-invoice-dollar" style={{ fontSize: '0.55rem' }} /> Τιμολόγηση
+          </button>
+        )}
+        {elorusConfigured && quote.elorusInvoiceId && (
+          <a href={quote.elorusInvoiceUrl || '#'} target="_blank" rel="noreferrer" style={{
+            padding: '6px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600,
+            background: 'color-mix(in srgb, var(--success) 12%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--success) 25%, transparent)',
+            color: 'var(--success)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            <i className="fas fa-check" style={{ fontSize: '0.55rem' }} /> Τιμολόγιο
+          </a>
+        )}
       </div>
 
-      {/* ═══ TITLE ═══ */}
-      <input
-        value={title}
-        onChange={e => setTitle(e.target.value)}
-        placeholder="Τίτλος προσφοράς..."
-        style={{
-          width: '100%', background: 'transparent', border: 'none',
-          fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)',
-          padding: '8px 0', marginBottom: 12, outline: 'none',
-          borderBottom: '1px solid var(--border)',
-        }}
-      />
-
-      {/* ═══ ACTIONS BAR ═══ */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16,
-        flexWrap: 'wrap',
-      }}>
-        <div style={{ flex: 1 }} />
-
-        {/* Send quote */}
-        {canSend && (
-          <button onClick={() => setShowSendModal(true)} style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
-            background: 'color-mix(in srgb, var(--blue) 12%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--blue) 25%, transparent)',
-            color: 'var(--blue)', cursor: 'pointer',
-          }}>
-            <i className="fas fa-paper-plane" style={{ fontSize: '0.6rem' }} /> Αποστολή
-          </button>
-        )}
-
-        {/* Invoice (Elorus) */}
-        {elorusConfigured && (
-          quote.elorusInvoiceId ? (
-            <a href={quote.elorusInvoiceUrl || '#'} target="_blank" rel="noreferrer" style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
-              background: 'color-mix(in srgb, var(--success) 12%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--success) 25%, transparent)',
-              color: 'var(--success)', cursor: 'pointer', textDecoration: 'none',
-            }}>
-              <i className="fas fa-check" style={{ fontSize: '0.6rem' }} /> Τιμολόγιο
-            </a>
-          ) : (
-            <button onClick={() => setShowInvoiceModal(true)} style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
-              background: 'color-mix(in srgb, #4f46e5 12%, transparent)',
-              border: '1px solid color-mix(in srgb, #4f46e5 25%, transparent)',
-              color: '#4f46e5', cursor: 'pointer',
-            }}>
-              <i className="fas fa-file-invoice-dollar" style={{ fontSize: '0.6rem' }} /> Τιμολόγηση
-            </button>
-          )
-        )}
-
-        {/* Courier */}
-        {courierConfigured && (
-          courierVoucher ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
-                background: 'color-mix(in srgb, #10b981 12%, transparent)',
-                border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
-                color: '#10b981',
-              }}>
-                <i className="fas fa-truck" style={{ fontSize: '0.6rem' }} /> {courierVoucher}
-                {courierStatus && <span style={{ fontSize: '0.68rem', color: '#64748b', marginLeft: 4 }}>· {courierStatus}</span>}
-              </span>
-              <button onClick={async () => {
-                const res = await fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'trackVoucher', quoteId: quote.id }) }).then(r => r.json());
-                if (res.ok) setCourierStatus(res.status);
-              }} title="Ανανέωση status" style={{ border: 'none', background: 'transparent', color: '#10b981', cursor: 'pointer', fontSize: '0.7rem', padding: '4px' }}>
-                <i className="fas fa-sync-alt" />
-              </button>
-              <button onClick={async () => {
-                const res = await fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'printVoucher', quoteId: quote.id, type: 'a6' }) });
-                if (res.ok) { const blob = await res.blob(); window.open(URL.createObjectURL(blob)); }
-              }} title="Εκτύπωση A6" style={{ border: 'none', background: 'transparent', color: '#10b981', cursor: 'pointer', fontSize: '0.7rem', padding: '4px' }}>
-                <i className="fas fa-print" />
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setShowCourierModal(true)} style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
-              background: 'color-mix(in srgb, #10b981 12%, transparent)',
-              border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
-              color: '#10b981', cursor: 'pointer',
-            }}>
-              <i className="fas fa-truck" style={{ fontSize: '0.6rem' }} /> Αποστολή
-            </button>
-          )
-        )}
-
-        {/* Order papers */}
-        {items.some(i => i.calcData?.paperName) && (
-          <button onClick={() => setShowOrderModal(true)} style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
-            background: 'color-mix(in srgb, var(--teal) 12%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--teal) 25%, transparent)',
-            color: 'var(--teal)', cursor: 'pointer',
-          }}>
-            <i className="fas fa-truck" style={{ fontSize: '0.6rem' }} /> Παραγγελία Χαρτιών
-          </button>
-        )}
+      {/* ═══ TITLE + STATUS + ACTIONS ROW ═══ */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+        <input
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="Τίτλος προσφοράς..."
+          style={{
+            flex: 1, background: 'transparent', border: 'none',
+            fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)',
+            padding: '4px 0', outline: 'none', minWidth: 0,
+          }}
+        />
 
         {/* Status transitions */}
         {transitions.map(t => (
           <button key={t.status} onClick={() => changeStatus(t.status)} style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            padding: '6px 12px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 500,
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '5px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 500,
             background: `color-mix(in srgb, ${t.color} 10%, transparent)`,
             border: `1px solid color-mix(in srgb, ${t.color} 20%, transparent)`,
-            color: t.color, cursor: 'pointer',
+            color: t.color, cursor: 'pointer', whiteSpace: 'nowrap',
           }}>
-            <i className={`fas ${t.icon}`} style={{ fontSize: '0.6rem' }} /> {t.label}
+            <i className={`fas ${t.icon}`} style={{ fontSize: '0.55rem' }} /> {t.label}
           </button>
         ))}
 
         {/* Autosave indicator */}
-        <span style={{ fontSize: '0.78rem', color: saving ? 'var(--text-muted)' : dirty ? 'var(--accent)' : 'var(--success)', display: 'flex', alignItems: 'center', gap: 4 }}>
-          {saving ? <><i className="fas fa-spinner fa-spin" style={{ fontSize: '0.6rem' }} /> Αποθήκευση...</>
-            : dirty ? <><i className="fas fa-circle" style={{ fontSize: '0.35rem' }} /> Μη αποθηκευμένο</>
-            : <><i className="fas fa-check" style={{ fontSize: '0.6rem' }} /> Αποθηκεύτηκε</>}
+        <span style={{ fontSize: '0.72rem', color: saving ? 'var(--text-muted)' : dirty ? 'var(--accent)' : 'var(--success)', display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+          {saving ? <><i className="fas fa-spinner fa-spin" style={{ fontSize: '0.55rem' }} /></>
+            : dirty ? <><i className="fas fa-circle" style={{ fontSize: '0.3rem' }} /></>
+            : <><i className="fas fa-check" style={{ fontSize: '0.55rem' }} /></>}
         </span>
 
         {/* Delete */}
         <button onClick={handleDelete} style={{
-          padding: '6px 8px', borderRadius: 6, fontSize: '0.92rem',
-          background: 'transparent', border: '1px solid var(--border)',
+          padding: '5px 7px', borderRadius: 6, fontSize: '0.82rem',
+          background: 'transparent', border: 'none',
           color: 'var(--text-muted)', cursor: 'pointer',
         }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
@@ -683,49 +613,21 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         </button>
       </div>
 
-      {/* ═══ FILES BAR ═══ */}
-      {(quote as any).fileLinks?.length > 0 && (() => {
-        const hasCompanyFolder = !!(selectedCompany as any)?.folderPath;
-        return (
-          <div style={{
-            display: 'flex', gap: 8, alignItems: 'center',
-            padding: '8px 14px', marginBottom: 8, borderRadius: 10,
-            background: 'rgba(245,130,32,0.04)', border: '1px solid rgba(245,130,32,0.15)',
+      {/* ═══ ACTIONS BAR (remaining) ═══ */}
+      {items.some(i => i.calcData?.paperName) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => setShowOrderModal(true)} style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '6px 14px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
+            background: 'color-mix(in srgb, var(--teal) 12%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--teal) 25%, transparent)',
+            color: 'var(--teal)', cursor: 'pointer',
           }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f58220' }}>
-              <i className="fas fa-paperclip" style={{ fontSize: '0.6rem', marginRight: 4 }} />
-              {((quote as any).fileLinks as any[]).length} αρχεία
-            </span>
-            <a
-              href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=global`}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '5px 14px', borderRadius: 8,
-                background: '#f58220', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
-                textDecoration: 'none', cursor: 'pointer',
-              }}
-            >
-              <i className="fas fa-folder-open" style={{ fontSize: '0.6rem' }} />
-              Φάκελος Εργασιών
-            </a>
-            {hasCompanyFolder && (
-              <a
-                href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer`}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '5px 14px', borderRadius: 8,
-                  border: '1px solid #f58220', background: 'transparent',
-                  color: '#f58220', fontSize: '0.75rem', fontWeight: 700,
-                  textDecoration: 'none', cursor: 'pointer',
-                }}
-              >
-                <i className="fas fa-user-folder" style={{ fontSize: '0.6rem' }} />
-                Φάκελος Πελάτη
-              </a>
-            )}
-          </div>
-        );
-      })()}
+            <i className="fas fa-truck" style={{ fontSize: '0.6rem' }} /> Παραγγελία Χαρτιών
+          </button>
+        </div>
+      )}
 
       {/* ═══ ITEMS TABLE ═══ */}
       <div style={{
@@ -895,21 +797,169 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       {/* ═══ BOTTOM GRID: 2 columns ═══ */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
 
-        {/* ─── LEFT: Email Πελάτη ─── */}
-        <EmailPanel
-          quoteId={quote.id}
-          linkedEmails={quote.linkedEmails}
-          threadId={quote.threadId}
-          customerEmail={quote.customer?.email ?? ''}
-          onEmailLinked={(msgId, tId) => {
-            setQuote(prev => ({
-              ...prev,
-              threadId: prev.threadId || tId,
-              linkedEmails: [...(prev.linkedEmails || []), msgId],
-            }));
-          }}
-          toast={toast}
-        />
+        {/* ─── LEFT: Tabbed (Email / Αρχεία) ─── */}
+        <div style={{ borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden' }}>
+          {/* Tabs */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
+            <button onClick={() => setLeftTab('email')} style={{
+              flex: 1, padding: '8px 0', border: 'none', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+              background: leftTab === 'email' ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+              color: leftTab === 'email' ? 'var(--accent)' : 'var(--text-muted)',
+              borderBottom: leftTab === 'email' ? '2px solid var(--accent)' : '2px solid transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            }}>
+              <i className="fas fa-envelope" style={{ fontSize: '0.65rem' }} /> Email
+              {(quote.linkedEmails as string[] || []).length > 0 && (
+                <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{(quote.linkedEmails as string[]).length}</span>
+              )}
+            </button>
+            <button onClick={() => setLeftTab('files')} style={{
+              flex: 1, padding: '8px 0', border: 'none', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+              background: leftTab === 'files' ? 'color-mix(in srgb, #f58220 10%, transparent)' : 'transparent',
+              color: leftTab === 'files' ? '#f58220' : 'var(--text-muted)',
+              borderBottom: leftTab === 'files' ? '2px solid #f58220' : '2px solid transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            }}>
+              <i className="fas fa-folder-open" style={{ fontSize: '0.65rem' }} /> Αρχεία
+              {(quote as any).fileLinks?.length > 0 && (
+                <span style={{ fontSize: '0.6rem', opacity: 0.6 }}>{(quote as any).fileLinks.length}</span>
+              )}
+            </button>
+          </div>
+
+          {/* Email tab */}
+          {leftTab === 'email' && (
+            <EmailPanel
+              quoteId={quote.id}
+              linkedEmails={quote.linkedEmails}
+              threadId={quote.threadId}
+              customerEmail={quote.customer?.email ?? ''}
+              onEmailLinked={(msgId, tId) => {
+                setQuote(prev => ({
+                  ...prev,
+                  threadId: prev.threadId || tId,
+                  linkedEmails: [...(prev.linkedEmails || []), msgId],
+                }));
+              }}
+              toast={toast}
+            />
+          )}
+
+          {/* Files tab */}
+          {leftTab === 'files' && (
+            <div style={{ padding: 12 }}>
+              {/* Fetch from email button */}
+              {(quote.linkedEmails as string[] || []).length > 0 && !((quote as any).fileLinks?.length > 0) && (
+                <button
+                  onClick={async () => {
+                    toast('Κατέβασμα αρχείων...', 'info');
+                    const { saveEmailAttachments } = await import('../../quotes/actions');
+                    const result = await saveEmailAttachments(quote.id, quote.linkedEmails as string[]);
+                    if (result.saved > 0) {
+                      toast(`${result.saved} αρχεία αποθηκεύτηκαν`);
+                      router.refresh();
+                    } else {
+                      toast('Δεν βρέθηκαν συνημμένα', 'error');
+                    }
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, width: '100%',
+                    padding: '10px', borderRadius: 8, marginBottom: 10,
+                    background: 'var(--blue)', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
+                    border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  <i className="fas fa-cloud-download-alt" /> Κατέβασμα αρχείων από email
+                </button>
+              )}
+
+              {/* File grid with thumbnails */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+                {((quote as any).fileLinks as any[] || []).map((fl: any) => {
+                  const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(fl.fileName);
+                  return (
+                    <div key={fl.id} style={{
+                      borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden',
+                      background: 'rgba(255,255,255,0.02)',
+                    }}>
+                      {/* Thumbnail / icon */}
+                      <a href={fl.filePath} target="_blank" style={{ display: 'block', height: 80, background: 'rgba(0,0,0,0.15)', position: 'relative', overflow: 'hidden' }}>
+                        {isImage ? (
+                          <img src={fl.filePath} alt={fl.fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                            <i className={`fas ${attIcon(fl.fileName)}`} style={{ fontSize: '1.5rem', color: '#f58220', opacity: 0.6 }} />
+                          </div>
+                        )}
+                      </a>
+                      {/* Name + actions */}
+                      <div style={{ padding: '5px 6px' }}>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-dim)', marginBottom: 4 }}>
+                          {fl.fileName}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <a href={fl.filePath} download={fl.fileName} title="Download" style={{
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '3px', borderRadius: 4, border: '1px solid var(--border)',
+                            color: 'var(--text-muted)', fontSize: '0.6rem', textDecoration: 'none',
+                          }}>
+                            <i className="fas fa-download" />
+                          </a>
+                          <a href={`presscal-fh://open-file?path=${encodeURIComponent(fl.filePath)}&quoteId=${quote.id}`} title="Helper" style={{
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            padding: '3px', borderRadius: 4, border: '1px solid var(--border)',
+                            color: '#f58220', fontSize: '0.6rem', textDecoration: 'none',
+                          }}>
+                            <i className="fas fa-external-link-alt" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Bulk Helper button */}
+              {(quote as any).fileLinks?.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+                  <a
+                    href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=global`}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                      padding: '8px', borderRadius: 8,
+                      background: '#f58220', color: '#fff', fontSize: '0.72rem', fontWeight: 700,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <i className="fas fa-folder-open" style={{ fontSize: '0.6rem' }} /> Φάκελος Εργασιών
+                  </a>
+                  {(selectedCompany as any)?.folderPath && (
+                    <a
+                      href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer`}
+                      style={{
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                        padding: '8px', borderRadius: 8,
+                        border: '1px solid #f58220', background: 'transparent',
+                        color: '#f58220', fontSize: '0.72rem', fontWeight: 700,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <i className="fas fa-user" style={{ fontSize: '0.6rem' }} /> Φάκελος Πελάτη
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {!((quote as any).fileLinks?.length > 0) && !(quote.linkedEmails as string[] || []).length && (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                  <i className="fas fa-folder-open" style={{ fontSize: '1.5rem', opacity: 0.3, marginBottom: 8, display: 'block' }} />
+                  Κανένα αρχείο
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* ─── RIGHT: AI Ανάλυση ─── */}
         <AiPanel
