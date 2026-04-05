@@ -70,6 +70,7 @@ async function nextQuoteNumber(): Promise<string> {
 
 export async function createQuote(data: {
   companyId?: string;
+  contactId?: string;
   customerId?: string;  // DEPRECATED — still accepted, maps to companyId
   title?: string;
   description?: string;
@@ -97,6 +98,7 @@ export async function createQuote(data: {
       number,
       status: 'draft',
       companyId,
+      contactId: data.contactId || null,
       title: data.title || null,
       description: data.description || null,
       notes: data.notes || null,

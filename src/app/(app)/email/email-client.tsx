@@ -211,50 +211,51 @@ export default function EmailClient() {
       const senderName = parseAddress(detail.from).name || senderEmail;
       const emailBody = detail.textBody || detail.htmlBody || '';
 
-      // Match contact → company via new model
+      // Match contact → company (fast, local DB lookup)
       const matchRes = await fetch(`/api/email/match-customer?email=${encodeURIComponent(senderEmail)}`).then(r => r.json()).catch(() => ({}));
       const companyId = matchRes?.companies?.[0]?.id || undefined;
       const contactId = matchRes?.contact?.id || undefined;
 
-      // AI parse + create quote in parallel
-      const [aiRes, q] = await Promise.all([
-        fetch('/api/ai/parse-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ emailBody, subject: detail.subject, senderEmail }),
-        }).then(r => r.json()).catch(() => null),
-        createQuote({
-          companyId,
-          recipientContactIds: contactId ? [contactId] : undefined,
-          title: detail.subject || undefined,
-          description: `Email από: ${senderName}`,
-        }),
-      ]);
+      // Create quote immediately
+      const q = await createQuote({
+        companyId,
+        contactId,
+        recipientContactIds: contactId ? [contactId] : undefined,
+        title: detail.subject || undefined,
+        description: `Email από: ${senderName}`,
+      });
 
       // Link email
       await linkEmailToQuote(q.id, detail.id, detail.threadId);
 
-      // Save AI items
-      if (aiRes?.success && aiRes.items?.length > 0) {
-        const items = aiRes.items.map((ai: any) => {
-          const nameParts = [ai.description || 'Προϊόν'];
-          if (ai.dimensions) nameParts.push(ai.dimensions);
-          if (ai.colors) nameParts.push(ai.colors);
-          const notesParts: string[] = [];
-          if (ai.paperType) notesParts.push(`Χαρτί: ${ai.paperType}`);
-          if (ai.finishing?.length) notesParts.push(`Φινίρισμα: ${ai.finishing.join(', ')}`);
-          if (ai.specialNotes) notesParts.push(ai.specialNotes);
-          return {
-            id: crypto.randomUUID(), name: nameParts.join(' '), type: 'manual',
-            qty: ai.quantity || 1, unit: 'τεμ', unitPrice: 0, finalPrice: 0,
-            cost: 0, profit: 0, status: 'pending',
-            notes: notesParts.join(' · '), aiParsed: ai,
-          };
-        });
-        await updateQuote(q.id, { items, description: aiRes.customerInterpretation || undefined });
-      }
-
+      // Redirect immediately — don't wait for AI
       router.push(`/quotes/${q.id}`);
+
+      // AI parse in background (results will appear when user refreshes or next autosave)
+      fetch('/api/ai/parse-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailBody, subject: detail.subject, senderEmail }),
+      }).then(r => r.json()).then(aiRes => {
+        if (aiRes?.success && aiRes.items?.length > 0) {
+          const items = aiRes.items.map((ai: any) => {
+            const nameParts = [ai.description || 'Προϊόν'];
+            if (ai.dimensions) nameParts.push(ai.dimensions);
+            if (ai.colors) nameParts.push(ai.colors);
+            const notesParts: string[] = [];
+            if (ai.paperType) notesParts.push(`Χαρτί: ${ai.paperType}`);
+            if (ai.finishing?.length) notesParts.push(`Φινίρισμα: ${ai.finishing.join(', ')}`);
+            if (ai.specialNotes) notesParts.push(ai.specialNotes);
+            return {
+              id: crypto.randomUUID(), name: nameParts.join(' '), type: 'manual',
+              qty: ai.quantity || 1, unit: 'τεμ', unitPrice: 0, finalPrice: 0,
+              cost: 0, profit: 0, status: 'pending',
+              notes: notesParts.join(' · '), aiParsed: ai,
+            };
+          });
+          updateQuote(q.id, { items, description: aiRes.customerInterpretation || undefined });
+        }
+      }).catch(() => {});
     } catch (e) {
       alert('Σφάλμα: ' + (e as Error).message);
       setCreatingQuote(false);
