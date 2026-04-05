@@ -969,29 +969,40 @@ function calcStepBlocks(
   printW: number, printH: number,
   gutter: number, bleed: number,
 ): void {
-  for (let bi = 0; bi < blocks.length; bi++) {
-    const block = blocks[bi];
+  // Precompute cell sizes per block
+  const cellSizes = blocks.map(block => {
     const rot = block.rotation || 0;
-    let tw = block.trimW;
-    let th = block.trimH;
+    let tw = block.trimW, th = block.trimH;
     if (rot === 90 || rot === 270) { const tmp = tw; tw = th; th = tmp; }
-    const cellW = tw + bleed * 2;
-    const cellH = th + bleed * 2;
+    return { cellW: tw + bleed * 2, cellH: th + bleed * 2 };
+  });
 
-    const needsAutoCalc = (block.blockW === 0 && !block._manualGrid);
+  // Collect which blocks need auto-calc
+  const autoBlocks = blocks.map((b, i) => b.blockW === 0 && !b._manualGrid ? i : -1).filter(i => i >= 0);
 
-    if (needsAutoCalc) {
-      // For blocks after the first: find free position FIRST (using minimum 1-cell size),
-      // then calculate how many cells fit at that position
-      if (bi > 0) {
-        const minW = cellW;
-        const minH = cellH;
-        const pos = findFreePosition(minW, minH, printW, printH, blocks, bi, gutter);
+  if (autoBlocks.length > 0) {
+    // PASS 1: Place all auto-blocks with 1×1 minimum size
+    for (const bi of autoBlocks) {
+      const block = blocks[bi];
+      const { cellW, cellH } = cellSizes[bi];
+      block.cols = 1;
+      block.rows = 1;
+      block.blockW = cellW;
+      block.blockH = cellH;
+
+      if (bi > 0 || autoBlocks.indexOf(bi) > 0) {
+        // Find free position among already-placed blocks
+        const pos = findFreePosition(cellW, cellH, printW, printH, blocks, bi, gutter);
         block.x = pos.x;
         block.y = pos.y;
       }
+    }
 
-      // Calculate max cells that fit from this position (avoiding overlap with other blocks)
+    // PASS 2: Expand each auto-block to fill available space without overlapping others
+    for (const bi of autoBlocks) {
+      const block = blocks[bi];
+      const { cellW, cellH } = cellSizes[bi];
+
       const availW = printW - block.x;
       const availH = printH - block.y;
       let maxC = Math.max(1, Math.floor((availW + gutter) / (cellW + gutter)));
@@ -999,31 +1010,40 @@ function calcStepBlocks(
       if (maxC * cellW + (maxC - 1) * gutter > availW + 0.01) maxC = Math.max(1, maxC - 1);
       if (maxR * cellH + (maxR - 1) * gutter > availH + 0.01) maxR = Math.max(1, maxR - 1);
 
-      // For blocks after the first: shrink to avoid overlapping placed blocks
-      if (bi > 0) {
-        for (let c = maxC; c >= 1; c--) {
-          for (let r = maxR; r >= 1; r--) {
-            const testW = c * cellW + Math.max(0, c - 1) * gutter;
-            const testH = r * cellH + Math.max(0, r - 1) * gutter;
-            let overlaps = false;
-            for (let j = 0; j < bi; j++) {
-              if (rectsOverlap(block.x, block.y, testW, testH, blocks[j].x, blocks[j].y, blocks[j].blockW, blocks[j].blockH)) {
-                overlaps = true;
-                break;
-              }
+      // Find largest non-overlapping size (try reducing cols first, then rows)
+      let bestC = 1, bestR = 1;
+      for (let c = maxC; c >= 1; c--) {
+        for (let r = maxR; r >= 1; r--) {
+          const testW = c * cellW + Math.max(0, c - 1) * gutter;
+          const testH = r * cellH + Math.max(0, r - 1) * gutter;
+          let overlaps = false;
+          for (let j = 0; j < blocks.length; j++) {
+            if (j === bi) continue;
+            if (rectsOverlap(block.x, block.y, testW, testH, blocks[j].x, blocks[j].y, blocks[j].blockW, blocks[j].blockH)) {
+              overlaps = true;
+              break;
             }
-            if (!overlaps) { maxC = c; maxR = r; c = 0; break; }
           }
+          if (!overlaps) { bestC = c; bestR = r; c = 0; break; }
         }
       }
 
-      block.cols = maxC;
-      block.rows = maxR;
+      block.cols = bestC;
+      block.rows = bestR;
+      block.blockW = bestC * cellW + Math.max(0, bestC - 1) * gutter;
+      block.blockH = bestR * cellH + Math.max(0, bestR - 1) * gutter;
     }
+  }
 
-    // Update blockW/blockH
-    block.blockW = block.cols * cellW + Math.max(0, block.cols - 1) * gutter;
-    block.blockH = block.rows * cellH + Math.max(0, block.rows - 1) * gutter;
+  // Handle manual blocks + clamp positions
+  for (let bi = 0; bi < blocks.length; bi++) {
+    const block = blocks[bi];
+    const { cellW, cellH } = cellSizes[bi];
+
+    if (block.blockW === 0 || block._manualGrid) {
+      block.blockW = block.cols * cellW + Math.max(0, block.cols - 1) * gutter;
+      block.blockH = block.rows * cellH + Math.max(0, block.rows - 1) * gutter;
+    }
 
     // Clamp position to printable area
     if (block.x + block.blockW > printW + 0.1) block.x = Math.max(0, printW - block.blockW);
