@@ -441,17 +441,16 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 
   return (
     <>
-      {/* ═══ RIBBON ═══ */}
+      {/* ═══ TOP BAR: Number + Title + Actions ═══ */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: '14px 20px', borderRadius: 12,
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 16px', borderRadius: 10,
         background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)',
-        marginBottom: 16,
+        marginBottom: 8,
       }}>
-        {/* Back */}
         <button onClick={() => router.push('/quotes')} style={{
           background: 'transparent', border: 'none', color: 'var(--text-muted)',
-          cursor: 'pointer', fontSize: '1rem', padding: '4px 8px', borderRadius: 6,
+          cursor: 'pointer', fontSize: '0.92rem', padding: '4px 6px', borderRadius: 6,
         }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
           onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
@@ -459,162 +458,9 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           <i className="fas fa-arrow-left" />
         </button>
 
-        {/* Main info block */}
-        <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-          {/* Row 1: Quote number + Status + Date */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-            <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: '0.85rem', fontFamily: "'DM Mono', monospace", letterSpacing: '0.02em' }}>{quote.number}</span>
-            <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: '0.72rem', fontWeight: 600, background: st.bg, color: st.color }}>{st.label}</span>
-            <span style={{ fontSize: '0.78rem', color: '#475569' }}>{new Date(quote.date).toLocaleDateString('el-GR')}</span>
-            {(quote as any).jobFolderPath && (
-              <a href={`presscal-fh://open-folder?path=${encodeURIComponent((quote as any).jobFolderPath)}`} title={(quote as any).jobFolderPath}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--teal)', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 600 }}>
-                <i className="fas fa-briefcase" style={{ fontSize: '0.6rem' }} />Εργασία
-              </a>
-            )}
-          </div>
+        <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: '0.82rem', fontFamily: "'DM Mono', monospace", letterSpacing: '0.02em', flexShrink: 0 }}>{quote.number}</span>
+        <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: '0.7rem', fontWeight: 600, background: st.bg, color: st.color, flexShrink: 0 }}>{st.label}</span>
 
-          {/* Row 2+3: Company + Contact side by side */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            {/* Company */}
-            <div
-              style={{
-                padding: '8px 12px', borderRadius: 8,
-                background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)',
-                position: 'relative',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <i className="fas fa-building" style={{ fontSize: '0.55rem', color: 'var(--blue)', opacity: 0.7 }} />
-                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#475569', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Πελάτης</span>
-              </div>
-              <div
-                onClick={() => setShowCustomerPicker(!showCustomerPicker)}
-                style={{ fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
-                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text)')}
-              >
-                {customerName}
-                <i className="fas fa-pen" style={{ fontSize: '0.5rem', opacity: 0.3 }} />
-              </div>
-              <div style={{ display: 'flex', gap: 10, fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                {selectedCompany?.email && <span><i className="fas fa-envelope" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedCompany.email}</span>}
-                {selectedCompany?.phone && <span><i className="fas fa-phone" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedCompany.phone}</span>}
-                {selectedCompany?.folderPath && (
-                  <a href={`presscal-fh://open-folder?path=${encodeURIComponent(selectedCompany.folderPath)}${selectedCompany?.email ? `&email=${encodeURIComponent(selectedCompany.email)}` : ''}`} title={selectedCompany.folderPath}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#f58220', textDecoration: 'none', fontWeight: 600 }}>
-                    <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} />Φάκελος
-                  </a>
-                )}
-              </div>
-              {/* Customer picker dropdown */}
-              {showCustomerPicker && (
-                <CustomerPicker
-                  customers={customers}
-                  currentId={customerId}
-                  linkedEmails={quote.linkedEmails as string[] || []}
-                  hasElorus={elorusConfigured}
-                  onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
-                  onClose={() => setShowCustomerPicker(false)}
-                  toast={toast}
-                />
-              )}
-            </div>
-
-            {/* Contact */}
-            <div
-              style={{
-                padding: '8px 12px', borderRadius: 8,
-                background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)',
-                position: 'relative',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <i className="fas fa-user" style={{ fontSize: '0.55rem', color: 'var(--teal)', opacity: 0.7 }} />
-                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#475569', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Επαφή</span>
-              </div>
-              <div
-                onClick={() => setShowContactPicker(!showContactPicker)}
-                style={{
-                  fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer', marginBottom: 4,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  color: contactId ? 'var(--text)' : '#475569',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.color = 'var(--teal)')}
-                onMouseLeave={e => (e.currentTarget.style.color = contactId ? 'var(--text)' : '#475569')}
-              >
-                {selectedContact?.name || '— Επιλογή επαφής —'}
-                <i className={`fas fa-${contactId ? 'pen' : 'plus'}`} style={{ fontSize: '0.5rem', opacity: 0.3 }} />
-              </div>
-              {selectedContact && (
-                <div style={{ display: 'flex', gap: 10, fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                  {selectedContact.email && <span><i className="fas fa-envelope" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedContact.email}</span>}
-                  {selectedContact.phone && <span><i className="fas fa-phone" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedContact.phone}</span>}
-                  {selectedContact.mobile && <span><i className="fas fa-mobile-alt" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedContact.mobile}</span>}
-                </div>
-              )}
-              {/* Contact picker dropdown */}
-              {showContactPicker && (
-                <ContactPicker
-                  currentId={contactId}
-                  onSelect={(id, contact) => {
-                    setContactId(id);
-                    if (contact) setQuote(prev => ({ ...prev, contact } as any));
-                    setShowContactPicker(false);
-                  }}
-                  onClose={() => setShowContactPicker(false)}
-                  toast={toast}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Quick actions */}
-        {courierConfigured && !courierVoucher && (
-          <button onClick={() => setShowCourierModal(true)} style={{
-            padding: '6px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600,
-            background: 'color-mix(in srgb, #10b981 12%, transparent)',
-            border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
-            color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            <i className="fas fa-truck" style={{ fontSize: '0.55rem' }} /> Voucher
-          </button>
-        )}
-        {courierVoucher && (
-          <span style={{
-            padding: '6px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600,
-            background: 'color-mix(in srgb, #10b981 12%, transparent)',
-            border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
-            color: '#10b981', display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            <i className="fas fa-truck" style={{ fontSize: '0.55rem' }} /> {courierVoucher}
-          </span>
-        )}
-        {elorusConfigured && !quote.elorusInvoiceId && (
-          <button onClick={() => setShowInvoiceModal(true)} style={{
-            padding: '6px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600,
-            background: 'color-mix(in srgb, #818cf8 15%, transparent)',
-            border: '1px solid color-mix(in srgb, #818cf8 30%, transparent)',
-            color: '#a5b4fc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            <i className="fas fa-file-invoice-dollar" style={{ fontSize: '0.55rem' }} /> Τιμολόγηση
-          </button>
-        )}
-        {elorusConfigured && quote.elorusInvoiceId && (
-          <a href={quote.elorusInvoiceUrl || '#'} target="_blank" rel="noreferrer" style={{
-            padding: '6px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600,
-            background: 'color-mix(in srgb, var(--success) 12%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--success) 25%, transparent)',
-            color: 'var(--success)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            <i className="fas fa-check" style={{ fontSize: '0.55rem' }} /> Τιμολόγιο
-          </a>
-        )}
-      </div>
-
-      {/* ═══ TITLE + STATUS + ACTIONS ROW ═══ */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
         <input
           value={title}
           onChange={e => setTitle(e.target.value)}
@@ -630,33 +476,150 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         {transitions.map(t => (
           <button key={t.status} onClick={() => changeStatus(t.status)} style={{
             display: 'flex', alignItems: 'center', gap: 4,
-            padding: '5px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 500,
+            padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 500,
             background: `color-mix(in srgb, ${t.color} 10%, transparent)`,
             border: `1px solid color-mix(in srgb, ${t.color} 20%, transparent)`,
-            color: t.color, cursor: 'pointer', whiteSpace: 'nowrap',
+            color: t.color, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
           }}>
             <i className={`fas ${t.icon}`} style={{ fontSize: '0.55rem' }} /> {t.label}
           </button>
         ))}
 
         {/* Autosave indicator */}
-        <span style={{ fontSize: '0.72rem', color: saving ? 'var(--text-muted)' : dirty ? 'var(--accent)' : 'var(--success)', display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
-          {saving ? <><i className="fas fa-spinner fa-spin" style={{ fontSize: '0.55rem' }} /></>
-            : dirty ? <><i className="fas fa-circle" style={{ fontSize: '0.3rem' }} /></>
-            : <><i className="fas fa-check" style={{ fontSize: '0.55rem' }} /></>}
+        <span style={{ fontSize: '0.72rem', color: saving ? 'var(--text-muted)' : dirty ? 'var(--accent)' : 'var(--success)', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+          {saving ? <i className="fas fa-spinner fa-spin" style={{ fontSize: '0.55rem' }} />
+            : dirty ? <i className="fas fa-circle" style={{ fontSize: '0.3rem' }} />
+            : <i className="fas fa-check" style={{ fontSize: '0.55rem' }} />}
         </span>
 
-        {/* Delete */}
         <button onClick={handleDelete} style={{
-          padding: '5px 7px', borderRadius: 6, fontSize: '0.82rem',
+          padding: '5px 7px', borderRadius: 6, fontSize: '0.78rem',
           background: 'transparent', border: 'none',
-          color: 'var(--text-muted)', cursor: 'pointer',
+          color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0,
         }}
           onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
           onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
         >
           <i className="fas fa-trash" />
         </button>
+      </div>
+
+      {/* ═══ COMPANY + CONTACT + QUICK ACTIONS (compact row) ═══ */}
+      <div style={{
+        display: 'flex', alignItems: 'stretch', gap: 8,
+        marginBottom: 16, fontSize: '0.78rem',
+      }}>
+        {/* Company */}
+        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+          <div
+            onClick={() => setShowCustomerPicker(!showCustomerPicker)}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'var(--text)')}
+          >
+            <i className="fas fa-building" style={{ fontSize: '0.5rem', color: '#475569' }} />
+            <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{customerName}</span>
+            <i className="fas fa-pen" style={{ fontSize: '0.42rem', opacity: 0.3 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 10, color: '#64748b', flexWrap: 'wrap' }}>
+            {selectedCompany?.email && <span>{selectedCompany.email}</span>}
+            {selectedCompany?.phone && <span>{selectedCompany.phone}</span>}
+            {selectedCompany?.folderPath && (
+              <a href={`presscal-fh://open-folder?path=${encodeURIComponent(selectedCompany.folderPath)}${selectedCompany?.email ? `&email=${encodeURIComponent(selectedCompany.email)}` : ''}`}
+                style={{ color: '#f58220', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <i className="fas fa-folder-open" style={{ fontSize: '0.5rem' }} />Φάκελος
+              </a>
+            )}
+            {(quote as any).jobFolderPath && (
+              <a href={`presscal-fh://open-folder?path=${encodeURIComponent((quote as any).jobFolderPath)}`}
+                style={{ color: 'var(--teal)', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <i className="fas fa-briefcase" style={{ fontSize: '0.5rem' }} />Εργασία
+              </a>
+            )}
+          </div>
+          {showCustomerPicker && (
+            <CustomerPicker customers={customers} currentId={customerId}
+              linkedEmails={quote.linkedEmails as string[] || []} hasElorus={elorusConfigured}
+              onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
+              onClose={() => setShowCustomerPicker(false)} toast={toast} />
+          )}
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, background: 'var(--glass-border)', flexShrink: 0 }} />
+
+        {/* Contact */}
+        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+          <div
+            onClick={() => setShowContactPicker(!showContactPicker)}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, color: contactId ? 'var(--text)' : '#475569' }}
+            onMouseEnter={e => (e.currentTarget.style.color = 'var(--teal)')}
+            onMouseLeave={e => (e.currentTarget.style.color = contactId ? 'var(--text)' : '#475569')}
+          >
+            <i className="fas fa-user" style={{ fontSize: '0.5rem', color: '#475569' }} />
+            <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{selectedContact?.name || '— Επαφή —'}</span>
+            <i className={`fas fa-${contactId ? 'pen' : 'plus'}`} style={{ fontSize: '0.42rem', opacity: 0.3 }} />
+          </div>
+          {selectedContact && (
+            <div style={{ display: 'flex', gap: 10, color: '#64748b', flexWrap: 'wrap' }}>
+              {selectedContact.email && <span>{selectedContact.email}</span>}
+              {selectedContact.phone && <span>{selectedContact.phone}</span>}
+            </div>
+          )}
+          {showContactPicker && (
+            <ContactPicker currentId={contactId}
+              onSelect={(id, contact) => { setContactId(id); if (contact) setQuote(prev => ({ ...prev, contact } as any)); setShowContactPicker(false); }}
+              onClose={() => setShowContactPicker(false)} toast={toast} />
+          )}
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, background: 'var(--glass-border)', flexShrink: 0 }} />
+
+        {/* Quick actions (voucher/invoice) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: '0.72rem', color: '#475569', marginRight: 2 }}>{new Date(quote.date).toLocaleDateString('el-GR')}</span>
+          {courierConfigured && !courierVoucher && (
+            <button onClick={() => setShowCourierModal(true)} style={{
+              padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+              background: 'color-mix(in srgb, #10b981 12%, transparent)',
+              border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
+              color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+            }}>
+              <i className="fas fa-truck" style={{ fontSize: '0.5rem' }} />Voucher
+            </button>
+          )}
+          {courierVoucher && (
+            <span style={{
+              padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+              background: 'color-mix(in srgb, #10b981 12%, transparent)',
+              border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
+              color: '#10b981', display: 'flex', alignItems: 'center', gap: 4,
+            }}>
+              <i className="fas fa-truck" style={{ fontSize: '0.5rem' }} />{courierVoucher}
+            </span>
+          )}
+          {elorusConfigured && !quote.elorusInvoiceId && (
+            <button onClick={() => setShowInvoiceModal(true)} style={{
+              padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+              background: 'color-mix(in srgb, #818cf8 15%, transparent)',
+              border: '1px solid color-mix(in srgb, #818cf8 30%, transparent)',
+              color: '#a5b4fc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+            }}>
+              <i className="fas fa-file-invoice-dollar" style={{ fontSize: '0.5rem' }} />Τιμολόγηση
+            </button>
+          )}
+          {elorusConfigured && quote.elorusInvoiceId && (
+            <a href={quote.elorusInvoiceUrl || '#'} target="_blank" rel="noreferrer" style={{
+              padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+              background: 'color-mix(in srgb, var(--success) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--success) 25%, transparent)',
+              color: 'var(--success)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4,
+            }}>
+              <i className="fas fa-check" style={{ fontSize: '0.5rem' }} />Τιμολόγιο
+            </a>
+          )}
+        </div>
       </div>
 
       {/* ═══ ACTIONS BAR (remaining) ═══ */}
