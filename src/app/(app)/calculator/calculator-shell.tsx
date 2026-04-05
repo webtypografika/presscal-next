@@ -2570,33 +2570,18 @@ export default function CalculatorShell() {
                       const computed = impo.blocks?.[i];
                       return (
                         <div key={i} style={{
-                          marginBottom: 4, borderRadius: 6,
+                          marginBottom: 4, borderRadius: 6, padding: '5px 8px',
                           background: `color-mix(in srgb, ${blkColor} 10%, transparent)`,
                           border: `1px solid color-mix(in srgb, ${blkColor} 25%, transparent)`,
-                          padding: '6px 8px',
                         }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <span style={{
-                              width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                              width: 14, height: 14, borderRadius: 3, flexShrink: 0,
                               background: blkColor,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '0.55rem', fontWeight: 800, color: '#fff',
+                              fontSize: '0.5rem', fontWeight: 800, color: '#fff',
                             }}>{i + 1}</span>
-                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text)', flex: 1 }}>Block {i + 1}</span>
-                            {computed && (
-                              <span style={{ fontSize: '0.5rem', color: '#64748b' }}>
-                                {computed.cols}×{computed.rows} = {computed.cols * computed.rows} ups
-                              </span>
-                            )}
-                            {smBlocks.length > 1 && (
-                              <button onClick={() => setSmBlocks(prev => prev.filter((_, idx) => idx !== i))}
-                                style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.6rem', padding: '2px' }}>
-                                <i className="fas fa-times" />
-                              </button>
-                            )}
-                          </div>
-                          {/* PDF upload + Trim size */}
-                          <div style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center', overflow: 'hidden' }}>
+                            {/* PDF upload */}
                             <label style={{
                               display: 'inline-flex', alignItems: 'center', gap: 3,
                               padding: '2px 5px', borderRadius: 4, cursor: 'pointer', flexShrink: 0,
@@ -2606,7 +2591,7 @@ export default function CalculatorShell() {
                               fontSize: '0.5rem', fontWeight: 600, fontFamily: 'inherit',
                             }}>
                               <i className={`fas ${smBlockPdfs[i] ? 'fa-file-pdf' : 'fa-upload'}`} style={{ fontSize: '0.45rem' }} />
-                              {smBlockPdfs[i] ? smBlockPdfs[i]!.fileName.slice(0, 12) : 'PDF'}
+                              {smBlockPdfs[i] ? smBlockPdfs[i]!.fileName.slice(0, 14) : 'PDF'}
                               <input type="file" accept=".pdf" hidden onChange={async e => {
                                 const f = e.target.files?.[0];
                                 if (!f) return;
@@ -2616,72 +2601,45 @@ export default function CalculatorShell() {
                                   const pg = parsed.pageSizes[0];
                                   setSmBlocks(prev => prev.map((b, idx) => idx === i ? {
                                     ...b, trimW: Math.round(pg.trimW * 10) / 10, trimH: Math.round(pg.trimH * 10) / 10,
-                                    blockW: 0, blockH: 0,
+                                    cols: 1, rows: 1, blockW: 0, blockH: 0,
                                   } : b));
                                 }
                                 e.target.value = '';
                               }} />
                             </label>
-                            {smBlockPdfs[i] && (
-                              <button onClick={() => setSmBlockPdfs(prev => { const next = [...prev]; next[i] = undefined; return next; })}
-                                style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.45rem', padding: '1px', flexShrink: 0 }}>
+                            {/* Trim size display */}
+                            <span style={{ fontSize: '0.55rem', color: '#94a3b8', fontWeight: 600 }}>
+                              {blk.trimW}×{blk.trimH}
+                            </span>
+                            {/* Computed ups */}
+                            {computed && (
+                              <span style={{ fontSize: '0.5rem', color: '#64748b' }}>
+                                {computed.cols}×{computed.rows}={computed.cols * computed.rows}
+                              </span>
+                            )}
+                            <div style={{ flex: 1 }} />
+                            {/* Rotate */}
+                            <button onClick={() => setSmBlocks(prev => prev.map((b, idx) => idx === i
+                              ? { ...b, rotation: ((b.rotation + 90) % 360) as 0 | 90 | 180 | 270, cols: 1, rows: 1, blockW: 0, blockH: 0 }
+                              : b
+                            ))} style={{
+                              border: `1px solid color-mix(in srgb, ${blkColor} 40%, transparent)`,
+                              background: blk.rotation ? `color-mix(in srgb, ${blkColor} 15%, transparent)` : 'transparent',
+                              color: blk.rotation ? blkColor : '#64748b',
+                              cursor: 'pointer', fontSize: '0.5rem', padding: '2px 4px', borderRadius: 3,
+                              fontFamily: 'inherit', fontWeight: 700,
+                            }} title="Rotate 90°">
+                              <i className="fas fa-redo" style={{ fontSize: '0.4rem' }} /> {blk.rotation}°
+                            </button>
+                            {/* Remove */}
+                            {smBlocks.length > 1 && (
+                              <button onClick={() => {
+                                setSmBlocks(prev => prev.filter((_, idx) => idx !== i));
+                                setSmBlockPdfs(prev => prev.filter((_, idx) => idx !== i));
+                              }} style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.55rem', padding: '2px' }}>
                                 <i className="fas fa-times" />
                               </button>
                             )}
-                            <input type="number" value={blk.trimW}
-                              onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, trimW: Math.max(1, Number(e.target.value) || 1), blockW: 0, blockH: 0 } : b))}
-                              style={{
-                                flex: 1, minWidth: 0, border: '1px solid var(--border)', borderRadius: 4,
-                                background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
-                                fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
-                                outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
-                              }} />
-                            <span style={{ fontSize: '0.5rem', color: '#64748b', flexShrink: 0 }}>×</span>
-                            <input type="number" value={blk.trimH}
-                              onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, trimH: Math.max(1, Number(e.target.value) || 1), blockW: 0, blockH: 0 } : b))}
-                              style={{
-                                flex: 1, minWidth: 0, border: '1px solid var(--border)', borderRadius: 4,
-                                background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
-                                fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
-                                outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
-                              }} />
-                          </div>
-                          {/* Rotation + Page */}
-                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.5rem', color: '#64748b', flexShrink: 0 }}>Pg</span>
-                            <input type="number" min={1} value={blk.pageNum}
-                              onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, pageNum: Math.max(1, Number(e.target.value) || 1) } : b))}
-                              style={{
-                                width: 36, border: '1px solid var(--border)', borderRadius: 4,
-                                background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
-                                fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
-                                outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
-                              }} />
-                            {job.sides === 2 && (<>
-                              <span style={{ fontSize: '0.5rem', color: '#64748b', flexShrink: 0 }}>B</span>
-                              <input type="number" min={0} value={blk.backPageNum || 0}
-                                onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, backPageNum: Number(e.target.value) || null } : b))}
-                                style={{
-                                  width: 36, border: '1px solid var(--border)', borderRadius: 4,
-                                  background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
-                                  fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
-                                  outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
-                                }} />
-                            </>)}
-                            <div style={{ flex: 1 }} />
-                            {([0, 90, 180, 270] as const).map(r => (
-                              <button key={r}
-                                onClick={() => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, rotation: r, blockW: 0, blockH: 0 } : b))}
-                                style={{
-                                  width: 22, height: 22, borderRadius: 3, fontSize: '0.5rem', fontWeight: 700,
-                                  border: `1px solid ${blk.rotation === r ? blkColor : 'var(--border)'}`,
-                                  background: blk.rotation === r ? `color-mix(in srgb, ${blkColor} 20%, transparent)` : 'transparent',
-                                  color: blk.rotation === r ? blkColor : '#64748b',
-                                  cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-                                }}>
-                                {r}°
-                              </button>
-                            ))}
                           </div>
                         </div>
                       );
@@ -2699,6 +2657,10 @@ export default function CalculatorShell() {
                       }}>
                       <i className="fas fa-plus" style={{ marginRight: 4, fontSize: '0.5rem' }} />Προσθήκη block
                     </button>
+                    <div style={{ fontSize: '0.48rem', color: '#475569', marginTop: 4 }}>
+                      <i className="fas fa-info-circle" style={{ marginRight: 3 }} />
+                      Drag handle στον canvas για αλλαγή grid
+                    </div>
                   </div>
 
                   {/* Step Multi summary — mini layout */}
@@ -3008,6 +2970,10 @@ export default function CalculatorShell() {
                 gangJobPdfs={impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf) : undefined}
                 gangCellAssign={impoMode === 'gangrun' ? gangCellAssign : undefined}
                 smBlockPdfs={impoMode === 'stepmulti' ? smBlockPdfs : undefined}
+                smBlocks={impoMode === 'stepmulti' ? smBlocks : undefined}
+                onSmBlockUpdate={impoMode === 'stepmulti' ? (idx, cols, rows) => {
+                  setSmBlocks(prev => prev.map((b, i) => i === idx ? { ...b, cols, rows, blockW: 0, blockH: 0, _manualGrid: true } : b));
+                } : undefined}
               />
               {/* PDF upload overlay (top-left) */}
               <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>

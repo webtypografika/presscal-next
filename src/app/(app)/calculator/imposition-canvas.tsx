@@ -49,6 +49,8 @@ interface ImpositionCanvasProps {
   gangJobPdfs?: (ParsedPDF | undefined)[];  // per-job PDFs for gang run
   gangCellAssign?: Record<number, number>;   // cellIdx → jobIdx (0-based)
   smBlockPdfs?: (ParsedPDF | undefined)[];   // per-block PDFs for step multi
+  smBlocks?: import('@/types/calculator').StepBlock[];  // step multi blocks (for drag handles)
+  onSmBlockUpdate?: (idx: number, cols: number, rows: number) => void;  // drag callback
 }
 
 type ViewMode = 'single' | 'dual';
@@ -505,8 +507,8 @@ function drawSheet(
     }
   }
 
-  // ─── STEP MULTI BLOCK BOUNDARIES ───
-  if (impo.mode === 'stepmulti' && impo.blocks && impo.blocks.length > 1) {
+  // ─── STEP MULTI BLOCK BOUNDARIES + DRAG HANDLES ───
+  if (impo.mode === 'stepmulti' && impo.blocks && impo.blocks.length > 0) {
     const smColors = ['#f58220', '#3b82f6', '#14b8a6', '#a78bfa', '#f472b6', '#facc15'];
     for (let bi = 0; bi < impo.blocks.length; bi++) {
       const blk = impo.blocks[bi];
@@ -519,17 +521,25 @@ function drawSheet(
       ctx.setLineDash([4, 3]);
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.2;
-      ctx.strokeRect(bx, by, bw, bh);
+      ctx.strokeRect(bx - 1, by - 1, bw + 2, bh + 2);
       ctx.setLineDash([]);
-      // Block number badge
-      const badgeW = Math.min(bw * 0.15, 16);
-      const badgeH = Math.min(bh * 0.12, 12);
+      // Block label
       ctx.fillStyle = color;
-      ctx.fillRect(bx, by, badgeW, badgeH);
-      ctx.font = `800 ${Math.min(badgeH * 0.75, 8)}px Inter, DM Sans, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#fff';
-      ctx.fillText(String(bi + 1), bx + badgeW / 2, by + badgeH * 0.78);
+      ctx.font = '600 9px Inter, DM Sans, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${bi + 1}  ${blk.cols}×${blk.rows}`, bx + 2, by - 3);
+      // Drag handle (bottom-right corner)
+      const hx = bx + bw;
+      const hy = by + bh;
+      const hs = 5;
+      ctx.fillStyle = color;
+      ctx.fillRect(hx - hs, hy - hs, hs * 2, hs * 2);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(hx - 2, hy + 2); ctx.lineTo(hx + 2, hy - 2);
+      ctx.moveTo(hx + 1, hy + 2); ctx.lineTo(hx + 2, hy + 1);
+      ctx.stroke();
       ctx.restore();
     }
   }
@@ -603,7 +613,7 @@ export default function ImpositionCanvas({
   bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
   showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
   pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
-  gangJobPdfs, gangCellAssign, smBlockPdfs,
+  gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -794,13 +804,93 @@ export default function ImpositionCanvas({
     }
   }, [zoom]);
 
+  // ─── STEP MULTI DRAG ───
+  const smDragRef = useRef<{ blockIdx: number; cols: number; rows: number } | null>(null);
+
+  const canvasToMM = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { mmX: 0, mmY: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const cssScale = rect.width / canvas.width * (window.devicePixelRatio || 1);
+    const px = (clientX - rect.left) / cssScale;
+    const py = (clientY - rect.top) / cssScale;
+    const s = canvas.width / (window.devicePixelRatio || 1) / sheetW;
+    const isOff = machCat === 'offset';
+    const mt = isOff ? marginBottom : marginTop;
+    return { mmX: px / s - marginLeft, mmY: py / s - mt };
+  }, [sheetW, marginLeft, marginTop, marginBottom, machCat]);
+
+  const findSmHandle = useCallback((mmX: number, mmY: number): number => {
+    if (!smBlocks || impo.mode !== 'stepmulti') return -1;
+    const handleMM = 6;
+    const computed = impo.blocks || [];
+    for (let i = computed.length - 1; i >= 0; i--) {
+      const blk = computed[i];
+      const right = blk.x + blk.blockW;
+      const bottom = blk.y + blk.blockH;
+      if (mmX >= right - handleMM && mmX <= right + handleMM &&
+          mmY >= bottom - handleMM && mmY <= bottom + handleMM) return i;
+    }
+    return -1;
+  }, [smBlocks, impo]);
+
   // ─── PAN ───
   const onMouseDown = useCallback((e: React.MouseEvent) => {
+    // Step multi drag handle check
+    if (smBlocks && impo.mode === 'stepmulti' && impo.blocks) {
+      const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
+      const hi = findSmHandle(mmX, mmY);
+      if (hi >= 0) {
+        const blk = impo.blocks[hi];
+        smDragRef.current = { blockIdx: hi, cols: blk.cols, rows: blk.rows };
+        e.preventDefault();
+        return;
+      }
+    }
     if (zoom <= 1.02) return;
     draggingRef.current = true;
     dragLastRef.current = { x: e.clientX, y: e.clientY };
-  }, [zoom]);
+  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle]);
   const onMouseMove = useCallback((e: React.MouseEvent) => {
+    // Step multi drag
+    if (smDragRef.current && smBlocks && impo.blocks && onSmBlockUpdate) {
+      const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
+      const bi = smDragRef.current.blockIdx;
+      const blk = smBlocks[bi];
+      if (!blk) return;
+      const rot = blk.rotation || 0;
+      const sw = rot === 90 || rot === 270;
+      const cellW = (sw ? blk.trimH : blk.trimW) + bleed * 2;
+      const cellH = (sw ? blk.trimW : blk.trimH) + bleed * 2;
+      const bx = impo.blocks[bi]?.x ?? 0;
+      const by = impo.blocks[bi]?.y ?? 0;
+      const printW = sheetW - marginLeft - marginRight;
+      const printH = sheetH - marginTop - marginBottom;
+      const dragW = mmX - bx;
+      const dragH = mmY - by;
+      const newCols = Math.max(1, Math.min(
+        Math.round((dragW + gutter) / (cellW + gutter)),
+        Math.floor((printW - bx + gutter) / (cellW + gutter)),
+      ));
+      const newRows = Math.max(1, Math.min(
+        Math.round((dragH + gutter) / (cellH + gutter)),
+        Math.floor((printH - by + gutter) / (cellH + gutter)),
+      ));
+      if (newCols !== smDragRef.current.cols || newRows !== smDragRef.current.rows) {
+        smDragRef.current.cols = newCols;
+        smDragRef.current.rows = newRows;
+        onSmBlockUpdate(bi, newCols, newRows);
+      }
+      return;
+    }
+    // Step multi cursor
+    if (smBlocks && impo.mode === 'stepmulti') {
+      const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
+      const container = containerRef.current;
+      if (container) {
+        container.style.cursor = findSmHandle(mmX, mmY) >= 0 ? 'nwse-resize' : (zoom > 1.02 ? 'grab' : 'default');
+      }
+    }
     if (!draggingRef.current) return;
     const dx = e.clientX - dragLastRef.current.x;
     const dy = e.clientY - dragLastRef.current.y;
@@ -809,8 +899,8 @@ export default function ImpositionCanvas({
     panRef.current.y += dy;
     const canvas = canvasRef.current;
     if (canvas) canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
-  }, [zoom]);
-  const onMouseUp = useCallback(() => { draggingRef.current = false; }, []);
+  }, [zoom, smBlocks, impo, onSmBlockUpdate, canvasToMM, findSmHandle, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom]);
+  const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; }, []);
   const onDoubleClick = useCallback(() => { setZoom(1); panRef.current = { x: 0, y: 0 }; }, []);
 
   // ─── DROP ───
