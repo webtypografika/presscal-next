@@ -73,16 +73,8 @@ export function Topbar() {
         ))}
       </div>
 
-      {/* Right: icons — exact D-hybrid styles */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <button className="h-btn" style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'color 0.2s' }}><i className="fas fa-moon" /></button>
-        <button className="h-btn" style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', position: 'relative' as const, transition: 'color 0.2s' }}>
-          <i className="fas fa-bell" />
-          <span style={{ position: 'absolute' as const, top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)' }} />
-        </button>
-        <Link href="/settings" className="h-btn" style={{ width: 36, height: 36, borderRadius: 8, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', transition: 'color 0.2s', textDecoration: 'none' }} title="Ρυθμίσεις"><i className="fas fa-cog" /></Link>
-        <UserMenu />
-      </div>
+      {/* Right: user menu */}
+      <UserMenu />
     </div>
   );
 }
