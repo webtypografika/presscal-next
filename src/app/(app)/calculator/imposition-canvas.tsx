@@ -710,6 +710,69 @@ export default function ImpositionCanvas({
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
         machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs);
+
+      // ─── STEP MULTI DIMENSION LINES (during drag) ───
+      if (impo.mode === 'stepmulti' && smDragRef.current && impo.blocks) {
+        const sbi = smDragRef.current.blockIdx;
+        const sblk = impo.blocks[sbi];
+        if (sblk) {
+          const isOff = machCat === 'offset';
+          const dmL = marginLeft * scale;
+          const dmT = (isOff ? marginBottom : marginTop) * scale;
+          const dmR = (isOff ? marginLeft : marginRight) * scale;  // not used directly
+          const printWpx = drawW - marginLeft * scale - marginRight * scale;
+          const printHpx = drawH - marginTop * scale - marginBottom * scale;
+          const sbx = offX + dmL + sblk.x * scale;
+          const sby = offY + dmT + sblk.y * scale;
+          const sbw = sblk.blockW * scale;
+          const sbh = sblk.blockH * scale;
+          const paL = offX + dmL;  // printable area left
+          const paT = offY + dmT;  // printable area top
+          const paR = paL + printWpx;
+          const paB = paT + printHpx;
+
+          ctx.save();
+          ctx.setLineDash([2, 2]);
+          ctx.strokeStyle = 'rgba(245,130,32,0.6)';
+          ctx.lineWidth = 0.8;
+          ctx.font = '600 8px Inter, DM Sans, sans-serif';
+          ctx.fillStyle = 'rgba(245,130,32,0.9)';
+          ctx.textAlign = 'center';
+
+          // Left distance
+          const distL = sblk.x;
+          if (distL > 0.5) {
+            const ly = sby + sbh / 2;
+            ctx.beginPath(); ctx.moveTo(paL, ly); ctx.lineTo(sbx, ly); ctx.stroke();
+            ctx.fillText(`${distL.toFixed(1)}`, (paL + sbx) / 2, ly - 3);
+          }
+          // Top distance
+          const distT = sblk.y;
+          if (distT > 0.5) {
+            const lx = sbx + sbw / 2;
+            ctx.beginPath(); ctx.moveTo(lx, paT); ctx.lineTo(lx, sby); ctx.stroke();
+            ctx.fillText(`${distT.toFixed(1)}`, lx, (paT + sby) / 2 + 3);
+          }
+          // Right distance
+          const printWmm = sheetW - marginLeft - marginRight;
+          const distR = printWmm - sblk.x - sblk.blockW;
+          if (distR > 0.5) {
+            const ly = sby + sbh / 2;
+            ctx.beginPath(); ctx.moveTo(sbx + sbw, ly); ctx.lineTo(paR, ly); ctx.stroke();
+            ctx.fillText(`${distR.toFixed(1)}`, (sbx + sbw + paR) / 2, ly - 3);
+          }
+          // Bottom distance
+          const printHmm = sheetH - marginTop - marginBottom;
+          const distB = printHmm - sblk.y - sblk.blockH;
+          if (distB > 0.5) {
+            const lx = sbx + sbw / 2;
+            ctx.beginPath(); ctx.moveTo(lx, sby + sbh); ctx.lineTo(lx, paB); ctx.stroke();
+            ctx.fillText(`${distB.toFixed(1)}`, lx, (sby + sbh + paB) / 2 + 3);
+          }
+
+          ctx.restore();
+        }
+      }
     }
 
     // Feed direction indicator — LEFT edge = paper entry side

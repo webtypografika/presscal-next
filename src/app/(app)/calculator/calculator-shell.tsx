@@ -2611,10 +2611,15 @@ export default function CalculatorShell() {
                             <span style={{ fontSize: '0.55rem', color: '#94a3b8', fontWeight: 600 }}>
                               {blk.trimW}×{blk.trimH}
                             </span>
-                            {/* Computed ups */}
+                            {/* Computed ups + position */}
                             {computed && (
                               <span style={{ fontSize: '0.5rem', color: '#64748b' }}>
                                 {computed.cols}×{computed.rows}={computed.cols * computed.rows}
+                              </span>
+                            )}
+                            {computed && (computed.x > 0.1 || computed.y > 0.1) && (
+                              <span style={{ fontSize: '0.45rem', color: '#475569' }}>
+                                x:{computed.x.toFixed(1)} y:{computed.y.toFixed(1)}
                               </span>
                             )}
                             <div style={{ flex: 1 }} />
