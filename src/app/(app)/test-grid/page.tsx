@@ -27,6 +27,7 @@ interface GridBlock {
   rows: number;
   x: number; // mm from printable origin
   y: number;
+  rotation: 0 | 90 | 180 | 270;
 }
 
 export default function TestGridPage() {
@@ -75,7 +76,9 @@ export default function TestGridPage() {
       // Find free Y position (stack below existing blocks)
       let freeY = 0;
       for (const b of blocks) {
-        const bBottom = b.y + b.rows * (b.trimH + BLEED * 2 + GUTTER) - GUTTER;
+        const bsw = b.rotation === 90 || b.rotation === 270;
+        const bCellH = (bsw ? b.trimW : b.trimH) + BLEED * 2;
+        const bBottom = b.y + b.rows * (bCellH + GUTTER) - GUTTER;
         if (bBottom > freeY) freeY = bBottom + GUTTER;
       }
 
@@ -87,6 +90,7 @@ export default function TestGridPage() {
         rows: 1,
         x: 0,
         y: freeY,
+        rotation: 0,
       }]);
     }
   }, [blocks]);
@@ -109,8 +113,9 @@ export default function TestGridPage() {
     const handleSize = 8; // mm
     for (let i = blocks.length - 1; i >= 0; i--) {
       const b = blocks[i];
-      const cellW = b.trimW + BLEED * 2;
-      const cellH = b.trimH + BLEED * 2;
+      const sw = b.rotation === 90 || b.rotation === 270;
+      const cellW = (sw ? b.trimH : b.trimW) + BLEED * 2;
+      const cellH = (sw ? b.trimW : b.trimH) + BLEED * 2;
       const blockRight = b.x + b.cols * (cellW + GUTTER) - GUTTER;
       const blockBottom = b.y + b.rows * (cellH + GUTTER) - GUTTER;
       if (mmX >= blockRight - handleSize && mmX <= blockRight + handleSize &&
@@ -151,8 +156,9 @@ export default function TestGridPage() {
 
     const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
     const b = blocks[dragState.blockIdx];
-    const cellW = b.trimW + BLEED * 2;
-    const cellH = b.trimH + BLEED * 2;
+    const sw = b.rotation === 90 || b.rotation === 270;
+    const cellW = (sw ? b.trimH : b.trimW) + BLEED * 2;
+    const cellH = (sw ? b.trimW : b.trimH) + BLEED * 2;
 
     // Calculate cols/rows from drag position relative to block origin
     const dragW = mmX - b.x;
@@ -215,8 +221,10 @@ export default function TestGridPage() {
 
     for (let bi = 0; bi < blocks.length; bi++) {
       const b = blocks[bi];
-      const cellW = b.trimW + BLEED * 2;
-      const cellH = b.trimH + BLEED * 2;
+      const rot = b.rotation || 0;
+      const swapped = rot === 90 || rot === 270;
+      const cellW = (swapped ? b.trimH : b.trimW) + BLEED * 2;
+      const cellH = (swapped ? b.trimW : b.trimH) + BLEED * 2;
       const color = blkColors[bi % blkColors.length];
       const thumb = b.pdf.thumbnails[0];
 
@@ -248,14 +256,24 @@ export default function TestGridPage() {
             const pgSize = b.pdf.pageSizes[0];
             const pdfW = pgSize.trimW;
             const pdfH = pgSize.trimH;
-            const scX = tw / (pdfW * scale);
-            const scY = th / (pdfH * scale);
+
+            // Rotate around cell center
+            const centerX = tx + tw / 2;
+            const centerY = ty + th / 2;
+            ctx.translate(centerX, centerY);
+            ctx.rotate((rot * Math.PI) / 180);
+
+            // Scale PDF to fit the UNROTATED cell (swap fit dimensions for 90/270)
+            const fitW = swapped ? th : tw;
+            const fitH = swapped ? tw : th;
+            const scX = fitW / (pdfW * scale);
+            const scY = fitH / (pdfH * scale);
             const sc = Math.min(scX, scY);
             const drawW = (pgSize.cropW || pgSize.w) * scale * sc;
             const drawH = (pgSize.cropH || pgSize.h) * scale * sc;
-            const offX = (pgSize.trimOffX ?? ((pgSize.cropW || pgSize.w) - pdfW) / 2) * scale * sc;
-            const offY = (pgSize.trimOffY ?? ((pgSize.cropH || pgSize.h) - pdfH) / 2) * scale * sc;
-            ctx.drawImage(thumb, tx - offX, ty - offY, drawW, drawH);
+            const pOffX = (pgSize.trimOffX ?? ((pgSize.cropW || pgSize.w) - pdfW) / 2) * scale * sc;
+            const pOffY = (pgSize.trimOffY ?? ((pgSize.cropH || pgSize.h) - pdfH) / 2) * scale * sc;
+            ctx.drawImage(thumb, -fitW / 2 - pOffX, -fitH / 2 - pOffY, drawW, drawH);
             ctx.restore();
           } else {
             ctx.fillStyle = `${color}15`;
@@ -345,6 +363,17 @@ export default function TestGridPage() {
                   fontSize: '0.5rem', fontWeight: 800, color: '#fff',
                 }}>{i + 1}</span>
                 {b.pdf.fileName.slice(0, 20)} — {b.trimW}×{b.trimH}mm — {b.cols}×{b.rows} = {b.cols * b.rows} ups
+                {b.rotation > 0 && <span style={{ fontSize: '0.55rem', opacity: 0.7 }}>{b.rotation}°</span>}
+                <button onClick={() => setBlocks(prev => prev.map((bl, idx) => idx === i
+                  ? { ...bl, rotation: ((bl.rotation + 90) % 360) as 0 | 90 | 180 | 270, cols: 1, rows: 1 }
+                  : bl
+                ))} style={{
+                  border: `1px solid ${color}60`, background: `${color}20`, color,
+                  cursor: 'pointer', fontSize: '0.6rem', padding: '2px 5px', borderRadius: 3,
+                  fontFamily: 'inherit', fontWeight: 700,
+                }} title="Rotate 90° clockwise">
+                  <i className="fas fa-redo" style={{ fontSize: '0.5rem' }} /> {((b.rotation + 90) % 360)}°
+                </button>
                 <button onClick={() => removeBlock(i)} style={{
                   border: 'none', background: 'transparent', color: '#64748b',
                   cursor: 'pointer', fontSize: '0.6rem', padding: '2px',
