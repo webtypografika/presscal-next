@@ -459,108 +459,115 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           <i className="fas fa-arrow-left" />
         </button>
 
-        {/* Customer avatar — click to change */}
-        <div
-          onClick={() => setShowCustomerPicker(!showCustomerPicker)}
-          style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: `color-mix(in srgb, ${st.color} 15%, transparent)`,
-            color: st.color, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '0.92rem', fontWeight: 700, flexShrink: 0, cursor: 'pointer',
-          }}
-        >{initials(customerName)}</div>
-
-        {/* Info — click to change customer */}
+        {/* Main info block */}
         <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              onClick={() => setShowCustomerPicker(!showCustomerPicker)}
-              style={{ fontSize: '1rem', fontWeight: 600, cursor: 'pointer' }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text)')}
-            >
-              {customerName} <i className="fas fa-pen" style={{ fontSize: '0.6rem', opacity: 0.4, marginLeft: 4 }} />
-            </span>
-            <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: '0.78rem', fontWeight: 600, background: st.bg, color: st.color }}>{st.label}</span>
-          </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{quote.number}</span>
-            {/* Contact (who requested the quote) */}
-            <span
-              onClick={() => setShowContactPicker(!showContactPicker)}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                cursor: 'pointer', padding: '1px 8px', borderRadius: 10,
-                background: contactId ? 'color-mix(in srgb, var(--teal) 12%, transparent)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${contactId ? 'color-mix(in srgb, var(--teal) 25%, transparent)' : 'var(--glass-border)'}`,
-                color: contactId ? 'var(--teal)' : '#64748b',
-                fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.15s',
-              }}
-            >
-              <i className="fas fa-user" style={{ fontSize: '0.55rem' }} />
-              {selectedContact?.name || 'Επαφή'}
-              <i className={`fas fa-${contactId ? 'pen' : 'plus'}`} style={{ fontSize: '0.45rem', opacity: 0.5 }} />
-            </span>
-            {selectedCompany?.email && <span>{selectedCompany.email}</span>}
-            {selectedCompany?.phone && <span>{selectedCompany.phone}</span>}
-            <span>{new Date(quote.date).toLocaleDateString('el-GR')}</span>
-            {selectedCompany?.folderPath && (
-              <a
-                href={`presscal-fh://open-folder?path=${encodeURIComponent(selectedCompany.folderPath)}${selectedCompany?.email ? `&email=${encodeURIComponent(selectedCompany.email)}` : ''}`}
-                title={selectedCompany.folderPath}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  color: '#f58220', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600,
-                }}
-                onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-              >
-                <i className="fas fa-folder-open" style={{ fontSize: '0.65rem' }} />
-                Φάκελος
-              </a>
-            )}
+          {/* Row 1: Quote number + Status + Date */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: '0.85rem', fontFamily: "'DM Mono', monospace", letterSpacing: '0.02em' }}>{quote.number}</span>
+            <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: '0.72rem', fontWeight: 600, background: st.bg, color: st.color }}>{st.label}</span>
+            <span style={{ fontSize: '0.78rem', color: '#475569' }}>{new Date(quote.date).toLocaleDateString('el-GR')}</span>
             {(quote as any).jobFolderPath && (
-              <a
-                href={`presscal-fh://open-folder?path=${encodeURIComponent((quote as any).jobFolderPath)}`}
-                title={(quote as any).jobFolderPath}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  color: 'var(--teal)', textDecoration: 'none', fontSize: '0.8rem', fontWeight: 600,
-                }}
-                onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-              >
-                <i className="fas fa-briefcase" style={{ fontSize: '0.65rem' }} />
-                Εργασία
+              <a href={`presscal-fh://open-folder?path=${encodeURIComponent((quote as any).jobFolderPath)}`} title={(quote as any).jobFolderPath}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--teal)', textDecoration: 'none', fontSize: '0.75rem', fontWeight: 600 }}>
+                <i className="fas fa-briefcase" style={{ fontSize: '0.6rem' }} />Εργασία
               </a>
             )}
           </div>
 
-          {/* Customer picker dropdown */}
-          {showCustomerPicker && (
-            <CustomerPicker
-              customers={customers}
-              currentId={customerId}
-              linkedEmails={quote.linkedEmails as string[] || []}
-              hasElorus={elorusConfigured}
-              onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
-              onClose={() => setShowCustomerPicker(false)}
-              toast={toast}
-            />
-          )}
-          {/* Contact picker dropdown */}
-          {showContactPicker && (
-            <ContactPicker
-              currentId={contactId}
-              onSelect={(id, contact) => {
-                setContactId(id);
-                if (contact) setQuote(prev => ({ ...prev, contact } as any));
-                setShowContactPicker(false);
+          {/* Row 2+3: Company + Contact side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {/* Company */}
+            <div
+              style={{
+                padding: '8px 12px', borderRadius: 8,
+                background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)',
+                position: 'relative',
               }}
-              onClose={() => setShowContactPicker(false)}
-              toast={toast}
-            />
-          )}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <i className="fas fa-building" style={{ fontSize: '0.55rem', color: 'var(--blue)', opacity: 0.7 }} />
+                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#475569', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Πελάτης</span>
+              </div>
+              <div
+                onClick={() => setShowCustomerPicker(!showCustomerPicker)}
+                style={{ fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text)')}
+              >
+                {customerName}
+                <i className="fas fa-pen" style={{ fontSize: '0.5rem', opacity: 0.3 }} />
+              </div>
+              <div style={{ display: 'flex', gap: 10, fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                {selectedCompany?.email && <span><i className="fas fa-envelope" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedCompany.email}</span>}
+                {selectedCompany?.phone && <span><i className="fas fa-phone" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedCompany.phone}</span>}
+                {selectedCompany?.folderPath && (
+                  <a href={`presscal-fh://open-folder?path=${encodeURIComponent(selectedCompany.folderPath)}${selectedCompany?.email ? `&email=${encodeURIComponent(selectedCompany.email)}` : ''}`} title={selectedCompany.folderPath}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#f58220', textDecoration: 'none', fontWeight: 600 }}>
+                    <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} />Φάκελος
+                  </a>
+                )}
+              </div>
+              {/* Customer picker dropdown */}
+              {showCustomerPicker && (
+                <CustomerPicker
+                  customers={customers}
+                  currentId={customerId}
+                  linkedEmails={quote.linkedEmails as string[] || []}
+                  hasElorus={elorusConfigured}
+                  onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
+                  onClose={() => setShowCustomerPicker(false)}
+                  toast={toast}
+                />
+              )}
+            </div>
+
+            {/* Contact */}
+            <div
+              style={{
+                padding: '8px 12px', borderRadius: 8,
+                background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)',
+                position: 'relative',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <i className="fas fa-user" style={{ fontSize: '0.55rem', color: 'var(--teal)', opacity: 0.7 }} />
+                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#475569', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Επαφή</span>
+              </div>
+              <div
+                onClick={() => setShowContactPicker(!showContactPicker)}
+                style={{
+                  fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer', marginBottom: 4,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  color: contactId ? 'var(--text)' : '#475569',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--teal)')}
+                onMouseLeave={e => (e.currentTarget.style.color = contactId ? 'var(--text)' : '#475569')}
+              >
+                {selectedContact?.name || '— Επιλογή επαφής —'}
+                <i className={`fas fa-${contactId ? 'pen' : 'plus'}`} style={{ fontSize: '0.5rem', opacity: 0.3 }} />
+              </div>
+              {selectedContact && (
+                <div style={{ display: 'flex', gap: 10, fontSize: '0.75rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                  {selectedContact.email && <span><i className="fas fa-envelope" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedContact.email}</span>}
+                  {selectedContact.phone && <span><i className="fas fa-phone" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedContact.phone}</span>}
+                  {selectedContact.mobile && <span><i className="fas fa-mobile-alt" style={{ fontSize: '0.5rem', marginRight: 3, opacity: 0.5 }} />{selectedContact.mobile}</span>}
+                </div>
+              )}
+              {/* Contact picker dropdown */}
+              {showContactPicker && (
+                <ContactPicker
+                  currentId={contactId}
+                  onSelect={(id, contact) => {
+                    setContactId(id);
+                    if (contact) setQuote(prev => ({ ...prev, contact } as any));
+                    setShowContactPicker(false);
+                  }}
+                  onClose={() => setShowContactPicker(false)}
+                  toast={toast}
+                />
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Quick actions */}
