@@ -524,6 +524,11 @@ export default function CalculatorShell() {
   const [csNumPosY, setCsNumPosY] = useState(0.95);
   const [csNumRotation, setCsNumRotation] = useState(0);
   const [csFixedBack, setCsFixedBack] = useState(false);
+  // Gang Run
+  const [gangJobs, setGangJobs] = useState<{ id: string; label: string; qty: number }[]>([
+    { id: crypto.randomUUID(), label: 'Δουλειά 1', qty: 1 },
+  ]);
+  const [gangCellAssign, setGangCellAssign] = useState<Record<number, number>>({});  // cellIdx → jobIdx (0-based)
   const [csBackPdf, setCsBackPdf] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [pbPaperThickness, setPbPaperThickness] = useState(0.1); // mm per sheet
   const [impoColorBar, setImpoColorBar] = useState(false);
@@ -917,6 +922,15 @@ export default function CalculatorShell() {
     // Cut & Stack
     stackOrder: csStackOrder,
     stackStartNum: csStartNum,
+    // Gang Run
+    gangPageCount: impoMode === 'gangrun' ? gangJobs.length : undefined,
+    gangCellAssign: impoMode === 'gangrun' ? Object.fromEntries(
+      Object.entries(gangCellAssign).map(([k, v]) => [k, v + 1])  // engine uses 1-based page numbers
+    ) : undefined,
+    gangCellQty: impoMode === 'gangrun' ? Object.fromEntries(
+      Object.entries(gangCellAssign).map(([k, v]) => [k, gangJobs[v]?.qty || 1])
+    ) : undefined,
+    gangAutoOptimize: impoMode === 'gangrun' ? Object.keys(gangCellAssign).length === 0 : undefined,
   };
 
   const impo: ImpositionResult = calcImposition(impoInput);
@@ -2353,6 +2367,131 @@ export default function CalculatorShell() {
                       </div>
                     )}
                   </div>
+                </>)}
+
+                {/* Gang Run */}
+                {impoMode === 'gangrun' && (<>
+                  <div style={{ marginBottom: 10 }}>
+                    <MfLabel>ΔΟΥΛΕΙΕΣ</MfLabel>
+                    {gangJobs.map((gj, i) => (
+                      <div key={gj.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
+                        padding: '6px 8px', borderRadius: 6,
+                        background: `color-mix(in srgb, ${['var(--accent)', 'var(--blue)', 'var(--teal)', '#a78bfa', '#f472b6', '#facc15'][i % 6]} 10%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${['var(--accent)', 'var(--blue)', 'var(--teal)', '#a78bfa', '#f472b6', '#facc15'][i % 6]} 25%, transparent)`,
+                      }}>
+                        <span style={{
+                          width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                          background: ['var(--accent)', 'var(--blue)', 'var(--teal)', '#a78bfa', '#f472b6', '#facc15'][i % 6],
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '0.55rem', fontWeight: 800, color: '#fff',
+                        }}>{i + 1}</span>
+                        <input
+                          value={gj.label}
+                          onChange={e => setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, label: e.target.value } : j))}
+                          style={{
+                            flex: 1, border: 'none', background: 'transparent', color: 'var(--text)',
+                            fontSize: '0.75rem', fontWeight: 600, outline: 'none', fontFamily: 'inherit', minWidth: 0,
+                          }}
+                          placeholder={`Δουλειά ${i + 1}`}
+                        />
+                        <span style={{ fontSize: '0.55rem', color: '#64748b', flexShrink: 0 }}>×</span>
+                        <input
+                          type="number"
+                          value={gj.qty}
+                          onChange={e => setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, qty: Math.max(1, Number(e.target.value) || 1) } : j))}
+                          style={{
+                            width: 50, border: '1px solid var(--border)', borderRadius: 4,
+                            background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
+                            fontSize: '0.75rem', fontWeight: 700, textAlign: 'center',
+                            outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
+                          }}
+                        />
+                        {gangJobs.length > 1 && (
+                          <button onClick={() => {
+                            setGangJobs(prev => prev.filter((_, idx) => idx !== i));
+                            setGangCellAssign(prev => {
+                              const next: Record<number, number> = {};
+                              for (const [k, v] of Object.entries(prev)) {
+                                if (v < i) next[Number(k)] = v;
+                                else if (v > i) next[Number(k)] = v - 1;
+                              }
+                              return next;
+                            });
+                          }} style={{
+                            border: 'none', background: 'transparent', color: '#64748b',
+                            cursor: 'pointer', fontSize: '0.6rem', padding: '2px',
+                          }}>
+                            <i className="fas fa-times" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button onClick={() => setGangJobs(prev => [...prev, { id: crypto.randomUUID(), label: `Δουλειά ${prev.length + 1}`, qty: 1 }])}
+                      style={{
+                        width: '100%', padding: '5px 0', borderRadius: 6,
+                        border: '1px dashed var(--border)', background: 'transparent',
+                        color: 'var(--teal)', fontSize: '0.68rem', fontWeight: 600,
+                        cursor: 'pointer', fontFamily: 'inherit', marginTop: 2,
+                      }}>
+                      <i className="fas fa-plus" style={{ marginRight: 4, fontSize: '0.5rem' }} />Προσθήκη δουλειάς
+                    </button>
+                  </div>
+
+                  {/* Cell assignments */}
+                  <div style={{ marginBottom: 10 }}>
+                    <MfLabel>ΑΝΑΘΕΣΗ CELLS ({ups}-up)</MfLabel>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {Array.from({ length: ups }, (_, cellIdx) => {
+                        const jobIdx = gangCellAssign[cellIdx] ?? 0;
+                        const colors = ['var(--accent)', 'var(--blue)', 'var(--teal)', '#a78bfa', '#f472b6', '#facc15'];
+                        const color = colors[jobIdx % colors.length];
+                        return (
+                          <button key={cellIdx}
+                            onClick={() => setGangCellAssign(prev => ({ ...prev, [cellIdx]: (jobIdx + 1) % gangJobs.length }))}
+                            style={{
+                              width: 28, height: 28, borderRadius: 4,
+                              border: `2px solid ${color}`,
+                              background: `color-mix(in srgb, ${color} 15%, transparent)`,
+                              color, fontSize: '0.65rem', fontWeight: 800,
+                              cursor: 'pointer', fontFamily: 'inherit',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                            title={`Cell ${cellIdx + 1}: ${gangJobs[jobIdx]?.label || '?'} — κλικ για αλλαγή`}
+                          >
+                            {jobIdx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ fontSize: '0.5rem', color: '#475569', marginTop: 4 }}>
+                      <i className="fas fa-info-circle" style={{ marginRight: 3 }} />Κλικ σε cell για εναλλαγή δουλειάς
+                    </div>
+                  </div>
+
+                  {/* Gang summary */}
+                  {impo.gangData && (
+                    <div style={{
+                      padding: '8px 10px', borderRadius: 6, marginBottom: 10,
+                      background: 'color-mix(in srgb, var(--teal) 6%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--teal) 20%, transparent)',
+                      fontSize: '0.62rem', color: '#94a3b8',
+                    }}>
+                      <div style={{ fontWeight: 700, color: 'var(--teal)', marginBottom: 4 }}>Σύνοψη Gang Run</div>
+                      {gangJobs.map((gj, i) => {
+                        const cellCount = Object.values(gangCellAssign).filter(v => v === i).length || (i === 0 ? ups - Object.keys(gangCellAssign).length : 0);
+                        return (
+                          <div key={gj.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                            <span>{gj.label}</span>
+                            <span style={{ fontWeight: 600 }}>{cellCount} cells × {gj.qty} = {impo.gangData!.gangSheetsNeeded} φύλλα</span>
+                          </div>
+                        );
+                      })}
+                      <div style={{ borderTop: '1px solid color-mix(in srgb, var(--teal) 20%, transparent)', paddingTop: 4, marginTop: 4, fontWeight: 700, color: 'var(--teal)' }}>
+                        Σύνολο: {impo.gangData.gangSheetsNeeded} φύλλα
+                      </div>
+                    </div>
+                  )}
                 </>)}
 
                 {/* Booklet */}
