@@ -208,6 +208,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [vatRate, setVatRate] = useState(initial.vatRate ?? 24);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [customerId, setCustomerId] = useState(initial.companyId ?? initial.customerId ?? '');
+  const [contactId, setContactId] = useState((initial as any).contactId ?? '');
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
@@ -217,6 +218,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [leftTab, setLeftTab] = useState<'email' | 'files'>((quote as any).fileLinks?.length > 0 ? 'files' : 'email');
   const [courierStatus, setCourierStatus] = useState(quote.courierStatus || '');
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [showContactPicker, setShowContactPicker] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
 
   const toast = useCallback((message: string, type: ToastType = 'success') => {
@@ -236,6 +238,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const selectedCustomer = selectedCompany; // backward compat alias
   const primaryContact = selectedCompany?.companyContacts?.find((cc: any) => cc.isPrimary)?.contact;
   const customerName = selectedCompany?.name ?? quote.customer?.name ?? '—';
+  const selectedContact = (quote as any).contact ?? null;
 
   // Autosave with debounce (1s after last change)
   const mountedRef = useRef(false);
@@ -277,7 +280,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
     saveTimeoutRef.current = setTimeout(() => { save(); }, 1000);
     return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, title, notes, vatRate, customerId]);
+  }, [items, title, notes, vatRate, customerId, contactId]);
 
   function updateItem(idx: number, field: string, value: any) {
     setItems(prev => prev.map((item, i) => {
@@ -293,7 +296,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   async function save() {
     setSaving(true);
     try {
-      const result = await updateQuote(quote.id, { companyId: customerId || null, title: title || null, notes: notes || null, items, subtotal, vatRate, vatAmount, grandTotal, totalCost, totalProfit });
+      const result = await updateQuote(quote.id, { companyId: customerId || null, contactId: contactId || null, title: title || null, notes: notes || null, items, subtotal, vatRate, vatAmount, grandTotal, totalCost, totalProfit });
       setQuote(prev => ({ ...prev, ...result }));
       setDirty(false);
     } catch (e) { toast('Σφάλμα αποθήκευσης: ' + (e as Error).message, 'error'); }
@@ -480,9 +483,24 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             </span>
             <span style={{ padding: '2px 8px', borderRadius: 10, fontSize: '0.78rem', fontWeight: 600, background: st.bg, color: st.color }}>{st.label}</span>
           </div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 12 }}>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{quote.number}</span>
-            {primaryContact && <span><i className="fas fa-user" style={{ fontSize: '0.6rem', marginRight: 3 }} />{primaryContact.name}</span>}
+            {/* Contact (who requested the quote) */}
+            <span
+              onClick={() => setShowContactPicker(!showContactPicker)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                cursor: 'pointer', padding: '1px 8px', borderRadius: 10,
+                background: contactId ? 'color-mix(in srgb, var(--teal) 12%, transparent)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${contactId ? 'color-mix(in srgb, var(--teal) 25%, transparent)' : 'var(--glass-border)'}`,
+                color: contactId ? 'var(--teal)' : '#64748b',
+                fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.15s',
+              }}
+            >
+              <i className="fas fa-user" style={{ fontSize: '0.55rem' }} />
+              {selectedContact?.name || 'Επαφή'}
+              <i className={`fas fa-${contactId ? 'pen' : 'plus'}`} style={{ fontSize: '0.45rem', opacity: 0.5 }} />
+            </span>
             {selectedCompany?.email && <span>{selectedCompany.email}</span>}
             {selectedCompany?.phone && <span>{selectedCompany.phone}</span>}
             <span>{new Date(quote.date).toLocaleDateString('el-GR')}</span>
@@ -527,6 +545,19 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               hasElorus={elorusConfigured}
               onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
               onClose={() => setShowCustomerPicker(false)}
+              toast={toast}
+            />
+          )}
+          {/* Contact picker dropdown */}
+          {showContactPicker && (
+            <ContactPicker
+              currentId={contactId}
+              onSelect={(id, contact) => {
+                setContactId(id);
+                if (contact) setQuote(prev => ({ ...prev, contact } as any));
+                setShowContactPicker(false);
+              }}
+              onClose={() => setShowContactPicker(false)}
               toast={toast}
             />
           )}
@@ -2713,6 +2744,131 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// CONTACT PICKER — dropdown to select contact (who requested the quote)
+// ═══════════════════════════════════════════════════════
+function ContactPicker({ currentId, onSelect, onClose, toast }: {
+  currentId: string;
+  onSelect: (id: string, contact?: any) => void;
+  onClose: () => void;
+  toast: (msg: string, type?: ToastType) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [onClose]);
+
+  // Debounced search
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const { searchContacts } = await import('../actions');
+        const data = await searchContacts(search.trim() || undefined);
+        setResults(data as any);
+      } finally { setLoading(false); }
+    }, search ? 300 : 0);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [search]);
+
+  const inp: React.CSSProperties = {
+    width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+    borderRadius: 6, padding: '7px 10px', color: 'var(--text)', fontSize: '0.85rem', outline: 'none',
+  };
+
+  return (
+    <div ref={ref} style={{
+      position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 50,
+      width: 340, maxHeight: 380, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      background: '#141e37', border: '1px solid var(--border)',
+      borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+    }}>
+      {/* Search */}
+      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6 }}>
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Αναζήτηση επαφής..."
+          autoFocus style={{ ...inp, flex: 1 }}
+        />
+      </div>
+
+      {/* Results */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {/* Remove contact option */}
+        {currentId && (
+          <div
+            onClick={() => onSelect('', null)}
+            style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.82rem', color: '#64748b', fontStyle: 'italic' }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          >
+            <i className="fas fa-times" style={{ marginRight: 6, fontSize: '0.6rem' }} />Χωρίς επαφή
+          </div>
+        )}
+
+        {loading && (
+          <div style={{ padding: '12px', fontSize: '0.78rem', color: '#64748b' }}>
+            <i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Αναζήτηση...
+          </div>
+        )}
+
+        {!loading && results.length === 0 && (
+          <div style={{ padding: '16px 12px', fontSize: '0.82rem', color: '#475569', textAlign: 'center' }}>
+            {search ? 'Δεν βρέθηκαν επαφές' : 'Πληκτρολογήστε για αναζήτηση'}
+          </div>
+        )}
+
+        {results.map(c => (
+          <div
+            key={c.id}
+            onClick={() => onSelect(c.id, c)}
+            style={{
+              padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+              background: c.id === currentId ? 'rgba(255,255,255,0.03)' : 'transparent',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+            onMouseLeave={e => (e.currentTarget.style.background = c.id === currentId ? 'rgba(255,255,255,0.03)' : 'transparent')}
+          >
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+              background: 'color-mix(in srgb, var(--teal) 12%, transparent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--teal)', fontSize: '0.65rem', fontWeight: 700,
+            }}>
+              {c.name.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                {c.name}
+                {c.id === currentId && <i className="fas fa-check" style={{ marginLeft: 6, fontSize: '0.6rem', color: 'var(--success)' }} />}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {c.email && <span>{c.email}</span>}
+                {c.companyContacts?.map((cc: any) => (
+                  <span key={cc.company.id} style={{ color: '#475569' }}>
+                    <i className="fas fa-building" style={{ fontSize: '0.5rem', marginRight: 2 }} />{cc.company.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

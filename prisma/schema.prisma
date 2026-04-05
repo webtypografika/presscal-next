@@ -496,6 +496,7 @@ model Contact {
   companyContacts CompanyContact[]
   quoteRecipients QuoteRecipient[]
   calendarEvents  CalendarEvent[]
+  quotes          Quote[] @relation("QuoteContact")
 
   deletedAt DateTime?
   createdAt DateTime @default(now())
@@ -548,6 +549,10 @@ model Quote {
 
   companyId  String?
   company    Company? @relation(fields: [companyId], references: [id])
+
+  // Contact — the person who requested this quote (independent of company)
+  contactId  String?
+  contact    Contact? @relation("QuoteContact", fields: [contactId], references: [id])
 
   // DEPRECATED — kept for migration
   customerId String?

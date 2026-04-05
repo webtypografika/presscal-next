@@ -40,6 +40,7 @@ export async function getQuote(id: string) {
           },
         },
       },
+      contact: true,
       quoteRecipients: {
         include: { contact: true },
       },
@@ -125,6 +126,7 @@ export async function createQuote(data: {
 
 export async function updateQuote(id: string, data: {
   companyId?: string | null;
+  contactId?: string | null;
   customerId?: string | null;
   title?: string | null;
   description?: string | null;
@@ -138,11 +140,12 @@ export async function updateQuote(id: string, data: {
   totalCost?: number;
   totalProfit?: number;
 }) {
-  // Separate companyId/customerId from other fields to avoid FK issues
-  const { companyId, customerId, items, ...rest } = data;
+  // Separate companyId/customerId/contactId from other fields to avoid FK issues
+  const { companyId, contactId, customerId, items, ...rest } = data;
   const updateData: Record<string, unknown> = { ...rest };
   if (items !== undefined) updateData.items = items as any;
   if (companyId !== undefined) updateData.companyId = companyId || null;
+  if (contactId !== undefined) updateData.contactId = contactId || null;
   // Don't set customerId to a company ID — only set if it's actually a Customer record
   // During transition, leave customerId untouched unless explicitly null
   if (customerId === null) updateData.customerId = null;
@@ -277,6 +280,29 @@ export async function getCompaniesForQuotes(search?: string) {
     },
     orderBy: { name: 'asc' },
     take: 30,
+  });
+}
+
+export async function searchContacts(search?: string) {
+  const where: any = { orgId: ORG_ID, deletedAt: null };
+  if (search?.trim()) {
+    const s = search.trim();
+    where.OR = [
+      { name: { contains: s, mode: 'insensitive' } },
+      { email: { contains: s, mode: 'insensitive' } },
+      { phone: { contains: s } },
+    ];
+  }
+  return prisma.contact.findMany({
+    where,
+    include: {
+      companyContacts: {
+        include: { company: { select: { id: true, name: true } } },
+        take: 3,
+      },
+    },
+    orderBy: { name: 'asc' },
+    take: 20,
   });
 }
 
