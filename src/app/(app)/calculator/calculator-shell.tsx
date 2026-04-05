@@ -2471,32 +2471,57 @@ export default function CalculatorShell() {
                     </button>
                   </div>
 
-                  {/* Cell assignments */}
+                  {/* Cell assignments — mini sheet layout */}
                   <div style={{ marginBottom: 10 }}>
                     <MfLabel>ΑΝΑΘΕΣΗ CELLS ({ups}-up)</MfLabel>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {Array.from({ length: ups }, (_, cellIdx) => {
-                        const jobIdx = gangCellAssign[cellIdx] ?? 0;
-                        const colors = ['var(--accent)', 'var(--blue)', 'var(--teal)', '#a78bfa', '#f472b6', '#facc15'];
-                        const color = colors[jobIdx % colors.length];
-                        return (
-                          <button key={cellIdx}
-                            onClick={() => setGangCellAssign(prev => ({ ...prev, [cellIdx]: (jobIdx + 1) % gangJobs.length }))}
-                            style={{
-                              width: 28, height: 28, borderRadius: 4,
-                              border: `2px solid ${color}`,
-                              background: `color-mix(in srgb, ${color} 15%, transparent)`,
-                              color, fontSize: '0.65rem', fontWeight: 800,
-                              cursor: 'pointer', fontFamily: 'inherit',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}
-                            title={`Cell ${cellIdx + 1}: ${gangJobs[jobIdx]?.label || '?'} — κλικ για αλλαγή`}
-                          >
-                            {jobIdx + 1}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {(() => {
+                      const gCols = impo.cols || 1;
+                      const gRows = impo.rows || 1;
+                      const cellAspect = job.width && job.height ? job.width / job.height : 1;
+                      const maxGridW = 220;
+                      const cellW = Math.min(Math.floor((maxGridW - (gCols - 1) * 3) / gCols), 52);
+                      const cellH = Math.round(cellW / cellAspect);
+                      const colors = ['var(--accent)', 'var(--blue)', 'var(--teal)', '#a78bfa', '#f472b6', '#facc15'];
+                      return (
+                        <div style={{
+                          display: 'inline-block', padding: 6, borderRadius: 6,
+                          background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+                        }}>
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: `repeat(${gCols}, ${cellW}px)`,
+                            gridTemplateRows: `repeat(${gRows}, ${cellH}px)`,
+                            gap: 3,
+                          }}>
+                            {Array.from({ length: gRows }, (_, row) =>
+                              Array.from({ length: gCols }, (_, col) => {
+                                const cellIdx = row * gCols + col;
+                                if (cellIdx >= ups) return <div key={`${row}-${col}`} />;
+                                const jobIdx = gangCellAssign[cellIdx] ?? 0;
+                                const color = colors[jobIdx % colors.length];
+                                return (
+                                  <button key={`${row}-${col}`}
+                                    onClick={() => setGangCellAssign(prev => ({ ...prev, [cellIdx]: (jobIdx + 1) % gangJobs.length }))}
+                                    style={{
+                                      width: cellW, height: cellH, borderRadius: 3,
+                                      border: `2px solid ${color}`,
+                                      background: `color-mix(in srgb, ${color} 18%, transparent)`,
+                                      color, fontSize: '0.6rem', fontWeight: 800,
+                                      cursor: 'pointer', fontFamily: 'inherit',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      padding: 0,
+                                    }}
+                                    title={`Cell ${cellIdx + 1}: ${gangJobs[jobIdx]?.label || '?'} — κλικ για αλλαγή`}
+                                  >
+                                    {jobIdx + 1}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div style={{ fontSize: '0.5rem', color: '#475569', marginTop: 4 }}>
                       <i className="fas fa-info-circle" style={{ marginRight: 3 }} />Κλικ σε cell για εναλλαγή δουλειάς
                     </div>
