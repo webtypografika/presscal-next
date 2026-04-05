@@ -1577,7 +1577,8 @@ export default function CalculatorShell() {
                   </div>
                 </div>
 
-                {/* ── FEED DIRECTION ── */}
+                {/* ── FEED DIRECTION (digital only — offset always feeds from gripper/bottom) ── */}
+                {machine?.cat !== 'offset' && (<>
                 <MfLabel>FEED DIRECTION</MfLabel>
                 <button
                   onClick={() => {
@@ -1605,6 +1606,7 @@ export default function CalculatorShell() {
                     </span>
                   </div>
                 </button>
+                </>)}
 
                 <MfLabel>FORCE</MfLabel>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
@@ -2596,7 +2598,7 @@ export default function CalculatorShell() {
                 plateSlugEdge={impoPlateSlugEdge}
                 pdf={pdf}
                 onDrop={handlePdfFiles}
-                feedEdge={feedEdge}
+                feedEdge={machine?.cat === 'offset' ? undefined : feedEdge}
                 activeSigSheet={(pdf || impo.signatureMap) ? activeSigSheet : undefined}
                 sigShowBack={job.sides === 2 ? sigShowBack : undefined}
                 csNumbering={impoMode === 'cutstack' && csNumbering ? {
@@ -2636,7 +2638,7 @@ export default function CalculatorShell() {
               </div>
               {/* Info chips overlay (bottom-right) */}
               <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4, pointerEvents: 'none', zIndex: 2 }}>
-                <ImpoChip><i className={feedEdge === 'sef' ? 'fas fa-arrows-alt-v' : 'fas fa-arrows-alt-h'} style={{ fontSize: '0.5rem' }} /> {feedEdge === 'sef' ? 'SEF' : 'LEF'}</ImpoChip>
+                {machine?.cat !== 'offset' && <ImpoChip><i className={feedEdge === 'sef' ? 'fas fa-arrows-alt-v' : 'fas fa-arrows-alt-h'} style={{ fontSize: '0.5rem' }} /> {feedEdge === 'sef' ? 'SEF' : 'LEF'}</ImpoChip>}
                 <ImpoChip><strong>{ups}</strong>-up</ImpoChip>
                 <ImpoChip><strong>{sheets}</strong> φύλ</ImpoChip>
                 <ImpoChip><i className="fas fa-clock" /><strong>~{timeMin >= 60 ? `${(timeMin / 60).toFixed(1)}h` : `${timeMin}'`}</strong></ImpoChip>
