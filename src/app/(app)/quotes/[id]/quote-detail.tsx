@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer, Company, Material, Org } from '@/generated/prisma/client';
-import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer } from '../actions';
+import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer, createCompanyQuick, createCompanyFromElorus } from '../actions';
+import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
 
 type QuoteWithCustomer = Quote & { customer: Customer | null; company: Company | null };
 
@@ -522,6 +523,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               customers={customers}
               currentId={customerId}
               linkedEmails={quote.linkedEmails as string[] || []}
+              hasElorus={elorusConfigured}
               onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
               onClose={() => setShowCustomerPicker(false)}
               toast={toast}
@@ -2146,10 +2148,11 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
 // ═══════════════════════════════════════════════════════
 // CUSTOMER PICKER — dropdown to select/change customer
 // ═══════════════════════════════════════════════════════
-function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose, toast }: {
+function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelect, onClose, toast }: {
   customers: any[];
   currentId: string;
   linkedEmails: string[];
+  hasElorus?: boolean;
   onSelect: (id: string) => void;
   onClose: () => void;
   toast: (msg: string, type?: ToastType) => void;
@@ -2544,16 +2547,63 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
             )}
           </div>
         </>
-      ) : (
-        /* New / Edit form */
+      ) : mode === 'new' ? (
+        /* New company — shared form with AFM lookup */
         <>
           <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => setMode('list')} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}>
               <i className="fas fa-arrow-left" />
             </button>
-            <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>
-              {mode === 'new' ? 'Νέα Εταιρεία' : 'Επεξεργασία Εταιρείας'}
-            </span>
+            <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>Νέα Εταιρεία</span>
+          </div>
+          <div style={{ padding: '12px', overflow: 'auto' }}>
+            <NewCompanyForm
+              hasElorus={hasElorus}
+              initialData={{
+                name: emailSender?.name || '',
+                email: emailSender?.email || '',
+              }}
+              onSave={async (data: CompanyFormData) => {
+                let company: any;
+                if (data.elorusContactId) {
+                  company = await createCompanyFromElorus({
+                    name: data.name.trim(),
+                    afm: data.afm || undefined,
+                    doy: data.doy || undefined,
+                    email: data.email || undefined,
+                    phone: data.phone || undefined,
+                    address: data.address || undefined,
+                    city: data.city || undefined,
+                    zip: data.zip || undefined,
+                    elorusContactId: data.elorusContactId,
+                  });
+                } else {
+                  company = await createCompanyQuick({
+                    name: data.name.trim(),
+                    email: data.email || undefined,
+                    phone: data.phone || undefined,
+                    afm: data.afm || undefined,
+                    contactName: data.contactName || undefined,
+                    contactEmail: data.contactEmail || undefined,
+                  });
+                }
+                toast('Εταιρεία δημιουργήθηκε');
+                onSelect(company.id);
+              }}
+              onCancel={() => setMode('list')}
+              toast={toast}
+              style={{ border: 'none', padding: 0, background: 'transparent' }}
+            />
+          </div>
+        </>
+      ) : (
+        /* Edit form */
+        <>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => setMode('list')} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <i className="fas fa-arrow-left" />
+            </button>
+            <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>Επεξεργασία Εταιρείας</span>
           </div>
           <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto' }}>
             <div>
@@ -2582,7 +2632,7 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input value={formFolder} onChange={e => setFormFolder(e.target.value)} placeholder="Paste path ή επιλογή μέσω PressKit →" style={{ ...inp, flex: 1, fontFamily: 'monospace', fontSize: '0.8rem' }} />
-                {mode === 'edit' && editId && (
+                {editId && (
                   <a
                     href={`presscal-fh://pick-folder?customerId=${editId}`}
                     title="Επιλογή μέσω PressKit"
@@ -2610,7 +2660,7 @@ function CustomerPicker({ customers, currentId, linkedEmails, onSelect, onClose,
                 background: 'var(--accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 700,
                 cursor: 'pointer', opacity: (saving || !formName.trim()) ? 0.5 : 1,
               }}>
-                {saving ? 'Αποθήκευση...' : mode === 'new' ? 'Δημιουργία' : 'Αποθήκευση'}
+                {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
               </button>
             </div>
           </div>

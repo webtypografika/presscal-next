@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer } from '@/generated/prisma/client';
 import { createQuote, updateQuote, updateQuoteStatus, deleteQuote, createCustomer, createCompanyQuick, createCompanyFromElorus, linkEmailToQuote, saveEmailAttachments } from './actions';
+import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
 
 type QuoteWithCustomer = Quote & { customer: Customer | null };
 
@@ -453,20 +454,9 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
   const [showNewCust, setShowNewCust] = useState(false);
-  const [newCustTab, setNewCustTab] = useState<'afm' | 'manual'>(hasElorus ? 'afm' : 'manual');
   const [custSearch, setCustSearch] = useState('');
   const [custDropOpen, setCustDropOpen] = useState(false);
   const custRef = useRef<HTMLDivElement>(null);
-
-  // New customer form fields
-  const [newF, setNewF] = useState({ name: '', email: '', phone: '', afm: '', doy: '', address: '', city: '', zip: '', contactName: '', contactEmail: '' });
-  const setF = (patch: Partial<typeof newF>) => setNewF(prev => ({ ...prev, ...patch }));
-
-  // AFM lookup state
-  const [afmSearch, setAfmSearch] = useState('');
-  const [afmLoading, setAfmLoading] = useState(false);
-  const [afmResult, setAfmResult] = useState<any>(null);
-  const [afmError, setAfmError] = useState('');
 
   const inp = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', color: 'var(--text)', fontSize: '0.92rem', width: '100%', outline: 'none', fontFamily: 'inherit' } as const;
   const lbl: React.CSSProperties = { fontSize: '0.68rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase', display: 'block', marginBottom: 4 };
@@ -502,31 +492,6 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // AFM Lookup via AADE/Elorus
-  async function lookupAfm() {
-    const afm = afmSearch.replace(/\s/g, '');
-    if (!/^\d{9}$/.test(afm)) { setAfmError('Το ΑΦΜ πρέπει να είναι 9 ψηφία'); return; }
-    setAfmLoading(true); setAfmError(''); setAfmResult(null);
-    try {
-      const res = await fetch('/api/elorus/lookup-afm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ afm }) });
-      const data = await res.json();
-      if (!res.ok) { setAfmError(data.error || 'Σφάλμα αναζήτησης'); return; }
-      setAfmResult(data);
-      // Auto-fill the form
-      setNewF({
-        name: data.onomasia || data.commer_title || '',
-        afm,
-        doy: data.doy_descr || '',
-        address: data.postal_address || '',
-        city: data.postal_area_description || '',
-        zip: data.postal_zip_code || '',
-        email: data.email || '',
-        phone: '', contactName: '', contactEmail: '',
-      });
-    } catch (e) { setAfmError((e as Error).message); }
-    finally { setAfmLoading(false); }
-  }
-
   async function create() {
     setSaving(true);
     try {
@@ -536,31 +501,30 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
     finally { setSaving(false); }
   }
 
-  async function createCustAndQuote() {
-    if (!newF.name.trim()) { toast('Εισάγετε όνομα εταιρείας', 'error'); return; }
+  async function createCustAndQuote(data: CompanyFormData) {
     setSaving(true);
     try {
       let company: any;
-      if (afmResult?.elorusContactId) {
+      if (data.elorusContactId) {
         company = await createCompanyFromElorus({
-          name: newF.name.trim(),
-          afm: newF.afm || undefined,
-          doy: newF.doy || undefined,
-          email: newF.email || undefined,
-          phone: newF.phone || undefined,
-          address: newF.address || undefined,
-          city: newF.city || undefined,
-          zip: newF.zip || undefined,
-          elorusContactId: afmResult.elorusContactId,
+          name: data.name.trim(),
+          afm: data.afm || undefined,
+          doy: data.doy || undefined,
+          email: data.email || undefined,
+          phone: data.phone || undefined,
+          address: data.address || undefined,
+          city: data.city || undefined,
+          zip: data.zip || undefined,
+          elorusContactId: data.elorusContactId,
         });
       } else {
         company = await createCompanyQuick({
-          name: newF.name.trim(),
-          email: newF.email || undefined,
-          phone: newF.phone || undefined,
-          afm: newF.afm || undefined,
-          contactName: newF.contactName || undefined,
-          contactEmail: newF.contactEmail || undefined,
+          name: data.name.trim(),
+          email: data.email || undefined,
+          phone: data.phone || undefined,
+          afm: data.afm || undefined,
+          contactName: data.contactName || undefined,
+          contactEmail: data.contactEmail || undefined,
         });
       }
       onCustomerCreated(company as any);
@@ -674,148 +638,22 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
         </div>
 
         {/* ── NEW CUSTOMER FORM ── */}
-        {showNewCust && (<div style={{
-          marginBottom: 14, padding: '14px 14px 12px', borderRadius: 10,
-          background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)',
-        }}>
-          {/* Tab bar: AFM lookup | Manual */}
-          <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2, marginBottom: 14, width: 'fit-content' }}>
-            {hasElorus && (
-              <button onClick={() => setNewCustTab('afm')} style={{
-                padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                color: newCustTab === 'afm' ? 'var(--teal)' : '#64748b',
-                background: newCustTab === 'afm' ? 'color-mix(in srgb, var(--teal) 15%, transparent)' : 'transparent',
-                transition: 'all 0.2s',
-              }}>
-                <i className="fas fa-search" style={{ marginRight: 6, fontSize: '0.65rem' }} />Αναζήτηση ΑΦΜ
-              </button>
-            )}
-            <button onClick={() => setNewCustTab('manual')} style={{
-              padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-              color: newCustTab === 'manual' ? 'var(--blue)' : '#64748b',
-              background: newCustTab === 'manual' ? 'color-mix(in srgb, var(--blue) 15%, transparent)' : 'transparent',
-              transition: 'all 0.2s',
-            }}>
-              <i className="fas fa-pen" style={{ marginRight: 6, fontSize: '0.65rem' }} />Χειροκίνητα
-            </button>
-          </div>
-
-          {/* AFM Lookup tab */}
-          {newCustTab === 'afm' && hasElorus && (<>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-              <input
-                value={afmSearch} onChange={e => setAfmSearch(e.target.value.replace(/\D/g, '').slice(0, 9))}
-                placeholder="ΑΦΜ (9 ψηφία)"
-                onKeyDown={e => { if (e.key === 'Enter') lookupAfm(); }}
-                style={{ ...inp, flex: 1, fontFamily: "'DM Mono', monospace", fontSize: '1rem', letterSpacing: '0.1em' }}
-              />
-              <button onClick={lookupAfm} disabled={afmLoading || afmSearch.length !== 9} style={{
-                padding: '0 16px', borderRadius: 8, border: 'none',
-                background: afmSearch.length === 9 ? 'var(--teal)' : 'rgba(255,255,255,0.06)',
-                color: afmSearch.length === 9 ? '#fff' : '#475569',
-                fontSize: '0.82rem', fontWeight: 700, cursor: afmSearch.length === 9 ? 'pointer' : 'default',
-                opacity: afmLoading ? 0.6 : 1, transition: 'all 0.2s', fontFamily: 'inherit', whiteSpace: 'nowrap',
-              }}>
-                {afmLoading ? <i className="fas fa-spinner fa-spin" /> : <><i className="fas fa-search" style={{ marginRight: 6 }} />TaxisNet</>}
-              </button>
-            </div>
-            {afmError && (
-              <div style={{ padding: '8px 10px', borderRadius: 6, marginBottom: 10, background: 'color-mix(in srgb, #ef4444 10%, transparent)', border: '1px solid color-mix(in srgb, #ef4444 25%, transparent)', color: '#fca5a5', fontSize: '0.78rem' }}>
-                <i className="fas fa-exclamation-triangle" style={{ marginRight: 6 }} />{afmError}
-              </div>
-            )}
-            {afmResult && (
-              <div style={{ padding: '10px 12px', borderRadius: 8, marginBottom: 10, background: 'color-mix(in srgb, var(--teal) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--teal) 20%, transparent)' }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--teal)', marginBottom: 4 }}>{afmResult.onomasia || afmResult.commer_title || '(κενή επωνυμία)'}</div>
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {afmResult.doy_descr && <span><i className="fas fa-building" style={{ marginRight: 4 }} />{afmResult.doy_descr}</span>}
-                  {afmResult.postal_address && <span><i className="fas fa-map-marker-alt" style={{ marginRight: 4 }} />{afmResult.postal_address}</span>}
-                  {afmResult.postal_area_description && <span>{afmResult.postal_area_description} {afmResult.postal_zip_code}</span>}
-                </div>
-                {afmResult.elorusContactId && (
-                  <div style={{ marginTop: 6, fontSize: '0.68rem', color: 'var(--teal)' }}>
-                    <i className="fas fa-check-circle" style={{ marginRight: 4 }} />Συνδέθηκε με Elorus
-                  </div>
-                )}
-              </div>
-            )}
-          </>)}
-
-          {/* Form fields — shown after AFM result or in manual mode */}
-          {(newCustTab === 'manual' || afmResult) && (<>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-              <div>
-                <label style={lbl}>Επωνυμία *</label>
-                <input value={newF.name} onChange={e => setF({ name: e.target.value })} placeholder="Επωνυμία εταιρείας" style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>ΑΦΜ</label>
-                <input value={newF.afm} onChange={e => setF({ afm: e.target.value.replace(/\D/g, '').slice(0, 9) })} placeholder="000000000" style={{ ...inp, fontFamily: "'DM Mono', monospace" }} />
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-              <div>
-                <label style={lbl}>Email</label>
-                <input value={newF.email} onChange={e => setF({ email: e.target.value })} placeholder="info@company.gr" style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>Τηλέφωνο</label>
-                <input value={newF.phone} onChange={e => setF({ phone: e.target.value })} placeholder="210..." style={inp} />
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-              <div>
-                <label style={lbl}>ΔΟΥ</label>
-                <input value={newF.doy} onChange={e => setF({ doy: e.target.value })} placeholder="ΔΟΥ" style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>Διεύθυνση</label>
-                <input value={newF.address} onChange={e => setF({ address: e.target.value })} placeholder="Οδός αριθμός" style={inp} />
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-              <div>
-                <label style={lbl}>Πόλη</label>
-                <input value={newF.city} onChange={e => setF({ city: e.target.value })} placeholder="Πόλη" style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>ΤΚ</label>
-                <input value={newF.zip} onChange={e => setF({ zip: e.target.value })} placeholder="00000" style={inp} />
-              </div>
-            </div>
-            {/* Primary contact (optional) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, marginBottom: 6 }}>
-              <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
-              <span style={{ fontSize: '0.65rem', fontWeight: 600, color: '#475569', letterSpacing: '0.05em' }}>ΕΠΑΦΗ (ΠΡΟΑΙΡΕΤΙΚΑ)</span>
-              <div style={{ height: 1, flex: 1, background: 'var(--glass-border)' }} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div>
-                <label style={lbl}>Όνομα επαφής</label>
-                <input value={newF.contactName} onChange={e => setF({ contactName: e.target.value })} placeholder="Γιάννης Παπ." style={inp} />
-              </div>
-              <div>
-                <label style={lbl}>Email επαφής</label>
-                <input value={newF.contactEmail} onChange={e => setF({ contactEmail: e.target.value })} placeholder="contact@..." style={inp} />
-              </div>
-            </div>
-          </>)}
-        </div>)}
+        {showNewCust && (
+          <NewCompanyForm
+            hasElorus={hasElorus}
+            onSave={createCustAndQuote}
+            onCancel={() => setShowNewCust(false)}
+            toast={toast}
+            style={{ marginBottom: 14 }}
+          />
+        )}
 
         <label style={{ ...lbl, marginTop: 4 }}>Τίτλος (προαιρετικό)</label>
         <input value={title} onChange={e => setTitle(e.target.value)} placeholder="π.χ. Φυλλάδια A4 4χρ." style={{ ...inp, marginBottom: 20 }} />
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.92rem', cursor: 'pointer', fontFamily: 'inherit' }}>Ακύρωση</button>
-          {showNewCust ? (
-            <button onClick={createCustAndQuote} disabled={saving || !newF.name.trim()} style={{
-              padding: '8px 20px', borderRadius: 8, border: 'none',
-              background: 'var(--accent)', color: '#fff', fontSize: '0.92rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-              opacity: saving || !newF.name.trim() ? 0.5 : 1,
-            }}>
-              {saving ? 'Δημιουργία...' : 'Δημιουργία εταιρείας & προσφοράς'}
-            </button>
-          ) : (
+          {!showNewCust && (
             <button onClick={create} disabled={saving} style={{
               padding: '8px 20px', borderRadius: 8, border: 'none',
               background: 'var(--accent)', color: '#fff', fontSize: '0.92rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',

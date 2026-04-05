@@ -11,6 +11,7 @@ import {
   bulkCreateCustomers,
   getCustomer,
 } from './actions';
+import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
 
 type CustomerWithCount = Customer & { _count: { quotes: number } };
 type CustomerWithQuotes = Customer & { quotes: Quote[] };
@@ -106,9 +107,10 @@ function ModalBackdrop({ children, onClose }: { children: React.ReactNode; onClo
 // ─── MAIN COMPONENT ───
 interface Props {
   customers: CustomerWithCount[];
+  hasElorus?: boolean;
 }
 
-export function CustomersList({ customers: initialCustomers }: Props) {
+export function CustomersList({ customers: initialCustomers, hasElorus }: Props) {
   const [customers, setCustomers] = useState(initialCustomers);
   const [filter, setFilter] = useState<FilterId>('all');
   const [search, setSearch] = useState('');
@@ -487,19 +489,51 @@ export function CustomersList({ customers: initialCustomers }: Props) {
         )}
       </div>
 
-      {/* ─── EDITOR MODAL ─── */}
-      {showEditor && (
+      {/* ─── NEW CUSTOMER MODAL ─── */}
+      {showEditor === 'new' && (
+        <ModalBackdrop onClose={() => setShowEditor(null)}>
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--glass-border)',
+            borderRadius: 20, padding: 28, boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h2 style={{ fontSize: '1rem', fontWeight: 800 }}>Νέος Πελάτης</h2>
+              <button onClick={() => setShowEditor(null)} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', fontSize: '1.1rem', cursor: 'pointer' }}>&times;</button>
+            </div>
+            <NewCompanyForm
+              hasElorus={hasElorus}
+              onSave={async (data: CompanyFormData) => {
+                const result = await createCustomer({
+                  name: data.name.trim(),
+                  email: data.email || undefined,
+                  phone: data.phone || undefined,
+                  afm: data.afm || undefined,
+                  doy: data.doy || undefined,
+                  address: data.address || undefined,
+                  city: data.city || undefined,
+                  zip: data.zip || undefined,
+                });
+                setCustomers(prev => [result as CustomerWithCount, ...prev]);
+                setShowEditor(null);
+                toast('Ο πελάτης δημιουργήθηκε');
+              }}
+              onCancel={() => setShowEditor(null)}
+              toast={toast}
+              style={{ border: 'none', padding: 0, background: 'transparent' }}
+            />
+          </div>
+        </ModalBackdrop>
+      )}
+
+      {/* ─── EDITOR MODAL (edit only) ─── */}
+      {showEditor && showEditor !== 'new' && (
         <CustomerEditor
           customer={editingCustomer}
           onClose={() => setShowEditor(null)}
           onSaved={(c) => {
-            if (editingCustomer) {
-              setCustomers(prev => prev.map(old => old.id === c.id ? { ...old, ...c } : old));
-            } else {
-              setCustomers(prev => [c as CustomerWithCount, ...prev]);
-            }
+            setCustomers(prev => prev.map(old => old.id === c.id ? { ...old, ...c } : old));
             setShowEditor(null);
-            toast(editingCustomer ? 'Ο πελάτης ενημερώθηκε' : 'Ο πελάτης δημιουργήθηκε');
+            toast('Ο πελάτης ενημερώθηκε');
           }}
           toast={toast}
         />
