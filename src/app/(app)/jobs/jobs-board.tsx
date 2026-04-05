@@ -136,6 +136,13 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
     onUpdate();
   }
 
+  async function handleComplete() {
+    if (!confirm('Ολοκλήρωση εργασίας; Θα μεταφερθεί στο αρχείο.')) return;
+    await updateJobStage(job.id, 'completed');
+    onUpdate();
+    onClose();
+  }
+
   return createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', background: 'rgba(0,0,0,0.3)' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 560, maxHeight: '85vh', overflow: 'auto', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--glass-border)', padding: 28, boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }} className="custom-scrollbar">
@@ -161,8 +168,8 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
           <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}>&times;</button>
         </div>
 
-        {/* Stage progress */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
+        {/* Stage progress + Complete button */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20, alignItems: 'flex-start' }}>
           {STAGES.map((s, i) => {
             const isDone = i < currentStage;
             const isActive = i === currentStage;
@@ -189,6 +196,19 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
               </button>
             );
           })}
+          <button onClick={handleComplete} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+            border: 'none', background: 'transparent', cursor: 'pointer', padding: '8px 0', flexShrink: 0,
+          }}>
+            <div style={{
+              width: 28, height: 6, borderRadius: 3,
+              background: 'color-mix(in srgb, var(--success) 20%, transparent)',
+            }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <i className="fas fa-check-double" style={{ fontSize: '0.6rem', color: 'var(--success)' }} />
+              <span style={{ fontSize: '0.62rem', fontWeight: 600, color: 'var(--success)' }}>Done</span>
+            </div>
+          </button>
         </div>
 
         {/* Items with technical specs */}
