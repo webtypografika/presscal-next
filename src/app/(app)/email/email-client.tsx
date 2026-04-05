@@ -146,10 +146,15 @@ export default function EmailClient() {
     }).catch(() => {});
   }
 
-  // ─── SEARCH ───
-  function handleSearch(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') fetchMessages(folder, search, currentLabel);
-  }
+  // ─── LIVE SEARCH (debounced) ───
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      fetchMessages(folder, search, currentLabel);
+    }, search ? 500 : 0);
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── CHANGE FOLDER ───
   function handleFolder(f: Folder) {
@@ -342,13 +347,16 @@ export default function EmailClient() {
           }}>
             <i className="fas fa-search" style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }} />
             <input
-              value={search} onChange={e => setSearch(e.target.value)} onKeyDown={handleSearch}
+              value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Αναζητηση email..."
               style={{ border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', flex: 1 }}
             />
-            <button onClick={() => fetchMessages(folder, search, currentLabel)} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}>
-              <i className="fas fa-sync-alt" style={{ fontSize: '0.7rem' }} />
-            </button>
+            {search && (
+              <button onClick={() => setSearch('')} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>
+                <i className="fas fa-times" />
+              </button>
+            )}
+            {loading && <i className="fas fa-spinner fa-spin" style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }} />}
           </div>
         </div>
 
