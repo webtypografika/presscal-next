@@ -384,7 +384,10 @@ export default function EmailClient() {
                 background: isSelected ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : isUnread ? 'rgba(255,255,255,0.02)' : 'transparent',
                 borderLeft: isSelected ? '3px solid var(--accent)' : isUnread ? '3px solid var(--blue)' : '3px solid transparent',
                 transition: 'background 0.15s',
-              }}>
+              }}
+                onMouseEnter={e => e.currentTarget.querySelectorAll<HTMLElement>('.email-filter-btn').forEach(b => b.style.opacity = '0.6')}
+                onMouseLeave={e => e.currentTarget.querySelectorAll<HTMLElement>('.email-filter-btn').forEach(b => b.style.opacity = '0')}
+              >
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   {/* Avatar */}
                   <div style={{
@@ -394,7 +397,17 @@ export default function EmailClient() {
                   }}>{getInitials(sender.name)}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.82rem', fontWeight: isUnread ? 800 : 600, color: isUnread ? 'var(--text)' : 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sender.name}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', minWidth: 0 }}>
+                        <span style={{ fontSize: '0.82rem', fontWeight: isUnread ? 800 : 600, color: isUnread ? 'var(--text)' : 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sender.name}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSearch(`from:${sender.email}`); }}
+                          title={`Emails από ${sender.email}`}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '1px 3px', fontSize: '0.55rem', color: 'var(--text-muted)', opacity: 0, transition: 'opacity 0.15s', flexShrink: 0, borderRadius: 3 }}
+                          className="email-filter-btn"
+                        >
+                          <i className="fas fa-filter" />
+                        </button>
+                      </span>
                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', flexShrink: 0, marginLeft: 8 }}>{timeAgo(email.date)}</span>
                     </div>
                     <p style={{ fontSize: '0.78rem', fontWeight: isUnread ? 700 : 500, color: isUnread ? 'var(--text)' : 'var(--text-muted)', margin: '2px 0', display: 'flex', alignItems: 'center', gap: 5 }}>
