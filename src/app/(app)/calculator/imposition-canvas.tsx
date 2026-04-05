@@ -508,13 +508,10 @@ function drawSheet(
   // ─── STEP MULTI BLOCK BOUNDARIES ───
   if (impo.mode === 'stepmulti' && impo.blocks && impo.blocks.length > 1) {
     const smColors = ['#f58220', '#3b82f6', '#14b8a6', '#a78bfa', '#f472b6', '#facc15'];
-    const isOff = machCat === 'offset';
-    const smML = marginLeft * scale;
-    const smMB = (isOff ? marginTop : marginBottom) * scale;
     for (let bi = 0; bi < impo.blocks.length; bi++) {
       const blk = impo.blocks[bi];
-      const bx = offX + smML + blk.x * scale;
-      const by = offY + drawH - smMB - (blk.y + blk.blockH) * scale;
+      const bx = offX + mL + blk.x * scale;
+      const by = offY + mT + blk.y * scale;
       const bw = blk.blockW * scale;
       const bh = blk.blockH * scale;
       const color = smColors[bi % smColors.length];
