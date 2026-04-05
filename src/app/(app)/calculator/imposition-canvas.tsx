@@ -46,6 +46,8 @@ interface ImpositionCanvasProps {
     font: 'Helvetica' | 'Courier';
     rotation: number;        // degrees
   };
+  gangJobPdfs?: (ParsedPDF | undefined)[];  // per-job PDFs for gang run
+  gangCellAssign?: Record<number, number>;   // cellIdx → jobIdx (0-based)
 }
 
 type ViewMode = 'single' | 'dual';
@@ -104,6 +106,8 @@ function drawSheet(
   label?: string,
   activeSigSheet?: number,
   csNumbering?: ImpositionCanvasProps['csNumbering'],
+  gangJobPdfs?: (ParsedPDF | undefined)[],
+  gangCellAssign?: Record<number, number>,
 ) {
   const scale = drawW / sheetW;
   const hasBleed = bleed > 0;
@@ -234,11 +238,18 @@ function drawSheet(
 
       // PDF page to show
       const mode = impo.mode;
+      const isGangMultiPdf = mode === 'gangrun' && gangJobPdfs && gangJobPdfs.some(Boolean);
       const pdfCount = pdf?.thumbnails?.length || 0;
       const isCutStack = mode === 'cutstack' && pdfCount > 1;
-      const isStepRepeat = !isCutStack && (mode === 'nup' || mode === 'cutstack' || mode === 'gangrun');
+      const isStepRepeat = !isCutStack && (mode === 'nup' || mode === 'cutstack' || (mode === 'gangrun' && !isGangMultiPdf));
       let pidx: number;
-      if (isCutStack) {
+      let cellPdf: ParsedPDF | null | undefined = pdf;
+      if (isGangMultiPdf) {
+        // Gang Run multi-PDF: each cell shows its job's PDF (page 0 = front)
+        const jobIdx = gangCellAssign?.[idx] ?? 0;
+        cellPdf = gangJobPdfs![jobIdx] || null;
+        pidx = pdfPageIdx; // 0=front, 1=back
+      } else if (isCutStack) {
         // Cut & Stack: each position gets a different page from the PDF
         // stackNum * sheetsNeeded + sheetIndex → after cut+stack = sequential
         const sheetsNeeded = Math.ceil(pdfCount / Math.max(impo.ups, 1));
@@ -250,9 +261,10 @@ function drawSheet(
       } else {
         pidx = (cellPageNum || idx + 1) - 1;
       }
-      const validPidx = pdfCount > 0 && pidx < pdfCount;
-      const thumb = validPidx ? pdf?.thumbnails?.[pidx] : undefined;
-      const pgSize = validPidx ? pdf?.pageSizes?.[pidx] : undefined;
+      const cellPdfCount = cellPdf?.thumbnails?.length || 0;
+      const validPidx = cellPdfCount > 0 && pidx < cellPdfCount;
+      const thumb = validPidx ? cellPdf?.thumbnails?.[pidx] : undefined;
+      const pgSize = validPidx ? cellPdf?.pageSizes?.[pidx] : undefined;
 
       if (thumb && pgSize) {
         ctx.save();
@@ -314,6 +326,21 @@ function drawSheet(
         ctx.lineWidth = 0.5;
         ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
 
+        // Gang Run: show job number badge in corner
+        if (isGangMultiPdf) {
+          const gjIdx = gangCellAssign?.[idx] ?? 0;
+          const gjColors = ['#f58220', '#3b82f6', '#14b8a6', '#a78bfa', '#f472b6', '#facc15'];
+          const gjColor = gjColors[gjIdx % gjColors.length];
+          const badgeW = Math.min(trimW * 0.25, 18);
+          const badgeH = Math.min(trimH * 0.2, 14);
+          ctx.fillStyle = gjColor;
+          ctx.fillRect(trimX + 1, trimY + 1, badgeW, badgeH);
+          ctx.font = `800 ${Math.min(badgeH * 0.75, 9)}px Inter, DM Sans, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#fff';
+          ctx.fillText(String(gjIdx + 1), trimX + 1 + badgeW / 2, trimY + 1 + badgeH * 0.75);
+        }
+
         // Overlay: show page/position number on top of thumbnail
         if ((isStepRepeat || isCutStack) && impo.mode !== 'gangrun') {
           if (isCutStack && csNumbering) {
@@ -347,35 +374,54 @@ function drawSheet(
           }
         }
       } else {
+        // Gang Run without PDF: tint cell with job color
+        if (isGangMultiPdf) {
+          const gjIdx = gangCellAssign?.[idx] ?? 0;
+          const gjColors = ['#f58220', '#3b82f6', '#14b8a6', '#a78bfa', '#f472b6', '#facc15'];
+          const gjColor = gjColors[gjIdx % gjColors.length];
+          ctx.fillStyle = gjColor + '18'; // ~10% opacity
+          ctx.fillRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+          ctx.strokeStyle = gjColor + '55';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+          const fontSize = Math.min(trimW * 0.3, trimH * 0.3, 20);
+          ctx.font = `800 ${fontSize}px Inter, DM Sans, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = gjColor + 'aa';
+          ctx.fillText(String(gjIdx + 1), trimX + trimW / 2, trimY + trimH / 2 + fontSize * 0.35);
+        } else {
         ctx.fillStyle = isRotated ? COLORS.rotatedFill : COLORS.trimFill;
         ctx.fillRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
 
         ctx.strokeStyle = isRotated ? COLORS.rotatedStroke : COLORS.trimStroke;
         ctx.lineWidth = 1;
         ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+        }
 
-        const cellLabel = isCutStack ? pidx + 1 : (cellPageNum || idx + 1);
-        if (isCutStack && csNumbering) {
-          const seqNum = csNumbering.startNum + pidx;
-          const numStr = csNumbering.prefix + String(seqNum).padStart(csNumbering.digits, '0');
-          const nFS = Math.min(csNumbering.fontSize * scale * 0.8, trimW * 0.25, trimH * 0.2);
-          const nx = trimX + csNumbering.posX * trimW;
-          const ny = trimY + (1 - csNumbering.posY) * trimH;
-          const fontFam = csNumbering.font === 'Courier' ? 'Courier New, Courier, monospace' : 'Helvetica, Arial, sans-serif';
-          ctx.save();
-          ctx.translate(nx, ny);
-          if (csNumbering.rotation) ctx.rotate(csNumbering.rotation * Math.PI / 180);
-          ctx.font = `700 ${nFS}px ${fontFam}`;
-          ctx.textAlign = 'center';
-          ctx.fillStyle = csNumbering.color === '#cc0000' ? 'rgba(204,0,0,0.9)' : 'rgba(0,0,0,0.8)';
-          ctx.fillText(numStr, 0, 0);
-          ctx.restore();
-        } else {
-          const fontSize = Math.min(trimW * 0.3, trimH * 0.3, 20);
-          ctx.font = `600 ${fontSize}px Inter, DM Sans, sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.fillStyle = isRotated ? COLORS.rotatedNum : COLORS.cellNum;
-          ctx.fillText(String(cellLabel), trimX + trimW / 2, trimY + trimH / 2 + fontSize * 0.35);
+        if (!isGangMultiPdf) {
+          const cellLabel = isCutStack ? pidx + 1 : (cellPageNum || idx + 1);
+          if (isCutStack && csNumbering) {
+            const seqNum = csNumbering.startNum + pidx;
+            const numStr = csNumbering.prefix + String(seqNum).padStart(csNumbering.digits, '0');
+            const nFS = Math.min(csNumbering.fontSize * scale * 0.8, trimW * 0.25, trimH * 0.2);
+            const nx = trimX + csNumbering.posX * trimW;
+            const ny = trimY + (1 - csNumbering.posY) * trimH;
+            const fontFam = csNumbering.font === 'Courier' ? 'Courier New, Courier, monospace' : 'Helvetica, Arial, sans-serif';
+            ctx.save();
+            ctx.translate(nx, ny);
+            if (csNumbering.rotation) ctx.rotate(csNumbering.rotation * Math.PI / 180);
+            ctx.font = `700 ${nFS}px ${fontFam}`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = csNumbering.color === '#cc0000' ? 'rgba(204,0,0,0.9)' : 'rgba(0,0,0,0.8)';
+            ctx.fillText(numStr, 0, 0);
+            ctx.restore();
+          } else {
+            const fontSize = Math.min(trimW * 0.3, trimH * 0.3, 20);
+            ctx.font = `600 ${fontSize}px Inter, DM Sans, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = isRotated ? COLORS.rotatedNum : COLORS.cellNum;
+            ctx.fillText(String(cellLabel), trimX + trimW / 2, trimY + trimH / 2 + fontSize * 0.35);
+          }
         }
       }
     }
@@ -504,6 +550,7 @@ export default function ImpositionCanvas({
   bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
   showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
   pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
+  gangJobPdfs, gangCellAssign,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -567,14 +614,14 @@ export default function ImpositionCanvas({
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering);
+        machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign);
 
       // Back
       drawSheet(ctx, baseX + drawW + gap, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering);
+        machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign);
     } else {
       // ═══ SINGLE VIEW: one sheet, pagination ═══
       const scaleX = (cW - 24 - markLen * 2) / sheetW;
@@ -598,7 +645,7 @@ export default function ImpositionCanvas({
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering);
+        machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign);
     }
 
     // Feed direction indicator — LEFT edge = paper entry side

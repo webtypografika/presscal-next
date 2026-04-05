@@ -98,6 +98,7 @@ export interface ExportOptions {
 
   // Gang Run
   gangData?: GangRunData;
+  gangJobPdfBytes?: (Uint8Array | undefined)[];  // per-job PDF bytes (indexed by jobIdx)
 
   // Step Multi
   blocks?: StepBlock[];
@@ -1457,6 +1458,7 @@ async function exportGangRun(
   embeddedPages: EmbeddedPageInfo[],
   font: PDFFont,
   cbEmbed: PDFEmbeddedPage | null,
+  gangJobEmbedded?: EmbeddedPageInfo[][],
 ): Promise<void> {
   const impo = opts.imposition;
   const gangData = opts.gangData || impo.gangData;
@@ -1483,13 +1485,25 @@ async function exportGangRun(
   const grUserRot = opts.rotation || 0;
   const grBaseRot = (grUserRot === 180 || grUserRot === 270) ? 180 : 0;
 
+  // Multi-PDF: cellAssign maps posIdx → 1-based "page number" which is really jobIdx+1
+  const hasMultiPdf = gangJobEmbedded && gangJobEmbedded.some(arr => arr.length > 0);
+
   for (let row = 0; row < impo.rows; row++) {
     for (let col = 0; col < impo.cols; col++) {
       const posIdx = row * impo.cols + col;
       const pageNum = gangData?.cellAssign?.[posIdx] || 1;
-      const pageIdx = pageNum - 1;
-      if (pageIdx >= 0 && pageIdx < embeddedPages.length) {
-        const epObj = embeddedPages[pageIdx];
+      const jobIdx = pageNum - 1; // 0-based job index
+
+      // Pick embedded page: multi-PDF uses per-job page 0, legacy uses single PDF pageIdx
+      let epObj: EmbeddedPageInfo | undefined;
+      if (hasMultiPdf) {
+        const jobPages = gangJobEmbedded![jobIdx];
+        epObj = jobPages?.[0]; // page 0 of this job's PDF
+      } else {
+        epObj = jobIdx >= 0 && jobIdx < embeddedPages.length ? embeddedPages[jobIdx] : undefined;
+      }
+
+      if (epObj) {
         const epPage = epObj.page;
         const cellX = cenX + col * (pieceW + gutterPt);
         const cellY = cenY + (impo.rows - 1 - row) * (pieceH + gutterPt);
@@ -1525,7 +1539,7 @@ async function exportGangRun(
     plateSlugEdge: opts.plateSlugEdge,
     colorBarEdge: opts.colorBarEdge,
     colorBarOffsetY: opts.colorBarOffsetY,
-        colorBarScale: opts.colorBarScale,
+    colorBarScale: opts.colorBarScale,
   });
 }
 
@@ -1842,7 +1856,19 @@ export async function exportImpositionPDF(options: ExportOptions): Promise<Uint8
   } else if (mode === 'workturn') {
     await exportWorkTurn(doc, options, embeddedPages, font, cbEmbed);
   } else if (mode === 'gangrun') {
-    await exportGangRun(doc, options, embeddedPages, font, cbEmbed);
+    // Multi-PDF: embed each job's PDF separately
+    let gangJobEmbedded: EmbeddedPageInfo[][] | undefined;
+    if (options.gangJobPdfBytes && options.gangJobPdfBytes.some(Boolean)) {
+      gangJobEmbedded = [];
+      for (const jobBytes of options.gangJobPdfBytes) {
+        if (jobBytes && jobBytes.length > 0) {
+          gangJobEmbedded.push(await embedSourcePages(doc, jobBytes, 'nup', options.bleed || 0, options.keepSourceMarks));
+        } else {
+          gangJobEmbedded.push([]);
+        }
+      }
+    }
+    await exportGangRun(doc, options, embeddedPages, font, cbEmbed, gangJobEmbedded);
   } else if (mode === 'stepmulti') {
     await exportStepMulti(doc, options, embeddedPages, font, cbEmbed);
   } else {
