@@ -615,21 +615,21 @@ export default function ImpositionCanvas({
       ctx.fillStyle = 'rgba(245,130,32,0.7)';
 
       // Large triangle arrow (no tail) pointing right at sheet left edge
-      const ax = sx - 3;
+      const ax = sx - 2;
       const ay = sy + dH / 2;
-      const triW = 14;
-      const triH = 10;
+      const triW = 12;
+      const triH = 8;
       ctx.beginPath();
-      ctx.moveTo(ax + 2, ay);
-      ctx.lineTo(ax + 2 - triW, ay - triH);
-      ctx.lineTo(ax + 2 - triW, ay + triH);
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - triW, ay - triH);
+      ctx.lineTo(ax - triW, ay + triH);
       ctx.closePath();
       ctx.fill();
 
-      // Label: "MACHINE FEED SIDE" — fixed at left edge of canvas, always visible
+      // Label: "MACHINE FEED SIDE" — left of the arrow, never overlapping
       ctx.save();
-      ctx.font = '700 9px Inter, DM Sans, sans-serif';
-      ctx.translate(10, sy + dH / 2);
+      ctx.font = '700 8px Inter, DM Sans, sans-serif';
+      ctx.translate(ax - triW - 6, sy + dH / 2);
       ctx.rotate(-Math.PI / 2);
       ctx.textAlign = 'center';
       ctx.fillText('MACHINE FEED SIDE', 0, 0);
