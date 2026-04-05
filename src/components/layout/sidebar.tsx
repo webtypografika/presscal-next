@@ -16,19 +16,21 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  CalendarDays,
 } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/', icon: LayoutDashboard, labelEl: 'Πίνακας Ελέγχου', labelEn: 'Dashboard' },
+  { href: '/', icon: LayoutDashboard, labelEl: 'Dashboard', labelEn: 'Dashboard' },
   { href: '/calculator', icon: Calculator, labelEl: 'Κοστολόγηση', labelEn: 'Calculator' },
+  { href: '/email', icon: Mail, labelEl: 'Emails', labelEn: 'Emails' },
   { href: '/quotes', icon: FileText, labelEl: 'Προσφορές', labelEn: 'Quotes' },
   { href: '/jobs', icon: ClipboardList, labelEl: 'Εργασίες', labelEn: 'Jobs' },
-  { href: '/email', icon: Mail, labelEl: 'Email', labelEn: 'Email' },
+  { href: '/calendar', icon: CalendarDays, labelEl: 'Ημερολόγιο', labelEn: 'Calendar' },
+  { href: '/companies', icon: Users, labelEl: 'Επαφές', labelEn: 'Contacts' },
   { href: '/machines', icon: Printer, labelEl: 'Μηχανήματα', labelEn: 'Machines' },
   { href: '/inventory', icon: Warehouse, labelEl: 'Αποθήκη', labelEn: 'Inventory' },
-  { href: '/companies', icon: Users, labelEl: 'Επαφές', labelEn: 'Contacts' },
   { href: '/products', icon: Package, labelEl: 'Προϊόντα', labelEn: 'Products' },
   { href: '/postpress', icon: Scissors, labelEl: 'Μεταφορές', labelEn: 'Postpress' },
   { href: '/settings', icon: Settings, labelEl: 'Ρυθμίσεις', labelEn: 'Settings' },
