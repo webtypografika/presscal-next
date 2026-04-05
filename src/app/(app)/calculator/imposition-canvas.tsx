@@ -50,7 +50,8 @@ interface ImpositionCanvasProps {
   gangCellAssign?: Record<number, number>;   // cellIdx → jobIdx (0-based)
   smBlockPdfs?: (ParsedPDF | undefined)[];   // per-block PDFs for step multi
   smBlocks?: import('@/types/calculator').StepBlock[];  // step multi blocks (for drag handles)
-  onSmBlockUpdate?: (idx: number, cols: number, rows: number) => void;  // drag callback
+  onSmBlockUpdate?: (idx: number, cols: number, rows: number) => void;  // resize callback
+  onSmBlockMove?: (idx: number, x: number, y: number) => void;  // move callback
 }
 
 type ViewMode = 'single' | 'dual';
@@ -613,7 +614,7 @@ export default function ImpositionCanvas({
   bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
   showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
   pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
-  gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate,
+  gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate, onSmBlockMove,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -805,7 +806,12 @@ export default function ImpositionCanvas({
   }, [zoom]);
 
   // ─── STEP MULTI DRAG ───
-  const smDragRef = useRef<{ blockIdx: number; cols: number; rows: number } | null>(null);
+  const smDragRef = useRef<{
+    blockIdx: number;
+    mode: 'resize' | 'move';
+    cols: number; rows: number;  // for resize
+    startMmX: number; startMmY: number; origX: number; origY: number;  // for move
+  } | null>(null);
 
   const canvasToMM = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -859,15 +865,33 @@ export default function ImpositionCanvas({
     return -1;
   }, [smBlocks, impo]);
 
+  const findSmBlock = useCallback((mmX: number, mmY: number): number => {
+    if (!smBlocks || impo.mode !== 'stepmulti') return -1;
+    const computed = impo.blocks || [];
+    for (let i = computed.length - 1; i >= 0; i--) {
+      const blk = computed[i];
+      if (mmX >= blk.x && mmX <= blk.x + blk.blockW &&
+          mmY >= blk.y && mmY <= blk.y + blk.blockH) return i;
+    }
+    return -1;
+  }, [smBlocks, impo]);
+
   // ─── PAN ───
   const onMouseDown = useCallback((e: React.MouseEvent) => {
-    // Step multi drag handle check
+    // Step multi: resize handle takes priority, then block move
     if (smBlocks && impo.mode === 'stepmulti' && impo.blocks) {
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
       const hi = findSmHandle(mmX, mmY);
       if (hi >= 0) {
         const blk = impo.blocks[hi];
-        smDragRef.current = { blockIdx: hi, cols: blk.cols, rows: blk.rows };
+        smDragRef.current = { blockIdx: hi, mode: 'resize', cols: blk.cols, rows: blk.rows, startMmX: mmX, startMmY: mmY, origX: blk.x, origY: blk.y };
+        e.preventDefault();
+        return;
+      }
+      const bi = findSmBlock(mmX, mmY);
+      if (bi >= 0) {
+        const blk = impo.blocks[bi];
+        smDragRef.current = { blockIdx: bi, mode: 'move', cols: blk.cols, rows: blk.rows, startMmX: mmX, startMmY: mmY, origX: blk.x, origY: blk.y };
         e.preventDefault();
         return;
       }
@@ -875,36 +899,47 @@ export default function ImpositionCanvas({
     if (zoom <= 1.02) return;
     draggingRef.current = true;
     dragLastRef.current = { x: e.clientX, y: e.clientY };
-  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle]);
+  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle, findSmBlock]);
   const onMouseMove = useCallback((e: React.MouseEvent) => {
-    // Step multi drag
-    if (smDragRef.current && smBlocks && impo.blocks && onSmBlockUpdate) {
+    // Step multi drag (resize or move)
+    if (smDragRef.current && smBlocks && impo.blocks) {
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
       const bi = smDragRef.current.blockIdx;
       const blk = smBlocks[bi];
       if (!blk) return;
-      const rot = blk.rotation || 0;
-      const sw = rot === 90 || rot === 270;
-      const cellW = (sw ? blk.trimH : blk.trimW) + bleed * 2;
-      const cellH = (sw ? blk.trimW : blk.trimH) + bleed * 2;
-      const bx = impo.blocks[bi]?.x ?? 0;
-      const by = impo.blocks[bi]?.y ?? 0;
       const printW = sheetW - marginLeft - marginRight;
       const printH = sheetH - marginTop - marginBottom;
-      const dragW = mmX - bx;
-      const dragH = mmY - by;
-      const newCols = Math.max(1, Math.min(
-        Math.round((dragW + gutter) / (cellW + gutter)),
-        Math.floor((printW - bx + gutter) / (cellW + gutter)),
-      ));
-      const newRows = Math.max(1, Math.min(
-        Math.round((dragH + gutter) / (cellH + gutter)),
-        Math.floor((printH - by + gutter) / (cellH + gutter)),
-      ));
-      if (newCols !== smDragRef.current.cols || newRows !== smDragRef.current.rows) {
-        smDragRef.current.cols = newCols;
-        smDragRef.current.rows = newRows;
-        onSmBlockUpdate(bi, newCols, newRows);
+
+      if (smDragRef.current.mode === 'resize' && onSmBlockUpdate) {
+        const rot = blk.rotation || 0;
+        const sw = rot === 90 || rot === 270;
+        const cellW = (sw ? blk.trimH : blk.trimW) + bleed * 2;
+        const cellH = (sw ? blk.trimW : blk.trimH) + bleed * 2;
+        const bx = impo.blocks[bi]?.x ?? 0;
+        const by = impo.blocks[bi]?.y ?? 0;
+        const dragW = mmX - bx;
+        const dragH = mmY - by;
+        const newCols = Math.max(1, Math.min(
+          Math.round((dragW + gutter) / (cellW + gutter)),
+          Math.floor((printW - bx + gutter) / (cellW + gutter)),
+        ));
+        const newRows = Math.max(1, Math.min(
+          Math.round((dragH + gutter) / (cellH + gutter)),
+          Math.floor((printH - by + gutter) / (cellH + gutter)),
+        ));
+        if (newCols !== smDragRef.current.cols || newRows !== smDragRef.current.rows) {
+          smDragRef.current.cols = newCols;
+          smDragRef.current.rows = newRows;
+          onSmBlockUpdate(bi, newCols, newRows);
+        }
+      } else if (smDragRef.current.mode === 'move' && onSmBlockMove) {
+        const dx = mmX - smDragRef.current.startMmX;
+        const dy = mmY - smDragRef.current.startMmY;
+        const blockW = impo.blocks[bi]?.blockW ?? 0;
+        const blockH = impo.blocks[bi]?.blockH ?? 0;
+        const newX = Math.max(0, Math.min(printW - blockW, smDragRef.current.origX + dx));
+        const newY = Math.max(0, Math.min(printH - blockH, smDragRef.current.origY + dy));
+        onSmBlockMove(bi, Math.round(newX * 10) / 10, Math.round(newY * 10) / 10);
       }
       return;
     }
@@ -913,7 +948,9 @@ export default function ImpositionCanvas({
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
       const container = containerRef.current;
       if (container) {
-        container.style.cursor = findSmHandle(mmX, mmY) >= 0 ? 'nwse-resize' : (zoom > 1.02 ? 'grab' : 'default');
+        const h = findSmHandle(mmX, mmY);
+        const b = h < 0 ? findSmBlock(mmX, mmY) : -1;
+        container.style.cursor = h >= 0 ? 'nwse-resize' : b >= 0 ? 'move' : (zoom > 1.02 ? 'grab' : 'default');
       }
     }
     if (!draggingRef.current) return;
@@ -924,7 +961,7 @@ export default function ImpositionCanvas({
     panRef.current.y += dy;
     const canvas = canvasRef.current;
     if (canvas) canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
-  }, [zoom, smBlocks, impo, onSmBlockUpdate, canvasToMM, findSmHandle, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom]);
+  }, [zoom, smBlocks, impo, onSmBlockUpdate, onSmBlockMove, canvasToMM, findSmHandle, findSmBlock, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom]);
   const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; }, []);
   const onDoubleClick = useCallback(() => { setZoom(1); panRef.current = { x: 0, y: 0 }; }, []);
 

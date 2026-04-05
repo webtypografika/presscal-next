@@ -2974,6 +2974,9 @@ export default function CalculatorShell() {
                 onSmBlockUpdate={impoMode === 'stepmulti' ? (idx, cols, rows) => {
                   setSmBlocks(prev => prev.map((b, i) => i === idx ? { ...b, cols, rows, blockW: 0, blockH: 0, _manualGrid: true } : b));
                 } : undefined}
+                onSmBlockMove={impoMode === 'stepmulti' ? (idx, x, y) => {
+                  setSmBlocks(prev => prev.map((b, i) => i === idx ? { ...b, x, y, blockW: 0, blockH: 0, _manualGrid: true } : b));
+                } : undefined}
               />
               {/* PDF upload overlay (top-left) */}
               <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>
