@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { calcImposition } from '@/lib/calc/imposition';
 import type { ImpositionInput } from '@/lib/calc/imposition';
-import type { ImpositionMode, ImpositionResult, CalculatorResult } from '@/types/calculator';
+import type { ImpositionMode, ImpositionResult, CalculatorResult, StepBlock } from '@/types/calculator';
 import ImpositionCanvas from './imposition-canvas';
 import DuplexNavigator from './signature-navigator';
 import { parsePDF } from '@/lib/calc/pdf-utils';
@@ -529,6 +529,10 @@ export default function CalculatorShell() {
     { id: crypto.randomUUID(), label: 'Δουλειά 1', qty: 1 },
   ]);
   const [gangCellAssign, setGangCellAssign] = useState<Record<number, number>>({});  // cellIdx → jobIdx (0-based)
+  // Step Multi
+  const [smBlocks, setSmBlocks] = useState<StepBlock[]>([
+    { pageNum: 1, backPageNum: null, trimW: 90, trimH: 55, cols: 1, rows: 1, rotation: 0, x: 0, y: 0, blockW: 0, blockH: 0 },
+  ]);
   const [csBackPdf, setCsBackPdf] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [pbPaperThickness, setPbPaperThickness] = useState(0.1); // mm per sheet
   const [impoColorBar, setImpoColorBar] = useState(false);
@@ -931,6 +935,8 @@ export default function CalculatorShell() {
       Object.entries(gangCellAssign).map(([k, v]) => [k, gangJobs[v]?.qty || 1])
     ) : undefined,
     gangAutoOptimize: impoMode === 'gangrun' ? Object.keys(gangCellAssign).length === 0 : undefined,
+    // Step Multi
+    stepBlocks: impoMode === 'stepmulti' ? smBlocks : undefined,
   };
 
   const impo: ImpositionResult = calcImposition(impoInput);
@@ -1389,6 +1395,8 @@ export default function CalculatorShell() {
                 fixedBackPdfBytes: csBackPdf?.bytes,
                 // Gang Run multi-PDF
                 gangJobPdfBytes: impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf?.bytes) : undefined,
+                // Step Multi
+                blocks: impoMode === 'stepmulti' ? impo.blocks : undefined,
                 jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
               });
             } catch (e) {
@@ -2550,6 +2558,165 @@ export default function CalculatorShell() {
                       </div>
                     </div>
                   )}
+                </>)}
+
+                {/* Step Multi */}
+                {impoMode === 'stepmulti' && (<>
+                  <div style={{ marginBottom: 10 }}>
+                    <MfLabel>BLOCKS</MfLabel>
+                    {smBlocks.map((blk, i) => {
+                      const blkColor = ['var(--accent)', 'var(--blue)', 'var(--teal)', '#a78bfa', '#f472b6', '#facc15'][i % 6];
+                      const computed = impo.blocks?.[i];
+                      return (
+                        <div key={i} style={{
+                          marginBottom: 4, borderRadius: 6,
+                          background: `color-mix(in srgb, ${blkColor} 10%, transparent)`,
+                          border: `1px solid color-mix(in srgb, ${blkColor} 25%, transparent)`,
+                          padding: '6px 8px',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                            <span style={{
+                              width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                              background: blkColor,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.55rem', fontWeight: 800, color: '#fff',
+                            }}>{i + 1}</span>
+                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text)', flex: 1 }}>Block {i + 1}</span>
+                            {computed && (
+                              <span style={{ fontSize: '0.5rem', color: '#64748b' }}>
+                                {computed.cols}×{computed.rows} = {computed.cols * computed.rows} ups
+                              </span>
+                            )}
+                            {smBlocks.length > 1 && (
+                              <button onClick={() => setSmBlocks(prev => prev.filter((_, idx) => idx !== i))}
+                                style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.6rem', padding: '2px' }}>
+                                <i className="fas fa-times" />
+                              </button>
+                            )}
+                          </div>
+                          {/* Trim size */}
+                          <div style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.5rem', color: '#64748b', width: 16, flexShrink: 0 }}>W</span>
+                            <input type="number" value={blk.trimW}
+                              onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, trimW: Math.max(1, Number(e.target.value) || 1), blockW: 0, blockH: 0 } : b))}
+                              style={{
+                                flex: 1, border: '1px solid var(--border)', borderRadius: 4,
+                                background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
+                                fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
+                                outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
+                              }} />
+                            <span style={{ fontSize: '0.5rem', color: '#64748b' }}>×</span>
+                            <span style={{ fontSize: '0.5rem', color: '#64748b', width: 10, flexShrink: 0 }}>H</span>
+                            <input type="number" value={blk.trimH}
+                              onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, trimH: Math.max(1, Number(e.target.value) || 1), blockW: 0, blockH: 0 } : b))}
+                              style={{
+                                flex: 1, border: '1px solid var(--border)', borderRadius: 4,
+                                background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
+                                fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
+                                outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
+                              }} />
+                            <span style={{ fontSize: '0.5rem', color: '#64748b' }}>mm</span>
+                          </div>
+                          {/* Rotation + Page */}
+                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.5rem', color: '#64748b', flexShrink: 0 }}>Pg</span>
+                            <input type="number" min={1} value={blk.pageNum}
+                              onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, pageNum: Math.max(1, Number(e.target.value) || 1) } : b))}
+                              style={{
+                                width: 36, border: '1px solid var(--border)', borderRadius: 4,
+                                background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
+                                fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
+                                outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
+                              }} />
+                            {job.sides === 2 && (<>
+                              <span style={{ fontSize: '0.5rem', color: '#64748b', flexShrink: 0 }}>B</span>
+                              <input type="number" min={0} value={blk.backPageNum || 0}
+                                onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, backPageNum: Number(e.target.value) || null } : b))}
+                                style={{
+                                  width: 36, border: '1px solid var(--border)', borderRadius: 4,
+                                  background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
+                                  fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
+                                  outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
+                                }} />
+                            </>)}
+                            <div style={{ flex: 1 }} />
+                            {([0, 90, 180, 270] as const).map(r => (
+                              <button key={r}
+                                onClick={() => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, rotation: r, blockW: 0, blockH: 0 } : b))}
+                                style={{
+                                  width: 22, height: 22, borderRadius: 3, fontSize: '0.5rem', fontWeight: 700,
+                                  border: `1px solid ${blk.rotation === r ? blkColor : 'var(--border)'}`,
+                                  background: blk.rotation === r ? `color-mix(in srgb, ${blkColor} 20%, transparent)` : 'transparent',
+                                  color: blk.rotation === r ? blkColor : '#64748b',
+                                  cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+                                }}>
+                                {r}°
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <button onClick={() => setSmBlocks(prev => [...prev, {
+                      pageNum: prev.length + 1, backPageNum: null,
+                      trimW: prev[0]?.trimW || 90, trimH: prev[0]?.trimH || 55,
+                      cols: 1, rows: 1, rotation: 0, x: 0, y: 0, blockW: 0, blockH: 0,
+                    }])}
+                      style={{
+                        width: '100%', padding: '5px 0', borderRadius: 6,
+                        border: '1px dashed var(--border)', background: 'transparent',
+                        color: 'var(--teal)', fontSize: '0.68rem', fontWeight: 600,
+                        cursor: 'pointer', fontFamily: 'inherit', marginTop: 2,
+                      }}>
+                      <i className="fas fa-plus" style={{ marginRight: 4, fontSize: '0.5rem' }} />Προσθήκη block
+                    </button>
+                  </div>
+
+                  {/* Step Multi summary — mini layout */}
+                  {impo.blocks && impo.blocks.length > 0 && (() => {
+                    const areaW = vizW - (machine?.marginLeft || 0) - (machine?.marginRight || 0);
+                    const areaH = vizH - (machine?.marginTop || 0) - (machine?.marginBottom || 0);
+                    const miniW = 220;
+                    const miniScale = miniW / areaW;
+                    const miniH = areaH * miniScale;
+                    const blkColors = ['var(--accent)', 'var(--blue)', 'var(--teal)', '#a78bfa', '#f472b6', '#facc15'];
+                    return (
+                      <div style={{ marginBottom: 10 }}>
+                        <MfLabel>LAYOUT</MfLabel>
+                        <div style={{
+                          position: 'relative', width: miniW, height: miniH,
+                          background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+                          borderRadius: 6, overflow: 'hidden',
+                        }}>
+                          {impo.blocks.map((blk, i) => {
+                            const bW = blk.blockW * miniScale;
+                            const bH = blk.blockH * miniScale;
+                            const bX = blk.x * miniScale;
+                            const bY = blk.y * miniScale;
+                            const color = blkColors[i % blkColors.length];
+                            return (
+                              <div key={i} style={{
+                                position: 'absolute', left: bX, top: bY, width: bW, height: bH,
+                                background: `color-mix(in srgb, ${color} 15%, transparent)`,
+                                border: `1.5px solid ${color}`,
+                                borderRadius: 3,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '0.55rem', fontWeight: 800, color,
+                              }}>
+                                {i + 1}
+                                <span style={{ fontSize: '0.4rem', fontWeight: 500, marginLeft: 3, opacity: 0.7 }}>
+                                  {blk.cols}×{blk.rows}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div style={{ fontSize: '0.5rem', color: '#475569', marginTop: 4 }}>
+                          {impo.blocks.length} blocks · {impo.ups} ups · {impo.totalSheets} φύλλα
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>)}
 
                 {/* Booklet */}

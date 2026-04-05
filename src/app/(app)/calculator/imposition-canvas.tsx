@@ -481,6 +481,38 @@ function drawSheet(
     }
   }
 
+  // ─── STEP MULTI BLOCK BOUNDARIES ───
+  if (impo.mode === 'stepmulti' && impo.blocks && impo.blocks.length > 1) {
+    const smColors = ['#f58220', '#3b82f6', '#14b8a6', '#a78bfa', '#f472b6', '#facc15'];
+    const isOff = machCat === 'offset';
+    const smML = marginLeft * scale;
+    const smMB = (isOff ? marginTop : marginBottom) * scale;
+    for (let bi = 0; bi < impo.blocks.length; bi++) {
+      const blk = impo.blocks[bi];
+      const bx = offX + smML + blk.x * scale;
+      const by = offY + drawH - smMB - (blk.y + blk.blockH) * scale;
+      const bw = blk.blockW * scale;
+      const bh = blk.blockH * scale;
+      const color = smColors[bi % smColors.length];
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.setLineDash([]);
+      // Block number badge
+      const badgeW = Math.min(bw * 0.15, 16);
+      const badgeH = Math.min(bh * 0.12, 12);
+      ctx.fillStyle = color;
+      ctx.fillRect(bx, by, badgeW, badgeH);
+      ctx.font = `800 ${Math.min(badgeH * 0.75, 8)}px Inter, DM Sans, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(String(bi + 1), bx + badgeW / 2, by + badgeH * 0.78);
+      ctx.restore();
+    }
+  }
+
   // ─── COLOR BAR ───
   if (showColorBar) {
     const cbS = colorBarScale / 100;
