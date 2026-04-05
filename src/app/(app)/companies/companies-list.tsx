@@ -167,14 +167,13 @@ export function CompaniesList({ initialCompanies, initialTotal, initialHasMore, 
     debouncedSaveContact(contactId, data);
   }, [debouncedSaveContact]);
 
-  // Create company
+  // Create company — instantly create blank card
   const handleCreate = useCallback(async () => {
-    if (!newName.trim()) return;
-    const c = await createCompany({ name: newName.trim() });
+    const c = await createCompany({ name: '' });
     setCompanies(prev => [c as any, ...prev]);
-    setNewName('');
     setCreating(false);
-  }, [newName]);
+    setNewName('');
+  }, []);
 
   // Add new contact to company
   const handleAddContact = useCallback(async (companyId: string) => {
@@ -223,17 +222,9 @@ export function CompaniesList({ initialCompanies, initialTotal, initialHasMore, 
             <i className="fas fa-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#475569', fontSize: '0.7rem' }} />
             <input value={search} onChange={e => handleSearchChange(e.target.value)} placeholder="Αναζήτηση..." style={{ ...inp, paddingLeft: 30, borderColor: 'var(--glass-border)', background: 'rgba(255,255,255,0.04)' }} />
           </div>
-          {!creating ? (
-            <button onClick={() => setCreating(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent)', color: '#fff', padding: '8px 18px', borderRadius: 8, border: 'none', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(245,130,32,0.3)', whiteSpace: 'nowrap' }}>
-              <i className="fas fa-plus" /> Νέα Εταιρεία
-            </button>
-          ) : (
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Επωνυμία..." autoFocus onKeyDown={e => e.key === 'Enter' && handleCreate()} style={{ ...inp, width: 200, borderColor: 'var(--accent)', background: 'rgba(255,255,255,0.04)' }} />
-              <button onClick={handleCreate} disabled={!newName.trim()} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', opacity: newName.trim() ? 1 : 0.5 }}>OK</button>
-              <button onClick={() => { setCreating(false); setNewName(''); }} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--glass-border)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer' }}><i className="fas fa-times" /></button>
-            </div>
-          )}
+          <button onClick={handleCreate} disabled={creating} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent)', color: '#fff', padding: '8px 18px', borderRadius: 8, border: 'none', fontSize: '0.85rem', fontWeight: 700, cursor: creating ? 'wait' : 'pointer', boxShadow: '0 4px 16px rgba(245,130,32,0.3)', whiteSpace: 'nowrap', opacity: creating ? 0.6 : 1 }}>
+            <i className="fas fa-plus" /> Νέα Εταιρεία
+          </button>
         </div>
       </div>
 
