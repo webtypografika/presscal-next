@@ -531,7 +531,7 @@ export default function CalculatorShell() {
   const [gangCellAssign, setGangCellAssign] = useState<Record<number, number>>({});  // cellIdx → jobIdx (0-based)
   // Step Multi
   const [smBlocks, setSmBlocks] = useState<StepBlock[]>([
-    { pageNum: 1, backPageNum: null, trimW: 90, trimH: 55, cols: 1, rows: 1, rotation: 0, x: 0, y: 0, blockW: 0, blockH: 0 },
+    { pageNum: 1, backPageNum: null, trimW: 90, trimH: 55, cols: 1, rows: 1, rotation: 0, x: 0, y: 0, blockW: 0, blockH: 0, _manualGrid: true },
   ]);
   const [smBlockPdfs, setSmBlockPdfs] = useState<(ParsedPDF | undefined)[]>([]);
   const [csBackPdf, setCsBackPdf] = useState<{ bytes: Uint8Array; name: string } | null>(null);
@@ -2601,7 +2601,7 @@ export default function CalculatorShell() {
                                   const pg = parsed.pageSizes[0];
                                   setSmBlocks(prev => prev.map((b, idx) => idx === i ? {
                                     ...b, trimW: Math.round(pg.trimW * 10) / 10, trimH: Math.round(pg.trimH * 10) / 10,
-                                    cols: 1, rows: 1, blockW: 0, blockH: 0,
+                                    cols: 1, rows: 1, blockW: 0, blockH: 0, _manualGrid: true,
                                   } : b));
                                 }
                                 e.target.value = '';
@@ -2647,7 +2647,7 @@ export default function CalculatorShell() {
                     <button onClick={() => setSmBlocks(prev => [...prev, {
                       pageNum: prev.length + 1, backPageNum: null,
                       trimW: prev[0]?.trimW || 90, trimH: prev[0]?.trimH || 55,
-                      cols: 1, rows: 1, rotation: 0, x: 0, y: 0, blockW: 0, blockH: 0,
+                      cols: 1, rows: 1, rotation: 0, x: 0, y: 0, blockW: 0, blockH: 0, _manualGrid: true,
                     }])}
                       style={{
                         width: '100%', padding: '5px 0', borderRadius: 6,
