@@ -1144,8 +1144,10 @@ export function calcStepMulti(input: ImpositionInput): ImpositionResult {
   }
 
   const firstBlock = blocks[0];
-  const cellW = trimW + bleed * 2;
-  const cellH = trimH + bleed * 2;
+  const fbTrimW = firstBlock?.trimW || trimW;
+  const fbTrimH = firstBlock?.trimH || trimH;
+  const cellW = fbTrimW + bleed * 2;
+  const cellH = fbTrimH + bleed * 2;
   const rawSheets = Math.ceil(qty / totalUps);
 
   return {
@@ -1157,8 +1159,8 @@ export function calcStepMulti(input: ImpositionInput): ImpositionResult {
     paperH: area.paperH,
     pieceW: cellW,
     pieceH: cellH,
-    trimW,
-    trimH,
+    trimW: fbTrimW,
+    trimH: fbTrimH,
     rotated: false,
     wastePercent: 0, // complex to calculate with multi blocks
     cells,

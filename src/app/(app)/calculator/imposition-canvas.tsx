@@ -175,15 +175,19 @@ function drawSheet(
   const cenX = paX + (printAreaW - totalGridW) / 2 + gridOffsetX * scale;
   const cenY = paY + (printAreaH - totalGridH) / 2 + gridOffsetY * scale;
 
-  // W&T uses actual cell coordinates (includes fold gap), others use uniform grid
+  // W&T and Step Multi use actual cell coordinates, others use uniform grid
   const isWT = impo.mode === 'workturn';
+  const isSM = impo.mode === 'stepmulti';
+  const useCellCoords = isWT || isSM;
 
-  // Draw cells
-  for (let row = 0; row < impo.rows; row++) {
-    for (let col = 0; col < impo.cols; col++) {
-      const idx = row * impo.cols + col;
-      if (idx >= impo.cells.length) continue;
-      const cell = impo.cells[idx];
+  // Draw cells — step multi iterates all cells directly (variable grid)
+  const cellCount = isSM ? impo.cells.length : impo.rows * impo.cols;
+  for (let ci = 0; ci < cellCount; ci++) {
+    const row = isSM ? 0 : Math.floor(ci / impo.cols);
+    const col = isSM ? 0 : ci % impo.cols;
+    const idx = isSM ? ci : row * impo.cols + col;
+    if (idx >= impo.cells.length) continue;
+    const cell = impo.cells[idx];
 
       // Signature navigator override: swap page numbers for the active sheet
       let cellPageNum = cell.pageNum;
@@ -211,30 +215,33 @@ function drawSheet(
         }
       }
 
-      const x = isWT ? offX + cell.x * scale + gridOffsetX * scale : cenX + col * (pw + gutterPx);
-      const y = isWT ? offY + cell.y * scale + gridOffsetY * scale : cenY + row * (ph + gutterPx);
+      const x = useCellCoords ? offX + cell.x * scale + gridOffsetX * scale : cenX + col * (pw + gutterPx);
+      const y = useCellCoords ? offY + cell.y * scale + gridOffsetY * scale : cenY + row * (ph + gutterPx);
+      // Step multi: per-cell dimensions (blocks can have different trim sizes)
+      const cpw = isSM && cell.w ? cell.w * scale : pw;
+      const cph = isSM && cell.h ? cell.h * scale : ph;
       const isRotated = cell.rotation && cell.rotation !== 0;
 
       // Bleed zone
       if (hasBleed) {
         ctx.fillStyle = COLORS.bleedBand;
-        ctx.fillRect(x, y, pw, bleedPx);
-        ctx.fillRect(x, y + ph - bleedPx, pw, bleedPx);
-        ctx.fillRect(x, y + bleedPx, bleedPx, ph - 2 * bleedPx);
-        ctx.fillRect(x + pw - bleedPx, y + bleedPx, bleedPx, ph - 2 * bleedPx);
+        ctx.fillRect(x, y, cpw, bleedPx);
+        ctx.fillRect(x, y + cph - bleedPx, cpw, bleedPx);
+        ctx.fillRect(x, y + bleedPx, bleedPx, cph - 2 * bleedPx);
+        ctx.fillRect(x + cpw - bleedPx, y + bleedPx, bleedPx, cph - 2 * bleedPx);
 
         ctx.setLineDash([3, 2]);
         ctx.strokeStyle = COLORS.bleedStroke;
         ctx.lineWidth = 0.6;
-        ctx.strokeRect(x + bleedPx, y + bleedPx, pw - 2 * bleedPx, ph - 2 * bleedPx);
+        ctx.strokeRect(x + bleedPx, y + bleedPx, cpw - 2 * bleedPx, cph - 2 * bleedPx);
         ctx.setLineDash([]);
       }
 
       // Trim area
       const trimX = x + (hasBleed ? bleedPx : 0);
       const trimY = y + (hasBleed ? bleedPx : 0);
-      const trimW = hasBleed ? pw - 2 * bleedPx : pw;
-      const trimH = hasBleed ? ph - 2 * bleedPx : ph;
+      const trimW = hasBleed ? cpw - 2 * bleedPx : cpw;
+      const trimH = hasBleed ? cph - 2 * bleedPx : cph;
 
       // PDF page to show
       const mode = impo.mode;
@@ -269,7 +276,7 @@ function drawSheet(
       if (thumb && pgSize) {
         ctx.save();
         ctx.beginPath();
-        ctx.rect(x, y, pw, ph);
+        ctx.rect(x, y, cpw, cph);
         ctx.clip();
 
         const rendW = (pgSize.cropW || pgSize.w) * scale;
@@ -277,11 +284,11 @@ function drawSheet(
         const tOffX = (pgSize.trimOffX != null ? pgSize.trimOffX : ((pgSize.cropW || pgSize.w) - pgSize.trimW) / 2) * scale;
         const tOffY = (pgSize.trimOffY != null ? pgSize.trimOffY : ((pgSize.cropH || pgSize.h) - pgSize.trimH) / 2) * scale;
 
-        // The cell dimensions (pw × ph) already reflect any grid rotation
+        // The cell dimensions (cpw × cph) already reflect any grid rotation
         // (e.g. 90° → cells swapped W↔H by imposition engine).
         // We only need to check if the PDF page orientation matches the CURRENT cell.
         const pdfPortrait = pgSize.trimW <= pgSize.trimH;
-        const cellPortrait = pw <= ph;
+        const cellPortrait = cpw <= cph;
         const needsAutoRot = pdfPortrait !== cellPortrait;
 
         // User content rotation from cell (set by imposition engine)
@@ -425,7 +432,7 @@ function drawSheet(
         }
       }
     }
-  }
+  // end cell loop
 
   // W&T fold/cut line (dashed line at sheet center — where the sheet is cut after printing)
   if (isWT) {

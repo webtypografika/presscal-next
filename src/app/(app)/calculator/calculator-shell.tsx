@@ -2595,27 +2595,25 @@ export default function CalculatorShell() {
                             )}
                           </div>
                           {/* Trim size */}
-                          <div style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.5rem', color: '#64748b', width: 16, flexShrink: 0 }}>W</span>
+                          <div style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center', overflow: 'hidden' }}>
                             <input type="number" value={blk.trimW}
                               onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, trimW: Math.max(1, Number(e.target.value) || 1), blockW: 0, blockH: 0 } : b))}
                               style={{
-                                flex: 1, border: '1px solid var(--border)', borderRadius: 4,
+                                flex: 1, minWidth: 0, border: '1px solid var(--border)', borderRadius: 4,
                                 background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
                                 fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
                                 outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
                               }} />
-                            <span style={{ fontSize: '0.5rem', color: '#64748b' }}>×</span>
-                            <span style={{ fontSize: '0.5rem', color: '#64748b', width: 10, flexShrink: 0 }}>H</span>
+                            <span style={{ fontSize: '0.5rem', color: '#64748b', flexShrink: 0 }}>×</span>
                             <input type="number" value={blk.trimH}
                               onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, trimH: Math.max(1, Number(e.target.value) || 1), blockW: 0, blockH: 0 } : b))}
                               style={{
-                                flex: 1, border: '1px solid var(--border)', borderRadius: 4,
+                                flex: 1, minWidth: 0, border: '1px solid var(--border)', borderRadius: 4,
                                 background: 'rgba(255,255,255,0.04)', color: 'var(--text)',
                                 fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
                                 outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
                               }} />
-                            <span style={{ fontSize: '0.5rem', color: '#64748b' }}>mm</span>
+                            <span style={{ fontSize: '0.5rem', color: '#64748b', flexShrink: 0 }}>mm</span>
                           </div>
                           {/* Rotation + Page */}
                           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
