@@ -533,6 +533,7 @@ export default function CalculatorShell() {
   const [smBlocks, setSmBlocks] = useState<StepBlock[]>([
     { pageNum: 1, backPageNum: null, trimW: 90, trimH: 55, cols: 1, rows: 1, rotation: 0, x: 0, y: 0, blockW: 0, blockH: 0 },
   ]);
+  const [smBlockPdfs, setSmBlockPdfs] = useState<(ParsedPDF | undefined)[]>([]);
   const [csBackPdf, setCsBackPdf] = useState<{ bytes: Uint8Array; name: string } | null>(null);
   const [pbPaperThickness, setPbPaperThickness] = useState(0.1); // mm per sheet
   const [impoColorBar, setImpoColorBar] = useState(false);
@@ -2594,8 +2595,39 @@ export default function CalculatorShell() {
                               </button>
                             )}
                           </div>
-                          {/* Trim size */}
+                          {/* PDF upload + Trim size */}
                           <div style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center', overflow: 'hidden' }}>
+                            <label style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              padding: '2px 5px', borderRadius: 4, cursor: 'pointer', flexShrink: 0,
+                              background: smBlockPdfs[i] ? `color-mix(in srgb, ${blkColor} 18%, transparent)` : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${smBlockPdfs[i] ? blkColor : 'var(--border)'}`,
+                              color: smBlockPdfs[i] ? blkColor : '#64748b',
+                              fontSize: '0.5rem', fontWeight: 600, fontFamily: 'inherit',
+                            }}>
+                              <i className={`fas ${smBlockPdfs[i] ? 'fa-file-pdf' : 'fa-upload'}`} style={{ fontSize: '0.45rem' }} />
+                              {smBlockPdfs[i] ? smBlockPdfs[i]!.fileName.slice(0, 12) : 'PDF'}
+                              <input type="file" accept=".pdf" hidden onChange={async e => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                const parsed = await parsePDF(f);
+                                setSmBlockPdfs(prev => { const next = [...prev]; next[i] = parsed; return next; });
+                                if (parsed.pageSizes[0]) {
+                                  const pg = parsed.pageSizes[0];
+                                  setSmBlocks(prev => prev.map((b, idx) => idx === i ? {
+                                    ...b, trimW: Math.round(pg.trimW * 10) / 10, trimH: Math.round(pg.trimH * 10) / 10,
+                                    blockW: 0, blockH: 0,
+                                  } : b));
+                                }
+                                e.target.value = '';
+                              }} />
+                            </label>
+                            {smBlockPdfs[i] && (
+                              <button onClick={() => setSmBlockPdfs(prev => { const next = [...prev]; next[i] = undefined; return next; })}
+                                style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.45rem', padding: '1px', flexShrink: 0 }}>
+                                <i className="fas fa-times" />
+                              </button>
+                            )}
                             <input type="number" value={blk.trimW}
                               onChange={e => setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, trimW: Math.max(1, Number(e.target.value) || 1), blockW: 0, blockH: 0 } : b))}
                               style={{
@@ -2613,7 +2645,6 @@ export default function CalculatorShell() {
                                 fontSize: '0.7rem', fontWeight: 600, textAlign: 'center',
                                 outline: 'none', fontFamily: 'inherit', padding: '2px 4px',
                               }} />
-                            <span style={{ fontSize: '0.5rem', color: '#64748b', flexShrink: 0 }}>mm</span>
                           </div>
                           {/* Rotation + Page */}
                           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -2976,6 +3007,7 @@ export default function CalculatorShell() {
                 } : undefined}
                 gangJobPdfs={impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf) : undefined}
                 gangCellAssign={impoMode === 'gangrun' ? gangCellAssign : undefined}
+                smBlockPdfs={impoMode === 'stepmulti' ? smBlockPdfs : undefined}
               />
               {/* PDF upload overlay (top-left) */}
               <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>

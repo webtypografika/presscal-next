@@ -981,14 +981,42 @@ function calcStepBlocks(
     const needsAutoCalc = (block.blockW === 0 && !block._manualGrid);
 
     if (needsAutoCalc) {
-      // Available space from block position
-      let availW = printW - block.x;
-      let availH = printH - block.y;
+      // For blocks after the first: find free position FIRST (using minimum 1-cell size),
+      // then calculate how many cells fit at that position
+      if (bi > 0) {
+        const minW = cellW;
+        const minH = cellH;
+        const pos = findFreePosition(minW, minH, printW, printH, blocks, bi, gutter);
+        block.x = pos.x;
+        block.y = pos.y;
+      }
+
+      // Calculate max cells that fit from this position (avoiding overlap with other blocks)
+      const availW = printW - block.x;
+      const availH = printH - block.y;
       let maxC = Math.max(1, Math.floor((availW + gutter) / (cellW + gutter)));
       let maxR = Math.max(1, Math.floor((availH + gutter) / (cellH + gutter)));
-      // Validate fit
       if (maxC * cellW + (maxC - 1) * gutter > availW + 0.01) maxC = Math.max(1, maxC - 1);
       if (maxR * cellH + (maxR - 1) * gutter > availH + 0.01) maxR = Math.max(1, maxR - 1);
+
+      // For blocks after the first: shrink to avoid overlapping placed blocks
+      if (bi > 0) {
+        for (let c = maxC; c >= 1; c--) {
+          for (let r = maxR; r >= 1; r--) {
+            const testW = c * cellW + Math.max(0, c - 1) * gutter;
+            const testH = r * cellH + Math.max(0, r - 1) * gutter;
+            let overlaps = false;
+            for (let j = 0; j < bi; j++) {
+              if (rectsOverlap(block.x, block.y, testW, testH, blocks[j].x, blocks[j].y, blocks[j].blockW, blocks[j].blockH)) {
+                overlaps = true;
+                break;
+              }
+            }
+            if (!overlaps) { maxC = c; maxR = r; c = 0; break; }
+          }
+        }
+      }
+
       block.cols = maxC;
       block.rows = maxR;
     }
@@ -1000,25 +1028,6 @@ function calcStepBlocks(
     // Clamp position to printable area
     if (block.x + block.blockW > printW + 0.1) block.x = Math.max(0, printW - block.blockW);
     if (block.y + block.blockH > printH + 0.1) block.y = Math.max(0, printH - block.blockH);
-
-    // Auto-place new blocks that overlap
-    if (needsAutoCalc && bi > 0 && block.x === 0 && block.y === 0) {
-      const pos = findFreePosition(block.blockW, block.blockH, printW, printH, blocks, bi, gutter);
-      block.x = pos.x;
-      block.y = pos.y;
-
-      // Recalc available space at new position
-      const availW = printW - block.x;
-      const availH = printH - block.y;
-      let maxC = Math.max(1, Math.floor((availW + gutter) / (cellW + gutter)));
-      let maxR = Math.max(1, Math.floor((availH + gutter) / (cellH + gutter)));
-      if (maxC * cellW + (maxC - 1) * gutter > availW + 0.01) maxC = Math.max(1, maxC - 1);
-      if (maxR * cellH + (maxR - 1) * gutter > availH + 0.01) maxR = Math.max(1, maxR - 1);
-      block.cols = maxC;
-      block.rows = maxR;
-      block.blockW = block.cols * cellW + Math.max(0, block.cols - 1) * gutter;
-      block.blockH = block.rows * cellH + Math.max(0, block.rows - 1) * gutter;
-    }
   }
 }
 

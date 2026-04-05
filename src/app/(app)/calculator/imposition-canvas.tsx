@@ -48,6 +48,7 @@ interface ImpositionCanvasProps {
   };
   gangJobPdfs?: (ParsedPDF | undefined)[];  // per-job PDFs for gang run
   gangCellAssign?: Record<number, number>;   // cellIdx → jobIdx (0-based)
+  smBlockPdfs?: (ParsedPDF | undefined)[];   // per-block PDFs for step multi
 }
 
 type ViewMode = 'single' | 'dual';
@@ -108,6 +109,7 @@ function drawSheet(
   csNumbering?: ImpositionCanvasProps['csNumbering'],
   gangJobPdfs?: (ParsedPDF | undefined)[],
   gangCellAssign?: Record<number, number>,
+  smBlockPdfs?: (ParsedPDF | undefined)[],
 ) {
   const scale = drawW / sheetW;
   const hasBleed = bleed > 0;
@@ -180,6 +182,16 @@ function drawSheet(
   const isSM = impo.mode === 'stepmulti';
   const useCellCoords = isWT || isSM;
 
+  // Step multi: map cell index → block index for per-block PDF rendering
+  const smCellBlockIdx: number[] = [];
+  if (isSM && impo.blocks) {
+    for (let bi = 0; bi < impo.blocks.length; bi++) {
+      const b = impo.blocks[bi];
+      for (let r = 0; r < b.rows; r++) for (let c = 0; c < b.cols; c++) smCellBlockIdx.push(bi);
+    }
+  }
+  const isSmMultiPdf = isSM && smBlockPdfs && smBlockPdfs.some(Boolean);
+
   // Draw cells — step multi iterates all cells directly (variable grid)
   const cellCount = isSM ? impo.cells.length : impo.rows * impo.cols;
   for (let ci = 0; ci < cellCount; ci++) {
@@ -251,7 +263,12 @@ function drawSheet(
       const isStepRepeat = !isCutStack && (mode === 'nup' || mode === 'cutstack' || (mode === 'gangrun' && !isGangMultiPdf));
       let pidx: number;
       let cellPdf: ParsedPDF | null | undefined = pdf;
-      if (isGangMultiPdf) {
+      if (isSmMultiPdf) {
+        // Step Multi: each cell shows its block's PDF
+        const bi = smCellBlockIdx[idx] ?? 0;
+        cellPdf = smBlockPdfs![bi] || null;
+        pidx = pdfPageIdx;
+      } else if (isGangMultiPdf) {
         // Gang Run multi-PDF: each cell shows its job's PDF (page 0 = front)
         const jobIdx = gangCellAssign?.[idx] ?? 0;
         cellPdf = gangJobPdfs![jobIdx] || null;
@@ -589,7 +606,7 @@ export default function ImpositionCanvas({
   bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
   showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
   pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
-  gangJobPdfs, gangCellAssign,
+  gangJobPdfs, gangCellAssign, smBlockPdfs,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -653,14 +670,14 @@ export default function ImpositionCanvas({
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign);
+        machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs);
 
       // Back
       drawSheet(ctx, baseX + drawW + gap, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign);
+        machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs);
     } else {
       // ═══ SINGLE VIEW: one sheet, pagination ═══
       const scaleX = (cW - 24 - markLen * 2) / sheetW;
@@ -684,7 +701,7 @@ export default function ImpositionCanvas({
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign);
+        machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs);
     }
 
     // Feed direction indicator — LEFT edge = paper entry side
