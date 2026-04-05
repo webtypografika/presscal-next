@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { Quote, Customer, Company, Material, Org } from '@/generated/prisma/client';
 import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer, createCompanyQuick, createCompanyFromElorus } from '../actions';
 import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
+import { ElorusAfmLookup, type ElorusLookupResult } from '@/components/elorus-afm-lookup';
 
 type QuoteWithCustomer = Quote & { customer: Customer | null; company: Company | null };
 
@@ -2166,6 +2167,10 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formAfm, setFormAfm] = useState('');
+  const [formDoy, setFormDoy] = useState('');
+  const [formAddress, setFormAddress] = useState('');
+  const [formCity, setFormCity] = useState('');
+  const [formZip, setFormZip] = useState('');
   const [formFolder, setFormFolder] = useState('');
   const [saving, setSaving] = useState(false);
   const [emailSender, setEmailSender] = useState<{ name: string; email: string } | null>(null);
@@ -2292,6 +2297,10 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
     setFormEmail(c.email || '');
     setFormPhone(c.phone || '');
     setFormAfm(c.afm || '');
+    setFormDoy((c as any).doy || '');
+    setFormAddress((c as any).address || '');
+    setFormCity((c as any).city || '');
+    setFormZip((c as any).zip || '');
     setFormFolder((c as any).folderPath || '');
     setMode('edit');
   }
@@ -2306,6 +2315,10 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
         email: formEmail.trim() || undefined,
         phone: formPhone.trim() || undefined,
         afm: formAfm.trim() || undefined,
+        doy: formDoy.trim() || undefined,
+        address: formAddress.trim() || undefined,
+        city: formCity.trim() || undefined,
+        zip: formZip.trim() || undefined,
         folderPath: formFolder.trim() || undefined,
       };
       if (mode === 'new') {
@@ -2626,6 +2639,40 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
               <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>ΑΦΜ</label>
               <input value={formAfm} onChange={e => setFormAfm(e.target.value)} placeholder="ΑΦΜ" style={inp} />
             </div>
+            <div>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>ΔΟΥ</label>
+              <input value={formDoy} onChange={e => setFormDoy(e.target.value)} placeholder="ΔΟΥ" style={inp} />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Διεύθυνση</label>
+              <input value={formAddress} onChange={e => setFormAddress(e.target.value)} placeholder="Οδός αριθμός" style={inp} />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Πόλη</label>
+              <input value={formCity} onChange={e => setFormCity(e.target.value)} placeholder="Πόλη" style={inp} />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>ΤΚ</label>
+              <input value={formZip} onChange={e => setFormZip(e.target.value)} placeholder="00000" style={inp} />
+            </div>
+            {/* Elorus / TaxisNet lookup */}
+            {hasElorus && (
+              <div>
+                <ElorusAfmLookup
+                  currentAfm={formAfm}
+                  currentValues={{ afm: formAfm, doy: formDoy, address: formAddress, city: formCity, zip: formZip }}
+                  onApply={(data: ElorusLookupResult) => {
+                    if (data.afm) setFormAfm(data.afm);
+                    if (data.doy) setFormDoy(data.doy);
+                    if (data.address) setFormAddress(data.address);
+                    if (data.city) setFormCity(data.city);
+                    if (data.zip) setFormZip(data.zip);
+                    if (data.email && !formEmail) setFormEmail(data.email);
+                  }}
+                  toast={toast}
+                />
+              </div>
+            )}
             <div>
               <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
                 <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.65rem' }} />Φάκελος Πελάτη

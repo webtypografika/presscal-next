@@ -12,6 +12,7 @@ import {
   getCustomer,
 } from './actions';
 import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
+import { ElorusAfmLookup, type ElorusLookupResult } from '@/components/elorus-afm-lookup';
 
 type CustomerWithCount = Customer & { _count: { quotes: number } };
 type CustomerWithQuotes = Customer & { quotes: Quote[] };
@@ -529,6 +530,7 @@ export function CustomersList({ customers: initialCustomers, hasElorus }: Props)
       {showEditor && showEditor !== 'new' && (
         <CustomerEditor
           customer={editingCustomer}
+          hasElorus={hasElorus}
           onClose={() => setShowEditor(null)}
           onSaved={(c) => {
             setCustomers(prev => prev.map(old => old.id === c.id ? { ...old, ...c } : old));
@@ -592,6 +594,7 @@ export function CustomersList({ customers: initialCustomers, hasElorus }: Props)
 // ─── CUSTOMER EDITOR ───
 interface EditorProps {
   customer: CustomerWithCount | null;
+  hasElorus?: boolean;
   onClose: () => void;
   onSaved: (c: CustomerWithCount) => void;
   toast: (msg: string, type?: ToastType) => void;
@@ -605,7 +608,7 @@ interface ContactItem {
   role: string;
 }
 
-function CustomerEditor({ customer, onClose, onSaved, toast }: EditorProps) {
+function CustomerEditor({ customer, hasElorus, onClose, onSaved, toast }: EditorProps) {
   const [name, setName] = useState(customer?.name ?? '');
   const [company, setCompany] = useState(customer?.company ?? '');
   const [email, setEmail] = useState(customer?.email ?? '');
@@ -754,6 +757,25 @@ function CustomerEditor({ customer, onClose, onSaved, toast }: EditorProps) {
             <input value={zip} onChange={e => setZip(e.target.value)} placeholder="Τ.Κ." style={inp} />
           </div>
         </div>
+
+        {/* Elorus / TaxisNet lookup */}
+        {hasElorus && (
+          <div style={{ marginBottom: 16 }}>
+            <ElorusAfmLookup
+              currentAfm={afm}
+              currentValues={{ afm, doy, address, city, zip }}
+              onApply={(data: ElorusLookupResult) => {
+                if (data.afm) setAfm(data.afm);
+                if (data.doy) setDoy(data.doy);
+                if (data.address) setAddress(data.address);
+                if (data.city) setCity(data.city);
+                if (data.zip) setZip(data.zip);
+                if (data.email && !email) setEmail(data.email);
+              }}
+              toast={toast}
+            />
+          </div>
+        )}
 
         {/* Notes */}
         <div style={{ marginBottom: 16 }}>
