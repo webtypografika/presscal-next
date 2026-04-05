@@ -399,6 +399,7 @@ export default function EmailClient() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', minWidth: 0 }}>
                         <span style={{ fontSize: '0.82rem', fontWeight: isUnread ? 800 : 600, color: isUnread ? 'var(--text)' : 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sender.name}</span>
+                        {sender.email && sender.email !== sender.name && <span style={{ fontSize: '0.68rem', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sender.email}</span>}
                         <button
                           onClick={(e) => { e.stopPropagation(); setSearch(`from:${sender.email}`); }}
                           title={`Emails από ${sender.email}`}
