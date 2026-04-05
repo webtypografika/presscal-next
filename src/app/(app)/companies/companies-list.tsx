@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { createCompany, updateCompany, deleteCompany, createContact, updateContact, unlinkContactFromCompany, setPrimaryContact } from './actions';
+import { ElorusAfmLookup, type ElorusLookupResult } from '@/components/elorus-afm-lookup';
 
 interface ContactData { id: string; name: string; email: string | null; phone: string | null; mobile: string | null; role: string }
 interface CCData { id: string; role: string; isPrimary: boolean; contact: ContactData }
@@ -11,7 +12,7 @@ interface CompanyData {
   folderPath: string | null; tags: string[]; companyContacts: CCData[]; _count: { quotes: number };
 }
 
-interface Props { initialCompanies: CompanyData[]; initialTotal: number; initialHasMore: boolean }
+interface Props { initialCompanies: CompanyData[]; initialTotal: number; initialHasMore: boolean; hasElorus?: boolean }
 
 const PAGE_SIZE = 50;
 
@@ -100,7 +101,7 @@ function ContactRow({ cc, companyId, onUpdate, onRemove, onSetPrimary }: {
   );
 }
 
-export function CompaniesList({ initialCompanies, initialTotal, initialHasMore }: Props) {
+export function CompaniesList({ initialCompanies, initialTotal, initialHasMore, hasElorus }: Props) {
   const [companies, setCompanies] = useState(initialCompanies);
   const [total, setTotal] = useState(initialTotal);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -298,6 +299,23 @@ export function CompaniesList({ initialCompanies, initialTotal, initialHasMore }
                   <Field label="WEBSITE" value={company.website || ''} onChange={v => updateCompanyField(company.id, 'website', v)} placeholder="—" />
                   <Field label="ΤΚ" value={company.zip || ''} onChange={v => updateCompanyField(company.id, 'zip', v)} placeholder="—" />
                 </div>
+                {hasElorus && (
+                  <div style={{ marginTop: 8 }}>
+                    <ElorusAfmLookup
+                      currentAfm={company.afm || ''}
+                      currentValues={{ afm: company.afm || '', doy: company.doy || '', address: company.address || '', city: company.city || '', zip: company.zip || '' }}
+                      onApply={(data: ElorusLookupResult) => {
+                        if (data.afm) updateCompanyField(company.id, 'afm', data.afm);
+                        if (data.doy) updateCompanyField(company.id, 'doy', data.doy);
+                        if (data.address) updateCompanyField(company.id, 'address', data.address);
+                        if (data.city) updateCompanyField(company.id, 'city', data.city);
+                        if (data.zip) updateCompanyField(company.id, 'zip', data.zip);
+                        if (data.email && !company.email) updateCompanyField(company.id, 'email', data.email);
+                      }}
+                      toast={() => {}}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
