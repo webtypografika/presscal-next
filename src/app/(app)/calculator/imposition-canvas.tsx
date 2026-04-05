@@ -811,9 +811,23 @@ export default function ImpositionCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return { mmX: 0, mmY: 0 };
     const rect = canvas.getBoundingClientRect();
-    // Convert client coords → logical canvas coords (LOGICAL_W × LOGICAL_H)
-    const lx = (clientX - rect.left) / rect.width * LOGICAL_W;
-    const ly = (clientY - rect.top) / rect.height * LOGICAL_H;
+    // Account for object-fit: contain (letterboxing)
+    const canvasAspect = LOGICAL_W / LOGICAL_H;
+    const boxAspect = rect.width / rect.height;
+    let contentW: number, contentH: number, contentX: number, contentY: number;
+    if (boxAspect > canvasAspect) {
+      contentH = rect.height;
+      contentW = rect.height * canvasAspect;
+      contentX = (rect.width - contentW) / 2;
+      contentY = 0;
+    } else {
+      contentW = rect.width;
+      contentH = rect.width / canvasAspect;
+      contentX = 0;
+      contentY = (rect.height - contentH) / 2;
+    }
+    const lx = (clientX - rect.left - contentX) / contentW * LOGICAL_W;
+    const ly = (clientY - rect.top - contentY) / contentH * LOGICAL_H;
     // Replicate the sheet positioning from draw()
     const markLen = cropMarks ? 8 : 0;
     const reserveTop = 20;
@@ -828,9 +842,7 @@ export default function ImpositionCanvas({
     // Convert to mm relative to printable area origin
     const isOff = machCat === 'offset';
     const mt = isOff ? marginBottom : marginTop;
-    const mmX = (lx - sheetOffX) / s - marginLeft;
-    const mmY = (ly - sheetOffY) / s - mt;
-    return { mmX, mmY };
+    return { mmX: (lx - sheetOffX) / s - marginLeft, mmY: (ly - sheetOffY) / s - mt };
   }, [sheetW, sheetH, marginLeft, marginTop, marginBottom, machCat, cropMarks]);
 
   const findSmHandle = useCallback((mmX: number, mmY: number): number => {
