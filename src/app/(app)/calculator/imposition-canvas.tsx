@@ -811,14 +811,27 @@ export default function ImpositionCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return { mmX: 0, mmY: 0 };
     const rect = canvas.getBoundingClientRect();
-    const cssScale = rect.width / canvas.width * (window.devicePixelRatio || 1);
-    const px = (clientX - rect.left) / cssScale;
-    const py = (clientY - rect.top) / cssScale;
-    const s = canvas.width / (window.devicePixelRatio || 1) / sheetW;
+    // Convert client coords → logical canvas coords (LOGICAL_W × LOGICAL_H)
+    const lx = (clientX - rect.left) / rect.width * LOGICAL_W;
+    const ly = (clientY - rect.top) / rect.height * LOGICAL_H;
+    // Replicate the sheet positioning from draw()
+    const markLen = cropMarks ? 8 : 0;
+    const reserveTop = 20;
+    const reserveBot = 22;
+    const scaleX = (LOGICAL_W - 24 - markLen * 2) / sheetW;
+    const scaleY = (LOGICAL_H - reserveTop - reserveBot - markLen * 2) / sheetH;
+    const s = Math.min(scaleX, scaleY);
+    const drawW = sheetW * s;
+    const drawH = sheetH * s;
+    const sheetOffX = (LOGICAL_W - drawW) / 2;
+    const sheetOffY = reserveTop + markLen + (LOGICAL_H - reserveTop - reserveBot - markLen * 2 - drawH) / 2;
+    // Convert to mm relative to printable area origin
     const isOff = machCat === 'offset';
     const mt = isOff ? marginBottom : marginTop;
-    return { mmX: px / s - marginLeft, mmY: py / s - mt };
-  }, [sheetW, marginLeft, marginTop, marginBottom, machCat]);
+    const mmX = (lx - sheetOffX) / s - marginLeft;
+    const mmY = (ly - sheetOffY) / s - mt;
+    return { mmX, mmY };
+  }, [sheetW, sheetH, marginLeft, marginTop, marginBottom, machCat, cropMarks]);
 
   const findSmHandle = useCallback((mmX: number, mmY: number): number => {
     if (!smBlocks || impo.mode !== 'stepmulti') return -1;
