@@ -889,13 +889,18 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
                 {((quote as any).fileLinks as any[] || []).map((fl: any) => {
                   const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(fl.fileName);
+                  // Parse email-sourced paths: /api/email/messages/{msgId}/attachments/{attId}?...
+                  const emailMatch = fl.source === 'email' && fl.filePath.match(/\/messages\/([^/]+)\/attachments\/([^?]+)/);
+                  const pressKitHref = emailMatch
+                    ? `presscal-fh://attachment?messageId=${emailMatch[1]}&attId=${emailMatch[2]}&mime=${encodeURIComponent(fl.fileType || 'application/octet-stream')}&filename=${encodeURIComponent(fl.fileName)}&quoteId=${quote.id}`
+                    : `presscal-fh://open-file?path=${encodeURIComponent(fl.filePath)}&quoteId=${quote.id}`;
                   return (
                     <div key={fl.id} style={{
                       borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden',
                       background: 'rgba(255,255,255,0.02)',
                     }}>
                       {/* Thumbnail / icon */}
-                      <a href={`presscal-fh://open-file?path=${encodeURIComponent(fl.filePath)}&quoteId=${quote.id}`} style={{ display: 'block', height: 80, background: 'rgba(0,0,0,0.15)', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
+                      <a href={pressKitHref} style={{ display: 'block', height: 80, background: 'rgba(0,0,0,0.15)', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
                         {fl.thumbnail ? (
                           <img src={fl.thumbnail} alt={fl.fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : isImage && fl.filePath.startsWith('/storage/') ? (
@@ -919,7 +924,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                           }}>
                             <i className="fas fa-download" />
                           </a>
-                          <a href={`presscal-fh://open-file?path=${encodeURIComponent(fl.filePath)}&quoteId=${quote.id}`} title="PressKit" style={{
+                          <a href={pressKitHref} title="PressKit" style={{
                             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             padding: '3px', borderRadius: 4, border: '1px solid var(--border)',
                             color: '#f58220', fontSize: '0.6rem', textDecoration: 'none',
