@@ -490,10 +490,12 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
     for (const msgId of messageIds) {
       try {
         const msg = await getMessage(token, msgId);
+        console.log('[saveEmailAttachments] msgId:', msgId, 'attachments:', JSON.stringify(msg.attachments));
         if (!msg.attachments?.length) continue;
 
         for (const att of msg.attachments) {
-          if (!att.id || !att.filename) continue;
+          console.log('[saveEmailAttachments] att:', att.id, att.filename, att.mimeType);
+          if (!att.filename) continue;
 
           // Sanitize filename
           const safeName = att.filename.replace(/[<>:"|?*]/g, '_');
@@ -502,7 +504,8 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
           // Skip if already exists
           try { await fs.access(filePath); continue; } catch { /* doesn't exist, good */ }
 
-          // Download from Gmail
+          // Download from Gmail (skip if no attachmentId — inline data too small for API)
+          if (!att.id) { console.log('[saveEmailAttachments] skipping, no attachmentId:', att.filename); continue; }
           const b64 = await getAttachment(token, msgId, att.id);
           const buffer = Buffer.from(b64, 'base64');
           await fs.writeFile(filePath, buffer);
@@ -540,7 +543,7 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
           fileLinks.push({ name: safeName, path: webPath, type: ext, size: buffer.length });
           saved++;
         }
-      } catch (e) { console.error('[saveEmailAttachments] message error:', (e as Error).message); }
+      } catch (e) { console.error('[saveEmailAttachments] message error:', msgId, (e as Error).message, (e as Error).stack); }
     }
 
     console.log('[saveEmailAttachments] done, saved:', saved);
