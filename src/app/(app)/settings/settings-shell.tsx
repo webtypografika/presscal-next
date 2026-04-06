@@ -366,12 +366,18 @@ export function SettingsShell({ org }: { org: Org }) {
               </div>
             </Field>
             {apiFilehelper && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} />
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  Βάλε αυτό το key στο PressKit app: Settings → PressCal → API Key
-                </span>
-              </div>
+              <a
+                href={`presscal-fh://connect?url=${encodeURIComponent(window.location.origin)}&apiKey=${encodeURIComponent(apiFilehelper)}`}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8,
+                  padding: '10px 16px', borderRadius: 8,
+                  background: '#f58220', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
+                  textDecoration: 'none', cursor: 'pointer',
+                }}
+              >
+                <i className="fas fa-link" style={{ fontSize: '0.65rem' }} />
+                Σύνδεση PressKit
+              </a>
             )}
           </Section>
 
