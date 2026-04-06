@@ -528,7 +528,7 @@ function drawSheet(
       ctx.fillStyle = color;
       ctx.font = '600 9px Inter, DM Sans, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(`${bi + 1}  ${blk.cols}×${blk.rows}`, bx + 2, by - 3);
+      ctx.fillText(`${bi + 1}  ${blk.cols}×${blk.rows}  ${blk.trimW}×${blk.trimH}mm`, bx + 2, by - 3);
       // Drag handle (bottom-right corner)
       const hx = bx + bw;
       const hy = by + bh;
