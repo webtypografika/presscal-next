@@ -501,33 +501,33 @@ function drawSheet(
     ctx.strokeStyle = COLORS.cropMark;
     ctx.lineWidth = 0.5;
     if (isNUpLike) {
-      // N-Up/CutStack/GangRun: collect unique cell-edge positions via step
-      // This handles negative cellGap (shared bleeds) correctly
-      const cellXs: number[] = [];
+      // N-Up/CutStack/GangRun: crop marks at TRIM edges (not cell/bleed edges)
+      // Trim positions are bleed-independent: cenX + col*step + bleedPx = constant
+      const trimXs: number[] = [];
       for (let col = 0; col < impo.cols; col++) {
-        const cx = cenX + col * stepW;
-        cellXs.push(cx);        // left cell edge
-        cellXs.push(cx + pw);   // right cell edge
+        const cellX = cenX + col * stepW;
+        trimXs.push(cellX + bleedPx);          // left trim edge
+        trimXs.push(cellX + pw - bleedPx);     // right trim edge
       }
-      cellXs.sort((a, b) => a - b);
-      const uX = [cellXs[0]];
-      for (let i = 1; i < cellXs.length; i++) {
-        if (cellXs[i] - uX[uX.length - 1] > 0.3) uX.push(cellXs[i]);
+      trimXs.sort((a, b) => a - b);
+      const uX = [trimXs[0]];
+      for (let i = 1; i < trimXs.length; i++) {
+        if (trimXs[i] - uX[uX.length - 1] > 0.3) uX.push(trimXs[i]);
       }
 
-      const cellYs: number[] = [];
+      const trimYs: number[] = [];
       for (let row = 0; row < impo.rows; row++) {
-        const cy = cenY + row * stepH;
-        cellYs.push(cy);        // top cell edge
-        cellYs.push(cy + ph);   // bottom cell edge
+        const cellY = cenY + row * stepH;
+        trimYs.push(cellY + bleedPx);          // top trim edge
+        trimYs.push(cellY + ph - bleedPx);     // bottom trim edge
       }
-      cellYs.sort((a, b) => a - b);
-      const uY = [cellYs[0]];
-      for (let i = 1; i < cellYs.length; i++) {
-        if (cellYs[i] - uY[uY.length - 1] > 0.3) uY.push(cellYs[i]);
+      trimYs.sort((a, b) => a - b);
+      const uY = [trimYs[0]];
+      for (let i = 1; i < trimYs.length; i++) {
+        if (trimYs[i] - uY[uY.length - 1] > 0.3) uY.push(trimYs[i]);
       }
 
-      // Perimeter marks: vertical cuts at top/bottom, horizontal cuts at left/right
+      // Perimeter marks
       const gridT = uY[0], gridB = uY[uY.length - 1];
       const gridL = uX[0], gridR = uX[uX.length - 1];
       for (const vx of uX) {
@@ -543,7 +543,7 @@ function drawSheet(
         ctx.stroke();
       }
 
-      // Gutter marks between cells (if positive trim-to-trim gap)
+      // Gutter marks between trims (if positive trim gap)
       if (trimGutterPx > 1) {
         for (let col = 0; col < impo.cols - 1; col++) {
           const rightTrim = cenX + col * stepW + pw - bleedPx;
@@ -951,7 +951,6 @@ export default function ImpositionCanvas({
     parts.push(Math.round(sheetW) + '×' + Math.round(sheetH) + ' mm');
     parts.push(Math.round(impo.trimW) + '×' + Math.round(impo.trimH) + ' mm/τεμ.');
     if (impo.wastePercent > 0) parts.push(impo.wastePercent.toFixed(1) + '% waste');
-    parts.push('g=' + gutter.toFixed(1) + ' b=' + bleed.toFixed(1));
 
     ctx.font = '600 9px Inter, DM Sans, sans-serif';
     ctx.fillStyle = COLORS.info;
