@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
         title: quote.title || quote.number,
         description: '',
         quantity: '1',
+        unit_measure: '1',
         unit_value: (quote.subtotal || quote.grandTotal || 0).toFixed(2),
         taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
         ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),
