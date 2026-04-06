@@ -112,6 +112,7 @@ interface DbProduct {
   customMult: number | null;
   offset: Record<string, unknown>;
   digital: Record<string, unknown>;
+  isFavourite?: boolean;
 }
 
 // ─── FALLBACK DEMO DATA ───
@@ -851,6 +852,25 @@ export default function CalculatorShell() {
     const valid = ARCHETYPE_MODES[job.archetype] || ARCHETYPE_MODES.single_leaf;
     if (!valid.includes(impoMode)) setImpoMode(valid[0]);
   }, [job.archetype]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select product: favourite first, or only product for archetype
+  useEffect(() => {
+    if (!products.length || job.productId) return;
+    const matching = products.filter(p => p.archetype === job.archetype);
+    if (matching.length === 0) return;
+    const fav = matching.find(p => p.isFavourite);
+    const pick = fav || (matching.length === 1 ? matching[0] : null);
+    if (pick) {
+      setJob(prev => ({
+        ...prev,
+        productId: pick.id,
+        pages: pick.pages ?? prev.pages,
+        sheetsPerPad: pick.sheetsPerPad ?? prev.sheetsPerPad,
+        bodyPages: pick.bodyPages ?? prev.bodyPages,
+        customMult: pick.customMult ?? prev.customMult,
+      }));
+    }
+  }, [job.archetype, products]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-correct sides when mode forces duplex
   useEffect(() => {
@@ -2041,6 +2061,14 @@ export default function CalculatorShell() {
                       }}>
                         {arch && <i className={arch.icon} style={{ fontSize: '0.6rem', color: active ? 'var(--accent)' : '#64748b', flexShrink: 0 }} />}
                         <span style={{ flex: 1, fontSize: '0.72rem', color: active ? 'var(--accent)' : 'var(--text)', fontWeight: active ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                        <i className={`${p.isFavourite ? 'fas' : 'far'} fa-star`}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await fetch('/api/calculator', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'toggleFavourite', productId: p.id }) });
+                            setProducts(prev => prev.map(pp => pp.id === p.id ? { ...pp, isFavourite: !pp.isFavourite } : pp.archetype === p.archetype ? { ...pp, isFavourite: false } : pp));
+                          }}
+                          style={{ fontSize: '0.5rem', color: p.isFavourite ? '#facc15' : '#475569', cursor: 'pointer', flexShrink: 0, padding: '2px' }}
+                        />
                         {active && <i className="fas fa-check" style={{ fontSize: '0.55rem', color: 'var(--accent)', flexShrink: 0 }} />}
                       </div>
                     );

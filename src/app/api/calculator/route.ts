@@ -551,7 +551,7 @@ export async function GET() {
       select: {
         id: true, name: true, archetype: true,
         pages: true, sheetsPerPad: true, bodyPages: true, customMult: true,
-        offset: true, digital: true,
+        offset: true, digital: true, isFavourite: true,
       },
       orderBy: { name: 'asc' },
     }),
@@ -573,7 +573,21 @@ export async function GET() {
 // ─── PATCH: update machine custom_papers ───
 export async function PATCH(req: NextRequest) {
   try {
-    const { machineId, custom_papers, fav_papers } = await req.json();
+    const body = await req.json();
+
+    // Toggle product favourite
+    if (body.action === 'toggleFavourite' && body.productId) {
+      const product = await prisma.product.findFirst({ where: { id: body.productId, orgId: ORG_ID } });
+      if (!product) return Response.json({ error: 'Product not found' }, { status: 404 });
+      // Unfavourite all products with same archetype, then toggle this one
+      await prisma.product.updateMany({ where: { orgId: ORG_ID, archetype: product.archetype }, data: { isFavourite: false } });
+      if (!product.isFavourite) {
+        await prisma.product.update({ where: { id: body.productId }, data: { isFavourite: true } });
+      }
+      return Response.json({ ok: true });
+    }
+
+    const { machineId, custom_papers, fav_papers } = body;
     if (!machineId) return Response.json({ error: 'Missing machineId' }, { status: 400 });
 
     const machine = await prisma.machine.findFirst({
