@@ -555,6 +555,7 @@ export default function CalculatorShell() {
   const [speedOverride, setSpeedOverride] = useState<number | null>(null);
   // Waste (φύλλα μοντάζ)
   const [wasteFixed, setWasteFixed] = useState(0);
+  const [prodMultiplier, setProdMultiplier] = useState(1);
 
   // Overrides & Discounts
   const [showOverrides, setShowOverrides] = useState(false);
@@ -967,7 +968,8 @@ export default function CalculatorShell() {
 
   const impo: ImpositionResult = calcImposition(impoInput);
   const ups = Math.max(impo.ups, 1);
-  const rawSheets = impo.totalSheets || Math.ceil(job.qty / ups);
+  const rawSheetsBase = impo.totalSheets || Math.ceil(job.qty / ups);
+  const rawSheets = rawSheetsBase * prodMultiplier;
   const wasteSheets = wasteFixed;
   const sheets = rawSheets + wasteSheets;
   // W&T prints single-sided (same plate both sides after flip), no double count
@@ -1189,13 +1191,25 @@ export default function CalculatorShell() {
 
         {/* Stats inline */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, overflow: 'visible' }}>
-          <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          <span title="Τεμάχια ανά φύλλο" style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
             <i className="fas fa-th" style={{ fontSize: '0.55rem' }} /><strong style={{ color: 'var(--text)' }}>{ups}</strong> up
           </span>
-          <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            <i className="fas fa-copy" style={{ fontSize: '0.55rem' }} /><strong style={{ color: 'var(--text)' }}>{totalStockSheets}</strong> φύλ
+          <span title="Φύλλα μοντάζ (τυπογραφικά)" style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <i className="fas fa-layer-group" style={{ fontSize: '0.55rem' }} /><strong style={{ color: 'var(--text)' }}>{rawSheets}</strong> μοντάζ
           </span>
-          <span style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          <span title={`Όψεις εκτύπωσης (${rawSheets} φύλ × ${job.sides} ${job.sides === 2 ? 'όψεις' : 'όψη'})`} style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <i className="fas fa-clone" style={{ fontSize: '0.55rem' }} /><strong style={{ color: 'var(--text)' }}>{job.sides === 2 ? rawSheets * 2 : rawSheets}</strong> όψεις
+          </span>
+          <span title={`Φύλλα αποθήκης (μοντάζ ${rawSheets} + φύρα ${wasteSheets})`} style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <i className="fas fa-copy" style={{ fontSize: '0.55rem' }} /><strong style={{ color: 'var(--text)' }}>{totalStockSheets}</strong> φύλ. αποθ.
+          </span>
+          {/* Production multiplier */}
+          {prodMultiplier > 1 && (
+            <span title="Πολλαπλασιαστής παραγωγής" style={{ fontSize: '0.7rem', color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <i className="fas fa-times" style={{ fontSize: '0.5rem' }} /><strong>{prodMultiplier}</strong> παραγωγές
+            </span>
+          )}
+          <span title="Εκτιμώμενος χρόνος" style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
             <i className="fas fa-clock" style={{ fontSize: '0.55rem' }} /><strong style={{ color: 'var(--text)' }}>~{timeMin >= 60 ? `${(timeMin / 60).toFixed(1)}h` : `${timeMin}'`}</strong>
           </span>
 
@@ -1282,6 +1296,10 @@ export default function CalculatorShell() {
                 pricePerUnit,
                 profitAmount,
                 sheets: totalStockSheets,
+                impoSheets: rawSheetsBase,
+                faces: job.sides === 2 ? rawSheets * 2 : rawSheets,
+                ups,
+                prodMultiplier: prodMultiplier > 1 ? prodMultiplier : undefined,
                 machineName: machine?.name,
                 paperName: paper?.name,
                 machineId: machine?.id,
@@ -1675,9 +1693,15 @@ export default function CalculatorShell() {
                   </div>
                 </div>
 
-                <MfLabel>ΦΥΡΑ (φύλλα μοντάζ)</MfLabel>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
-                  <MfInput value={wasteFixed} onChange={v => setWasteFixed(Math.max(0, Number(v) || 0))} style={{ width: '100%', textAlign: 'center' }} />
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <MfLabel>ΦΥΡΑ (φύλλα)</MfLabel>
+                    <MfInput value={wasteFixed} onChange={v => setWasteFixed(Math.max(0, Number(v) || 0))} style={{ width: '100%', textAlign: 'center' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <MfLabel>ΠΑΡΑΓΩΓΕΣ (×)</MfLabel>
+                    <MfInput value={prodMultiplier} onChange={v => setProdMultiplier(Math.max(1, Math.round(Number(v) || 1)))} style={{ width: '100%', textAlign: 'center' }} />
+                  </div>
                 </div>
 
                 <MfLabel>ΤΑΧΥΤΗΤΑ ({machine?.cat === 'offset' ? 'φύλ/ώρα' : 'σελ/λεπτό'})</MfLabel>
