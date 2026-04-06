@@ -116,7 +116,7 @@ function drawSheet(
 ) {
   const scale = drawW / sheetW;
   const hasBleed = bleed > 0;
-  const hasGutter = gutter > 0;
+  const hasGutter = gutter !== 0;
   const markLen = cropMarks ? 8 : 0;
 
   // Shadow
@@ -173,7 +173,7 @@ function drawSheet(
   // Cell grid
   const pw = impo.pieceW * scale;
   const ph = impo.pieceH * scale;
-  const gutterPx = hasGutter ? gutter * scale : 0;
+  const gutterPx = gutter * scale;
   const bleedPx = hasBleed ? bleed * scale : 0;
   const totalGridW = impo.cols * pw + Math.max(0, impo.cols - 1) * gutterPx;
   const totalGridH = impo.rows * ph + Math.max(0, impo.rows - 1) * gutterPx;
@@ -476,7 +476,8 @@ function drawSheet(
   }
 
   // Gutter lines (skip for W&T — cells use actual coordinates with fold gap)
-  if (hasGutter && gutterPx > 1 && !isWT && !isSM) {
+  // Only draw fill for positive gutters (negative = overlap, no visible gap)
+  if (gutter > 0 && gutterPx > 1 && !isWT && !isSM) {
     ctx.fillStyle = COLORS.gutterFill;
     for (let col = 1; col < impo.cols; col++) {
       const gx = cenX + col * pw + (col - 1) * gutterPx;

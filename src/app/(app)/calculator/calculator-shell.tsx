@@ -2377,7 +2377,7 @@ export default function CalculatorShell() {
                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                   <div style={{ flex: 1 }}>
                     <MfLabel>GUTTER (MM)</MfLabel>
-                    <MfStepper value={impoGutter} onChange={v => setImpoGutter(Math.max(0, Number(v) || 0))} step={0.5} min={0} />
+                    <MfStepper value={impoGutter} onChange={v => setImpoGutter(Number(v) || 0)} step={0.5} />
                   </div>
                   <div style={{ flex: 1 }}>
                     <MfLabel>BLEED (MM)</MfLabel>
