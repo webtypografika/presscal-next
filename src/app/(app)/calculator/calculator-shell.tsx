@@ -859,6 +859,13 @@ export default function CalculatorShell() {
     }
   }, [impoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Offset: auto-set sides from back plate count
+  useEffect(() => {
+    if (machine?.cat !== 'offset' || FORCE_DUPLEX.has(impoMode)) return;
+    const hasBack = (color.platesBack + color.pmsBack) > 0;
+    setJob(prev => ({ ...prev, sides: hasBack ? 2 : 1 }));
+  }, [color.platesBack, color.pmsBack, machine?.cat]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cut&Stack: auto-set qty to PDF page count
   useEffect(() => {
     if (impoMode === 'cutstack' && pdf && pdf.pageCount > 1) {
