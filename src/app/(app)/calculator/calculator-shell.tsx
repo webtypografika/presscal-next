@@ -861,10 +861,11 @@ export default function CalculatorShell() {
 
   // Offset: auto-set sides from back plate count
   useEffect(() => {
-    if (machine?.cat !== 'offset' || FORCE_DUPLEX.has(impoMode)) return;
+    const m = machines[activeMachine];
+    if (m?.cat !== 'offset' || FORCE_DUPLEX.has(impoMode)) return;
     const hasBack = (color.platesBack + color.pmsBack) > 0;
     setJob(prev => ({ ...prev, sides: hasBack ? 2 : 1 }));
-  }, [color.platesBack, color.pmsBack, machine?.cat]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [color.platesBack, color.pmsBack, activeMachine]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cut&Stack: auto-set qty to PDF page count
   useEffect(() => {
