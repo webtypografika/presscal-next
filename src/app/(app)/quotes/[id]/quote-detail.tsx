@@ -866,7 +866,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                     const result = await saveEmailAttachments(quote.id, quote.linkedEmails as string[]);
                     if (result.saved > 0) {
                       toast(`${result.saved} αρχεία αποθηκεύτηκαν`);
-                      router.refresh();
+                      // Re-fetch quote to get updated fileLinks into state
+                      const { getQuote } = await import('../../quotes/actions');
+                      const fresh = await getQuote(quote.id);
+                      if (fresh) setQuote(fresh as any);
                     } else {
                       toast('Δεν βρέθηκαν συνημμένα', 'error');
                     }
