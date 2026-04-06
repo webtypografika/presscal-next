@@ -970,6 +970,15 @@ export default function ImpositionCanvas({
     parts.push(Math.round(impo.trimW) + '×' + Math.round(impo.trimH) + ' mm/τεμ.');
     if (impo.wastePercent > 0) parts.push(impo.wastePercent.toFixed(1) + '% waste');
 
+    // Debug: show PDF box info
+    const pg0 = pdf?.pageSizes?.[0];
+    if (pg0) {
+      parts.push('PDF:' + Math.round(pg0.cropW) + '×' + Math.round(pg0.cropH)
+        + ' trim=' + Math.round(pg0.trimW) + '×' + Math.round(pg0.trimH)
+        + ' off=' + (pg0.trimOffX != null ? pg0.trimOffX.toFixed(1) : 'null')
+        + ',' + (pg0.trimOffY != null ? pg0.trimOffY.toFixed(1) : 'null'));
+    }
+
     ctx.font = '600 9px Inter, DM Sans, sans-serif';
     ctx.fillStyle = COLORS.info;
     ctx.textAlign = 'center';
