@@ -51,15 +51,16 @@ export async function POST(req: NextRequest) {
 
     // ─── CREATE contact ───
     if (action === 'create') {
-      const { company, firstName, afm, email, phone, address, city, zip } = body;
+      const { company, firstName, afm, doy, email, phone, address, city, zip } = body;
       if (!afm || afm.length !== 9) return NextResponse.json({ error: 'ΑΦΜ πρέπει να είναι 9 ψηφία' }, { status: 400 });
       if (!company && !firstName) return NextResponse.json({ error: 'Εταιρεία ή Όνομα απαιτείται' }, { status: 400 });
 
       const payload: Record<string, unknown> = {
-        client_type: '1',
+        client_type: '0',  // 0 = Πελάτης only (not 1 which is Πελάτης & Προμηθευτής)
         company: company || '',
         first_name: firstName || '',
         tin: afm,
+        tin_authority: doy || '',
         country: 'GR',
         is_client: true,
         active: true,

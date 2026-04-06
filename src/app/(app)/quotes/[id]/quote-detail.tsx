@@ -2936,6 +2936,7 @@ function ElorusInvoiceModal({ quoteId, quoteNumber, customerName, customerAfm, c
   const [afm, setAfm] = useState(customerAfm);
   const [company, setCompany] = useState('');
   const [firstName, setFirstName] = useState('');
+  const [doy, setDoy] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
@@ -3004,6 +3005,7 @@ function ElorusInvoiceModal({ quoteId, quoteNumber, customerName, customerAfm, c
       const data = await res.json();
       if (data.error) { toast(data.error, 'error'); setLookupLoading(false); return; }
       if (data.onomasia) setCompany(data.onomasia);
+      if (data.doy_descr) setDoy(data.doy_descr);
       if (data.postal_address) setAddress(data.postal_address);
       if (data.postal_area_description) setCity(data.postal_area_description);
       if (data.postal_zip_code) setZip(data.postal_zip_code);
@@ -3022,7 +3024,7 @@ function ElorusInvoiceModal({ quoteId, quoteNumber, customerName, customerAfm, c
       if (!contactId) {
         const cRes = await fetch('/api/elorus/contacts', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create', company, firstName, afm, email, address, city, zip }),
+          body: JSON.stringify({ action: 'create', company, firstName, afm, doy, email, address, city, zip }),
         });
         const cData = await cRes.json();
         if (!cData.ok) { toast(cData.error || 'Σφάλμα δημιουργίας', 'error'); setCreating(false); return; }
