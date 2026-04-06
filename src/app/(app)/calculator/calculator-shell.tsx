@@ -615,6 +615,17 @@ export default function CalculatorShell() {
       if (parsed.coverage) {
         setColor(prev => ({ ...prev, coverage: 'pdf' as const }));
       }
+      // Step Multi: update first block's trim + PDF from global upload
+      if (impoMode === 'stepmulti' && parsed.pageSizes.length > 0) {
+        const pg = parsed.pageSizes[0];
+        setSmBlocks(prev => prev.map((b, i) => i === 0 ? {
+          ...b,
+          trimW: Math.round(pg.trimW * 10) / 10,
+          trimH: Math.round(pg.trimH * 10) / 10,
+          cols: 1, rows: 1, blockW: 0, blockH: 0, _manualGrid: true,
+        } : b));
+        setSmBlockPdfs(prev => { const next = [...prev]; next[0] = parsed; return next; });
+      }
     } catch (err) {
       console.error('PDF parse error:', err);
     } finally {
