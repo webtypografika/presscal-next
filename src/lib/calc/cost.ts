@@ -688,7 +688,8 @@ function calcOffsetCost(input: CostInput, totalSheets: number): number {
   const setupMin = specs.setupMin || 15;
   const sheetsPerHour = specs.speed || 5000;
   const totalHours = (setupMin / 60) + runHours;
-  const hourlyCost = totalHours * specs.hourCost;
+  const hourRate = input.overrides?.hourlyOverride ?? specs.hourCost;
+  const hourlyCost = totalHours * hourRate;
 
   const total = plateCost + blanketCost + inkCost + rollerCost + chemicalCost + varnishCost + coatingCost + hourlyCost;
 
@@ -1039,6 +1040,12 @@ export function calculateCost(input: CostInput): CalculatorResult {
   let extraCharges = 0;
 
   if (ov) {
+    // Plate discount: reduce charge by plate cost × discount%
+    if (ov.plateDiscount && input.machineCat === 'offset') {
+      const offsetBreak = (input as unknown as Record<string, unknown>)._offsetBreakdown as Record<string, any> | undefined;
+      const plateCostTotal = offsetBreak?.plates?.total || 0;
+      chargePrint -= plateCostTotal * (ov.plateDiscount / 100);
+    }
     if (ov.guillotineDiscount) adjChargeGuillotine *= (1 - ov.guillotineDiscount / 100);
     if (ov.lamDiscount) adjChargeLamination *= (1 - ov.lamDiscount / 100);
     if (ov.bindingDiscount) adjChargeBinding *= (1 - ov.bindingDiscount / 100);
