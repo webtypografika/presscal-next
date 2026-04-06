@@ -130,9 +130,10 @@ export async function POST(req: NextRequest) {
     if (org.apiElorus && org.elorusOrgId && result.onomasia) {
       const hdrs = elorusHeaders(org.apiElorus, org.elorusOrgId);
       const contactPayload = {
-        client_type: '1',
+        client_type: '0',  // 0 = Πελάτης only
         company: result.onomasia,
         tin: afm,
+        tin_authority: result.doy_descr || '',
         country: 'GR',
         is_client: true,
         active: true,
