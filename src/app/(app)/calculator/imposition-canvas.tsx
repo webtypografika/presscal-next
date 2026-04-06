@@ -341,13 +341,31 @@ function drawSheet(
         const fitH = effSwap ? trimW : trimH;
         const drawRendW = (pgSize.cropW || pgSize.w) * scale;
         const drawRendH = (pgSize.cropH || pgSize.h) * scale;
-        const scX = fitW / (pgSize.trimW * scale);
-        const scY = fitH / (pgSize.trimH * scale);
-        const sc = Math.min(scX, scY);
+
+        // When PDF has proper TrimBox (trimOffX != null): scale by PDF's trimW
+        // so TrimBox content fills the canvas trim area exactly.
+        // When no TrimBox: scale CropBox to fill the CELL (trim + 2×bleed) —
+        // the PDF likely includes bleed content that should fill the cell area.
+        // This ensures the PDF's own crop marks align with PressCal's trim marks.
+        const hasTrimBox = pgSize.trimOffX != null;
+        let sc: number, drawTOffX: number, drawTOffY: number;
+        if (hasTrimBox) {
+          const scX = fitW / (pgSize.trimW * scale);
+          const scY = fitH / (pgSize.trimH * scale);
+          sc = Math.min(scX, scY);
+          drawTOffX = (pgSize.trimOffX ?? 0) * scale * sc;
+          drawTOffY = (pgSize.trimOffY ?? 0) * scale * sc;
+        } else {
+          // No TrimBox — scale CropBox to fill the cell
+          const cellFitW = effSwap ? cph : cpw;
+          const cellFitH = effSwap ? cpw : cph;
+          sc = Math.min(cellFitW / drawRendW, cellFitH / drawRendH);
+          // Offset: bleedPx shifts from trim center to cell center
+          drawTOffX = bleedPx;
+          drawTOffY = bleedPx;
+        }
         const finalW = drawRendW * sc;
         const finalH = drawRendH * sc;
-        const drawTOffX = (pgSize.trimOffX != null ? pgSize.trimOffX : ((pgSize.cropW || pgSize.w) - pgSize.trimW) / 2) * scale * sc;
-        const drawTOffY = (pgSize.trimOffY != null ? pgSize.trimOffY : ((pgSize.cropH || pgSize.h) - pgSize.trimH) / 2) * scale * sc;
 
         ctx.drawImage(thumb, -fitW / 2 - drawTOffX, -fitH / 2 - drawTOffY, finalW, finalH);
         ctx.restore();
