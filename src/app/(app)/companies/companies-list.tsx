@@ -298,6 +298,7 @@ export function CompaniesList({ initialCompanies, initialTotal, initialHasMore, 
                       onApply={(data: ElorusLookupResult) => {
                         // Build all changes at once to avoid debounce conflicts
                         const changes: Record<string, string | null> = {};
+                        if (data.name && !company.name) changes.name = data.name;
                         if (data.afm) changes.afm = data.afm;
                         if (data.doy) changes.doy = data.doy;
                         if (data.address) changes.address = data.address;
