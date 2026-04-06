@@ -1466,6 +1466,55 @@ export default function CalculatorShell() {
           }} title="Εξαγωγή imposition PDF">
             <i className="fas fa-file-pdf" /> PDF
           </button>
+          {linkedFile && (
+            <button onClick={async () => {
+              try {
+                const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
+                const pdfBytes = await exportImpositionPDF({
+                  imposition: impo, jobW: job.width, jobH: job.height, bleed: effectiveBleed,
+                  sourceFileName: pdf?.fileName, sourcePdfBytes: pdf?.bytes,
+                  sides: job.sides, rotation: impoRotation || (job.rotation ? 90 : 0),
+                  cropMarks: impoCropMarks, gutterLines: true,
+                  numberingEnabled: impoMode === 'cutstack' && csNumbering,
+                  numberStartNum: csStartNum, numberDigits: csNumDigits,
+                  numberFontSize: csNumFontSize,
+                  numberColor: csNumColor === 'red' ? '#cc0000' : '#000000',
+                  numberFont: csNumFont, numberRotation: csNumRotation || undefined,
+                  numberGlobalPos: { x: csNumPosX, y: csNumPosY },
+                  fixedBack: impoMode === 'cutstack' && csFixedBack,
+                  fixedBackPdfBytes: csBackPdf?.bytes,
+                  gangJobPdfBytes: impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf?.bytes) : undefined,
+                  blocks: impoMode === 'stepmulti' ? impo.blocks : undefined,
+                  smBlockPdfBytes: impoMode === 'stepmulti' ? smBlockPdfs.map(p => p?.bytes) : undefined,
+                  jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
+                });
+                const folder = linkedFile.path.replace(/[/\\][^/\\]+$/, '');
+                const sep = folder.includes('\\') ? '\\' : '/';
+                const baseName = (pdf?.fileName || 'imposed').replace(/\.pdf$/i, '');
+                const fileName = `${baseName}_imposition.pdf`;
+                const savePath = `${folder}${sep}${fileName}`;
+                // Save via PressKit file server
+                const res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
+                  method: 'POST', body: new Blob([pdfBytes as BlobPart]),
+                });
+                if (res.ok) {
+                  // Visual feedback
+                  const btn = document.activeElement as HTMLElement;
+                  if (btn) { btn.style.color = '#4ade80'; setTimeout(() => { btn.style.color = ''; }, 1500); }
+                } else {
+                  alert('Αποτυχία αποθήκευσης στον φάκελο');
+                }
+              } catch (e) { alert('PDF export error: ' + (e as Error).message); }
+            }} style={{
+              padding: '7px 10px', borderRadius: 7,
+              background: 'rgba(245,130,32,0.08)', color: '#f58220', border: '1px solid rgba(245,130,32,0.25)',
+              fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5,
+              transition: 'all 0.2s', flexShrink: 0,
+            }} title="Αποθήκευση PDF στον φάκελο πελάτη">
+              <i className="fas fa-folder-open" />
+            </button>
+          )}
           {machine.cat === 'offset' && (color.platesFront + color.platesBack) > 0 && (
             <button onClick={() => setShowPlateOrder(true)} style={{
               padding: '7px 10px', borderRadius: 7,
