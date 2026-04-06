@@ -445,6 +445,7 @@ export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [view, setView] = useState<'board' | 'list'>('board');
   const [editingStages, setEditingStages] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [dragStageIdx, setDragStageIdx] = useState<number | null>(null);
 
   function toast(message: string, type: ToastData['type'] = 'success') {
@@ -528,6 +529,16 @@ export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
             <i className="fas fa-list" style={{ marginRight: 4 }} /> List
           </button>
         </div>
+
+        <button onClick={() => setShowCompleted(v => !v)} style={{
+            padding: '6px 12px', borderRadius: 8, border: '1px solid var(--glass-border)',
+            background: showCompleted ? 'rgba(74,222,128,0.1)' : 'transparent',
+            color: showCompleted ? '#4ade80' : 'var(--text-muted)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600,
+          }}>
+          <i className="fas fa-archive" style={{ marginRight: 4 }} />
+          Ολοκληρωμένες
+          {completed.length > 0 && <span style={{ marginLeft: 4, fontSize: '0.6rem', opacity: 0.7 }}>({completed.length})</span>}
+        </button>
 
         <button onClick={() => setEditingStages(!editingStages)} title="Ρύθμιση σταδίων"
           style={{
@@ -729,6 +740,44 @@ export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Completed jobs */}
+      {showCompleted && completed.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <i className="fas fa-check-circle" style={{ color: '#4ade80', fontSize: '0.85rem' }} />
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#4ade80' }}>Ολοκληρωμένες</span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', background: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: 8 }}>{completed.length}</span>
+          </div>
+          <div className="panel" style={{ overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Αριθμός</th>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Πελάτης</th>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Ολοκλήρωση</th>
+                  <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>Σύνολο</th>
+                </tr>
+              </thead>
+              <tbody>
+                {completed.map(j => (
+                  <tr key={j.id} onClick={() => setDetailJob(j)} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', opacity: 0.7, transition: 'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: '#4ade80' }}>{j.number}</td>
+                    <td style={{ padding: '10px 12px' }}>{(j as any).company?.name || j.customer?.name || '—'}</td>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>{formatDate(j.completedAt) || '—'}</td>
+                    <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      {new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(j.grandTotal)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
