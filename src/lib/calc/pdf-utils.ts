@@ -46,7 +46,7 @@ function ptToMM(pt: number): number {
 // ─── LAZY LOAD pdf.js ───
 let pdfJSLoaded = false;
 
-async function loadPdfJS(): Promise<void> {
+export async function loadPdfJS(): Promise<void> {
   if (pdfJSLoaded && typeof (window as any).pdfjsLib !== 'undefined') return;
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');

@@ -540,6 +540,15 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
   }
 }
 
+// ─── UPDATE FILELINK THUMBNAIL ───
+
+export async function updateFileLinkThumbnail(id: string, thumbnail: string) {
+  await prisma.fileLink.update({
+    where: { id },
+    data: { thumbnail },
+  });
+}
+
 // ─── GET LINKED EMAIL MAP ───
 
 export async function getLinkedEmailMap(): Promise<Record<string, string>> {

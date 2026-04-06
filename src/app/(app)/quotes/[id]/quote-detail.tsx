@@ -909,6 +909,13 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                           <img src={fl.thumbnail} alt={fl.fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : isImage && fl.filePath.startsWith('/storage/') ? (
                           <img src={fl.filePath} alt={fl.fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : fl.fileType === 'pdf' ? (
+                          <PdfThumb fileLinkId={fl.id} downloadUrl={webDownloadHref} onThumbReady={(b64) => {
+                            setQuote(prev => ({
+                              ...prev,
+                              fileLinks: ((prev as any).fileLinks || []).map((f: any) => f.id === fl.id ? { ...f, thumbnail: b64 } : f),
+                            } as any));
+                          }} />
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                             <i className={`fas ${attIcon(fl.fileName)}`} style={{ fontSize: '1.5rem', color: '#f58220', opacity: 0.6 }} />
@@ -1377,6 +1384,54 @@ function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }
       </div>
     </div>,
     document.body
+  );
+}
+
+// ─── PDF THUMBNAIL COMPONENT ───
+function PdfThumb({ fileLinkId, downloadUrl, onThumbReady }: { fileLinkId: string; downloadUrl: string; onThumbReady: (b64: string) => void }) {
+  const [thumb, setThumb] = useState<string | null>(null);
+  const tried = useRef(false);
+
+  useEffect(() => {
+    if (tried.current) return;
+    tried.current = true;
+    (async () => {
+      try {
+        const { loadPdfJS } = await import('@/lib/calc/pdf-utils');
+        await loadPdfJS();
+        const pdfjsLib = (window as any).pdfjsLib;
+        if (!pdfjsLib) return;
+
+        const res = await fetch(downloadUrl);
+        if (!res.ok) return;
+        const data = new Uint8Array(await res.arrayBuffer());
+        const pdf = await pdfjsLib.getDocument({ data }).promise;
+        const page = await pdf.getPage(1);
+
+        const scale = 160 / page.getViewport({ scale: 1 }).width;
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d')!;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        const b64 = canvas.toDataURL('image/jpeg', 0.7);
+        setThumb(b64);
+        onThumbReady(b64);
+
+        // Save to DB
+        const { updateFileLinkThumbnail } = await import('../../quotes/actions');
+        await updateFileLinkThumbnail(fileLinkId, b64);
+      } catch (e) { console.warn('PDF thumb error:', e); }
+    })();
+  }, []);
+
+  if (thumb) return <img src={thumb} alt="PDF" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+      <i className="fas fa-file-pdf" style={{ fontSize: '1.5rem', color: '#f58220', opacity: 0.6 }} />
+    </div>
   );
 }
 
