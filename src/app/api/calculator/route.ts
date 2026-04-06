@@ -409,8 +409,7 @@ export async function POST(req: NextRequest) {
       bleed: body.bleed,
       qty: body.qty,
       sides: body.sides,
-      // UI gutter = trim-to-trim; engine gutter = cell-to-cell
-      gutter: (body.impoGutter || 0) - (body.bleed || 0) * 2,
+      gutter: body.impoGutter || 0,
       area,
       forceUps: body.impoForceUps,
       forceCols: body.impoForceCols,

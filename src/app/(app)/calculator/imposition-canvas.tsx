@@ -183,7 +183,7 @@ function drawSheet(
   // W&T and Step Multi use actual cell coordinates, others use uniform grid
   const isWT = impo.mode === 'workturn';
   const isSM = impo.mode === 'stepmulti';
-  const useCellCoords = true; // always use cell coordinates from imposition engine
+  const useCellCoords = isWT || isSM;
 
   // Step multi: map cell index → block index for per-block PDF rendering
   const smCellBlockIdx: number[] = [];

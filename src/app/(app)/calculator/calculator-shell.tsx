@@ -964,8 +964,7 @@ export default function CalculatorShell() {
 
   // ─── CLIENT-SIDE IMPOSITION (instant feedback) ───
   const effectiveBleed = job.bleedOn ? (impoBleedOverride ?? job.bleed) : 0;
-  // UI gutter = trim-to-trim; engine gutter = cell-to-cell (cell includes bleed)
-  const engineGutter = impoGutter - effectiveBleed * 2;
+  const engineGutter = impoGutter;
   const impoInput: ImpositionInput = {
     mode: impoMode,
     trimW: job.width,
