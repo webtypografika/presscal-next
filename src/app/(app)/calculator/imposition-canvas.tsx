@@ -770,6 +770,50 @@ export default function ImpositionCanvas({
             ctx.fillText(`${distB.toFixed(1)}`, lx, (sby + sbh + paB) / 2 + 3);
           }
 
+          // Snap guide lines (green)
+          const printWmm2 = sheetW - marginLeft - marginRight;
+          const printHmm2 = sheetH - marginTop - marginBottom;
+          ctx.strokeStyle = 'rgba(16,185,129,0.7)';
+          ctx.lineWidth = 0.8;
+          ctx.setLineDash([3, 2]);
+          const snapT = 1.5; // mm threshold for showing guide
+          // Horizontal center
+          if (Math.abs(sblk.x + sblk.blockW / 2 - printWmm2 / 2) < snapT) {
+            const cx = paL + printWpx / 2;
+            ctx.beginPath(); ctx.moveTo(cx, paT); ctx.lineTo(cx, paB); ctx.stroke();
+          }
+          // Vertical center
+          if (Math.abs(sblk.y + sblk.blockH / 2 - printHmm2 / 2) < snapT) {
+            const cy = paT + printHpx / 2;
+            ctx.beginPath(); ctx.moveTo(paL, cy); ctx.lineTo(paR, cy); ctx.stroke();
+          }
+          // Edge alignment with other blocks
+          if (impo.blocks!.length > 1) {
+            for (let oi = 0; oi < impo.blocks!.length; oi++) {
+              if (oi === sbi) continue;
+              const ob = impo.blocks![oi];
+              const obx = offX + dmL + ob.x * scale;
+              const oby = offY + dmT + ob.y * scale;
+              const obr = obx + ob.blockW * scale;
+              const obb = oby + ob.blockH * scale;
+              // Left aligned
+              if (Math.abs(sblk.x - ob.x) < snapT) {
+                ctx.beginPath(); ctx.moveTo(obx, Math.min(sby, oby) - 4); ctx.lineTo(obx, Math.max(sby + sbh, obb) + 4); ctx.stroke();
+              }
+              // Right aligned
+              if (Math.abs(sblk.x + sblk.blockW - ob.x - ob.blockW) < snapT) {
+                ctx.beginPath(); ctx.moveTo(obr, Math.min(sby, oby) - 4); ctx.lineTo(obr, Math.max(sby + sbh, obb) + 4); ctx.stroke();
+              }
+              // Top aligned
+              if (Math.abs(sblk.y - ob.y) < snapT) {
+                ctx.beginPath(); ctx.moveTo(Math.min(sbx, obx) - 4, oby); ctx.lineTo(Math.max(sbx + sbw, obr) + 4, oby); ctx.stroke();
+              }
+              // Bottom aligned
+              if (Math.abs(sblk.y + sblk.blockH - ob.y - ob.blockH) < snapT) {
+                ctx.beginPath(); ctx.moveTo(Math.min(sbx, obx) - 4, obb); ctx.lineTo(Math.max(sbx + sbw, obr) + 4, obb); ctx.stroke();
+              }
+            }
+          }
           ctx.restore();
         }
       }
@@ -1000,8 +1044,40 @@ export default function ImpositionCanvas({
         const dy = mmY - smDragRef.current.startMmY;
         const blockW = impo.blocks[bi]?.blockW ?? 0;
         const blockH = impo.blocks[bi]?.blockH ?? 0;
-        const newX = Math.max(0, Math.min(printW - blockW, smDragRef.current.origX + dx));
-        const newY = Math.max(0, Math.min(printH - blockH, smDragRef.current.origY + dy));
+        let newX = Math.max(0, Math.min(printW - blockW, smDragRef.current.origX + dx));
+        let newY = Math.max(0, Math.min(printH - blockH, smDragRef.current.origY + dy));
+
+        // Magnetic snap
+        const snapThreshold = 3; // mm
+        const xEdges: number[] = [0, printW, printW / 2]; // left, right, center
+        const yEdges: number[] = [0, printH, printH / 2]; // top, bottom, center
+        // Add edges from other blocks
+        for (let j = 0; j < impo.blocks.length; j++) {
+          if (j === bi) continue;
+          const ob = impo.blocks[j];
+          xEdges.push(ob.x, ob.x + ob.blockW);
+          yEdges.push(ob.y, ob.y + ob.blockH);
+        }
+        // Snap block edges (left, right, centerX)
+        const myXEdges = [newX, newX + blockW, newX + blockW / 2];
+        let bestDx = snapThreshold + 1;
+        for (const me of myXEdges) {
+          for (const se of xEdges) {
+            const d = Math.abs(me - se);
+            if (d < bestDx) { bestDx = d; newX += se - me; }
+          }
+        }
+        // Snap block edges (top, bottom, centerY)
+        const myYEdges = [newY, newY + blockH, newY + blockH / 2];
+        let bestDy = snapThreshold + 1;
+        for (const me of myYEdges) {
+          for (const se of yEdges) {
+            const d = Math.abs(me - se);
+            if (d < bestDy) { bestDy = d; newY += se - me; }
+          }
+        }
+        newX = Math.max(0, Math.min(printW - blockW, newX));
+        newY = Math.max(0, Math.min(printH - blockH, newY));
         onSmBlockMove(bi, Math.round(newX * 10) / 10, Math.round(newY * 10) / 10);
       }
       return;

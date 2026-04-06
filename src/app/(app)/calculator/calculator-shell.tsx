@@ -2649,6 +2649,29 @@ export default function CalculatorShell() {
                               </span>
                             )}
                             <div style={{ flex: 1 }} />
+                            {/* Align */}
+                            {computed && (<>
+                              <button onClick={() => {
+                                const pw = vizW - (machine?.marginLeft || 0) - (machine?.marginRight || 0);
+                                const cx = (pw - computed.blockW) / 2;
+                                setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, x: Math.round(cx * 10) / 10, blockW: 0, blockH: 0, _manualGrid: true } : b));
+                              }} style={{
+                                border: '1px solid var(--border)', background: 'transparent',
+                                color: '#64748b', cursor: 'pointer', fontSize: '0.45rem', padding: '2px 3px', borderRadius: 3,
+                              }} title="Center horizontal">
+                                <i className="fas fa-arrows-alt-h" />
+                              </button>
+                              <button onClick={() => {
+                                const ph = vizH - (machine?.marginTop || 0) - (machine?.marginBottom || 0);
+                                const cy = (ph - computed.blockH) / 2;
+                                setSmBlocks(prev => prev.map((b, idx) => idx === i ? { ...b, y: Math.round(cy * 10) / 10, blockW: 0, blockH: 0, _manualGrid: true } : b));
+                              }} style={{
+                                border: '1px solid var(--border)', background: 'transparent',
+                                color: '#64748b', cursor: 'pointer', fontSize: '0.45rem', padding: '2px 3px', borderRadius: 3,
+                              }} title="Center vertical">
+                                <i className="fas fa-arrows-alt-v" />
+                              </button>
+                            </>)}
                             {/* Rotate */}
                             <button onClick={() => setSmBlocks(prev => prev.map((b, idx) => idx === i
                               ? { ...b, rotation: ((b.rotation + 90) % 360) as 0 | 90 | 180 | 270, cols: 1, rows: 1, blockW: 0, blockH: 0 }
