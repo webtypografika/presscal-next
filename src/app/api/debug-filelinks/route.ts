@@ -4,6 +4,14 @@ import { prisma } from '@/lib/db';
 // TEMPORARY debug endpoint — delete after debugging
 export async function GET(req: NextRequest) {
   try {
+    // Test auth if Bearer token provided
+    const authHeader = req.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const apiKey = authHeader.slice(7);
+      const org = await (prisma as any).org.findFirst({ where: { apiFilehelper: apiKey } });
+      return NextResponse.json({ authTest: true, orgFound: !!org, orgId: org?.id || null });
+    }
+
     const quoteId = req.nextUrl.searchParams.get('quoteId');
     if (!quoteId) return NextResponse.json({ error: 'quoteId required' });
 
