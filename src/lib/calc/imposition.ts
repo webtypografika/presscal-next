@@ -152,6 +152,10 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   const rawCellH = trimH + bleed * 2;
   const { w: pw, h: ph } = printable(area);
 
+  // Gutter = trim-to-trim distance. Convert to cell-to-cell gap:
+  // cellGap = gutter - 2*bleed (shared bleeds between adjacent cells)
+  const cellGap = gutter - 2 * bleed;
+
   // When forcing, ignore machine margins — use full paper
   const isForced = !!(forceUps || forceCols || forceRows);
   const fitW = isForced ? area.paperW : pw;
@@ -174,13 +178,13 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     rows = forceRows;
   } else if (forceCols) {
     cols = forceCols;
-    rows = fitCount(fitH, cellH, gutter);
+    rows = fitCount(fitH, cellH, cellGap);
   } else if (forceRows) {
     rows = forceRows;
-    cols = fitCount(fitW, cellW, gutter);
+    cols = fitCount(fitW, cellW, cellGap);
   } else if (forceUps) {
-    cols = fitCount(fitW, cellW, gutter);
-    rows = fitCount(fitH, cellH, gutter);
+    cols = fitCount(fitW, cellW, cellGap);
+    rows = fitCount(fitH, cellH, cellGap);
     // If nothing fits naturally, force at least 1×1
     if (cols === 0) cols = 1;
     if (rows === 0) rows = 1;
@@ -188,7 +192,7 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     while (cols * rows > forceUps && rows > 1) rows--;
   } else {
     // Try both orientations, pick the one with more ups
-    const best = bestOrientation(pw, ph, cellW, cellH, gutter);
+    const best = bestOrientation(pw, ph, cellW, cellH, cellGap);
     cols = best.cols;
     rows = best.rows;
     if (best.rotated) {
@@ -205,8 +209,8 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   const actualCellH = cellH;
   const rotated = isSwapped;
 
-  const usedW = cols * actualCellW + (cols - 1) * gutter;
-  const usedH = rows * actualCellH + (rows - 1) * gutter;
+  const usedW = cols * actualCellW + (cols - 1) * cellGap;
+  const usedH = rows * actualCellH + (rows - 1) * cellGap;
 
   const rawSheets = Math.ceil(qty / ups);
 
@@ -214,7 +218,7 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   const cenOffX = isForced ? (area.paperW - usedW) / 2 : area.marginLeft + (pw - usedW) / 2;
   const cenOffY = isForced ? (area.paperH - usedH) / 2 : area.marginTop + (ph - usedH) / 2;
   const cells = buildCells(
-    cols, rows, actualCellW, actualCellH, gutter,
+    cols, rows, actualCellW, actualCellH, cellGap,
     cenOffX, cenOffY,
     contentRotation,
   );

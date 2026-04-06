@@ -642,7 +642,10 @@ async function exportNUp(
   const mL = mmToPt(impo.marginL ?? 0);
   const pieceW = mmToPt(impo.pieceW);
   const pieceH = mmToPt(impo.pieceH);
-  const gutterPt = mmToPt(opts.gutter || 0);
+  // Gutter = trim-to-trim; convert to cell-to-cell gap for placement
+  const bleedPtGut = mmToPt(opts.bleed || 0);
+  const cellGapPt = mmToPt(opts.gutter || 0) - 2 * bleedPtGut;
+  const gutterPt = cellGapPt;
   const printableW = paperWpt - mL - mmToPt(impo.marginR ?? 0);
   const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mmToPt(impo.marginB ?? 0);
   const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
@@ -750,12 +753,14 @@ async function exportNUp(
         ? ascii((opts.jobDescription || 'Job') + (isBackSide ? ' (Back)' : ' (Front)'))
         : ascii(opts.jobDescription || 'Job');
 
+      // Pass cell-to-cell gap (not trim-to-trim gutter) for marks placement
+      const marksGutterMM = (opts.gutter || 0) - 2 * (opts.bleed || 0);
       drawPDFMarks(page, paperWpt, paperHpt, {
         marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
         marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
         pieceW: impo.pieceW, pieceH: impo.pieceH,
         cols: impo.cols, rows: impo.rows,
-        gutterMM: opts.gutter || 0,
+        gutterMM: marksGutterMM,
         bleedMM: opts.bleed || 0,
         offsetX: impo.offsetX, offsetY: impo.offsetY,
         cropMarks: opts.showCropMarks,
@@ -1105,7 +1110,9 @@ async function exportCutStack(
   const paperHpt = mmToPt(impo.paperH);
   const pieceW = mmToPt(impo.pieceW);
   const pieceH = mmToPt(impo.pieceH);
-  const gutterPt = mmToPt(opts.gutter || 0);
+  // Gutter = trim-to-trim; convert to cell-to-cell gap
+  const csBleedPt = mmToPt(opts.bleed || 0);
+  const gutterPt = mmToPt(opts.gutter || 0) - 2 * csBleedPt;
   const printableW = paperWpt - mmToPt(impo.marginL ?? 0) - mmToPt(impo.marginR ?? 0);
   const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mmToPt(impo.marginB ?? 0);
   const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
@@ -1196,12 +1203,14 @@ async function exportCutStack(
     }
 
     csMask(page, false);
+    // Pass cell-to-cell gap for marks placement
+    const csMarksGutterMM = (opts.gutter || 0) - 2 * (opts.bleed || 0);
     const marksImpo = {
       marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
       marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
       pieceW: impo.pieceW, pieceH: impo.pieceH,
       cols: impo.cols, rows: impo.rows,
-      gutterMM: opts.gutter || 0,
+      gutterMM: csMarksGutterMM,
       bleedMM: opts.bleed || 0,
       offsetX: impo.offsetX, offsetY: impo.offsetY,
       cropMarks: opts.showCropMarks,
@@ -1470,7 +1479,9 @@ async function exportGangRun(
   const mT = mmToPt(impo.marginT ?? 0);
   const pieceW = mmToPt(impo.pieceW);
   const pieceH = mmToPt(impo.pieceH);
-  const gutterPt = mmToPt(opts.gutter || 0);
+  // Gutter = trim-to-trim; convert to cell-to-cell gap
+  const grBleedPt = mmToPt(opts.bleed || 0);
+  const gutterPt = mmToPt(opts.gutter || 0) - 2 * grBleedPt;
   const printableW = paperWpt - mL - mmToPt(impo.marginR ?? 0);
   const printableH = paperHpt - mT - mmToPt(impo.marginB ?? 0);
   const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
@@ -1481,8 +1492,6 @@ async function exportGangRun(
   const cenY = mmToPt(impo.marginB ?? 0) + (printableH - totalGridH) / 2 - offYpt;
 
   const page = doc.addPage([paperWpt, paperHpt]);
-
-  const grBleedPt = mmToPt(opts.bleed || 0);
   const grUserRot = opts.rotation || 0;
   const grBaseRot = (grUserRot === 180 || grUserRot === 270) ? 180 : 0;
 
@@ -1523,12 +1532,14 @@ async function exportGangRun(
   const gridR = cenX + totalGridW + bleedPt, gridT = cenY + totalGridH + bleedPt;
   drawMarginalMasks(page, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
 
+  // Pass cell-to-cell gap for marks placement
+  const grMarksGutterMM = (opts.gutter || 0) - 2 * (opts.bleed || 0);
   drawPDFMarks(page, paperWpt, paperHpt, {
     marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
     marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
     pieceW: impo.pieceW, pieceH: impo.pieceH,
     cols: impo.cols, rows: impo.rows,
-    gutterMM: opts.gutter || 0, bleedMM: opts.bleed || 0,
+    gutterMM: grMarksGutterMM, bleedMM: opts.bleed || 0,
     offsetX: impo.offsetX, offsetY: impo.offsetY,
     cropMarks: opts.showCropMarks,
   }, {
