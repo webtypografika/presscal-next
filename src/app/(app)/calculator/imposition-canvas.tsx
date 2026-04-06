@@ -500,32 +500,34 @@ function drawSheet(
   if (cropMarks && !isWT && !isSM) {
     ctx.strokeStyle = COLORS.cropMark;
     ctx.lineWidth = 0.5;
-    if (isNUpLike && hasBleed) {
-      // N-Up: draw crop marks at TRIM edges (inset from cell edges by bleed)
-      // Collect unique trim X positions
-      const trimXs: number[] = [];
+    if (isNUpLike) {
+      // N-Up/CutStack/GangRun: collect unique cell-edge positions via step
+      // This handles negative cellGap (shared bleeds) correctly
+      const cellXs: number[] = [];
       for (let col = 0; col < impo.cols; col++) {
-        const cellX = cenX + col * stepW;
-        trimXs.push(cellX + bleedPx);          // left trim
-        trimXs.push(cellX + pw - bleedPx);     // right trim
+        const cx = cenX + col * stepW;
+        cellXs.push(cx);        // left cell edge
+        cellXs.push(cx + pw);   // right cell edge
       }
-      // Deduplicate (adjacent trims may share same position when gutter=0)
-      const uX = [trimXs[0]];
-      for (let i = 1; i < trimXs.length; i++) {
-        if (Math.abs(trimXs[i] - uX[uX.length - 1]) > 0.3) uX.push(trimXs[i]);
+      cellXs.sort((a, b) => a - b);
+      const uX = [cellXs[0]];
+      for (let i = 1; i < cellXs.length; i++) {
+        if (cellXs[i] - uX[uX.length - 1] > 0.3) uX.push(cellXs[i]);
       }
-      // Collect unique trim Y positions
-      const trimYs: number[] = [];
+
+      const cellYs: number[] = [];
       for (let row = 0; row < impo.rows; row++) {
-        const cellY = cenY + row * stepH;
-        trimYs.push(cellY + bleedPx);          // top trim
-        trimYs.push(cellY + ph - bleedPx);     // bottom trim
+        const cy = cenY + row * stepH;
+        cellYs.push(cy);        // top cell edge
+        cellYs.push(cy + ph);   // bottom cell edge
       }
-      const uY = [trimYs[0]];
-      for (let i = 1; i < trimYs.length; i++) {
-        if (Math.abs(trimYs[i] - uY[uY.length - 1]) > 0.3) uY.push(trimYs[i]);
+      cellYs.sort((a, b) => a - b);
+      const uY = [cellYs[0]];
+      for (let i = 1; i < cellYs.length; i++) {
+        if (cellYs[i] - uY[uY.length - 1] > 0.3) uY.push(cellYs[i]);
       }
-      // Draw perimeter marks (top/bottom for each X, left/right for each Y)
+
+      // Perimeter marks: vertical cuts at top/bottom, horizontal cuts at left/right
       const gridT = uY[0], gridB = uY[uY.length - 1];
       const gridL = uX[0], gridR = uX[uX.length - 1];
       for (const vx of uX) {
@@ -540,26 +542,33 @@ function drawSheet(
         ctx.moveTo(gridR + 2, hy); ctx.lineTo(gridR + markLen, hy);
         ctx.stroke();
       }
-      // Gutter marks between trims (if gutter > 0)
-      if (gutter > 0) {
+
+      // Gutter marks between cells (if positive trim-to-trim gap)
+      if (trimGutterPx > 1) {
         for (let col = 0; col < impo.cols - 1; col++) {
           const rightTrim = cenX + col * stepW + pw - bleedPx;
           const leftTrim = rightTrim + trimGutterPx;
-          for (const hy of uY) {
-            ctx.beginPath();
-            ctx.moveTo(rightTrim + 1, hy); ctx.lineTo(rightTrim + Math.min(markLen, trimGutterPx / 2 - 0.5), hy);
-            ctx.moveTo(leftTrim - 1, hy); ctx.lineTo(leftTrim - Math.min(markLen, trimGutterPx / 2 - 0.5), hy);
-            ctx.stroke();
+          const gutMarkLen = Math.min(markLen, trimGutterPx / 2 - 0.5);
+          if (gutMarkLen > 0.5) {
+            for (const hy of uY) {
+              ctx.beginPath();
+              ctx.moveTo(rightTrim + 1, hy); ctx.lineTo(rightTrim + gutMarkLen, hy);
+              ctx.moveTo(leftTrim - 1, hy); ctx.lineTo(leftTrim - gutMarkLen, hy);
+              ctx.stroke();
+            }
           }
         }
         for (let row = 0; row < impo.rows - 1; row++) {
           const bottomTrim = cenY + row * stepH + ph - bleedPx;
           const topTrim = bottomTrim + trimGutterPx;
-          for (const vx of uX) {
-            ctx.beginPath();
-            ctx.moveTo(vx, bottomTrim + 1); ctx.lineTo(vx, bottomTrim + Math.min(markLen, trimGutterPx / 2 - 0.5));
-            ctx.moveTo(vx, topTrim - 1); ctx.lineTo(vx, topTrim - Math.min(markLen, trimGutterPx / 2 - 0.5));
-            ctx.stroke();
+          const gutMarkLen = Math.min(markLen, trimGutterPx / 2 - 0.5);
+          if (gutMarkLen > 0.5) {
+            for (const vx of uX) {
+              ctx.beginPath();
+              ctx.moveTo(vx, bottomTrim + 1); ctx.lineTo(vx, bottomTrim + gutMarkLen);
+              ctx.moveTo(vx, topTrim - 1); ctx.lineTo(vx, topTrim - gutMarkLen);
+              ctx.stroke();
+            }
           }
         }
       }
