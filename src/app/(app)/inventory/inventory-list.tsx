@@ -59,6 +59,7 @@ function ToastContainer({ toasts, onRemove }: { toasts: ToastData[]; onRemove: (
 
 const TABS = [
   { id: 'sheet', label: 'Χαρτιά', icon: 'fa-file', color: 'var(--blue)' },
+  { id: 'lamination', label: 'Πλαστικοποίηση', icon: 'fa-scroll', color: '#84cc16' },
   { id: 'consumable-offset', label: 'Offset Αναλώσιμα', icon: 'fa-industry', color: 'var(--violet)' },
   { id: 'consumable-digital', label: 'Digital Αναλώσιμα', icon: 'fa-print', color: 'var(--accent)' },
   { id: 'plate-orders', label: 'Παραγγελίες Τσίγκων', icon: 'fa-layer-group', color: 'var(--amber)' },
@@ -109,6 +110,7 @@ export function InventoryList({ materials, consumables, org }: Props) {
   const [filterGrams, setFilterGrams] = useState<string | null>(null);
 
   const sheets = materials.filter(m => m.cat === 'sheet');
+  const lamFilms = materials.filter(m => m.cat === 'film' || m.cat === 'roll');
   const offsetCons = consumables.filter(c => c.conModule === 'offset');
   const digitalCons = consumables.filter(c => c.conModule === 'digital' || c.conModule === 'shared');
 
@@ -398,6 +400,8 @@ export function InventoryList({ materials, consumables, org }: Props) {
           onEdit={setEditMaterialId}
           onDelete={deleteMaterial}
         />
+      ) : tab === 'lamination' ? (
+        <LamFilmTable items={lamFilms} onEdit={setEditMaterialId} />
       ) : tab === 'plate-orders' ? (
         <PlateOrdersPanel orders={plateOrders} onUpdate={() => setPlateOrdersLoaded(false)} />
       ) : (
@@ -1019,6 +1023,67 @@ function SheetTable({ items, selected, onSelect, onSelectAll, onEdit, onDelete }
 }
 
 // ─── CONSUMABLE TABLE ───
+function LamFilmTable({ items, onEdit }: { items: Material[]; onEdit: (id: string) => void }) {
+  if (items.length === 0) return (
+    <div style={{ padding: 48, textAlign: 'center' }}>
+      <i className="fas fa-scroll" style={{ fontSize: '2.5rem', color: 'var(--text-muted)', opacity: 0.2 }} />
+      <p style={{ marginTop: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Δεν υπάρχουν υλικά πλαστικοποίησης</p>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>Προσθέστε από Μετεκτύπωση → Πλαστικοποίηση</p>
+    </div>
+  );
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border)', fontSize: '0.7rem', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+            <th style={{ textAlign: 'left', padding: '8px 12px' }}>ΥΛΙΚΟ</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>ΤΥΠΟΣ</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>ΔΙΑΣΤΑΣΕΙΣ</th>
+            <th style={{ textAlign: 'right', padding: '8px 12px' }}>ΚΟΣΤΟΣ</th>
+            <th style={{ textAlign: 'right', padding: '8px 12px' }}>ΤΙΜΗ ΠΩΛΗΣΗΣ</th>
+            <th style={{ textAlign: 'center', padding: '8px 12px' }}>STOCK</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(m => (
+            <tr key={m.id} onClick={() => onEdit(m.id)} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <td style={{ padding: '10px 12px' }}>
+                <p style={{ fontWeight: 700 }}>{m.name}</p>
+                {m.groupName && <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{m.groupName}</p>}
+              </td>
+              <td style={{ textAlign: 'center', padding: '10px 12px' }}>
+                <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: '0.7rem', fontWeight: 600, background: m.cat === 'roll' ? 'rgba(132,204,22,0.1)' : 'rgba(96,165,250,0.1)', color: m.cat === 'roll' ? '#84cc16' : '#60a5fa' }}>
+                  {m.cat === 'roll' ? 'Ρολό' : 'Pouch'}
+                </span>
+              </td>
+              <td style={{ textAlign: 'center', padding: '10px 12px', fontSize: '0.8rem' }}>
+                {m.cat === 'roll'
+                  ? `${m.width || '—'}mm × ${m.rollLength || '—'}m`
+                  : `${m.width || '—'} × ${m.height || '—'}mm`
+                }
+              </td>
+              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 700, color: 'var(--accent)' }}>
+                {m.costPerUnit ? `€${m.costPerUnit.toFixed(2)}` : '—'}
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: 2 }}>/{m.unit || 'τμχ'}</span>
+              </td>
+              <td style={{ textAlign: 'right', padding: '10px 12px', fontWeight: 600, color: '#84cc16' }}>
+                {m.sellPerUnit ? `€${m.sellPerUnit.toFixed(2)}` : '—'}
+              </td>
+              <td style={{ textAlign: 'center', padding: '10px 12px', color: 'var(--text-muted)' }}>
+                {(m as any).stock ?? '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function ConsumableTable({ items, onEdit, onDelete }: { items: ConsumableWithMachine[]; onEdit: (id: string) => void; onDelete: (id: string) => void }) {
   if (items.length === 0) return (
     <div style={{ padding: 48, textAlign: 'center' }}>
