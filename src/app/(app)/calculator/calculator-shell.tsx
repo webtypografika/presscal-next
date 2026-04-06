@@ -547,8 +547,8 @@ export default function CalculatorShell() {
   const [activeSigSheet, setActiveSigSheet] = useState(0);
   const [sigShowBack, setSigShowBack] = useState(false);
   // Machine sheet override (null = use machine default)
-  const [machineSheetW, setMachineSheetW] = useState<number | null>(null);
-  const [machineSheetH, setMachineSheetH] = useState<number | null>(null);
+  const [machineSheetW, setMachineSheetW] = useState<number | string | null>(null);
+  const [machineSheetH, setMachineSheetH] = useState<number | string | null>(null);
   // Feed direction: sef = short edge first, lef = long edge first
   const [feedEdge, setFeedEdge] = useState<'sef' | 'lef'>('lef');
   // Speed override (null = use machine default)
@@ -884,8 +884,8 @@ export default function CalculatorShell() {
   const machine = machines[activeMachine] || machines[0];
   const paper = papers.find(p => p.id === activePaperId) || papers[0];
   // Normalize: sheetW = always LS (long side), sheetH = always SS (short side)
-  const rawSheetA = machineSheetW || machine?.maxLS || 330;
-  const rawSheetB = machineSheetH || machine?.maxSS || 487;
+  const rawSheetA = (typeof machineSheetW === 'number' ? machineSheetW : null) || machine?.maxLS || 330;
+  const rawSheetB = (typeof machineSheetH === 'number' ? machineSheetH : null) || machine?.maxSS || 487;
   const sheetW = Math.max(rawSheetA, rawSheetB); // LS (long side)
   const sheetH = Math.min(rawSheetA, rawSheetB); // SS (short side)
   // Visual dimensions: left edge of canvas = feed side (paper enters from left)
@@ -1641,15 +1641,15 @@ export default function CalculatorShell() {
                 />
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <MfInput value={sheetW}
-                      onChange={v => setMachineSheetW(Number(v) || null)}
+                    <MfInput value={machineSheetW ?? sheetW}
+                      onChange={v => setMachineSheetW(v === '' ? '' : Number(v) || v)}
                       style={{ width: 70, textAlign: 'center' }} />
                     <span style={{ fontSize: '0.48rem', color: '#64748b', marginTop: 1 }}>LS</span>
                   </div>
                   <span style={{ color: '#475569', fontWeight: 600 }}>×</span>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <MfInput value={sheetH}
-                      onChange={v => setMachineSheetH(Number(v) || null)}
+                    <MfInput value={machineSheetH ?? sheetH}
+                      onChange={v => setMachineSheetH(v === '' ? '' : Number(v) || v)}
                       style={{ width: 70, textAlign: 'center' }} />
                     <span style={{ fontSize: '0.48rem', color: '#64748b', marginTop: 1 }}>SS</span>
                   </div>
