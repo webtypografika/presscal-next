@@ -485,6 +485,19 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           </button>
         ))}
 
+        {/* Send quote button */}
+        {canSend && (
+          <button onClick={() => setShowSendModal(true)} style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 500,
+            background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--blue) 20%, transparent)',
+            color: 'var(--blue)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            <i className="fas fa-paper-plane" style={{ fontSize: '0.55rem' }} /> Αποστολή
+          </button>
+        )}
+
         {/* Autosave indicator */}
         <span style={{ fontSize: '0.72rem', color: saving ? 'var(--text-muted)' : dirty ? 'var(--accent)' : 'var(--success)', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
           {saving ? <i className="fas fa-spinner fa-spin" style={{ fontSize: '0.55rem' }} />
