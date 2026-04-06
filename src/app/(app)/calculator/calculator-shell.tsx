@@ -2369,26 +2369,7 @@ export default function CalculatorShell() {
                     </button>
                     {csFixedBack && (
                       <div style={{ marginTop: 8 }}>
-                        <button onClick={() => {
-                          const inp = document.createElement('input');
-                          inp.type = 'file'; inp.accept = '.pdf';
-                          inp.onchange = async () => {
-                            const f = inp.files?.[0];
-                            if (!f) return;
-                            const bytes = new Uint8Array(await f.arrayBuffer());
-                            setCsBackPdf({ bytes, name: f.name });
-                          };
-                          inp.click();
-                        }} style={{
-                          display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', width: '100%',
-                          borderRadius: 6, border: `1px solid ${csBackPdf ? 'color-mix(in srgb, var(--success) 30%, transparent)' : 'var(--border)'}`,
-                          background: csBackPdf ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.03)',
-                          color: csBackPdf ? 'var(--success)' : '#64748b',
-                          fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                        }}>
-                          <i className="fas fa-file-pdf" style={{ fontSize: '0.55rem' }} />
-                          {csBackPdf ? csBackPdf.name.slice(0, 25) : 'Upload PDF πίσω όψης'}
-                        </button>
+                        <BackPdfPicker linkedFile={linkedFile} csBackPdf={csBackPdf} setCsBackPdf={setCsBackPdf} />
                         {csBackPdf && (
                           <button onClick={() => setCsBackPdf(null)} style={{
                             marginTop: 4, border: 'none', background: 'none', color: '#64748b',
@@ -3287,6 +3268,119 @@ function CostLine({ label, val }: { label: string; val: string }) {
     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: '0.75rem' }}>
       <span style={{ color: '#94a3b8' }}>{label}</span>
       <span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{val}</span>
+    </div>
+  );
+}
+
+// ─── BACK PDF PICKER (folder files via PressKit localhost:17824) ───
+function BackPdfPicker({ linkedFile, csBackPdf, setCsBackPdf }: {
+  linkedFile: { path: string; name: string } | null;
+  csBackPdf: { bytes: Uint8Array; name: string } | null;
+  setCsBackPdf: (v: { bytes: Uint8Array; name: string } | null) => void;
+}) {
+  const [folderFiles, setFolderFiles] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showList, setShowList] = useState(false);
+
+  const loadFolderFiles = useCallback(async () => {
+    if (!linkedFile?.path) return;
+    const folder = linkedFile.path.replace(/[/\\][^/\\]+$/, '');
+    setLoading(true);
+    try {
+      const res = await fetch(`http://localhost:17824/?list=${encodeURIComponent(folder)}`);
+      if (res.ok) {
+        const files: string[] = await res.json();
+        // Filter only PDFs and exclude the main file
+        const mainName = linkedFile.name;
+        setFolderFiles(files.filter(f => f.toLowerCase().endsWith('.pdf') && f !== mainName));
+      }
+    } catch { /* PressKit not running */ }
+    setLoading(false);
+    setShowList(true);
+  }, [linkedFile]);
+
+  const selectFile = useCallback(async (fileName: string) => {
+    if (!linkedFile?.path) return;
+    const folder = linkedFile.path.replace(/[/\\][^/\\]+$/, '');
+    const sep = folder.includes('\\') ? '\\' : '/';
+    const fullPath = `${folder}${sep}${fileName}`;
+    try {
+      const res = await fetch(`http://localhost:17824/?path=${encodeURIComponent(fullPath)}`);
+      if (!res.ok) return;
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      setCsBackPdf({ bytes, name: fileName });
+    } catch {}
+    setShowList(false);
+  }, [linkedFile, setCsBackPdf]);
+
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+        {/* File picker fallback */}
+        <button onClick={() => {
+          const inp = document.createElement('input');
+          inp.type = 'file'; inp.accept = '.pdf';
+          inp.onchange = async () => {
+            const f = inp.files?.[0];
+            if (!f) return;
+            const bytes = new Uint8Array(await f.arrayBuffer());
+            setCsBackPdf({ bytes, name: f.name });
+          };
+          inp.click();
+        }} style={{
+          flex: 1, display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px',
+          borderRadius: 6, border: `1px solid ${csBackPdf ? 'color-mix(in srgb, var(--success) 30%, transparent)' : 'var(--border)'}`,
+          background: csBackPdf ? 'rgba(16,185,129,0.08)' : 'rgba(255,255,255,0.03)',
+          color: csBackPdf ? 'var(--success)' : '#64748b',
+          fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+        }}>
+          <i className="fas fa-file-pdf" style={{ fontSize: '0.55rem' }} />
+          {csBackPdf ? csBackPdf.name.slice(0, 25) : 'PDF πίσω όψης'}
+        </button>
+        {/* PressKit folder browse */}
+        {linkedFile && (
+          <button onClick={loadFolderFiles} title="Αρχεία φακέλου" style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px 8px',
+            borderRadius: 6, border: '1px solid rgba(245,130,32,0.3)',
+            background: 'rgba(245,130,32,0.08)', color: '#f58220',
+            fontSize: '0.6rem', cursor: 'pointer',
+          }}>
+            <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-folder-open'}`} />
+          </button>
+        )}
+      </div>
+      {/* Dropdown list of folder PDFs */}
+      {showList && folderFiles.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4,
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
+          maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+        }}>
+          {folderFiles.map(f => (
+            <button key={f} onClick={() => selectFile(f)} style={{
+              display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
+              border: 'none', background: 'transparent', color: 'var(--text-dim)',
+              fontSize: '0.65rem', cursor: 'pointer', fontFamily: 'inherit',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.1)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <i className="fas fa-file-pdf" style={{ marginRight: 6, color: '#f58220', fontSize: '0.55rem' }} />
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
+      {showList && folderFiles.length === 0 && !loading && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4,
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
+          padding: '8px 10px', fontSize: '0.6rem', color: '#64748b',
+        }}>
+          Δεν βρέθηκαν άλλα PDF στον φάκελο
+        </div>
+      )}
+      {showList && <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setShowList(false)} />}
     </div>
   );
 }
