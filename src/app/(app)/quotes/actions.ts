@@ -494,8 +494,8 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
         for (const att of msg.attachments) {
           if (!att.filename || !att.id) continue;
 
-          // Build API-based download path (no filesystem needed — works on Vercel)
-          const downloadPath = `/api/email/messages/${msgId}/attachments/${att.id}?filename=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}`;
+          // Store email ref as filePath — PressKit uses /api/filehelper/emails/... with Bearer auth
+          const downloadPath = `/api/filehelper/emails/${msgId}/attachments/${att.id}?filename=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}`;
 
           // Skip duplicates
           if (existingPaths.has(downloadPath)) continue;

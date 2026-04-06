@@ -889,11 +889,15 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
                 {((quote as any).fileLinks as any[] || []).map((fl: any) => {
                   const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(fl.fileName);
-                  // Parse email-sourced paths: /api/email/messages/{msgId}/attachments/{attId}?...
-                  const emailMatch = fl.source === 'email' && fl.filePath.match(/\/messages\/([^/]+)\/attachments\/([^?]+)/);
+                  // For email-sourced files: parse messageId/attId for PressKit deep link
+                  const emailMatch = fl.source === 'email' && fl.filePath.match(/\/emails\/([^/]+)\/attachments\/([^?]+)/);
                   const pressKitHref = emailMatch
                     ? `presscal-fh://attachment?messageId=${emailMatch[1]}&attId=${emailMatch[2]}&mime=${encodeURIComponent(fl.fileType || 'application/octet-stream')}&filename=${encodeURIComponent(fl.fileName)}&quoteId=${quote.id}`
                     : `presscal-fh://open-file?path=${encodeURIComponent(fl.filePath)}&quoteId=${quote.id}`;
+                  // Web download: email files use session-based endpoint, local files use filePath directly
+                  const webDownloadHref = emailMatch
+                    ? `/api/email/messages/${emailMatch[1]}/attachments/${emailMatch[2]}?filename=${encodeURIComponent(fl.fileName)}&mime=${encodeURIComponent(fl.fileType || 'application/octet-stream')}`
+                    : fl.filePath;
                   return (
                     <div key={fl.id} style={{
                       borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden',
@@ -917,7 +921,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                           {fl.fileName}
                         </div>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <a href={fl.filePath} download={fl.fileName} title="Download" style={{
+                          <a href={webDownloadHref} download={fl.fileName} title="Download" style={{
                             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
                             padding: '3px', borderRadius: 4, border: '1px solid var(--border)',
                             color: 'var(--text-muted)', fontSize: '0.6rem', textDecoration: 'none',
