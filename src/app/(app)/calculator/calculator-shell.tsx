@@ -853,6 +853,20 @@ export default function CalculatorShell() {
     }
   }, [impoMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Step Multi: sync block 0 trim from global PDF when entering mode or PDF changes
+  useEffect(() => {
+    if (impoMode !== 'stepmulti' || !pdf?.pageSizes?.[0]) return;
+    const pg = pdf.pageSizes[0];
+    const tw = Math.round(pg.trimW * 10) / 10;
+    const th = Math.round(pg.trimH * 10) / 10;
+    setSmBlocks(prev => {
+      const b0 = prev[0];
+      if (!b0 || (b0.trimW === tw && b0.trimH === th)) return prev;
+      return prev.map((b, i) => i === 0 ? { ...b, trimW: tw, trimH: th, cols: 1, rows: 1, blockW: 0, blockH: 0, _manualGrid: true } : b);
+    });
+    setSmBlockPdfs(prev => { if (prev[0] === pdf) return prev; const next = [...prev]; next[0] = pdf; return next; });
+  }, [impoMode, pdf]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Reset signature navigator when mode or page count changes
   useEffect(() => { setActiveSigSheet(0); setSigShowBack(false); }, [impoMode, job.pages, job.bodyPages]);
 
