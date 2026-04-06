@@ -1472,7 +1472,7 @@ export default function CalculatorShell() {
                 const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
                 const pdfBytes = await exportImpositionPDF({
                   imposition: impo, jobW: job.width, jobH: job.height, bleed: effectiveBleed,
-                  sourceFileName: pdf?.fileName, sourcePdfBytes: pdf?.bytes,
+                  sourceFileName: pdf?.fileName, pdfBytes: pdf?.bytes,
                   sides: job.sides, rotation: impoRotation || (job.rotation ? 90 : 0),
                   cropMarks: impoCropMarks, gutterLines: true,
                   numberingEnabled: impoMode === 'cutstack' && csNumbering,
