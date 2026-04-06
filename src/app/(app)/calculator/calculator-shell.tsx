@@ -1693,15 +1693,9 @@ export default function CalculatorShell() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <MfLabel>ΦΥΡΑ (φύλλα)</MfLabel>
-                    <MfInput value={wasteFixed} onChange={v => setWasteFixed(Math.max(0, Number(v) || 0))} style={{ width: '100%', textAlign: 'center' }} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <MfLabel>ΠΑΡΑΓΩΓΕΣ (×)</MfLabel>
-                    <MfInput value={prodMultiplier} onChange={v => setProdMultiplier(Math.max(1, Math.round(Number(v) || 1)))} style={{ width: '100%', textAlign: 'center' }} />
-                  </div>
+                <MfLabel>ΦΥΡΑ (φύλλα μοντάζ)</MfLabel>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
+                  <MfInput value={wasteFixed} onChange={v => setWasteFixed(Math.max(0, Number(v) || 0))} style={{ width: '100%', textAlign: 'center' }} />
                 </div>
 
                 <MfLabel>ΤΑΧΥΤΗΤΑ ({machine?.cat === 'offset' ? 'φύλ/ώρα' : 'σελ/λεπτό'})</MfLabel>
@@ -1841,11 +1835,15 @@ export default function CalculatorShell() {
                 </button>
               </div>
 
-              {/* Qty + Bleed row */}
+              {/* Qty + Multiplier + Bleed row */}
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 2 }}>
                   <MfLabel>ΠΟΣΟΤΗΤΑ</MfLabel>
                   <MfInput value={job.qty} onChange={(v) => setJob({ ...job, qty: Number(v) || 0 })} style={{ width: '100%', textAlign: 'center', fontWeight: 600 }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <MfLabel>×ΠΑΡΑΓ.</MfLabel>
+                  <MfInput value={prodMultiplier} onChange={v => setProdMultiplier(Math.max(1, Math.round(Number(v) || 1)))} style={{ width: '100%', textAlign: 'center', fontWeight: 600, color: prodMultiplier > 1 ? 'var(--accent)' : undefined }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
