@@ -525,13 +525,13 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             {selectedCompany?.email && <span>{selectedCompany.email}</span>}
             {selectedCompany?.phone && <span>{selectedCompany.phone}</span>}
             {selectedCompany?.folderPath && (
-              <a href={`presscal-fh://open-folder?path=${encodeURIComponent(selectedCompany.folderPath)}${selectedCompany?.email ? `&email=${encodeURIComponent(selectedCompany.email)}` : ''}`}
+              <a href={`presscal-fh://open-folder?path=${encodeURIComponent(selectedCompany.folderPath)}${selectedCompany?.email ? `&email=${encodeURIComponent(selectedCompany.email)}` : ''}&quoteId=${quote.id}`}
                 style={{ color: '#f58220', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                 <i className="fas fa-folder-open" style={{ fontSize: '0.5rem' }} />Φάκελος
               </a>
             )}
             {(quote as any).jobFolderPath && (
-              <a href={`presscal-fh://open-folder?path=${encodeURIComponent((quote as any).jobFolderPath)}`}
+              <a href={`presscal-fh://open-folder?path=${encodeURIComponent((quote as any).jobFolderPath)}&quoteId=${quote.id}`}
                 style={{ color: 'var(--teal)', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                 <i className="fas fa-briefcase" style={{ fontSize: '0.5rem' }} />Εργασία
               </a>

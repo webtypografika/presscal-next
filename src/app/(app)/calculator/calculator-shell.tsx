@@ -1118,7 +1118,7 @@ export default function CalculatorShell() {
           <span style={{ fontWeight: 600, color: '#f58220' }}>{linkedFile.name}</span>
           <div style={{ flex: 1 }} />
           <a
-            href={`presscal-fh://open-folder?path=${encodeURIComponent(linkedFile.path.replace(/[/\\][^/\\]+$/, ''))}`}
+            href={`presscal-fh://open-folder?path=${encodeURIComponent(linkedFile.path.replace(/[/\\][^/\\]+$/, ''))}${quoteLink?.quoteId ? `&quoteId=${quoteLink.quoteId}` : ''}`}
             style={{
               display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
               borderRadius: 6, border: '1px solid rgba(245,130,32,0.3)',
