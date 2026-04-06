@@ -466,88 +466,74 @@ export async function updateCustomer(id: string, data: Record<string, unknown>) 
 
 export async function saveEmailAttachments(quoteId: string, messageIds: string[]) {
   try {
-    console.log('[saveEmailAttachments] start, quoteId:', quoteId, 'messages:', messageIds.length);
     // Find a user with Google OAuth in this org
     const account = await prisma.account.findFirst({
       where: { provider: 'google', user: { orgId: ORG_ID } },
       select: { userId: true },
     });
-    if (!account) { console.log('[saveEmailAttachments] no google account found'); return { saved: 0 }; }
+    if (!account) return { saved: 0 };
 
-    const { getGmailToken, getMessage, getAttachment } = await import('@/lib/gmail');
+    const { getGmailToken, getMessage } = await import('@/lib/gmail');
     const token = await getGmailToken(account.userId);
-    if (!token) { console.log('[saveEmailAttachments] no gmail token'); return { saved: 0 }; }
+    if (!token) return { saved: 0 };
 
-    const fs = await import('fs/promises');
-    const path = await import('path');
-
-    const dir = path.join(process.cwd(), 'public', 'storage', 'quotes', quoteId);
-    await fs.mkdir(dir, { recursive: true });
+    // Check for existing fileLinks to avoid duplicates
+    const existing = await prisma.fileLink.findMany({
+      where: { quoteId, source: 'email' },
+      select: { filePath: true },
+    });
+    const existingPaths = new Set(existing.map(f => f.filePath));
 
     let saved = 0;
-    const fileLinks: { name: string; path: string; type: string; size: number }[] = [];
 
     for (const msgId of messageIds) {
       try {
         const msg = await getMessage(token, msgId);
-        console.log('[saveEmailAttachments] msgId:', msgId, 'attachments:', JSON.stringify(msg.attachments));
         if (!msg.attachments?.length) continue;
 
         for (const att of msg.attachments) {
-          console.log('[saveEmailAttachments] att:', att.id, att.filename, att.mimeType);
-          if (!att.filename) continue;
+          if (!att.filename || !att.id) continue;
 
-          // Sanitize filename
-          const safeName = att.filename.replace(/[<>:"|?*]/g, '_');
-          const filePath = path.join(dir, safeName);
+          // Build API-based download path (no filesystem needed — works on Vercel)
+          const downloadPath = `/api/email/messages/${msgId}/attachments/${att.id}?filename=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}`;
 
-          // Skip if already exists
-          try { await fs.access(filePath); continue; } catch { /* doesn't exist, good */ }
+          // Skip duplicates
+          if (existingPaths.has(downloadPath)) continue;
 
-          // Download from Gmail (skip if no attachmentId — inline data too small for API)
-          if (!att.id) { console.log('[saveEmailAttachments] skipping, no attachmentId:', att.filename); continue; }
-          const b64 = await getAttachment(token, msgId, att.id);
-          const buffer = Buffer.from(b64, 'base64');
-          await fs.writeFile(filePath, buffer);
+          const ext = att.filename.split('.').pop()?.toLowerCase() || '';
 
-          const ext = safeName.split('.').pop()?.toLowerCase() || '';
-          const webPath = `/storage/quotes/${quoteId}/${safeName}`;
-
-          // Generate base64 thumbnail for images
+          // For images, fetch and create base64 thumbnail
           let thumbnail: string | null = null;
           const imageExts = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
-          if (imageExts.has(ext)) {
-            const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-            const b64Data = buffer.toString('base64');
-            const candidate = `data:${mime};base64,${b64Data}`;
-            if (candidate.length <= 200_000) thumbnail = candidate;
+          if (imageExts.has(ext) && att.size < 200_000) {
+            try {
+              const { getAttachment } = await import('@/lib/gmail');
+              const b64 = await getAttachment(token, msgId, att.id);
+              const mime = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+              thumbnail = `data:${mime};base64,${b64}`;
+            } catch { /* thumbnail is optional */ }
           }
 
-          // Create FileLink record
-          const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { orgId: true } });
-          if (quote) {
-            await prisma.fileLink.create({
-              data: {
-                orgId: quote.orgId,
-                fileName: safeName,
-                filePath: webPath,
-                fileType: ext,
-                fileSize: buffer.length,
-                source: 'email',
-                quoteId,
-                thumbnail,
-              },
-            });
-          }
+          await prisma.fileLink.create({
+            data: {
+              orgId: ORG_ID,
+              fileName: att.filename,
+              filePath: downloadPath,
+              fileType: ext,
+              fileSize: att.size || 0,
+              source: 'email',
+              quoteId,
+              thumbnail,
+            },
+          });
 
-          fileLinks.push({ name: safeName, path: webPath, type: ext, size: buffer.length });
+          existingPaths.add(downloadPath);
           saved++;
         }
-      } catch (e) { console.error('[saveEmailAttachments] message error:', msgId, (e as Error).message, (e as Error).stack); }
+      } catch (e) { console.error('[saveEmailAttachments] message error:', msgId, (e as Error).message); }
     }
 
-    console.log('[saveEmailAttachments] done, saved:', saved);
-    return { saved, files: fileLinks };
+    return { saved };
   } catch (e) {
     console.error('[saveEmailAttachments] fatal error:', (e as Error).message);
     return { saved: 0 };
