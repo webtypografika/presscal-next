@@ -479,16 +479,20 @@ function drawSheet(
   }
 
   // Gutter lines (skip for W&T — cells use actual coordinates with fold gap)
-  // Only draw fill for positive gutters (negative = overlap, no visible gap)
-  if (cellGap > 0 && gutterPx > 1 && !isWT && !isSM) {
+  // N-Up-like: gutter = trim-to-trim, fill between trim edges
+  const stepW = pw + gutterPx;
+  const stepH = ph + gutterPx;
+  const trimGutterPx = isNUpLike ? gutter * scale : gutterPx;
+  if (trimGutterPx > 0.5 && !isWT && !isSM) {
     ctx.fillStyle = COLORS.gutterFill;
     for (let col = 1; col < impo.cols; col++) {
-      const gx = cenX + col * pw + (col - 1) * gutterPx;
-      ctx.fillRect(gx, cenY, gutterPx, totalGridH);
+      // Right trim of prev col → left trim of this col
+      const gx = cenX + (col - 1) * stepW + pw - bleedPx;
+      ctx.fillRect(gx, cenY, trimGutterPx, totalGridH);
     }
     for (let row = 1; row < impo.rows; row++) {
-      const gy = cenY + row * ph + (row - 1) * gutterPx;
-      ctx.fillRect(cenX, gy, totalGridW, gutterPx);
+      const gy = cenY + (row - 1) * stepH + ph - bleedPx;
+      ctx.fillRect(cenX, gy, totalGridW, trimGutterPx);
     }
   }
 
@@ -496,18 +500,84 @@ function drawSheet(
   if (cropMarks && !isWT && !isSM) {
     ctx.strokeStyle = COLORS.cropMark;
     ctx.lineWidth = 0.5;
-    for (let row = 0; row <= impo.rows; row++) {
-      for (let col = 0; col <= impo.cols; col++) {
-        const cx = cenX + col * (pw + gutterPx) - (col > 0 ? gutterPx : 0);
-        const cy = cenY + row * (ph + gutterPx) - (row > 0 ? gutterPx : 0);
+    if (isNUpLike && hasBleed) {
+      // N-Up: draw crop marks at TRIM edges (inset from cell edges by bleed)
+      // Collect unique trim X positions
+      const trimXs: number[] = [];
+      for (let col = 0; col < impo.cols; col++) {
+        const cellX = cenX + col * stepW;
+        trimXs.push(cellX + bleedPx);          // left trim
+        trimXs.push(cellX + pw - bleedPx);     // right trim
+      }
+      // Deduplicate (adjacent trims may share same position when gutter=0)
+      const uX = [trimXs[0]];
+      for (let i = 1; i < trimXs.length; i++) {
+        if (Math.abs(trimXs[i] - uX[uX.length - 1]) > 0.3) uX.push(trimXs[i]);
+      }
+      // Collect unique trim Y positions
+      const trimYs: number[] = [];
+      for (let row = 0; row < impo.rows; row++) {
+        const cellY = cenY + row * stepH;
+        trimYs.push(cellY + bleedPx);          // top trim
+        trimYs.push(cellY + ph - bleedPx);     // bottom trim
+      }
+      const uY = [trimYs[0]];
+      for (let i = 1; i < trimYs.length; i++) {
+        if (Math.abs(trimYs[i] - uY[uY.length - 1]) > 0.3) uY.push(trimYs[i]);
+      }
+      // Draw perimeter marks (top/bottom for each X, left/right for each Y)
+      const gridT = uY[0], gridB = uY[uY.length - 1];
+      const gridL = uX[0], gridR = uX[uX.length - 1];
+      for (const vx of uX) {
         ctx.beginPath();
-        ctx.moveTo(cx - markLen, cy); ctx.lineTo(cx - 2, cy);
-        ctx.moveTo(cx + pw + 2, cy); ctx.lineTo(cx + pw + markLen, cy);
+        ctx.moveTo(vx, gridT - markLen); ctx.lineTo(vx, gridT - 2);
+        ctx.moveTo(vx, gridB + 2); ctx.lineTo(vx, gridB + markLen);
         ctx.stroke();
+      }
+      for (const hy of uY) {
         ctx.beginPath();
-        ctx.moveTo(cx, cy - markLen); ctx.lineTo(cx, cy - 2);
-        ctx.moveTo(cx, cy + ph + 2); ctx.lineTo(cx, cy + ph + markLen);
+        ctx.moveTo(gridL - markLen, hy); ctx.lineTo(gridL - 2, hy);
+        ctx.moveTo(gridR + 2, hy); ctx.lineTo(gridR + markLen, hy);
         ctx.stroke();
+      }
+      // Gutter marks between trims (if gutter > 0)
+      if (gutter > 0) {
+        for (let col = 0; col < impo.cols - 1; col++) {
+          const rightTrim = cenX + col * stepW + pw - bleedPx;
+          const leftTrim = rightTrim + trimGutterPx;
+          for (const hy of uY) {
+            ctx.beginPath();
+            ctx.moveTo(rightTrim + 1, hy); ctx.lineTo(rightTrim + Math.min(markLen, trimGutterPx / 2 - 0.5), hy);
+            ctx.moveTo(leftTrim - 1, hy); ctx.lineTo(leftTrim - Math.min(markLen, trimGutterPx / 2 - 0.5), hy);
+            ctx.stroke();
+          }
+        }
+        for (let row = 0; row < impo.rows - 1; row++) {
+          const bottomTrim = cenY + row * stepH + ph - bleedPx;
+          const topTrim = bottomTrim + trimGutterPx;
+          for (const vx of uX) {
+            ctx.beginPath();
+            ctx.moveTo(vx, bottomTrim + 1); ctx.lineTo(vx, bottomTrim + Math.min(markLen, trimGutterPx / 2 - 0.5));
+            ctx.moveTo(vx, topTrim - 1); ctx.lineTo(vx, topTrim - Math.min(markLen, trimGutterPx / 2 - 0.5));
+            ctx.stroke();
+          }
+        }
+      }
+    } else {
+      // Other modes: original crop marks at cell edges
+      for (let row = 0; row <= impo.rows; row++) {
+        for (let col = 0; col <= impo.cols; col++) {
+          const cx = cenX + col * (pw + gutterPx) - (col > 0 ? gutterPx : 0);
+          const cy = cenY + row * (ph + gutterPx) - (row > 0 ? gutterPx : 0);
+          ctx.beginPath();
+          ctx.moveTo(cx - markLen, cy); ctx.lineTo(cx - 2, cy);
+          ctx.moveTo(cx + pw + 2, cy); ctx.lineTo(cx + pw + markLen, cy);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - markLen); ctx.lineTo(cx, cy - 2);
+          ctx.moveTo(cx, cy + ph + 2); ctx.lineTo(cx, cy + ph + markLen);
+          ctx.stroke();
+        }
       }
     }
   }
