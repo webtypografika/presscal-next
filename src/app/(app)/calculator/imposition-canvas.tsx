@@ -476,7 +476,7 @@ function drawSheet(
   }
 
   // Gutter lines (skip for W&T — cells use actual coordinates with fold gap)
-  if (hasGutter && gutterPx > 1 && !isWT) {
+  if (hasGutter && gutterPx > 1 && !isWT && !isSM) {
     ctx.fillStyle = COLORS.gutterFill;
     for (let col = 1; col < impo.cols; col++) {
       const gx = cenX + col * pw + (col - 1) * gutterPx;
@@ -489,7 +489,7 @@ function drawSheet(
   }
 
   // Crop marks (skip for W&T — uses cell coordinates, marks drawn correctly in PDF export)
-  if (cropMarks && !isWT) {
+  if (cropMarks && !isWT && !isSM) {
     ctx.strokeStyle = COLORS.cropMark;
     ctx.lineWidth = 0.5;
     for (let row = 0; row <= impo.rows; row++) {
