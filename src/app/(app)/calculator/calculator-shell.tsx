@@ -964,6 +964,8 @@ export default function CalculatorShell() {
 
   // ─── CLIENT-SIDE IMPOSITION (instant feedback) ───
   const effectiveBleed = job.bleedOn ? (impoBleedOverride ?? job.bleed) : 0;
+  // UI gutter = trim-to-trim; engine gutter = cell-to-cell (cell includes bleed)
+  const engineGutter = impoGutter - effectiveBleed * 2;
   const impoInput: ImpositionInput = {
     mode: impoMode,
     trimW: job.width,
@@ -971,7 +973,7 @@ export default function CalculatorShell() {
     bleed: effectiveBleed,
     qty: job.qty,
     sides: job.sides,
-    gutter: impoGutter,
+    gutter: engineGutter,
     area: {
       paperW: vizW,
       paperH: vizH,
@@ -1445,7 +1447,7 @@ export default function CalculatorShell() {
                 jobW: job.width,
                 jobH: job.height,
                 bleed: effectiveBleed,
-                gutter: impoGutter,
+                gutter: engineGutter,
                 showCropMarks: impoCropMarks,
                 showRegistration: machine.cat === 'offset',
                 showColorBar: impoColorBar,
@@ -1507,7 +1509,7 @@ export default function CalculatorShell() {
                   sourceFileName: pdf?.fileName,
                   machineCat: machine.cat as 'digital' | 'offset',
                   machineName: machine.name, paperName: paper?.name,
-                  jobW: job.width, jobH: job.height, bleed: effectiveBleed, gutter: impoGutter,
+                  jobW: job.width, jobH: job.height, bleed: effectiveBleed, gutter: engineGutter,
                   showCropMarks: impoCropMarks, showRegistration: machine.cat === 'offset',
                   isDuplex: job.sides === 2, duplexOrient: impoDuplexOrient,
                   rotation: impoRotation, turnType: impoTurnType,
@@ -3102,7 +3104,7 @@ export default function CalculatorShell() {
                 marginLeft={machine?.marginLeft || 0}
                 marginRight={machine?.marginRight || 0}
                 bleed={effectiveBleed}
-                gutter={impoGutter}
+                gutter={engineGutter}
                 cropMarks={impoCropMarks}
                 machCat={machine?.cat as 'digital' | 'offset' | undefined}
                 sides={job.sides}

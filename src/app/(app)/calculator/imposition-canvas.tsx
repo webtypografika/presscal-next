@@ -174,11 +174,9 @@ function drawSheet(
   const pw = impo.pieceW * scale;
   const ph = impo.pieceH * scale;
   const gutterPx = gutter * scale;
-  const effectiveGutterPx = (gutter - bleed * 2) * scale; // gap between cells (gutter is trim-to-trim)
   const bleedPx = hasBleed ? bleed * scale : 0;
-  // Grid size uses effective gutter (matching imposition engine cell placement)
-  const totalGridW = impo.cols * pw + Math.max(0, impo.cols - 1) * effectiveGutterPx;
-  const totalGridH = impo.rows * ph + Math.max(0, impo.rows - 1) * effectiveGutterPx;
+  const totalGridW = impo.cols * pw + Math.max(0, impo.cols - 1) * gutterPx;
+  const totalGridH = impo.rows * ph + Math.max(0, impo.rows - 1) * gutterPx;
   const cenX = paX + (printAreaW - totalGridW) / 2 + gridOffsetX * scale;
   const cenY = paY + (printAreaH - totalGridH) / 2 + gridOffsetY * scale;
 
