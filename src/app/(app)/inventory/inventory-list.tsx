@@ -138,6 +138,7 @@ export function InventoryList({ materials, consumables, org }: Props) {
 
   const counts: Record<TabId, number> = {
     'sheet': sheets.length,
+    'lamination': lamFilms.length,
     'consumable-offset': offsetCons.length,
     'consumable-digital': digitalCons.length,
     'plate-orders': plateOrders.length,
