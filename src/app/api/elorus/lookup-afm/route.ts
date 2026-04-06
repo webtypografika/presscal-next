@@ -130,12 +130,13 @@ export async function POST(req: NextRequest) {
     if (org.apiElorus && org.elorusOrgId && result.onomasia) {
       const hdrs = elorusHeaders(org.apiElorus, org.elorusOrgId);
       const contactPayload = {
-        client_type: '0',  // 0 = Πελάτης only
+        client_type: '1',  // 1 = Company type
         company: result.onomasia,
         tin: afm,
         tin_authority: result.doy_descr || '',
         country: 'GR',
         is_client: true,
+        is_supplier: false,
         active: true,
         addresses: [{
           address: result.postal_address,
@@ -148,9 +149,10 @@ export async function POST(req: NextRequest) {
 
       if (elorusContactId) {
         // Update existing placeholder
-        await fetch(`${ELORUS_BASE}/v1.2/contacts/${elorusContactId}/`, {
+        const patchRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/${elorusContactId}/`, {
           method: 'PATCH', headers: hdrs, body: JSON.stringify(contactPayload),
         });
+        if (!patchRes.ok) console.error('[Elorus] PATCH contact failed:', patchRes.status, await patchRes.text().catch(() => ''));
       } else {
         // Create new
         const createRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
@@ -159,6 +161,8 @@ export async function POST(req: NextRequest) {
         if (createRes.ok) {
           const created = await createRes.json();
           result.elorusContactId = created.id;
+        } else {
+          console.error('[Elorus] CREATE contact failed:', createRes.status, await createRes.text().catch(() => ''));
         }
       }
     }

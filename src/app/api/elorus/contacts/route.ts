@@ -56,13 +56,14 @@ export async function POST(req: NextRequest) {
       if (!company && !firstName) return NextResponse.json({ error: 'Εταιρεία ή Όνομα απαιτείται' }, { status: 400 });
 
       const payload: Record<string, unknown> = {
-        client_type: '0',  // 0 = Πελάτης only (not 1 which is Πελάτης & Προμηθευτής)
+        client_type: '1',
         company: company || '',
         first_name: firstName || '',
         tin: afm,
         tin_authority: doy || '',
         country: 'GR',
         is_client: true,
+        is_supplier: false,
         active: true,
       };
       if (email) payload.email = [{ email, primary: true }];
