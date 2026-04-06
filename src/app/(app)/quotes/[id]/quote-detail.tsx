@@ -683,7 +683,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               <i className={`fas ${item.type === 'calculator' ? 'fa-calculator' : item.type === 'catalog' ? 'fa-book' : 'fa-pen'}`} />
             </span>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <input value={item.name} onChange={e => updateItem(idx, 'name', e.target.value)} placeholder="Περιγραφή" style={{ ...inp, border: 'none', background: 'transparent', padding: '4px 6px' }} />
+              <input value={item.name} onChange={e => updateItem(idx, 'name', e.target.value)} placeholder="Τίτλος προϊόντος" style={{ ...inp, border: 'none', background: 'transparent', padding: '4px 6px', fontWeight: 600 }} />
+              <input value={item.description || ''} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Περιγραφή..." style={{ ...inp, border: 'none', background: 'transparent', padding: '2px 6px', fontSize: '0.78rem', color: 'var(--text-muted)' }} />
               {item.linkedFile && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px', marginTop: -2 }}>
                   <i className="fas fa-paperclip" style={{ fontSize: '0.5rem', color: '#f58220' }} />
@@ -738,7 +739,12 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               )}
             </div>
             <input type="number" value={item.qty || ''} onChange={e => updateItem(idx, 'qty', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%' }} />
-            <input value={item.unit} onChange={e => updateItem(idx, 'unit', e.target.value)} style={{ ...inp, border: 'none', background: 'transparent', padding: '4px 4px', textAlign: 'center', width: '100%' }} />
+            <select value={item.unit || 'τεμ'} onChange={e => updateItem(idx, 'unit', e.target.value)} style={{ ...inp, border: 'none', background: 'transparent', padding: '4px 2px', textAlign: 'center', width: '100%', fontSize: '0.78rem', cursor: 'pointer', appearance: 'none' }}>
+              <option value="τεμ">τεμ</option>
+              <option value="m²">m²</option>
+              <option value="φύλ">φύλ</option>
+              <option value="σετ">σετ</option>
+            </select>
             <input type="number" value={item.unitPrice || ''} onChange={e => updateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%' }} />
             <input type="number" value={item.finalPrice || ''} onChange={e => updateItem(idx, 'finalPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%', fontWeight: 600 }} />
             <input type="number" value={item.cost || ''} onChange={e => updateItem(idx, 'cost', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%', color: 'var(--text-muted)' }} />

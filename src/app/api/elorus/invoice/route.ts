@@ -97,10 +97,13 @@ export async function POST(req: NextRequest) {
         const qty = (item.qty as number) || 1;
         const price = (item.finalPrice as number) || (item.unitPrice as number) || 0;
         const unitValue = qty > 0 ? (price / qty) : price;
+        // Map unit to Elorus unit_measure: 1=τεμάχιο, 7=τετραγωνικό μέτρο
+        const unitMap: Record<string, string> = { 'τεμ': '1', 'm²': '7', 'φύλ': '1', 'σετ': '1' };
         return {
           title: (item.name as string) || 'Υπηρεσία',
-          description: (item.notes as string) || '',
+          description: (item.description as string) || '',
           quantity: String(qty),
+          unit_measure: unitMap[(item.unit as string) || 'τεμ'] || '1',
           unit_value: unitValue.toFixed(2),
           taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
           ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),
