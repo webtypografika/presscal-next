@@ -174,16 +174,18 @@ function drawSheet(
   const pw = impo.pieceW * scale;
   const ph = impo.pieceH * scale;
   const gutterPx = gutter * scale;
+  const effectiveGutterPx = (gutter - bleed * 2) * scale; // gap between cells (gutter is trim-to-trim)
   const bleedPx = hasBleed ? bleed * scale : 0;
-  const totalGridW = impo.cols * pw + Math.max(0, impo.cols - 1) * gutterPx;
-  const totalGridH = impo.rows * ph + Math.max(0, impo.rows - 1) * gutterPx;
+  // Grid size uses effective gutter (matching imposition engine cell placement)
+  const totalGridW = impo.cols * pw + Math.max(0, impo.cols - 1) * effectiveGutterPx;
+  const totalGridH = impo.rows * ph + Math.max(0, impo.rows - 1) * effectiveGutterPx;
   const cenX = paX + (printAreaW - totalGridW) / 2 + gridOffsetX * scale;
   const cenY = paY + (printAreaH - totalGridH) / 2 + gridOffsetY * scale;
 
   // W&T and Step Multi use actual cell coordinates, others use uniform grid
   const isWT = impo.mode === 'workturn';
   const isSM = impo.mode === 'stepmulti';
-  const useCellCoords = isWT || isSM;
+  const useCellCoords = true; // always use cell coordinates from imposition engine
 
   // Step multi: map cell index → block index for per-block PDF rendering
   const smCellBlockIdx: number[] = [];
@@ -230,8 +232,8 @@ function drawSheet(
         }
       }
 
-      const x = useCellCoords ? offX + cell.x * scale + gridOffsetX * scale : cenX + col * (pw + gutterPx);
-      const y = useCellCoords ? offY + cell.y * scale + gridOffsetY * scale : cenY + row * (ph + gutterPx);
+      const x = offX + cell.x * scale + gridOffsetX * scale;
+      const y = offY + cell.y * scale + gridOffsetY * scale;
       // Step multi: per-cell dimensions (blocks can have different trim sizes)
       const cpw = isSM && cell.w ? cell.w * scale : pw;
       const cph = isSM && cell.h ? cell.h * scale : ph;

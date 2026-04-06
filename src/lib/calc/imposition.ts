@@ -154,11 +154,16 @@ function wastePercent(paperW: number, paperH: number, usedW: number, usedH: numb
 export function calcNUp(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, sides, gutter, area, forceUps, forceCols, forceRows, rotation } = input;
 
+  // pieceW/H = trim + bleed on all sides (full bleed cell)
   const rawCellW = trimW + bleed * 2;
   const rawCellH = trimH + bleed * 2;
   // gutter = distance between TRIM edges
-  // effectiveGutter = actual gap between CELL edges (cells include bleed)
-  // gutter=0 → trims touch → cells overlap by 2×bleed
+  // Cell step = trim + gutter + bleed (inner bleeds share space with gutter)
+  // When gutter=0: step = trim + bleed (like booklet spine — inner bleeds overlap completely)
+  // When gutter=2*bleed: step = trim + 2*bleed + bleed... no, simplify:
+  // step between cells = trimSize + max(gutter, bleed*2) — but actually we want:
+  // step = trimSize + gutter (gutter already accounts for bleed sharing)
+  // So effectiveGutter for fitCount = -(bleed*2) + gutter = gutter - 2*bleed
   const effectiveGutter = gutter - bleed * 2;
   const { w: pw, h: ph } = printable(area);
 
