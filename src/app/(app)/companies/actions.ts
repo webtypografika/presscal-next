@@ -28,6 +28,8 @@ export async function getCompanies(opts?: { search?: string; skip?: number; take
       { companyContacts: { some: { contact: { OR: [
         { name: { contains: s, mode: 'insensitive' } },
         { email: { contains: s, mode: 'insensitive' } },
+        { phone: { contains: s } },
+        { mobile: { contains: s } },
       ] } } } },
     ]);
   }
