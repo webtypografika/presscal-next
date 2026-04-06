@@ -753,15 +753,18 @@ async function exportNUp(
         ? ascii((opts.jobDescription || 'Job') + (isBackSide ? ' (Back)' : ' (Front)'))
         : ascii(opts.jobDescription || 'Job');
 
-      // Pass cell-to-cell gap (not trim-to-trim gutter) for marks placement
-      const marksGutterMM = (opts.gutter || 0) - 2 * (opts.bleed || 0);
+      // Use the embedded page's actual trim offset for mark positioning
+      // This reads the PDF's TrimBox position, not PressCal's bleed setting
+      const ep0 = embeddedPages[0];
+      const actualTrimOffMM = ep0 ? (ep0.trimOffsetX || 0) / MM : (opts.bleed || 0);
+      const marksGutterMM = (opts.gutter || 0) - 2 * actualTrimOffMM;
       drawPDFMarks(page, paperWpt, paperHpt, {
         marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
         marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
         pieceW: impo.pieceW, pieceH: impo.pieceH,
         cols: impo.cols, rows: impo.rows,
         gutterMM: marksGutterMM,
-        bleedMM: opts.bleed || 0,
+        bleedMM: actualTrimOffMM,
         offsetX: impo.offsetX, offsetY: impo.offsetY,
         cropMarks: opts.showCropMarks,
       }, {
@@ -1203,15 +1206,17 @@ async function exportCutStack(
     }
 
     csMask(page, false);
-    // Pass cell-to-cell gap for marks placement
-    const csMarksGutterMM = (opts.gutter || 0) - 2 * (opts.bleed || 0);
+    // Use embedded page's trim offset for mark positioning (reads TrimBox)
+    const csEp0 = embeddedPages[0];
+    const csActualTrimOff = csEp0 ? (csEp0.trimOffsetX || 0) / MM : (opts.bleed || 0);
+    const csMarksGutterMM = (opts.gutter || 0) - 2 * csActualTrimOff;
     const marksImpo = {
       marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
       marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
       pieceW: impo.pieceW, pieceH: impo.pieceH,
       cols: impo.cols, rows: impo.rows,
       gutterMM: csMarksGutterMM,
-      bleedMM: opts.bleed || 0,
+      bleedMM: csActualTrimOff,
       offsetX: impo.offsetX, offsetY: impo.offsetY,
       cropMarks: opts.showCropMarks,
     };
@@ -1532,14 +1537,16 @@ async function exportGangRun(
   const gridR = cenX + totalGridW + bleedPt, gridT = cenY + totalGridH + bleedPt;
   drawMarginalMasks(page, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
 
-  // Pass cell-to-cell gap for marks placement
-  const grMarksGutterMM = (opts.gutter || 0) - 2 * (opts.bleed || 0);
+  // Use embedded page's trim offset for mark positioning (reads TrimBox)
+  const grEp0 = embeddedPages[0];
+  const grActualTrimOff = grEp0 ? (grEp0.trimOffsetX || 0) / MM : (opts.bleed || 0);
+  const grMarksGutterMM = (opts.gutter || 0) - 2 * grActualTrimOff;
   drawPDFMarks(page, paperWpt, paperHpt, {
     marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
     marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
     pieceW: impo.pieceW, pieceH: impo.pieceH,
     cols: impo.cols, rows: impo.rows,
-    gutterMM: grMarksGutterMM, bleedMM: opts.bleed || 0,
+    gutterMM: grMarksGutterMM, bleedMM: grActualTrimOff,
     offsetX: impo.offsetX, offsetY: impo.offsetY,
     cropMarks: opts.showCropMarks,
   }, {

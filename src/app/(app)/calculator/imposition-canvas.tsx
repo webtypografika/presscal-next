@@ -496,6 +496,10 @@ function drawSheet(
     ctx.restore();
   }
 
+  // Actual trim offset: from PDF's TrimBox if available, else PressCal's bleed
+  const pg0trim = isNUpLike ? pdf?.pageSizes?.[0] : null;
+  const actualTrimOff = (pg0trim?.trimOffX != null ? pg0trim.trimOffX : bleed) * scale;
+
   // Gutter lines (skip for W&T — cells use actual coordinates with fold gap)
   // N-Up-like: gutter = trim-to-trim, fill between trim edges
   const stepW = pw + gutterPx;
@@ -505,11 +509,11 @@ function drawSheet(
     ctx.fillStyle = COLORS.gutterFill;
     for (let col = 1; col < impo.cols; col++) {
       // Right trim of prev col → left trim of this col
-      const gx = cenX + (col - 1) * stepW + pw - bleedPx;
+      const gx = cenX + (col - 1) * stepW + pw - actualTrimOff;
       ctx.fillRect(gx, cenY, trimGutterPx, totalGridH);
     }
     for (let row = 1; row < impo.rows; row++) {
-      const gy = cenY + (row - 1) * stepH + ph - bleedPx;
+      const gy = cenY + (row - 1) * stepH + ph - actualTrimOff;
       ctx.fillRect(cenX, gy, totalGridW, trimGutterPx);
     }
   }
@@ -519,13 +523,12 @@ function drawSheet(
     ctx.strokeStyle = COLORS.cropMark;
     ctx.lineWidth = 0.5;
     if (isNUpLike) {
-      // N-Up/CutStack/GangRun: crop marks at TRIM edges (not cell/bleed edges)
-      // Trim positions are bleed-independent: cenX + col*step + bleedPx = constant
+      // N-Up/CutStack/GangRun: crop marks at actual TRIM edges from PDF's TrimBox
       const trimXs: number[] = [];
       for (let col = 0; col < impo.cols; col++) {
         const cellX = cenX + col * stepW;
-        trimXs.push(cellX + bleedPx);          // left trim edge
-        trimXs.push(cellX + pw - bleedPx);     // right trim edge
+        trimXs.push(cellX + actualTrimOff);          // left trim edge (from PDF TrimBox)
+        trimXs.push(cellX + pw - actualTrimOff);     // right trim edge
       }
       trimXs.sort((a, b) => a - b);
       const uX = [trimXs[0]];
@@ -536,8 +539,8 @@ function drawSheet(
       const trimYs: number[] = [];
       for (let row = 0; row < impo.rows; row++) {
         const cellY = cenY + row * stepH;
-        trimYs.push(cellY + bleedPx);          // top trim edge
-        trimYs.push(cellY + ph - bleedPx);     // bottom trim edge
+        trimYs.push(cellY + actualTrimOff);          // top trim edge (from PDF TrimBox)
+        trimYs.push(cellY + ph - actualTrimOff);     // bottom trim edge
       }
       trimYs.sort((a, b) => a - b);
       const uY = [trimYs[0]];
@@ -564,7 +567,7 @@ function drawSheet(
       // Gutter marks between trims (if positive trim gap)
       if (trimGutterPx > 1) {
         for (let col = 0; col < impo.cols - 1; col++) {
-          const rightTrim = cenX + col * stepW + pw - bleedPx;
+          const rightTrim = cenX + col * stepW + pw - actualTrimOff;
           const leftTrim = rightTrim + trimGutterPx;
           const gutMarkLen = Math.min(markLen, trimGutterPx / 2 - 0.5);
           if (gutMarkLen > 0.5) {
@@ -577,7 +580,7 @@ function drawSheet(
           }
         }
         for (let row = 0; row < impo.rows - 1; row++) {
-          const bottomTrim = cenY + row * stepH + ph - bleedPx;
+          const bottomTrim = cenY + row * stepH + ph - actualTrimOff;
           const topTrim = bottomTrim + trimGutterPx;
           const gutMarkLen = Math.min(markLen, trimGutterPx / 2 - 0.5);
           if (gutMarkLen > 0.5) {
@@ -969,15 +972,6 @@ export default function ImpositionCanvas({
     parts.push(Math.round(sheetW) + '×' + Math.round(sheetH) + ' mm');
     parts.push(Math.round(impo.trimW) + '×' + Math.round(impo.trimH) + ' mm/τεμ.');
     if (impo.wastePercent > 0) parts.push(impo.wastePercent.toFixed(1) + '% waste');
-
-    // Debug: show PDF box info
-    const pg0 = pdf?.pageSizes?.[0];
-    if (pg0) {
-      parts.push('PDF:' + Math.round(pg0.cropW) + '×' + Math.round(pg0.cropH)
-        + ' trim=' + Math.round(pg0.trimW) + '×' + Math.round(pg0.trimH)
-        + ' off=' + (pg0.trimOffX != null ? pg0.trimOffX.toFixed(1) : 'null')
-        + ',' + (pg0.trimOffY != null ? pg0.trimOffY.toFixed(1) : 'null'));
-    }
 
     ctx.font = '600 9px Inter, DM Sans, sans-serif';
     ctx.fillStyle = COLORS.info;
