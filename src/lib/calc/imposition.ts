@@ -58,10 +58,18 @@ export interface ImpositionInput {
 
 // ─── CORE HELPERS ───
 
-/** How many cells fit along `available` mm with given cellSize and gutter */
+/** How many cells fit along `available` mm with given cellSize and gutter.
+ *  gutter = distance between TRIM edges (not cell edges).
+ *  So step = trimSize + gutter (since cellSize = trimSize + 2*bleed,
+ *  but bleeds overlap when gutter < 2*bleed).
+ *  For backwards compat, we use cellSize + gutter as the step
+ *  (caller adjusts gutter to be trim-to-trim via effectiveGutter).
+ */
 export function fitCount(available: number, cellSize: number, gutter: number): number {
   if (cellSize <= 0 || available < cellSize) return 0;
-  return 1 + Math.floor((available - cellSize) / (cellSize + gutter));
+  const step = cellSize + gutter;
+  if (step <= 0) return 1;
+  return 1 + Math.floor((available - cellSize) / step);
 }
 
 /** Printable dimensions from area spec */
@@ -148,6 +156,10 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
 
   const rawCellW = trimW + bleed * 2;
   const rawCellH = trimH + bleed * 2;
+  // gutter = distance between TRIM edges
+  // effectiveGutter = actual gap between CELL edges (cells include bleed)
+  // gutter=0 → trims touch → cells overlap by 2×bleed
+  const effectiveGutter = gutter - bleed * 2;
   const { w: pw, h: ph } = printable(area);
 
   // When forcing, ignore machine margins — use full paper
@@ -172,13 +184,13 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     rows = forceRows;
   } else if (forceCols) {
     cols = forceCols;
-    rows = fitCount(fitH, cellH, gutter);
+    rows = fitCount(fitH, cellH, effectiveGutter);
   } else if (forceRows) {
     rows = forceRows;
-    cols = fitCount(fitW, cellW, gutter);
+    cols = fitCount(fitW, cellW, effectiveGutter);
   } else if (forceUps) {
-    cols = fitCount(fitW, cellW, gutter);
-    rows = fitCount(fitH, cellH, gutter);
+    cols = fitCount(fitW, cellW, effectiveGutter);
+    rows = fitCount(fitH, cellH, effectiveGutter);
     // If nothing fits naturally, force at least 1×1
     if (cols === 0) cols = 1;
     if (rows === 0) rows = 1;
@@ -186,7 +198,7 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     while (cols * rows > forceUps && rows > 1) rows--;
   } else {
     // Try both orientations, pick the one with more ups
-    const best = bestOrientation(pw, ph, cellW, cellH, gutter);
+    const best = bestOrientation(pw, ph, cellW, cellH, effectiveGutter);
     cols = best.cols;
     rows = best.rows;
     if (best.rotated) {
@@ -203,8 +215,8 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   const actualCellH = cellH;
   const rotated = isSwapped;
 
-  const usedW = cols * actualCellW + (cols - 1) * gutter;
-  const usedH = rows * actualCellH + (rows - 1) * gutter;
+  const usedW = cols * actualCellW + (cols - 1) * effectiveGutter;
+  const usedH = rows * actualCellH + (rows - 1) * effectiveGutter;
 
   const rawSheets = Math.ceil(qty / ups);
 
@@ -212,7 +224,7 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   const cenOffX = isForced ? (area.paperW - usedW) / 2 : area.marginLeft + (pw - usedW) / 2;
   const cenOffY = isForced ? (area.paperH - usedH) / 2 : area.marginTop + (ph - usedH) / 2;
   const cells = buildCells(
-    cols, rows, actualCellW, actualCellH, gutter,
+    cols, rows, actualCellW, actualCellH, effectiveGutter,
     cenOffX, cenOffY,
     contentRotation,
   );
