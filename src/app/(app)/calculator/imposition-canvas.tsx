@@ -951,6 +951,7 @@ export default function ImpositionCanvas({
     parts.push(Math.round(sheetW) + '×' + Math.round(sheetH) + ' mm');
     parts.push(Math.round(impo.trimW) + '×' + Math.round(impo.trimH) + ' mm/τεμ.');
     if (impo.wastePercent > 0) parts.push(impo.wastePercent.toFixed(1) + '% waste');
+    parts.push('g=' + gutter.toFixed(1) + ' b=' + bleed.toFixed(1));
 
     ctx.font = '600 9px Inter, DM Sans, sans-serif';
     ctx.fillStyle = COLORS.info;
