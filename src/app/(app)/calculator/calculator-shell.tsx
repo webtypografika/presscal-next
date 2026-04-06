@@ -610,6 +610,8 @@ export default function CalculatorShell() {
           width: Math.round(pg.trimW * 10) / 10,
           height: Math.round(pg.trimH * 10) / 10,
           bleed: pg.bleedDetected > 0 ? pg.bleedDetected : prev.bleed,
+          // Cut&Stack: qty = PDF page count
+          ...(impoMode === 'cutstack' && parsed.pageCount > 1 ? { qty: parsed.pageCount } : {}),
         }));
       }
       // Auto-set coverage from PDF analysis
@@ -853,6 +855,13 @@ export default function CalculatorShell() {
       setJob(prev => ({ ...prev, sides: 2 }));
     }
   }, [impoMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cut&Stack: auto-set qty to PDF page count
+  useEffect(() => {
+    if (impoMode === 'cutstack' && pdf && pdf.pageCount > 1) {
+      setJob(prev => ({ ...prev, qty: pdf.pageCount }));
+    }
+  }, [impoMode, pdf]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Step Multi: sync block 0 trim from global PDF when entering mode or PDF changes
   useEffect(() => {
