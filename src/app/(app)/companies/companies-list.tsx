@@ -296,12 +296,18 @@ export function CompaniesList({ initialCompanies, initialTotal, initialHasMore, 
                       currentAfm={company.afm || ''}
                       currentValues={{ afm: company.afm || '', doy: company.doy || '', address: company.address || '', city: company.city || '', zip: company.zip || '' }}
                       onApply={(data: ElorusLookupResult) => {
-                        if (data.afm) updateCompanyField(company.id, 'afm', data.afm);
-                        if (data.doy) updateCompanyField(company.id, 'doy', data.doy);
-                        if (data.address) updateCompanyField(company.id, 'address', data.address);
-                        if (data.city) updateCompanyField(company.id, 'city', data.city);
-                        if (data.zip) updateCompanyField(company.id, 'zip', data.zip);
-                        if (data.email && !company.email) updateCompanyField(company.id, 'email', data.email);
+                        // Build all changes at once to avoid debounce conflicts
+                        const changes: Record<string, string | null> = {};
+                        if (data.afm) changes.afm = data.afm;
+                        if (data.doy) changes.doy = data.doy;
+                        if (data.address) changes.address = data.address;
+                        if (data.city) changes.city = data.city;
+                        if (data.zip) changes.zip = data.zip;
+                        if (data.email && !company.email) changes.email = data.email;
+                        // Update local state
+                        setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, ...changes } : c));
+                        // Save all fields at once (no debounce — immediate)
+                        updateCompany(company.id, changes as any);
                       }}
                       toast={() => {}}
                     />
