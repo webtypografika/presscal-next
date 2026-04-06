@@ -851,17 +851,17 @@ function calcLaminationCost(input: CostInput, totalSheets: number): number {
   const lam = input.lamination;
 
   if (lam.mode === 'pouch') {
-    // Pouch: cost per piece × quantity (each finished piece needs one pouch)
+    // Pouch: cost per piece × quantity (machine setup goes to profit, not cost)
     const pouchCost = (lam.pouchCostPerPiece ?? 0) * input.qty;
-    return pouchCost + lam.machineSetupCost;
+    return pouchCost;
   }
 
-  // Roll lamination
+  // Roll lamination (machine setup goes to profit, not cost)
   const sheetArea = input.machineMaxW * input.machineMaxH / 1_000_000; // m²
   const faces = lam.sides === 2 ? totalSheets * 2 : totalSheets;
   const filmCost = faces * sheetArea * lam.filmCostPerSqm;
 
-  return filmCost + lam.machineSetupCost;
+  return filmCost;
 }
 
 function calcBindingCharge(input: CostInput): number {
