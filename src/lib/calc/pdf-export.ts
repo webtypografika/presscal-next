@@ -102,6 +102,7 @@ export interface ExportOptions {
 
   // Step Multi
   blocks?: StepBlock[];
+  smBlockPdfBytes?: (Uint8Array | undefined)[];  // per-block PDF bytes
 
   // Work & Turn
   turnType?: 'turn' | 'tumble';
@@ -1647,6 +1648,7 @@ async function exportStepMulti(
   embeddedPages: EmbeddedPageInfo[],
   font: PDFFont,
   cbEmbed: PDFEmbeddedPage | null,
+  smBlockEmbedded?: EmbeddedPageInfo[][],
 ): Promise<void> {
   const impo = opts.imposition;
   const blocks = opts.blocks || impo.blocks || [];
@@ -1676,9 +1678,12 @@ async function exportStepMulti(
     const bxPt = mLpt + mmToPt(block.x);
     const byPt = mBpt + printHpt - mmToPt(block.y) - mmToPt(block.blockH);
 
-    const pageIdx = block.pageNum - 1;
-    if (pageIdx < 0 || pageIdx >= embeddedPages.length) continue;
-    const epObj = embeddedPages[pageIdx];
+    // Per-block PDF or global PDF fallback
+    const hasBlockPdf = smBlockEmbedded && smBlockEmbedded[bi] && smBlockEmbedded[bi].length > 0;
+    const blockPages = hasBlockPdf ? smBlockEmbedded![bi] : embeddedPages;
+    const pageIdx = hasBlockPdf ? 0 : block.pageNum - 1;
+    if (pageIdx < 0 || pageIdx >= blockPages.length) continue;
+    const epObj = blockPages[pageIdx];
     const epPage = epObj.page;
 
     for (let row = 0; row < block.rows; row++) {
@@ -1778,9 +1783,11 @@ async function exportStepMulti(
       const bbxPt = mLpt + mmToPt(bb.x);
       const bbyPt = mBpt + printHpt - mmToPt(bb.y) - mmToPt(bb.blockH);
 
-      const bpIdx = bb.backPageNum - 1;
-      if (bpIdx < 0 || bpIdx >= embeddedPages.length) continue;
-      const bepObj = embeddedPages[bpIdx];
+      const hasBackBlockPdf = smBlockEmbedded && smBlockEmbedded[bbi] && smBlockEmbedded[bbi].length > 1;
+      const backBlockPages = hasBackBlockPdf ? smBlockEmbedded![bbi] : embeddedPages;
+      const bpIdx = hasBackBlockPdf ? 1 : bb.backPageNum - 1;
+      if (bpIdx < 0 || bpIdx >= backBlockPages.length) continue;
+      const bepObj = backBlockPages[bpIdx];
       const bepPage = bepObj.page;
 
       // Mirror X for back side
@@ -1870,7 +1877,19 @@ export async function exportImpositionPDF(options: ExportOptions): Promise<Uint8
     }
     await exportGangRun(doc, options, embeddedPages, font, cbEmbed, gangJobEmbedded);
   } else if (mode === 'stepmulti') {
-    await exportStepMulti(doc, options, embeddedPages, font, cbEmbed);
+    // Multi-PDF: embed each block's PDF separately
+    let smBlockEmbedded: EmbeddedPageInfo[][] | undefined;
+    if (options.smBlockPdfBytes && options.smBlockPdfBytes.some(Boolean)) {
+      smBlockEmbedded = [];
+      for (const blockBytes of options.smBlockPdfBytes) {
+        if (blockBytes && blockBytes.length > 0) {
+          smBlockEmbedded.push(await embedSourcePages(doc, blockBytes, 'nup', options.bleed || 0, options.keepSourceMarks));
+        } else {
+          smBlockEmbedded.push([]);
+        }
+      }
+    }
+    await exportStepMulti(doc, options, embeddedPages, font, cbEmbed, smBlockEmbedded);
   } else {
     // Default: N-Up
     await exportNUp(doc, options, embeddedPages, font, cbEmbed);

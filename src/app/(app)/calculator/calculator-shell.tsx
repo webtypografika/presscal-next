@@ -1398,6 +1398,7 @@ export default function CalculatorShell() {
                 gangJobPdfBytes: impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf?.bytes) : undefined,
                 // Step Multi
                 blocks: impoMode === 'stepmulti' ? impo.blocks : undefined,
+                smBlockPdfBytes: impoMode === 'stepmulti' ? smBlockPdfs.map(p => p?.bytes) : undefined,
                 jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
               });
             } catch (e) {
