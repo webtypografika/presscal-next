@@ -669,17 +669,11 @@ async function exportNUp(
           const frontCellX = frontTrimX - bleedPt;
           const cellY = trimYpos - bleedPt;
 
-          // Per-cell bleed (asymmetric)
+          // Per-cell bleed (asymmetric) — front-side perspective
           const cBL = col === 0 ? bleedPt : intBleedPlace;
           const cBR = col === impo.cols - 1 ? bleedPt : intBleedPlace;
-          const cBB = row === impo.rows - 1 ? bleedPt : intBleedPlace; // row is visual (top-down), PDF Y is bottom-up
+          const cBB = row === impo.rows - 1 ? bleedPt : intBleedPlace;
           const cBT = row === 0 ? bleedPt : intBleedPlace;
-
-          // Clip rectangle = asymmetric cell bounds (trim + per-side bleed)
-          const clipX = frontTrimX - cBL;
-          const clipY = trimYpos - cBB;
-          const clipW = trimWpt + cBL + cBR;
-          const clipH = trimHpt + cBT + cBB;
 
           // Unified page placement
           const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
@@ -707,6 +701,19 @@ async function exportNUp(
             visX = isBackSide ? (paperWpt - frontCellX - pieceW) : frontCellX;
             visY = cellY;
           }
+
+          // Clip rectangle — must match actual draw position (mirrored for back side)
+          // For back H2H: L↔R swap. For back H2F: T↔B swap.
+          let vcBL = cBL, vcBR = cBR, vcBT = cBT, vcBB = cBB;
+          if (isBackSide && opts.duplexOrient !== 'h2f') { vcBL = cBR; vcBR = cBL; }
+          if (isBackSide && opts.duplexOrient === 'h2f') { vcBT = cBB; vcBB = cBT; }
+          // visTrimX/Y = cell origin + bleed on that side
+          const visTrimX = visX + bleedPt; // cell always placed at trimX - bleedPt
+          const visTrimY = visY + bleedPt;
+          const clipX = visTrimX - vcBL;
+          const clipY = visTrimY - vcBB;
+          const clipW = trimWpt + vcBL + vcBR;
+          const clipH = trimHpt + vcBT + vcBB;
 
           // Adjust draw origin for rotation
           let drawX = visX, drawY = visY;
