@@ -520,19 +520,19 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       {/* ═══ COMPANY + CONTACT + QUICK ACTIONS (compact row) ═══ */}
       <div style={{
         display: 'flex', alignItems: 'stretch', gap: 8,
-        marginBottom: 16, fontSize: '0.78rem',
+        marginBottom: (showCustomerPicker || showContactPicker) ? 0 : 16, fontSize: '0.78rem',
       }}>
         {/* Company */}
-        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
-            onClick={() => setShowCustomerPicker(!showCustomerPicker)}
+            onClick={() => { setShowCustomerPicker(!showCustomerPicker); if (!showCustomerPicker) setShowContactPicker(false); }}
             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}
             onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
             onMouseLeave={e => (e.currentTarget.style.color = 'var(--text)')}
           >
-            <i className="fas fa-building" style={{ fontSize: '0.5rem', color: '#475569' }} />
+            <i className="fas fa-building" style={{ fontSize: '0.5rem', color: showCustomerPicker ? 'var(--accent)' : '#475569' }} />
             <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{customerName}</span>
-            <i className="fas fa-pen" style={{ fontSize: '0.42rem', opacity: 0.3 }} />
+            <i className={`fas fa-${showCustomerPicker ? 'chevron-up' : 'pen'}`} style={{ fontSize: '0.42rem', opacity: showCustomerPicker ? 0.8 : 0.3 }} />
           </div>
           <div style={{ display: 'flex', gap: 10, color: '#64748b', flexWrap: 'wrap' }}>
             {selectedCompany?.email && <span>{selectedCompany.email}</span>}
@@ -550,28 +550,22 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               </a>
             )}
           </div>
-          {showCustomerPicker && (
-            <CustomerPicker customers={customers} currentId={customerId}
-              linkedEmails={quote.linkedEmails as string[] || []} hasElorus={elorusConfigured}
-              onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
-              onClose={() => setShowCustomerPicker(false)} toast={toast} />
-          )}
         </div>
 
         {/* Divider */}
         <div style={{ width: 1, background: 'var(--glass-border)', flexShrink: 0 }} />
 
         {/* Contact */}
-        <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div
-            onClick={() => setShowContactPicker(!showContactPicker)}
+            onClick={() => { setShowContactPicker(!showContactPicker); if (!showContactPicker) setShowCustomerPicker(false); }}
             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, color: contactId ? 'var(--text)' : '#475569' }}
             onMouseEnter={e => (e.currentTarget.style.color = 'var(--teal)')}
             onMouseLeave={e => (e.currentTarget.style.color = contactId ? 'var(--text)' : '#475569')}
           >
-            <i className="fas fa-user" style={{ fontSize: '0.5rem', color: '#475569' }} />
+            <i className="fas fa-user" style={{ fontSize: '0.5rem', color: showContactPicker ? 'var(--teal)' : '#475569' }} />
             <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{selectedContact?.name || '— Επαφή —'}</span>
-            <i className={`fas fa-${contactId ? 'pen' : 'plus'}`} style={{ fontSize: '0.42rem', opacity: 0.3 }} />
+            <i className={`fas fa-${showContactPicker ? 'chevron-up' : (contactId ? 'pen' : 'plus')}`} style={{ fontSize: '0.42rem', opacity: showContactPicker ? 0.8 : 0.3 }} />
           </div>
           {selectedContact && (
             <div style={{ display: 'flex', gap: 10, color: '#64748b', flexWrap: 'wrap' }}>
@@ -579,13 +573,6 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               {selectedContact.phone && <span>{selectedContact.phone}</span>}
               {selectedContact.mobile && <span>{selectedContact.mobile}</span>}
             </div>
-          )}
-          {showContactPicker && (
-            <ContactPicker currentId={contactId} currentContact={selectedContact}
-              companyId={customerId} linkedEmails={quote.linkedEmails as string[] || []}
-              hasElorus={elorusConfigured}
-              onSelect={(id, contact) => { setContactId(id); if (contact) setQuote(prev => ({ ...prev, contact } as any)); setShowContactPicker(false); }}
-              onClose={() => setShowContactPicker(false)} toast={toast} />
           )}
         </div>
 
@@ -637,6 +624,21 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           )}
         </div>
       </div>
+
+      {/* ═══ INLINE PICKER PANELS ═══ */}
+      {showCustomerPicker && (
+        <CustomerPicker customers={customers} currentId={customerId}
+          linkedEmails={quote.linkedEmails as string[] || []} hasElorus={elorusConfigured}
+          onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
+          onClose={() => setShowCustomerPicker(false)} toast={toast} />
+      )}
+      {showContactPicker && (
+        <ContactPicker currentId={contactId} currentContact={selectedContact}
+          companyId={customerId} linkedEmails={quote.linkedEmails as string[] || []}
+          hasElorus={elorusConfigured}
+          onSelect={(id, contact) => { setContactId(id); if (contact) setQuote(prev => ({ ...prev, contact } as any)); setShowContactPicker(false); }}
+          onClose={() => setShowContactPicker(false)} toast={toast} />
+      )}
 
       {/* ═══ ACTIONS BAR (remaining) ═══ */}
       {items.some(i => i.calcData?.paperName) && (
@@ -2438,10 +2440,9 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
 
   return (
     <div ref={ref} style={{
-      position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 50,
-      width: 360, maxHeight: 420, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-      background: '#141e37', border: '1px solid var(--border)',
-      borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+      marginBottom: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border)',
+      borderRadius: 10,
     }}>
       {mode === 'current' && currentCustomer ? (
         /* Current customer quick-view with edit + change buttons */
@@ -2944,10 +2945,9 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
 
   return (
     <div ref={ref} style={{
-      position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 50,
-      width: 360, maxHeight: 420, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-      background: '#141e37', border: '1px solid var(--border)',
-      borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+      marginBottom: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border)',
+      borderRadius: 10,
     }}>
       {mode === 'current' && currentContact ? (
         /* Current contact quick-view */
