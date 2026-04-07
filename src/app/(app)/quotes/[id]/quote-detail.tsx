@@ -429,16 +429,16 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 
   // Status transitions
   const transitions: { label: string; status: string; icon: string; color: string }[] = [];
-  if (['draft', 'new'].includes(quote.status)) transitions.push({ label: 'Σε Επεξεργασία', status: 'editing', icon: 'fa-pen', color: 'var(--accent)' });
+  if (['draft', 'new'].includes(quote.status)) transitions.push({ label: 'Επεξεργασία', status: 'editing', icon: 'fa-pen', color: 'var(--accent)' });
   // "Αποστολή" is handled by the send modal, not a simple status change
   const canSend = ['draft', 'new', 'editing', 'revision', 'sent'].includes(quote.status);
   if (['draft', 'new', 'editing', 'sent', 'partial'].includes(quote.status)) {
-    transitions.push({ label: 'Εγκρίθηκε', status: 'approved', icon: 'fa-check', color: 'var(--success)' });
+    transitions.push({ label: 'Έγκριση', status: 'approved', icon: 'fa-check', color: 'var(--success)' });
   }
   if (['sent', 'partial'].includes(quote.status)) {
-    transitions.push({ label: 'Απορρίφθηκε', status: 'rejected', icon: 'fa-times', color: 'var(--danger)' });
+    transitions.push({ label: 'Απόρριψη', status: 'rejected', icon: 'fa-times', color: 'var(--danger)' });
   }
-  if (quote.status === 'approved') transitions.push({ label: 'Ολοκληρώθηκε', status: 'completed', icon: 'fa-flag-checkered', color: 'var(--success)' });
+  if (quote.status === 'approved') transitions.push({ label: 'Ολοκλήρωση', status: 'completed', icon: 'fa-flag-checkered', color: 'var(--success)' });
   // Archive — available for draft/editing/sent (not approved, which has "Ολοκληρώθηκε")
   if (['draft', 'new', 'editing', 'revision', 'sent'].includes(quote.status)) {
     transitions.push({ label: 'Αρχειοθέτηση', status: 'cancelled', icon: 'fa-archive', color: '#64748b' });
