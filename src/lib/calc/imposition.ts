@@ -693,51 +693,45 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
 export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, gutter, area, rotation, turnType = 'turn' } = input;
 
-  const rawCellW = trimW + bleed * 2;
-  const rawCellH = trimH + bleed * 2;
   const { w: pw, h: ph } = printable(area);
   const rot = ((rotation || 0) % 360 + 360) % 360;
 
-  const cellW = rawCellW;
-  const cellH = rawCellH;
-
   const isTumble = turnType === 'tumble';
-  // Turn: left-right split (same gripper), Tumble: top-bottom split (gripper changes)
-  const halfW = isTumble ? pw : pw / 2;
-  const halfH = isTumble ? ph / 2 : ph;
+  // Fit on full paper halves (margins are advisory, not restrictive)
+  const halfW = isTumble ? area.paperW : area.paperW / 2;
+  const halfH = isTumble ? area.paperH / 2 : area.paperH;
 
   // ─── Step 1: Auto-orient — find best base orientation ───
-  const cols1 = fitCountLegacy(halfW, cellW, gutter);
-  const rows1 = fitCountLegacy(halfH, cellH, gutter);
+  let tW = trimW, tH = trimH;
+  const cols1 = fitCount(halfW, tW, bleed, gutter);
+  const rows1 = fitCount(halfH, tH, bleed, gutter);
   const fit1 = cols1 * rows1;
-  const cols2 = fitCountLegacy(halfW, cellH, gutter);
-  const rows2 = fitCountLegacy(halfH, cellW, gutter);
+  const cols2 = fitCount(halfW, tH, bleed, gutter);
+  const rows2 = fitCount(halfH, tW, bleed, gutter);
   const fit2 = cols2 * rows2;
 
   let autoRotated = fit2 > fit1;
   if (autoRotated && fit2 === 0) autoRotated = false;
   if (!autoRotated && fit1 === 0) autoRotated = true;
 
-  const baseCellW = autoRotated ? cellH : cellW;
-  const baseCellH = autoRotated ? cellW : cellH;
-  const baseRot = autoRotated ? 90 : 0;
+  if (autoRotated) { const tmp = tW; tW = tH; tH = tmp; }
 
   // ─── Step 2: Apply user rotation on top of base ───
-  // 90°/270° swap the base cell dims, 0°/180° keep them
   const userSwaps = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
-  const actualCellW = userSwaps ? baseCellH : baseCellW;
-  const actualCellH = userSwaps ? baseCellW : baseCellH;
+  if (userSwaps) { const tmp = tW; tW = tH; tH = tmp; }
 
-  // Re-compute fit with final cell dimensions
-  const cols = fitCountLegacy(halfW, actualCellW, gutter);
-  const rows = fitCountLegacy(halfH, actualCellH, gutter);
+  // Re-compute fit with final trim dimensions
+  const cols = fitCount(halfW, tW, bleed, gutter);
+  const rows = fitCount(halfH, tH, bleed, gutter);
   const fitsPerHalf = cols * rows;
 
   if (fitsPerHalf === 0) {
+    const maxCellW = tW + 2 * bleed;
+    const maxCellH = tH + 2 * bleed;
     return {
       mode: 'workturn', ups: 0, cols: 0, rows: 0,
       paperW: area.paperW, paperH: area.paperH,
-      pieceW: actualCellW, pieceH: actualCellH, trimW, trimH,
+      pieceW: maxCellW, pieceH: maxCellH, trimW: tW, trimH: tH,
       rotated: false, wastePercent: 100, cells: [], totalSheets: 0,
       turnType, fitsPerHalf: 0, ...marginInfo(area),
     };
@@ -747,92 +741,100 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const rawSheets = Math.ceil(qty / ups);
   const rotated = autoRotated || userSwaps;
 
-  // Content rotation: auto-fill so PDF matches cell + user flip
-  // If PDF orientation ≠ cell orientation → rotate 90° to fill
-  // If user chose 180°/270° → add 180° for "heads out" flip
-  const pdfPortrait = cellW <= cellH;
-  const finalPortrait = actualCellW <= actualCellH;
+  // Content rotation
+  const origCellW = trimW + bleed * 2;
+  const origCellH = trimH + bleed * 2;
+  const pdfPortrait = origCellW <= origCellH;
+  const finalPortrait = tW <= tH;
   const fillRot = (pdfPortrait !== finalPortrait) ? 90 : 0;
   const flipOffset = (rot >= 135 && rot <= 315) ? 180 : 0;
   const frontRot = (fillRot + flipOffset) % 360;
-  // When auto-rotated (fillRot=90): back gets opposite direction → heads outward
-  // When natural fit (fillRot=0): back same as front → physical turn handles it
   const backRot = fillRot
     ? ((360 - fillRot) + flipOffset) % 360
     : frontRot;
 
-  const usedW = cols * actualCellW + (cols - 1) * gutter;
-  const usedH = rows * actualCellH + (rows - 1) * gutter;
+  // Trim grid per half
+  const trimGridW = cols * tW + (cols - 1) * gutter;
+  const trimGridH = rows * tH + (rows - 1) * gutter;
 
-  // Build cells for both halves
+  // Center in printable half (margins define center)
+  const printHalfW = isTumble ? pw : pw / 2;
+  const printHalfH = isTumble ? ph / 2 : ph;
+  const gridOffX = (printHalfW - trimGridW) / 2;
+  const gridOffY = (printHalfH - trimGridH) / 2;
+
+  const intBleed = internalBleed(gutter, bleed);
+
+  // Build cells with asymmetric bleed
   const cells: ImpositionCell[] = [];
+  const buildHalfCells = (baseX: number, baseY: number, pageNum: number, cellRot: number, colOffset: number, rowOffset: number) => {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const bL = c === 0 ? bleed : intBleed;
+        const bR = c === cols - 1 ? bleed : intBleed;
+        const bT = r === 0 ? bleed : intBleed;
+        const bB = r === rows - 1 ? bleed : intBleed;
+        const trimX = baseX + gridOffX + c * (tW + gutter);
+        const trimY = baseY + gridOffY + r * (tH + gutter);
+        cells.push({
+          col: colOffset + c, row: rowOffset + r,
+          x: trimX - bL, y: trimY - bT,
+          w: tW + bL + bR, h: tH + bT + bB,
+          pageNum, rotation: cellRot,
+          bleedL: bL, bleedR: bR, bleedT: bT, bleedB: bB,
+        });
+      }
+    }
+  };
 
-  // Center grids within each half
-  const gridOffX = (halfW - usedW) / 2;
-  const gridOffY = (halfH - usedH) / 2;
-
-  // Signature: same grid in both halves, back content rotated 180° (αντικριστά)
   if (isTumble) {
-    // Top half — front (page 1)
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        cells.push({
-          col: c, row: r,
-          x: area.marginLeft + gridOffX + c * (actualCellW + gutter),
-          y: area.marginTop + gridOffY + r * (actualCellH + gutter),
-          w: actualCellW, h: actualCellH,
-          pageNum: 1,
-          rotation: frontRot,
-          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
-        });
-      }
-    }
-    // Bottom half — back (page 2), same positions + 180° content
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        cells.push({
-          col: c, row: rows + r,
-          x: area.marginLeft + gridOffX + c * (actualCellW + gutter),
-          y: area.marginTop + halfH + gridOffY + r * (actualCellH + gutter),
-          w: actualCellW, h: actualCellH,
-          pageNum: 2,
-          rotation: backRot,
-          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
-        });
-      }
-    }
+    buildHalfCells(area.marginLeft, area.marginTop, 1, frontRot, 0, 0);
+    buildHalfCells(area.marginLeft, area.marginTop + printHalfH, 2, backRot, 0, rows);
   } else {
-    // Interleave left + right per row (canvas reads row-major)
+    // Interleave left + right per row
     for (let r = 0; r < rows; r++) {
-      // Left half — front (page 1)
+      // Left half cells
       for (let c = 0; c < cols; c++) {
+        const bL = c === 0 ? bleed : intBleed;
+        const bR = c === cols - 1 ? bleed : intBleed;
+        const bT = r === 0 ? bleed : intBleed;
+        const bB = r === rows - 1 ? bleed : intBleed;
+        const trimX = area.marginLeft + gridOffX + c * (tW + gutter);
+        const trimY = area.marginTop + gridOffY + r * (tH + gutter);
         cells.push({
           col: c, row: r,
-          x: area.marginLeft + gridOffX + c * (actualCellW + gutter),
-          y: area.marginTop + gridOffY + r * (actualCellH + gutter),
-          w: actualCellW, h: actualCellH,
-          pageNum: 1,
-          rotation: frontRot,
-          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
+          x: trimX - bL, y: trimY - bT,
+          w: tW + bL + bR, h: tH + bT + bB,
+          pageNum: 1, rotation: frontRot,
+          bleedL: bL, bleedR: bR, bleedT: bT, bleedB: bB,
         });
       }
-      // Right half — back (page 2), same positions shifted right + 180° content
+      // Right half cells
       for (let c = 0; c < cols; c++) {
+        const bL = c === 0 ? bleed : intBleed;
+        const bR = c === cols - 1 ? bleed : intBleed;
+        const bT = r === 0 ? bleed : intBleed;
+        const bB = r === rows - 1 ? bleed : intBleed;
+        const trimX = area.marginLeft + printHalfW + gridOffX + c * (tW + gutter);
+        const trimY = area.marginTop + gridOffY + r * (tH + gutter);
         cells.push({
           col: cols + c, row: r,
-          x: area.marginLeft + halfW + gridOffX + c * (actualCellW + gutter),
-          y: area.marginTop + gridOffY + r * (actualCellH + gutter),
-          w: actualCellW, h: actualCellH,
-          pageNum: 2,
-          rotation: backRot,
-          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
+          x: trimX - bL, y: trimY - bT,
+          w: tW + bL + bR, h: tH + bT + bB,
+          pageNum: 2, rotation: backRot,
+          bleedL: bL, bleedR: bR, bleedT: bT, bleedB: bB,
         });
       }
     }
   }
 
-  const totalUsedW = isTumble ? usedW : usedW * 2;
-  const totalUsedH = isTumble ? usedH * 2 : usedH;
+  const usedPerHalf = 2 * bleed + trimGridW;
+  const usedPerHalfH = 2 * bleed + trimGridH;
+  const totalUsedW = isTumble ? usedPerHalf : usedPerHalf * 2;
+  const totalUsedH = isTumble ? usedPerHalfH * 2 : usedPerHalfH;
+  const marginWarning = totalUsedW > pw || totalUsedH > ph;
+  const maxCellW = tW + 2 * bleed;
+  const maxCellH = tH + 2 * bleed;
 
   return {
     mode: 'workturn',
@@ -841,14 +843,15 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
     rows: isTumble ? rows * 2 : rows,
     paperW: area.paperW,
     paperH: area.paperH,
-    pieceW: actualCellW,
-    pieceH: actualCellH,
-    trimW,
-    trimH,
+    pieceW: maxCellW,
+    pieceH: maxCellH,
+    trimW: tW,
+    trimH: tH,
     rotated,
     wastePercent: wastePercent(area.paperW, area.paperH, totalUsedW, totalUsedH),
     cells,
     totalSheets: rawSheets,
+    marginWarning,
     turnType,
     fitsPerHalf,
     halfCols: cols,

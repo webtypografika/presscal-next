@@ -936,7 +936,7 @@ export default function ImpositionCanvas({
     }
 
     // ─── N-UP GRID RESIZE HANDLE + ROTATE BUTTON (drawn in main draw, not drawSheet) ───
-    const isNUpLikeMode = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun';
+    const isNUpLikeMode = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun' || impo.mode === 'workturn';
     if (isNUpLikeMode && impo.cols > 0 && impo.rows > 0) {
       // Compute grid position in canvas pixels (replicate single-view sheet positioning)
       const sScX = (cW - 24 - markLen * 2) / sheetW;
@@ -1132,7 +1132,7 @@ export default function ImpositionCanvas({
   const gridDragRef = useRef<{ cols: number; rows: number; mode: 'resize' | 'move'; startMmX: number; startMmY: number; origOffX: number; origOffY: number; axis?: 'x' | 'y' | null } | null>(null);
 
   const findGridHandle = useCallback((mmX: number, mmY: number): boolean => {
-    if (!onGridResize || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun')) return false;
+    if (!onGridResize || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn')) return false;
     const pw = sheetW - marginLeft - marginRight;
     const ph = sheetH - marginTop - marginBottom;
     const tW = impo.trimW;
@@ -1148,7 +1148,7 @@ export default function ImpositionCanvas({
   }, [impo, onGridResize, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY]);
 
   const findRotateBtn = useCallback((mmX: number, mmY: number): boolean => {
-    if (!onRotate || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun')) return false;
+    if (!onRotate || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn')) return false;
     const pw = sheetW - marginLeft - marginRight;
     const ph = sheetH - marginTop - marginBottom;
     const trimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
@@ -1168,7 +1168,7 @@ export default function ImpositionCanvas({
   }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY, cropMarks]);
 
   const findGridBody = useCallback((mmX: number, mmY: number): boolean => {
-    if (!onOffsetChange || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun')) return false;
+    if (!onOffsetChange || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn')) return false;
     const pw = sheetW - marginLeft - marginRight;
     const ph = sheetH - marginTop - marginBottom;
     const trimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
@@ -1251,7 +1251,7 @@ export default function ImpositionCanvas({
   }, [smBlocks, impo]);
 
   // ─── PAN ───
-  const isNUpLikeCheck = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun';
+  const isNUpLikeCheck = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun' || impo.mode === 'workturn';
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     setEditDist(null); // dismiss any open distance input
     // N-Up grid: resize handle or rotate button

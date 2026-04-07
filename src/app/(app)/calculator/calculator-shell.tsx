@@ -3115,14 +3115,14 @@ export default function CalculatorShell() {
                 onSmBlockMove={impoMode === 'stepmulti' ? (idx, x, y) => {
                   setSmBlocks(prev => prev.map((b, i) => i === idx ? { ...b, x, y, blockW: 0, blockH: 0, _manualGrid: true } : b));
                 } : undefined}
-                onGridResize={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun') ? (cols, rows) => {
+                onGridResize={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn') ? (cols, rows) => {
                   setImpoForceCols(cols);
                   setImpoForceRows(rows);
                 } : undefined}
-                onRotate={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun') ? () => {
+                onRotate={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn') ? () => {
                   setImpoRotation(prev => (prev + 90) % 360);
                 } : undefined}
-                onOffsetChange={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun') ? (x, y) => {
+                onOffsetChange={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn') ? (x, y) => {
                   setImpoOffsetX(x);
                   setImpoOffsetY(y);
                 } : undefined}
