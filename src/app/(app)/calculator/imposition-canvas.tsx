@@ -1485,10 +1485,12 @@ export default function ImpositionCanvas({
 
   // ─── DROP ───
   const [dragOver, setDragOver] = useState(false);
-  const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragOver(true); }, []);
-  const onDragLeave = useCallback(() => setDragOver(false), []);
+  const dragCountRef = useRef(0);
+  const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); }, []);
+  const onDragEnter = useCallback((e: React.DragEvent) => { e.preventDefault(); dragCountRef.current++; setDragOver(true); }, []);
+  const onDragLeave = useCallback((e: React.DragEvent) => { dragCountRef.current--; if (dragCountRef.current <= 0) { dragCountRef.current = 0; setDragOver(false); } }, []);
   const onDropHandler = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); setDragOver(false);
+    e.preventDefault(); e.stopPropagation(); dragCountRef.current = 0; setDragOver(false);
     if (onDrop && e.dataTransfer.files.length) onDrop(e.dataTransfer.files);
   }, [onDrop]);
 
@@ -1511,7 +1513,7 @@ export default function ImpositionCanvas({
       }}
       onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp} onDoubleClick={onDoubleClick}
-      onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDropHandler}
+      onDragOver={onDragOver} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDrop={onDropHandler}
     >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', transformOrigin: '0 0' }} />
 
