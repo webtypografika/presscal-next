@@ -274,6 +274,19 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
     }
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Re-fetch quote on tab focus (picks up jobFolderPath, linkedFiles from FileHelper)
+  useEffect(() => {
+    const onFocus = async () => {
+      try {
+        const { getQuote } = await import('../actions');
+        const fresh = await getQuote(quote.id);
+        if (fresh) setQuote(fresh as any);
+      } catch {}
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [quote.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!mountedRef.current) return;
     setDirty(true);
