@@ -1388,6 +1388,8 @@ export default function CalculatorShell() {
                 finalPrice: Math.round(totalPrice * 100) / 100,
                 profit: Math.round(profitAmount * 100) / 100,
                 calcData: calcDataPayload,
+                // Link file from PressKit (if loaded via file server)
+                ...(linkedFile ? { linkedFile: { path: linkedFile.path, name: linkedFile.name } } : {}),
               };
 
               try {

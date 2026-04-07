@@ -435,14 +435,17 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   const usedH = spreadRows * spreadH + (spreadRows - 1) * gutter;
 
   // Build cells with page numbers from signature map
+  // Center spread grid in printable area
+  const cenOffX = area.marginLeft + (pw - usedW) / 2;
+  const cenOffY = area.marginTop + (ph - usedH) / 2;
   const cells: ImpositionCell[] = [];
   let sigIdx = 0;
   for (let sr = 0; sr < spreadRows; sr++) {
     for (let sc = 0; sc < spreadCols; sc++) {
       if (sigIdx >= signatureMap.sheets.length) break;
       const sig = signatureMap.sheets[sigIdx];
-      const baseX = area.marginLeft + sc * (spreadW + gutter);
-      const baseY = area.marginTop + sr * (spreadH + gutter);
+      const baseX = cenOffX + sc * (spreadW + gutter);
+      const baseY = cenOffY + sr * (spreadH + gutter);
 
       // Left page (front left = first element of front pair)
       // Booklet: left page has face bleed on left, spine=0 on right
