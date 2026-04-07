@@ -308,11 +308,6 @@ function drawSheet(
       const pgSize = validPidx ? cellPdf?.pageSizes?.[pidx] : undefined;
 
       if (thumb && pgSize) {
-        // DEBUG: red outline on clip area
-        ctx.strokeStyle = 'rgba(255,0,0,0.6)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x, y, cpw, cph);
-
         ctx.save();
         ctx.beginPath();
         ctx.rect(x, y, cpw, cph);
@@ -363,6 +358,7 @@ function drawSheet(
         // When no TrimBox: scale CropBox to fill the CELL (trim + 2×bleed) —
         // the PDF likely includes bleed content that should fill the cell area.
         // This ensures the PDF's own crop marks align with PressCal's trim marks.
+        // ALWAYS scale PDF to fit TRIM area (never cell) — bleed must not affect zoom
         const hasTrimBox = pgSize.trimOffX != null;
         let sc: number, drawTOffX: number, drawTOffY: number;
         if (hasTrimBox) {
@@ -372,13 +368,12 @@ function drawSheet(
           drawTOffX = (pgSize.trimOffX ?? 0) * scale * sc;
           drawTOffY = (pgSize.trimOffY ?? 0) * scale * sc;
         } else {
-          // No TrimBox — scale CropBox to fill the cell
-          const cellFitW = effSwap ? cph : cpw;
-          const cellFitH = effSwap ? cpw : cph;
-          sc = Math.min(cellFitW / drawRendW, cellFitH / drawRendH);
-          // Offset: cell bleed shifts from trim center to cell center
-          drawTOffX = cBL;
-          drawTOffY = cBT;
+          // No TrimBox — scale CropBox to fit the TRIM area (not cell!)
+          const scX = fitW / drawRendW;
+          const scY = fitH / drawRendH;
+          sc = Math.min(scX, scY);
+          drawTOffX = 0;
+          drawTOffY = 0;
         }
         const finalW = drawRendW * sc;
         const finalH = drawRendH * sc;
