@@ -1510,7 +1510,7 @@ export default function CalculatorShell() {
             </button>
             {pdfMenuOpen && (
               <div style={{
-                position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
+                position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 999,
                 background: 'var(--bg-elevated)', border: '1px solid var(--border)',
                 borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                 minWidth: 200, overflow: 'hidden',
