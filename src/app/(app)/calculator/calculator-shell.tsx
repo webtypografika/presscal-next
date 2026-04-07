@@ -3224,7 +3224,7 @@ export default function CalculatorShell() {
                   background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
                   borderRadius: 5, padding: '2px 4px',
                 }}>
-                  <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#f58220' }}>G</span>
+                  <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#f58220' }}>Gutter</span>
                   <input
                     type="number" step="0.5" min="0"
                     value={impoGutter}
@@ -3241,7 +3241,7 @@ export default function CalculatorShell() {
                   background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
                   borderRadius: 5, padding: '2px 4px',
                 }}>
-                  <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#ef4444' }}>B</span>
+                  <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#ef4444' }}>Bleed</span>
                   <input
                     type="number" step="0.5" min="0"
                     value={effectiveBleed}
