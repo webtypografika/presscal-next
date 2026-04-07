@@ -708,6 +708,7 @@ export default function ImpositionCanvas({
 
   // Editable distance input (click on ruler number to edit)
   const [editDist, setEditDist] = useState<{ side: 'left' | 'right' | 'top' | 'bottom' | 'gutter' | 'bleed'; x: number; y: number; value: string } | null>(null);
+  const [snapGuide, setSnapGuide] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
 
   const LOGICAL_W = 750;
   const LOGICAL_H = 625;
@@ -1064,6 +1065,25 @@ export default function ImpositionCanvas({
         ctx.fillText(`${dB.toFixed(1)}`, lx, (gB + sPaB) / 2 + 3);
       }
       ctx.restore();
+
+      // ─── SNAP GUIDE LINES (green, when magnetically centered) ───
+      if (snapGuide.x || snapGuide.y) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(16,185,129,0.7)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        if (snapGuide.x) {
+          // Vertical center line
+          const cx = sGridX + sTrimGridW / 2;
+          ctx.beginPath(); ctx.moveTo(cx, sPaT); ctx.lineTo(cx, sPaB); ctx.stroke();
+        }
+        if (snapGuide.y) {
+          // Horizontal center line
+          const cy = sGridY + sTrimGridH / 2;
+          ctx.beginPath(); ctx.moveTo(sPaL, cy); ctx.lineTo(sPaR, cy); ctx.stroke();
+        }
+        ctx.restore();
+      }
     }
 
     // Bottom info strip
@@ -1091,7 +1111,7 @@ export default function ImpositionCanvas({
       ctx.fillText('ΕΚΤΟΣ ΟΡΙΩΝ ΜΗΧΑΝΗΣ', cW / 2, cH - 16);
     }
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate, onOffsetChange, contentScale]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate, onOffsetChange, contentScale, snapGuide]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -1370,8 +1390,11 @@ export default function ImpositionCanvas({
         let newOffY = Math.round((gridDragRef.current.origOffY + (ax !== 'x' ? dy : 0)) * 10) / 10;
         // Magnetic snap to center (offset=0 = centered)
         const snapT = 1.5; // mm threshold
-        if (Math.abs(newOffX) < snapT) newOffX = 0;
-        if (Math.abs(newOffY) < snapT) newOffY = 0;
+        const snappedX = Math.abs(newOffX) < snapT;
+        const snappedY = Math.abs(newOffY) < snapT;
+        if (snappedX) newOffX = 0;
+        if (snappedY) newOffY = 0;
+        setSnapGuide({ x: snappedX, y: snappedY });
         onOffsetChange(newOffX, newOffY);
       }
       return;
@@ -1480,7 +1503,7 @@ export default function ImpositionCanvas({
     const canvas = canvasRef.current;
     if (canvas) canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
   }, [zoom, smBlocks, impo, onSmBlockUpdate, onSmBlockMove, onGridResize, onRotate, onOffsetChange, canvasToMM, findSmHandle, findSmBlock, findGridHandle, findRotateBtn, findGridBody, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
-  const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; gridDragRef.current = null; }, []);
+  const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; gridDragRef.current = null; setSnapGuide({ x: false, y: false }); }, []);
   const onDoubleClick = useCallback(() => { setZoom(1); panRef.current = { x: 0, y: 0 }; }, []);
 
   // ─── DROP ───
