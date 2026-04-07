@@ -322,7 +322,7 @@ function drawSheet(
         // (e.g. 90° → cells swapped W↔H by imposition engine).
         // We only need to check if the PDF page orientation matches the CURRENT cell.
         const pdfPortrait = pgSize.trimW <= pgSize.trimH;
-        const cellPortrait = cpw <= cph;
+        const cellPortrait = trimW <= trimH;  // use trim, not cell (asymmetric bleed)
         const needsAutoRot = pdfPortrait !== cellPortrait;
 
         // User content rotation from cell (set by imposition engine)
