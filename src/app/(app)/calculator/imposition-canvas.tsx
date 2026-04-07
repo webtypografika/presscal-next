@@ -1330,8 +1330,9 @@ export default function ImpositionCanvas({
     if (gridDragRef.current) {
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
       if (gridDragRef.current.mode === 'resize' && onGridResize) {
-        const pw = sheetW - marginLeft - marginRight;
-        const ph = sheetH - marginTop - marginBottom;
+        // Use full paper for fitting (margins are advisory)
+        const pw = sheetW;
+        const ph = sheetH;
         const tW = impo.trimW;
         const tH = impo.trimH;
         const trimGridWmm = impo.cols * tW + Math.max(0, impo.cols - 1) * gutter;
