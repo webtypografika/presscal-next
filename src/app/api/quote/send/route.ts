@@ -135,7 +135,11 @@ export async function POST(req: NextRequest) {
       <tbody>
         ${items.map((item: any) => `
         <tr>
-          <td style="padding:10px;font-size:13px;border-bottom:1px solid #f1f5f9;">${item.name || '—'}${item.notes ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">${item.notes}</div>` : ''}</td>
+          <td style="padding:10px;font-size:13px;border-bottom:1px solid #f1f5f9;">
+            ${item.name || '—'}
+            ${item.description ? `<div style="font-size:11px;color:#64748b;margin-top:2px;">${item.description}</div>` : ''}
+            ${item.calcData?.paperName || item.calcData?.colors ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">${[item.calcData?.paperName, item.calcData?.colors, item.calcData?.finishing].filter(Boolean).join(' · ')}</div>` : ''}
+          </td>
           <td style="text-align:right;padding:10px;font-size:13px;border-bottom:1px solid #f1f5f9;">${item.qty || ''} ${item.unit || ''}</td>
           <td style="text-align:right;padding:10px;font-size:13px;font-weight:600;border-bottom:1px solid #f1f5f9;">${fmt(item.finalPrice || 0)}</td>
         </tr>`).join('')}
