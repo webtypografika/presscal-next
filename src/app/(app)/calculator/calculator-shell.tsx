@@ -1553,12 +1553,31 @@ export default function CalculatorShell() {
                   <button onClick={async () => {
                     setPdfMenuOpen(false);
                     try {
-                      // Fetch quote's jobFolderPath, fallback to linkedFile folder
+                      // Fetch quote's jobFolderPath, fallback to linkedFile folder, fallback to create
                       const qRes = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
                       const qData = qRes.ok ? await qRes.json() : null;
-                      console.log('[Export] quoteId:', quoteLink.quoteId, 'jobFolderPath:', qData?.jobFolderPath, 'linkedFile:', linkedFile?.path);
-                      const jobFolder = qData?.jobFolderPath || (linkedFile?.path ? linkedFile.path.replace(/[/\\][^/\\]+$/, '') : null);
-                      if (!jobFolder) { alert('Δεν υπάρχει φάκελος εργασίας. Δημιουργήστε φάκελο από το tab Αρχεία στην προσφορά.'); return; }
+                      let jobFolder = qData?.jobFolderPath || (linkedFile?.path ? linkedFile.path.replace(/[/\\][^/\\]+$/, '') : null);
+                      // If no folder, try to create one via approval action
+                      if (!jobFolder) {
+                        try {
+                          const { updateQuoteStatus } = await import('../quotes/actions');
+                          // Trigger folder creation by re-saving current status
+                          const { getQuote, updateQuote: uq } = await import('../quotes/actions');
+                          const q = await getQuote(quoteLink.quoteId);
+                          if (q) {
+                            const { buildJobFolderPath } = await import('@/lib/job-folder');
+                            jobFolder = buildJobFolderPath({
+                              globalRoot: null,
+                              companyFolderPath: (q.company as any)?.folderPath || null,
+                              companyName: (q.company as any)?.name || 'Πελάτης',
+                              quoteNumber: q.number,
+                              quoteTitle: q.title,
+                            });
+                            await uq(quoteLink.quoteId, { jobFolderPath: jobFolder } as any);
+                          }
+                        } catch (e) { console.error('Create folder error:', e); }
+                      }
+                      if (!jobFolder) { alert('Δεν μπόρεσε να δημιουργηθεί φάκελος εργασίας.'); return; }
                       const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
                       const bytes = await exportImpositionPDF(pdfExportOpts);
                       const sep = jobFolder.includes('\\') ? '\\' : '/';
