@@ -205,6 +205,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [items, setItems] = useState<any[]>(() => Array.isArray(initial.items) && (initial.items as any[]).length > 0 ? initial.items as any[] : []);
   const [title, setTitle] = useState(initial.title ?? '');
   const [notes, setNotes] = useState(initial.notes ?? '');
+  const [notesTab, setNotesTab] = useState<'notes' | 'activity'>('notes');
   const [vatRate, setVatRate] = useState(initial.vatRate ?? 24);
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [customerId, setCustomerId] = useState(initial.companyId ?? initial.customerId ?? '');
@@ -1039,23 +1040,91 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           toast={toast}
         />
 
-        {/* Notes */}
+        {/* Notes + Activity */}
         <div style={{ borderRadius: 10, border: '1px solid var(--border)', padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-            <i className="fas fa-sticky-note" style={{ fontSize: '0.92rem', color: 'var(--accent)' }} />
-            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Σημειώσεις</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 10 }}>
+            {(['notes', 'activity'] as const).map(tab => (
+              <button key={tab} onClick={() => setNotesTab(tab)} style={{
+                padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+                fontSize: '0.78rem', fontWeight: 600,
+                background: notesTab === tab ? 'var(--accent)' : 'transparent',
+                color: notesTab === tab ? '#fff' : 'var(--text-muted)',
+              }}>
+                <i className={tab === 'notes' ? 'fas fa-sticky-note' : 'fas fa-history'} style={{ marginRight: 5, fontSize: '0.68rem' }} />
+                {tab === 'notes' ? 'Σημειώσεις' : 'Δραστηριότητα'}
+              </button>
+            ))}
           </div>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder="Εσωτερικές σημειώσεις..."
-            rows={4}
-            style={{
-              width: '100%', background: 'transparent', border: '1px solid var(--border)',
-              borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: '1rem',
-              resize: 'vertical', outline: 'none',
-            }}
-          />
+          {notesTab === 'notes' ? (
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Εσωτερικές σημειώσεις..."
+              rows={4}
+              style={{
+                width: '100%', background: 'transparent', border: '1px solid var(--border)',
+                borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: '1rem',
+                resize: 'vertical', outline: 'none',
+              }}
+            />
+          ) : (
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              {(() => {
+                const events: { date: Date | string; icon: string; color: string; text: string }[] = [];
+                // Created
+                if (quote.createdAt) events.push({ date: quote.createdAt, icon: 'fas fa-plus-circle', color: '#3b82f6', text: 'Δημιουργία προσφοράς' });
+                // Files linked
+                const filesCount = items.filter((i: any) => i.linkedFile).length;
+                if (filesCount > 0) events.push({ date: quote.createdAt, icon: 'fas fa-paperclip', color: '#8b5cf6', text: `${filesCount} αρχεί${filesCount === 1 ? 'ο' : 'α'} συνδεδεμέν${filesCount === 1 ? 'ο' : 'α'}` });
+                // Calc data (imposition done)
+                const calcCount = items.filter((i: any) => i.calcData?.machineId).length;
+                if (calcCount > 0) events.push({ date: quote.updatedAt || quote.createdAt, icon: 'fas fa-calculator', color: '#f58220', text: `Κοστολόγηση ${calcCount} προϊόντ${calcCount === 1 ? 'ος' : 'ων'}` });
+                // Sent
+                if (quote.sentAt) events.push({ date: quote.sentAt, icon: 'fas fa-paper-plane', color: '#14b8a6', text: 'Αποστολή email' });
+                // Linked emails
+                const emailCount = (quote.linkedEmails as string[])?.length || 0;
+                if (emailCount > 0) events.push({ date: quote.sentAt || quote.createdAt, icon: 'fas fa-envelope', color: '#64748b', text: `${emailCount} email${emailCount > 1 ? 's' : ''} συνδεδεμέν${emailCount === 1 ? 'ο' : 'α'}` });
+                // Approved
+                if (quote.approvedAt) events.push({ date: quote.approvedAt, icon: 'fas fa-check-circle', color: '#16a34a', text: quote.partialApproval ? 'Μερική έγκριση πελάτη' : 'Έγκριση πελάτη' });
+                // Job stage
+                if (quote.jobStage) {
+                  const stageLabels: Record<string, string> = { files: 'Αρχεία', printing: 'Εκτύπωση', cutting: 'Κοπή', finishing: 'Φινίρισμα', delivery: 'Παράδοση' };
+                  events.push({ date: quote.jobStageUpdatedAt || quote.updatedAt || quote.createdAt, icon: 'fas fa-tasks', color: '#f59e0b', text: `Στάδιο: ${stageLabels[quote.jobStage] || quote.jobStage}` });
+                }
+                // Invoice
+                if (quote.elorusInvoiceId) events.push({ date: quote.updatedAt || quote.createdAt, icon: 'fas fa-file-invoice', color: '#6366f1', text: 'Τιμολόγηση (Elorus)' });
+                // Courier
+                if (quote.courierVoucherId) events.push({ date: quote.courierStatusAt || quote.updatedAt || quote.createdAt, icon: 'fas fa-truck', color: '#0ea5e9', text: `Courier: ${quote.courierStatus || 'voucher'}` });
+                // Completed
+                if (quote.completedAt) events.push({ date: quote.completedAt, icon: 'fas fa-flag-checkered', color: '#16a34a', text: 'Ολοκλήρωση' });
+                // Deadline
+                if (quote.deadline) events.push({ date: quote.deadline, icon: 'fas fa-clock', color: new Date(quote.deadline) < new Date() ? '#ef4444' : '#f59e0b', text: `Προθεσμία: ${new Date(quote.deadline).toLocaleDateString('el-GR')}` });
+
+                // Sort by date
+                events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                if (events.length === 0) return <div style={{ color: '#475569', padding: '8px 0' }}>Δεν υπάρχει δραστηριότητα</div>;
+
+                return (
+                  <div style={{ position: 'relative', paddingLeft: 20 }}>
+                    {/* Vertical line */}
+                    <div style={{ position: 'absolute', left: 5, top: 4, bottom: 4, width: 2, background: 'var(--border)', borderRadius: 1 }} />
+                    {events.map((ev, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: -17, top: 2, width: 12, height: 12, borderRadius: '50%', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <i className={ev.icon} style={{ fontSize: '0.55rem', color: ev.color }} />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '0.76rem' }}>{ev.text}</div>
+                          <div style={{ fontSize: '0.65rem', color: '#64748b' }}>{new Date(ev.date).toLocaleDateString('el-GR')} · {new Date(ev.date).toLocaleTimeString('el-GR', { hour: '2-digit', minute: '2-digit' })}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
         </div>
       </div>
 
