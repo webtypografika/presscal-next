@@ -52,6 +52,9 @@ interface ImpositionCanvasProps {
   smBlocks?: import('@/types/calculator').StepBlock[];  // step multi blocks (for drag handles)
   onSmBlockUpdate?: (idx: number, cols: number, rows: number) => void;  // resize callback
   onSmBlockMove?: (idx: number, x: number, y: number) => void;  // move callback
+  // N-Up grid controls on canvas
+  onGridResize?: (cols: number, rows: number) => void;  // drag to resize grid
+  onRotate?: () => void;  // rotate content 90°
 }
 
 type ViewMode = 'single' | 'dual';
@@ -677,6 +680,7 @@ export default function ImpositionCanvas({
   showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
   pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
   gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate, onSmBlockMove,
+  onGridResize, onRotate,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -918,6 +922,77 @@ export default function ImpositionCanvas({
       ctx.restore();
     }
 
+    // ─── N-UP GRID RESIZE HANDLE + ROTATE BUTTON (drawn in main draw, not drawSheet) ───
+    const isNUpLikeMode = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun';
+    if (isNUpLikeMode && impo.cols > 0 && impo.rows > 0 && !isDuplex) {
+      // Compute grid position in canvas pixels (replicate single-view sheet positioning)
+      const sScX = (cW - 24 - markLen * 2) / sheetW;
+      const sScY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;
+      const sSc = Math.min(sScX, sScY);
+      const sDW = sheetW * sSc;
+      const sDH = sheetH * sSc;
+      const sOffX = (cW - sDW) / 2;
+      const sOffY = reserveTop + markLen + (cH - reserveTop - reserveBot - markLen * 2 - sDH) / 2;
+      const isOff = machCat === 'offset';
+      const smT = (isOff ? marginBottom : marginTop) * sSc;
+      const smL = marginLeft * sSc;
+      const sPaX = sOffX + smL;
+      const sPaY = sOffY + smT;
+      const sPrintW = sDW - smL - marginRight * sSc;
+      const sPrintH = sDH - smT - (isOff ? marginTop : marginBottom) * sSc;
+      const sTrimWpx = impo.trimW * sSc;
+      const sTrimHpx = impo.trimH * sSc;
+      const sGutPx = gutter * sSc;
+      const sTrimGridW = impo.cols * sTrimWpx + Math.max(0, impo.cols - 1) * sGutPx;
+      const sTrimGridH = impo.rows * sTrimHpx + Math.max(0, impo.rows - 1) * sGutPx;
+      const sGridX = sPaX + (sPrintW - sTrimGridW) / 2 + (offsetX || 0) * sSc;
+      const sGridY = sPaY + (sPrintH - sTrimGridH) / 2 + (offsetY || 0) * sSc;
+
+      if (onGridResize) {
+        // Resize handle — bottom-right of grid
+        const hx = sGridX + sTrimGridW;
+        const hy = sGridY + sTrimGridH;
+        const hs = 6;
+        ctx.fillStyle = '#f58220';
+        ctx.fillRect(hx - hs, hy - hs, hs * 2, hs * 2);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(hx - 3, hy + 3); ctx.lineTo(hx + 3, hy - 3);
+        ctx.moveTo(hx, hy + 3); ctx.lineTo(hx + 3, hy);
+        ctx.stroke();
+
+        // Grid label — cols×rows at top-left
+        ctx.fillStyle = 'rgba(245,130,32,0.8)';
+        ctx.font = '700 10px Inter, DM Sans, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${impo.cols}×${impo.rows}`, sGridX + 3, sGridY - 4);
+      }
+
+      if (onRotate) {
+        // Rotate button — top-center of grid
+        const rotBtnX = sGridX + sTrimGridW / 2;
+        const rotBtnY = sGridY - 16;
+        const rotR = 9;
+        ctx.fillStyle = 'rgba(245,130,32,0.85)';
+        ctx.beginPath();
+        ctx.arc(rotBtnX, rotBtnY, rotR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(rotBtnX, rotBtnY, 4.5, -Math.PI * 0.7, Math.PI * 0.5);
+        ctx.stroke();
+        const ax = rotBtnX + 4.5 * Math.cos(Math.PI * 0.5);
+        const ay = rotBtnY + 4.5 * Math.sin(Math.PI * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(ax - 2.5, ay - 1.5);
+        ctx.lineTo(ax, ay + 2);
+        ctx.lineTo(ax + 2.5, ay - 1.5);
+        ctx.stroke();
+      }
+    }
+
     // Bottom info strip
     const modeLabels: Record<string, string> = {
       nup: 'N-Up', booklet: 'Booklet', perfect_bound: 'Perfect Bound',
@@ -973,6 +1048,39 @@ export default function ImpositionCanvas({
       canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
     }
   }, [zoom]);
+
+  // ─── N-UP GRID DRAG (resize) ───
+  const gridDragRef = useRef<{ cols: number; rows: number } | null>(null);
+
+  const findGridHandle = useCallback((mmX: number, mmY: number): boolean => {
+    if (!onGridResize || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun')) return false;
+    const pw = sheetW - marginLeft - marginRight;
+    const ph = sheetH - marginTop - marginBottom;
+    const tW = impo.trimW;
+    const tH = impo.trimH;
+    const trimGridWmm = impo.cols * tW + Math.max(0, impo.cols - 1) * gutter;
+    const trimGridHmm = impo.rows * tH + Math.max(0, impo.rows - 1) * gutter;
+    const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
+    const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
+    const right = gridStartX + trimGridWmm;
+    const bottom = gridStartY + trimGridHmm;
+    const hitMM = 6;
+    return mmX >= right - hitMM && mmX <= right + hitMM && mmY >= bottom - hitMM && mmY <= bottom + hitMM;
+  }, [impo, onGridResize, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY]);
+
+  const findRotateBtn = useCallback((mmX: number, mmY: number): boolean => {
+    if (!onRotate || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun')) return false;
+    const pw = sheetW - marginLeft - marginRight;
+    const ph = sheetH - marginTop - marginBottom;
+    const trimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
+    const trimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+    const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
+    const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
+    const cx = gridStartX + trimGridWmm / 2;
+    const cy = gridStartY - 3; // ~3mm above grid
+    const dist = Math.sqrt((mmX - cx) ** 2 + (mmY - cy) ** 2);
+    return dist < 5;
+  }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY]);
 
   // ─── STEP MULTI DRAG ───
   const smDragRef = useRef<{
@@ -1047,6 +1155,20 @@ export default function ImpositionCanvas({
 
   // ─── PAN ───
   const onMouseDown = useCallback((e: React.MouseEvent) => {
+    // N-Up grid: resize handle or rotate button
+    if (onGridResize || onRotate) {
+      const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
+      if (findRotateBtn(mmX, mmY) && onRotate) {
+        onRotate();
+        e.preventDefault();
+        return;
+      }
+      if (findGridHandle(mmX, mmY) && onGridResize) {
+        gridDragRef.current = { cols: impo.cols, rows: impo.rows };
+        e.preventDefault();
+        return;
+      }
+    }
     // Step multi: resize handle takes priority, then block move
     if (smBlocks && impo.mode === 'stepmulti' && impo.blocks) {
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
@@ -1068,8 +1190,48 @@ export default function ImpositionCanvas({
     if (zoom <= 1.02) return;
     draggingRef.current = true;
     dragLastRef.current = { x: e.clientX, y: e.clientY };
-  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle, findSmBlock]);
+  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle, findSmBlock, onGridResize, onRotate, findGridHandle, findRotateBtn]);
   const onMouseMove = useCallback((e: React.MouseEvent) => {
+    // N-Up grid drag resize
+    if (gridDragRef.current && onGridResize) {
+      const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
+      const pw = sheetW - marginLeft - marginRight;
+      const ph = sheetH - marginTop - marginBottom;
+      const tW = impo.trimW;
+      const tH = impo.trimH;
+      const trimGridWmm = impo.cols * tW + Math.max(0, impo.cols - 1) * gutter;
+      const trimGridHmm = impo.rows * tH + Math.max(0, impo.rows - 1) * gutter;
+      const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
+      const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
+      const dragW = mmX - gridStartX;
+      const dragH = mmY - gridStartY;
+      const step = tW + gutter;
+      const stepH = tH + gutter;
+      const newCols = Math.max(1, Math.min(
+        Math.round((dragW + gutter) / step),
+        Math.floor((pw + gutter) / step),
+      ));
+      const newRows = Math.max(1, Math.min(
+        Math.round((dragH + gutter) / stepH),
+        Math.floor((ph + gutter) / stepH),
+      ));
+      if (newCols !== gridDragRef.current.cols || newRows !== gridDragRef.current.rows) {
+        gridDragRef.current.cols = newCols;
+        gridDragRef.current.rows = newRows;
+        onGridResize(newCols, newRows);
+      }
+      return;
+    }
+    // N-Up cursor feedback
+    if (onGridResize || onRotate) {
+      const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
+      const container = containerRef.current;
+      if (container) {
+        if (findGridHandle(mmX, mmY)) { container.style.cursor = 'nwse-resize'; }
+        else if (findRotateBtn(mmX, mmY)) { container.style.cursor = 'pointer'; }
+        else if (!smBlocks && zoom <= 1.02) { container.style.cursor = 'default'; }
+      }
+    }
     // Step multi drag (resize or move)
     if (smDragRef.current && smBlocks && impo.blocks) {
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
@@ -1162,8 +1324,8 @@ export default function ImpositionCanvas({
     panRef.current.y += dy;
     const canvas = canvasRef.current;
     if (canvas) canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
-  }, [zoom, smBlocks, impo, onSmBlockUpdate, onSmBlockMove, canvasToMM, findSmHandle, findSmBlock, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom]);
-  const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; }, []);
+  }, [zoom, smBlocks, impo, onSmBlockUpdate, onSmBlockMove, onGridResize, onRotate, canvasToMM, findSmHandle, findSmBlock, findGridHandle, findRotateBtn, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
+  const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; gridDragRef.current = null; }, []);
   const onDoubleClick = useCallback(() => { setZoom(1); panRef.current = { x: 0, y: 0 }; }, []);
 
   // ─── DROP ───

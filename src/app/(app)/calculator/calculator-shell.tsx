@@ -3141,6 +3141,13 @@ export default function CalculatorShell() {
                 onSmBlockMove={impoMode === 'stepmulti' ? (idx, x, y) => {
                   setSmBlocks(prev => prev.map((b, i) => i === idx ? { ...b, x, y, blockW: 0, blockH: 0, _manualGrid: true } : b));
                 } : undefined}
+                onGridResize={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun') ? (cols, rows) => {
+                  setImpoForceCols(cols);
+                  setImpoForceRows(rows);
+                } : undefined}
+                onRotate={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun') ? () => {
+                  setImpoRotation(prev => (prev + 90) % 360);
+                } : undefined}
               />
               {/* PDF upload overlay (top-left) */}
               <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>
