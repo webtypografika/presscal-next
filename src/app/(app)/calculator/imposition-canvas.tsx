@@ -55,6 +55,7 @@ interface ImpositionCanvasProps {
   // N-Up grid controls on canvas
   onGridResize?: (cols: number, rows: number) => void;  // drag to resize grid
   onRotate?: () => void;  // rotate content 90°
+  onOffsetChange?: (x: number, y: number) => void;  // drag to move grid offset
 }
 
 type ViewMode = 'single' | 'dual';
@@ -680,7 +681,7 @@ export default function ImpositionCanvas({
   showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
   pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
   gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate, onSmBlockMove,
-  onGridResize, onRotate,
+  onGridResize, onRotate, onOffsetChange,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -991,6 +992,63 @@ export default function ImpositionCanvas({
         ctx.lineTo(ax + 2.5, ay - 1.5);
         ctx.stroke();
       }
+
+      // ─── DISTANCE RULERS (grid to margins) ───
+      const sPaL = sOffX + smL;
+      const sPaT = sOffY + smT;
+      const sPaR = sPaL + sPrintW;
+      const sPaB = sPaT + sPrintH;
+
+      ctx.save();
+      ctx.setLineDash([2, 2]);
+      ctx.strokeStyle = 'rgba(245,130,32,0.5)';
+      ctx.lineWidth = 0.7;
+      ctx.font = '600 7px Inter, DM Sans, sans-serif';
+      ctx.fillStyle = 'rgba(245,130,32,0.8)';
+      ctx.textAlign = 'center';
+
+      // Distances in mm
+      const pW = sheetW - marginLeft - marginRight;
+      const pH = sheetH - marginTop - marginBottom;
+      const gTrimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
+      const gTrimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+      const gridOX = (pW - gTrimGridWmm) / 2 + (offsetX || 0);
+      const gridOY = (pH - gTrimGridHmm) / 2 + (offsetY || 0);
+      const dL = gridOX - bleed;
+      const dR = pW - gridOX - gTrimGridWmm - bleed;
+      const dT = gridOY - bleed;
+      const dB = pH - gridOY - gTrimGridHmm - bleed;
+
+      const gL = sGridX - bleed * sSc;
+      const gR = sGridX + sTrimGridW + bleed * sSc;
+      const gT = sGridY - bleed * sSc;
+      const gB = sGridY + sTrimGridH + bleed * sSc;
+
+      // Left
+      if (dL > 0.3) {
+        const ly = sGridY + sTrimGridH / 2;
+        ctx.beginPath(); ctx.moveTo(sPaL, ly); ctx.lineTo(gL, ly); ctx.stroke();
+        ctx.fillText(`${dL.toFixed(1)}`, (sPaL + gL) / 2, ly - 3);
+      }
+      // Right
+      if (dR > 0.3) {
+        const ly = sGridY + sTrimGridH / 2;
+        ctx.beginPath(); ctx.moveTo(gR, ly); ctx.lineTo(sPaR, ly); ctx.stroke();
+        ctx.fillText(`${dR.toFixed(1)}`, (gR + sPaR) / 2, ly - 3);
+      }
+      // Top
+      if (dT > 0.3) {
+        const lx = sGridX + sTrimGridW / 2;
+        ctx.beginPath(); ctx.moveTo(lx, sPaT); ctx.lineTo(lx, gT); ctx.stroke();
+        ctx.fillText(`${dT.toFixed(1)}`, lx, (sPaT + gT) / 2 + 3);
+      }
+      // Bottom
+      if (dB > 0.3) {
+        const lx = sGridX + sTrimGridW / 2;
+        ctx.beginPath(); ctx.moveTo(lx, gB); ctx.lineTo(lx, sPaB); ctx.stroke();
+        ctx.fillText(`${dB.toFixed(1)}`, lx, (gB + sPaB) / 2 + 3);
+      }
+      ctx.restore();
     }
 
     // Bottom info strip
@@ -1011,7 +1069,7 @@ export default function ImpositionCanvas({
     ctx.textAlign = 'center';
     ctx.fillText(parts.join(' · '), cW / 2, cH - 5);
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate, onOffsetChange]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -1050,7 +1108,7 @@ export default function ImpositionCanvas({
   }, [zoom]);
 
   // ─── N-UP GRID DRAG (resize) ───
-  const gridDragRef = useRef<{ cols: number; rows: number } | null>(null);
+  const gridDragRef = useRef<{ cols: number; rows: number; mode: 'resize' | 'move'; startMmX: number; startMmY: number; origOffX: number; origOffY: number } | null>(null);
 
   const findGridHandle = useCallback((mmX: number, mmY: number): boolean => {
     if (!onGridResize || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun')) return false;
@@ -1087,6 +1145,18 @@ export default function ImpositionCanvas({
     const dist = Math.sqrt((mmX - cx) ** 2 + (mmY - cy) ** 2);
     return dist < hitR;
   }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY, cropMarks]);
+
+  const findGridBody = useCallback((mmX: number, mmY: number): boolean => {
+    if (!onOffsetChange || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun')) return false;
+    const pw = sheetW - marginLeft - marginRight;
+    const ph = sheetH - marginTop - marginBottom;
+    const trimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
+    const trimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+    const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
+    const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
+    return mmX >= gridStartX && mmX <= gridStartX + trimGridWmm &&
+           mmY >= gridStartY && mmY <= gridStartY + trimGridHmm;
+  }, [impo, onOffsetChange, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY]);
 
   // ─── STEP MULTI DRAG ───
   const smDragRef = useRef<{
@@ -1170,7 +1240,12 @@ export default function ImpositionCanvas({
         return;
       }
       if (findGridHandle(mmX, mmY) && onGridResize) {
-        gridDragRef.current = { cols: impo.cols, rows: impo.rows };
+        gridDragRef.current = { cols: impo.cols, rows: impo.rows, mode: 'resize', startMmX: mmX, startMmY: mmY, origOffX: offsetX || 0, origOffY: offsetY || 0 };
+        e.preventDefault();
+        return;
+      }
+      if (findGridBody(mmX, mmY) && onOffsetChange) {
+        gridDragRef.current = { cols: impo.cols, rows: impo.rows, mode: 'move', startMmX: mmX, startMmY: mmY, origOffX: offsetX || 0, origOffY: offsetY || 0 };
         e.preventDefault();
         return;
       }
@@ -1196,45 +1271,54 @@ export default function ImpositionCanvas({
     if (zoom <= 1.02) return;
     draggingRef.current = true;
     dragLastRef.current = { x: e.clientX, y: e.clientY };
-  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle, findSmBlock, onGridResize, onRotate, findGridHandle, findRotateBtn]);
+  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle, findSmBlock, onGridResize, onRotate, onOffsetChange, findGridHandle, findRotateBtn, findGridBody]);
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     // N-Up grid drag resize
-    if (gridDragRef.current && onGridResize) {
+    if (gridDragRef.current) {
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
-      const pw = sheetW - marginLeft - marginRight;
-      const ph = sheetH - marginTop - marginBottom;
-      const tW = impo.trimW;
-      const tH = impo.trimH;
-      const trimGridWmm = impo.cols * tW + Math.max(0, impo.cols - 1) * gutter;
-      const trimGridHmm = impo.rows * tH + Math.max(0, impo.rows - 1) * gutter;
-      const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
-      const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
-      const dragW = mmX - gridStartX;
-      const dragH = mmY - gridStartY;
-      const step = tW + gutter;
-      const stepH = tH + gutter;
-      const newCols = Math.max(1, Math.min(
-        Math.round((dragW + gutter) / step),
-        Math.floor((pw + gutter) / step),
-      ));
-      const newRows = Math.max(1, Math.min(
-        Math.round((dragH + gutter) / stepH),
-        Math.floor((ph + gutter) / stepH),
-      ));
-      if (newCols !== gridDragRef.current.cols || newRows !== gridDragRef.current.rows) {
-        gridDragRef.current.cols = newCols;
-        gridDragRef.current.rows = newRows;
-        onGridResize(newCols, newRows);
+      if (gridDragRef.current.mode === 'resize' && onGridResize) {
+        const pw = sheetW - marginLeft - marginRight;
+        const ph = sheetH - marginTop - marginBottom;
+        const tW = impo.trimW;
+        const tH = impo.trimH;
+        const trimGridWmm = impo.cols * tW + Math.max(0, impo.cols - 1) * gutter;
+        const trimGridHmm = impo.rows * tH + Math.max(0, impo.rows - 1) * gutter;
+        const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
+        const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
+        const dragW = mmX - gridStartX;
+        const dragH = mmY - gridStartY;
+        const step = tW + gutter;
+        const stepH = tH + gutter;
+        const newCols = Math.max(1, Math.min(
+          Math.round((dragW + gutter) / step),
+          Math.floor((pw + gutter) / step),
+        ));
+        const newRows = Math.max(1, Math.min(
+          Math.round((dragH + gutter) / stepH),
+          Math.floor((ph + gutter) / stepH),
+        ));
+        if (newCols !== gridDragRef.current.cols || newRows !== gridDragRef.current.rows) {
+          gridDragRef.current.cols = newCols;
+          gridDragRef.current.rows = newRows;
+          onGridResize(newCols, newRows);
+        }
+      } else if (gridDragRef.current.mode === 'move' && onOffsetChange) {
+        const dx = mmX - gridDragRef.current.startMmX;
+        const dy = mmY - gridDragRef.current.startMmY;
+        const newOffX = Math.round((gridDragRef.current.origOffX + dx) * 10) / 10;
+        const newOffY = Math.round((gridDragRef.current.origOffY + dy) * 10) / 10;
+        onOffsetChange(newOffX, newOffY);
       }
       return;
     }
     // N-Up cursor feedback
-    if (onGridResize || onRotate) {
+    if (onGridResize || onRotate || onOffsetChange) {
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
       const container = containerRef.current;
       if (container) {
         if (findGridHandle(mmX, mmY)) { container.style.cursor = 'nwse-resize'; }
         else if (findRotateBtn(mmX, mmY)) { container.style.cursor = 'pointer'; }
+        else if (findGridBody(mmX, mmY)) { container.style.cursor = 'move'; }
         else if (!smBlocks && zoom <= 1.02) { container.style.cursor = 'default'; }
       }
     }
@@ -1330,7 +1414,7 @@ export default function ImpositionCanvas({
     panRef.current.y += dy;
     const canvas = canvasRef.current;
     if (canvas) canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
-  }, [zoom, smBlocks, impo, onSmBlockUpdate, onSmBlockMove, onGridResize, onRotate, canvasToMM, findSmHandle, findSmBlock, findGridHandle, findRotateBtn, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
+  }, [zoom, smBlocks, impo, onSmBlockUpdate, onSmBlockMove, onGridResize, onRotate, onOffsetChange, canvasToMM, findSmHandle, findSmBlock, findGridHandle, findRotateBtn, findGridBody, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
   const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; gridDragRef.current = null; }, []);
   const onDoubleClick = useCallback(() => { setZoom(1); panRef.current = { x: 0, y: 0 }; }, []);
 

@@ -3150,6 +3150,10 @@ export default function CalculatorShell() {
                 onRotate={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun') ? () => {
                   setImpoRotation(prev => (prev + 90) % 360);
                 } : undefined}
+                onOffsetChange={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun') ? (x, y) => {
+                  setImpoOffsetX(x);
+                  setImpoOffsetY(y);
+                } : undefined}
               />
               {/* PDF upload overlay (top-left) */}
               <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>
