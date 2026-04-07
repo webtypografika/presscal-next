@@ -1515,22 +1515,43 @@ export default function ImpositionCanvas({
   const onDropHandler = useCallback((e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation(); dragCountRef.current = 0; setDragOver(false);
     if (!onDrop) return;
-    // Capture data synchronously (dataTransfer is cleared after event)
     const files = e.dataTransfer.files;
     const items = e.dataTransfer.items;
-    // Standard file drop
+    console.log('[DROP]', { filesCount: files.length, itemsCount: items.length, types: Array.from(e.dataTransfer.types), itemDetails: Array.from(items).map(i => ({ kind: i.kind, type: i.type })) });
+    // 1. Standard file drop
     if (files.length > 0) { onDrop(files); return; }
-    // Fallback: extract file from items (PressKit sometimes has items but not files)
+    // 2. Extract from items
     if (items.length > 0) {
       for (let i = 0; i < items.length; i++) {
-        if (items[i].kind === 'file') {
-          const file = items[i].getAsFile();
+        const item = items[i];
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          console.log('[DROP] item.getAsFile():', file?.name, file?.size);
           if (file) {
             const dt = new DataTransfer();
             dt.items.add(file);
             onDrop(dt.files);
             return;
           }
+        }
+        // 3. String item — might be a file path
+        if (item.kind === 'string') {
+          item.getAsString(str => {
+            console.log('[DROP] string item:', str);
+            if (str && str.toLowerCase().includes('.pdf')) {
+              const filePath = str.replace(/^file:\/\/\/?/, '');
+              const url = `http://localhost:17824/?path=${encodeURIComponent(filePath)}`;
+              fetch(url).then(res => res.ok ? res.blob() : null).then(blob => {
+                if (!blob) return;
+                const fileName = filePath.split(/[/\\]/).pop() || 'file.pdf';
+                const f = new File([blob], fileName, { type: 'application/pdf' });
+                const dt = new DataTransfer();
+                dt.items.add(f);
+                onDrop(dt.files);
+              }).catch(err => console.error('[DROP] fetch error:', err));
+            }
+          });
+          return;
         }
       }
     }
