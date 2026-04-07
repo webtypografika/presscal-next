@@ -432,8 +432,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   if (['draft', 'new'].includes(quote.status)) transitions.push({ label: 'Σε Επεξεργασία', status: 'editing', icon: 'fa-pen', color: 'var(--accent)' });
   // "Αποστολή" is handled by the send modal, not a simple status change
   const canSend = ['draft', 'new', 'editing', 'revision', 'sent'].includes(quote.status);
-  if (['sent', 'partial'].includes(quote.status)) {
+  if (['draft', 'new', 'editing', 'sent', 'partial'].includes(quote.status)) {
     transitions.push({ label: 'Εγκρίθηκε', status: 'approved', icon: 'fa-check', color: 'var(--success)' });
+  }
+  if (['sent', 'partial'].includes(quote.status)) {
     transitions.push({ label: 'Απορρίφθηκε', status: 'rejected', icon: 'fa-times', color: 'var(--danger)' });
   }
   if (quote.status === 'approved') transitions.push({ label: 'Ολοκληρώθηκε', status: 'completed', icon: 'fa-flag-checkered', color: 'var(--success)' });
