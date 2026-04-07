@@ -826,13 +826,21 @@ export default function CalculatorShell() {
       try { setOverrides(JSON.parse(ovParam)); } catch {}
     }
 
-    // ─── Quote link ───
+    // ─── Quote link (persist in sessionStorage to survive refresh) ───
     const quoteId = searchParams.get('quoteId');
     const itemId = searchParams.get('itemId');
     const desc = searchParams.get('desc');
     if (quoteId) {
-      setQuoteLink({ quoteId, itemId: itemId || '', desc: desc || '' });
+      const ql = { quoteId, itemId: itemId || '', desc: desc || '' };
+      setQuoteLink(ql);
+      sessionStorage.setItem('calcQuoteLink', JSON.stringify(ql));
       setActivePanel('machine');
+    } else {
+      // Restore from sessionStorage if no URL params
+      try {
+        const saved = sessionStorage.getItem('calcQuoteLink');
+        if (saved) setQuoteLink(JSON.parse(saved));
+      } catch {}
     }
 
     // ─── Linked file info ───
