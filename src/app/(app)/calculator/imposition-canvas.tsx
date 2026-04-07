@@ -307,6 +307,10 @@ function drawSheet(
       const thumb = validPidx ? cellPdf?.thumbnails?.[pidx] : undefined;
       const pgSize = validPidx ? cellPdf?.pageSizes?.[pidx] : undefined;
 
+      // DEBUG: fill cell area to verify bounds (green = cell, visible gaps = problem)
+      ctx.fillStyle = idx % 2 === 0 ? 'rgba(0,200,0,0.12)' : 'rgba(0,100,255,0.12)';
+      ctx.fillRect(x, y, cpw, cph);
+
       if (thumb && pgSize) {
         ctx.save();
         ctx.beginPath();
