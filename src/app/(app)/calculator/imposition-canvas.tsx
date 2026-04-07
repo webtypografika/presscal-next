@@ -706,7 +706,7 @@ export default function ImpositionCanvas({
   const [viewMode, setViewMode] = useState<ViewMode>('single');
 
   // Editable distance input (click on ruler number to edit)
-  const [editDist, setEditDist] = useState<{ side: 'left' | 'right' | 'top' | 'bottom'; x: number; y: number; value: string } | null>(null);
+  const [editDist, setEditDist] = useState<{ side: 'left' | 'right' | 'top' | 'bottom' | 'gutter' | 'bleed'; x: number; y: number; value: string } | null>(null);
 
   const LOGICAL_W = 750;
   const LOGICAL_H = 625;
@@ -1005,6 +1005,35 @@ export default function ImpositionCanvas({
         ctx.stroke();
       }
 
+      // ─── GUTTER & BLEED LABELS on grid lines (clickable) ───
+      const sBleedPx = bleed * sSc;
+      // Gutter label — on vertical gutter between col 0 and col 1 (if >1 col)
+      if (onGutterChange && impo.cols > 1 && sGutPx > 1) {
+        const glX = sGridX + sTrimWpx + sGutPx / 2;
+        const glY = sGridY + sTrimGridH / 2;
+        const glText = `G ${gutter.toFixed(1)}`;
+        ctx.font = '700 8px Inter, DM Sans, sans-serif';
+        const tw = ctx.measureText(glText).width;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(glX - tw / 2 - 3, glY - 6, tw + 6, 13);
+        ctx.fillStyle = '#f58220';
+        ctx.textAlign = 'center';
+        ctx.fillText(glText, glX, glY + 3);
+      }
+      // Bleed label — on left bleed edge of top-left cell
+      if (onBleedChange && sBleedPx > 2) {
+        const blX = sGridX - sBleedPx / 2;
+        const blY = sGridY + sTrimHpx / 2;
+        const blText = `B ${bleed.toFixed(1)}`;
+        ctx.font = '700 8px Inter, DM Sans, sans-serif';
+        const tw2 = ctx.measureText(blText).width;
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(blX - tw2 / 2 - 3, blY - 6, tw2 + 6, 13);
+        ctx.fillStyle = '#ef4444';
+        ctx.textAlign = 'center';
+        ctx.fillText(blText, blX, blY + 3);
+      }
+
       // ─── DISTANCE RULERS (grid to margins) ───
       const sPaL = sOffX + smL;
       const sPaT = sOffY + smT;
@@ -1265,6 +1294,36 @@ export default function ImpositionCanvas({
         e.preventDefault();
         return;
       }
+      // Gutter & Bleed label click detection (before grid body drag)
+      if (isNUpLikeCheck) {
+        const pw3 = sheetW - marginLeft - marginRight;
+        const ph3 = sheetH - marginTop - marginBottom;
+        const tgW3 = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
+        const tgH3 = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+        const goX3 = (pw3 - tgW3) / 2 + (offsetX || 0);
+        const goY3 = (ph3 - tgH3) / 2 + (offsetY || 0);
+        const rect3 = containerRef.current?.getBoundingClientRect();
+        const cx3 = rect3 ? e.clientX - rect3.left : 0;
+        const cy3 = rect3 ? e.clientY - rect3.top : 0;
+        // Gutter label: between col 0 and col 1, vertical center
+        if (onGutterChange && impo.cols > 1 && gutter > 0) {
+          const glMmX = goX3 + impo.trimW + gutter / 2;
+          const glMmY = goY3 + tgH3 / 2;
+          if (Math.abs(mmX - glMmX) < 5 && Math.abs(mmY - glMmY) < 5) {
+            setEditDist({ side: 'gutter', x: cx3, y: cy3, value: gutter.toFixed(1) });
+            e.preventDefault(); return;
+          }
+        }
+        // Bleed label: left edge of top-left cell
+        if (onBleedChange && bleed > 0) {
+          const blMmX = goX3 - bleed / 2;
+          const blMmY = goY3 + impo.trimH / 2;
+          if (Math.abs(mmX - blMmX) < 5 && Math.abs(mmY - blMmY) < 5) {
+            setEditDist({ side: 'bleed', x: cx3, y: cy3, value: bleed.toFixed(1) });
+            e.preventDefault(); return;
+          }
+        }
+      }
       if (findGridBody(mmX, mmY) && onOffsetChange) {
         gridDragRef.current = { cols: impo.cols, rows: impo.rows, mode: 'move', startMmX: mmX, startMmY: mmY, origOffX: offsetX || 0, origOffY: offsetY || 0 };
         e.preventDefault();
@@ -1380,7 +1439,25 @@ export default function ImpositionCanvas({
         if (findGridHandle(mmX, mmY)) { container.style.cursor = 'nwse-resize'; }
         else if (findRotateBtn(mmX, mmY)) { container.style.cursor = 'pointer'; }
         else if (findGridBody(mmX, mmY)) { container.style.cursor = 'move'; }
-        else if (!smBlocks && zoom <= 1.02) { container.style.cursor = 'default'; }
+        else if (!smBlocks && zoom <= 1.02) {
+          // Check G/B labels for pointer cursor
+          let gbHit = false;
+          if (isNUpLikeCheck) {
+            const pw4 = sheetW - marginLeft - marginRight;
+            const ph4 = sheetH - marginTop - marginBottom;
+            const tgW4 = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
+            const tgH4 = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+            const goX4 = (pw4 - tgW4) / 2 + (offsetX || 0);
+            const goY4 = (ph4 - tgH4) / 2 + (offsetY || 0);
+            if (onGutterChange && impo.cols > 1 && gutter > 0) {
+              if (Math.abs(mmX - (goX4 + impo.trimW + gutter / 2)) < 5 && Math.abs(mmY - (goY4 + tgH4 / 2)) < 5) gbHit = true;
+            }
+            if (onBleedChange && bleed > 0) {
+              if (Math.abs(mmX - (goX4 - bleed / 2)) < 5 && Math.abs(mmY - (goY4 + impo.trimH / 2)) < 5) gbHit = true;
+            }
+          }
+          container.style.cursor = gbHit ? 'pointer' : 'default';
+        }
       }
     }
     // Step multi drag (resize or move)
@@ -1554,50 +1631,32 @@ export default function ImpositionCanvas({
         </div>
       )}
 
-      {/* Gutter & Bleed scroll controls (bottom-left of canvas) */}
-      {(onGutterChange || onBleedChange) && (
-        <div style={{
-          position: 'absolute', bottom: 26, left: 8, zIndex: 3,
-          display: 'flex', gap: 4, alignItems: 'center',
-        }}>
-          {onGutterChange && (
-            <div
-              title="Scroll ή drag για αλλαγή Gutter"
-              style={{
-                background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
-                borderRadius: 5, padding: '2px 6px', cursor: 'ns-resize', userSelect: 'none',
-                fontSize: '0.6rem', fontWeight: 700, color: '#94a3b8', letterSpacing: '0.03em',
-                display: 'flex', alignItems: 'center', gap: 3,
-              }}
-              onWheel={(e) => {
-                e.preventDefault(); e.stopPropagation();
-                const delta = e.deltaY > 0 ? -0.5 : 0.5;
-                onGutterChange(Math.max(0, Math.round((gutter + delta) * 10) / 10));
-              }}
-            >
-              <span style={{ color: '#64748b' }}>G</span>
-              <span style={{ color: '#f58220' }}>{gutter.toFixed(1)}</span>
-            </div>
-          )}
-          {onBleedChange && (
-            <div
-              title="Scroll ή drag για αλλαγή Bleed"
-              style={{
-                background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
-                borderRadius: 5, padding: '2px 6px', cursor: 'ns-resize', userSelect: 'none',
-                fontSize: '0.6rem', fontWeight: 700, color: '#94a3b8', letterSpacing: '0.03em',
-                display: 'flex', alignItems: 'center', gap: 3,
-              }}
-              onWheel={(e) => {
-                e.preventDefault(); e.stopPropagation();
-                const delta = e.deltaY > 0 ? -0.5 : 0.5;
-                onBleedChange(Math.max(0, Math.round((bleed + delta) * 10) / 10));
-              }}
-            >
-              <span style={{ color: '#64748b' }}>B</span>
-              <span style={{ color: '#ef4444' }}>{bleed.toFixed(1)}</span>
-            </div>
-          )}
+      {/* Floating G/B input (click on canvas label to edit) */}
+      {editDist && (editDist.side === 'gutter' || editDist.side === 'bleed') && (
+        <div style={{ position: 'absolute', left: editDist.x - 28, top: editDist.y - 12, zIndex: 10 }}>
+          <input
+            autoFocus
+            type="number"
+            step="0.5"
+            defaultValue={editDist.value}
+            style={{
+              width: 56, height: 22, fontSize: '0.65rem', fontWeight: 700, textAlign: 'center',
+              border: `1px solid ${editDist.side === 'gutter' ? 'var(--impo)' : '#ef4444'}`,
+              borderRadius: 4, outline: 'none',
+              background: 'rgba(0,0,0,0.85)',
+              color: editDist.side === 'gutter' ? '#f58220' : '#ef4444',
+              padding: '0 4px',
+            }}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter') {
+                const val = Math.max(0, parseFloat((ev.target as HTMLInputElement).value) || 0);
+                if (editDist.side === 'gutter' && onGutterChange) onGutterChange(val);
+                if (editDist.side === 'bleed' && onBleedChange) onBleedChange(val);
+                setEditDist(null);
+              } else if (ev.key === 'Escape') { setEditDist(null); }
+            }}
+            onBlur={() => setEditDist(null)}
+          />
         </div>
       )}
 
