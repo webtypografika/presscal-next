@@ -308,6 +308,11 @@ function drawSheet(
       const pgSize = validPidx ? cellPdf?.pageSizes?.[pidx] : undefined;
 
       if (thumb && pgSize) {
+        // DEBUG: red outline on clip area
+        ctx.strokeStyle = 'rgba(255,0,0,0.6)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, cpw, cph);
+
         ctx.save();
         ctx.beginPath();
         ctx.rect(x, y, cpw, cph);
