@@ -358,12 +358,14 @@ function drawPDFMarks(
   paperHpt: number,
   impo: {
     marginL: number; marginR: number; marginT: number; marginB: number;
-    pieceW: number; pieceH: number;
+    trimW?: number; trimH?: number;
     cols: number; rows: number;
     gutterMM?: number; gutterRowMM?: number;
     bleedMM?: number;
     offsetX?: number; offsetY?: number;
     cropMarks?: boolean;
+    // Legacy compat: pieceW/H used if trimW/H not set
+    pieceW?: number; pieceH?: number;
   },
   options?: DrawMarksOptions,
 ) {
@@ -374,8 +376,10 @@ function drawPDFMarks(
   const mR = mmToPt(impo.marginR);
   const mT = mmToPt(impo.marginT);
   const mB = mmToPt(impo.marginB);
-  const pieceW = mmToPt(impo.pieceW);
-  const pieceH = mmToPt(impo.pieceH);
+  // Use trim dimensions for grid positioning
+  const bleedPt = mmToPt(impo.bleedMM || 0);
+  const trimWpt = impo.trimW ? mmToPt(impo.trimW) : (impo.pieceW ? mmToPt(impo.pieceW) - 2 * bleedPt : 0);
+  const trimHpt = impo.trimH ? mmToPt(impo.trimH) : (impo.pieceH ? mmToPt(impo.pieceH) - 2 * bleedPt : 0);
   const gutterColPt = mmToPt(impo.gutterMM || 0);
   const gutterRowPt = mmToPt(impo.gutterRowMM != null ? impo.gutterRowMM : (impo.gutterMM || 0));
 
@@ -383,99 +387,72 @@ function drawPDFMarks(
   const printableH = paperHpt - mT - mB;
   const cols = impo.cols;
   const rows = impo.rows;
-  const totalGridW = cols * pieceW + Math.max(0, cols - 1) * gutterColPt;
-  const totalGridH = rows * pieceH + Math.max(0, rows - 1) * gutterRowPt;
+  // Trim-based grid: N*trim + (N-1)*gutter
+  const trimGridW = cols * trimWpt + Math.max(0, cols - 1) * gutterColPt;
+  const trimGridH = rows * trimHpt + Math.max(0, rows - 1) * gutterRowPt;
   const offXpt = mmToPt(impo.offsetX || 0);
   const offYpt = mmToPt(impo.offsetY || 0);
-  const cenX = mL + (printableW - totalGridW) / 2 + offXpt;
-  const cenY = mB + (printableH - totalGridH) / 2 - offYpt;
+  // cenX/cenY = bottom-left of first TRIM in the grid
+  const cenX = mL + (printableW - trimGridW) / 2 + offXpt;
+  const cenY = mB + (printableH - trimGridH) / 2 - offYpt;
 
   const regAll = cmyk(1, 1, 1, 1); // Registration — prints on ALL plates
   const markColor = options?.machineCat === 'offset' ? regAll : cmyk(0, 0, 0, 1);
 
-  // Crop marks
-  const bleedPt = mmToPt(impo.bleedMM || 0);
   const cropGap = markOffset;
 
-  // Cap mark length to available margin space
-  const spaceAbove = paperHpt - (cenY + totalGridH);
-  const spaceBelow = cenY;
-  const spaceLeft = cenX;
-  const spaceRight = paperWpt - (cenX + totalGridW);
+  // Cap mark length to available margin space (use bleed-extended bounds)
+  const spaceAbove = paperHpt - (cenY + trimGridH) - bleedPt;
+  const spaceBelow = cenY - bleedPt;
+  const spaceLeft = cenX - bleedPt;
+  const spaceRight = paperWpt - (cenX + trimGridW) - bleedPt;
   const minSpace = Math.min(spaceAbove, spaceBelow, spaceLeft, spaceRight);
   if (cropGap + markLen > minSpace) {
     markLen = Math.max(mmToPt(1), minSpace - cropGap);
   }
 
   if (drawCropMarks) {
-    // Collect unique vertical cut positions (X)
-    const vCuts: number[] = [];
+    // Trim-based: collect all trim edge positions
+    const trimStepW = trimWpt + gutterColPt;
+    const trimStepH = trimHpt + gutterRowPt;
+
+    const trimXs: number[] = [];
     for (let vc = 0; vc < cols; vc++) {
-      vCuts.push(cenX + vc * (pieceW + gutterColPt) + bleedPt);
-      vCuts.push(cenX + vc * (pieceW + gutterColPt) + pieceW - bleedPt);
+      trimXs.push(cenX + vc * trimStepW);              // left trim edge
+      trimXs.push(cenX + vc * trimStepW + trimWpt);    // right trim edge
     }
-    vCuts.sort((a, b) => a - b);
-    const uV = [vCuts[0]];
-    for (let vi = 1; vi < vCuts.length; vi++) {
-      if (vCuts[vi] - uV[uV.length - 1] > 0.1) uV.push(vCuts[vi]);
+    trimXs.sort((a, b) => a - b);
+    const uV = [trimXs[0]];
+    for (let vi = 1; vi < trimXs.length; vi++) {
+      if (trimXs[vi] - uV[uV.length - 1] > 0.1) uV.push(trimXs[vi]);
     }
 
-    // Collect unique horizontal cut positions (Y)
-    const hCuts: number[] = [];
+    const trimYs: number[] = [];
     for (let hr = 0; hr < rows; hr++) {
-      hCuts.push(cenY + hr * (pieceH + gutterRowPt) + bleedPt);
-      hCuts.push(cenY + hr * (pieceH + gutterRowPt) + pieceH - bleedPt);
+      trimYs.push(cenY + hr * trimStepH);              // bottom trim edge
+      trimYs.push(cenY + hr * trimStepH + trimHpt);    // top trim edge
     }
-    hCuts.sort((a, b) => a - b);
-    const uH = [hCuts[0]];
-    for (let hi = 1; hi < hCuts.length; hi++) {
-      if (hCuts[hi] - uH[uH.length - 1] > 0.1) uH.push(hCuts[hi]);
+    trimYs.sort((a, b) => a - b);
+    const uH = [trimYs[0]];
+    for (let hi = 1; hi < trimYs.length; hi++) {
+      if (trimYs[hi] - uH[uH.length - 1] > 0.1) uH.push(trimYs[hi]);
     }
 
     const gL = uV[0], gR = uV[uV.length - 1], gB = uH[0], gT = uH[uH.length - 1];
 
-    // Perimeter marks — top & bottom
+    // PERIMETER ONLY marks — top & bottom
     for (let vmi = 0; vmi < uV.length; vmi++) {
       const vx = uV[vmi];
       page.drawLine({ start: { x: vx, y: gT + cropGap }, end: { x: vx, y: gT + cropGap + markLen }, thickness: 0.5, color: markColor });
       page.drawLine({ start: { x: vx, y: gB - cropGap }, end: { x: vx, y: gB - cropGap - markLen }, thickness: 0.5, color: markColor });
     }
-    // Perimeter marks — left & right
+    // PERIMETER ONLY marks — left & right
     for (let hmi = 0; hmi < uH.length; hmi++) {
       const hy = uH[hmi];
       page.drawLine({ start: { x: gL - cropGap, y: hy }, end: { x: gL - cropGap - markLen, y: hy }, thickness: 0.5, color: markColor });
       page.drawLine({ start: { x: gR + cropGap, y: hy }, end: { x: gR + cropGap + markLen, y: hy }, thickness: 0.5, color: markColor });
     }
-
-    // Gutter marks — vertical gutters (between columns)
-    const gutGapPt = markOffset;
-    if (gutterColPt > mmToPt(0.5)) {
-      const gutColMarkLen = Math.min(markLen, gutterColPt / 2 - gutGapPt);
-      if (gutColMarkLen > mmToPt(0.3)) {
-        for (let vg = 0; vg < cols - 1; vg++) {
-          const gxVg = cenX + vg * (pieceW + gutterColPt) + pieceW;
-          for (let hci = 0; hci < uH.length; hci++) {
-            const hy2 = uH[hci];
-            page.drawLine({ start: { x: gxVg + gutGapPt, y: hy2 }, end: { x: gxVg + gutGapPt + gutColMarkLen, y: hy2 }, thickness: 0.5, color: markColor });
-            page.drawLine({ start: { x: gxVg + gutterColPt - gutGapPt, y: hy2 }, end: { x: gxVg + gutterColPt - gutGapPt - gutColMarkLen, y: hy2 }, thickness: 0.5, color: markColor });
-          }
-        }
-      }
-    }
-    // Gutter marks — horizontal gutters (between rows)
-    if (gutterRowPt > mmToPt(0.5)) {
-      const gutRowMarkLen = Math.min(markLen, gutterRowPt / 2 - gutGapPt);
-      if (gutRowMarkLen > mmToPt(0.3)) {
-        for (let hg = 0; hg < rows - 1; hg++) {
-          const gyHg = cenY + hg * (pieceH + gutterRowPt) + pieceH;
-          for (let vci = 0; vci < uV.length; vci++) {
-            const vx2 = uV[vci];
-            page.drawLine({ start: { x: vx2, y: gyHg + gutGapPt }, end: { x: vx2, y: gyHg + gutGapPt + gutRowMarkLen }, thickness: 0.5, color: markColor });
-            page.drawLine({ start: { x: vx2, y: gyHg + gutterRowPt - gutGapPt }, end: { x: vx2, y: gyHg + gutterRowPt - gutGapPt - gutRowMarkLen }, thickness: 0.5, color: markColor });
-          }
-        }
-      }
-    }
+    // NO gutter/internal crop marks — perimeter only
   }
 
   // Registration crosses — offset only
@@ -640,20 +617,26 @@ async function exportNUp(
   const paperWpt = mmToPt(impo.paperW);
   const paperHpt = mmToPt(impo.paperH);
   const mL = mmToPt(impo.marginL ?? 0);
-  const pieceW = mmToPt(impo.pieceW);
+  const mB = mmToPt(impo.marginB ?? 0);
+  const bleedPt = mmToPt(opts.bleed || 0);
+  const gutterPt = mmToPt(opts.gutter || 0);
+  const trimWpt = mmToPt(impo.trimW);
+  const trimHpt = mmToPt(impo.trimH);
+  const pieceW = mmToPt(impo.pieceW); // max cell = trim + 2*bleed (for scaling)
   const pieceH = mmToPt(impo.pieceH);
-  // Gutter = trim-to-trim; convert to cell-to-cell gap for placement
-  const bleedPtGut = mmToPt(opts.bleed || 0);
-  const cellGapPt = mmToPt(opts.gutter || 0) - 2 * bleedPtGut;
-  const gutterPt = cellGapPt;
   const printableW = paperWpt - mL - mmToPt(impo.marginR ?? 0);
-  const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mmToPt(impo.marginB ?? 0);
-  const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
-  const totalGridH = impo.rows * pieceH + Math.max(0, impo.rows - 1) * gutterPt;
+  const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mB;
+  // Trim-based grid
+  const trimGridW = impo.cols * trimWpt + Math.max(0, impo.cols - 1) * gutterPt;
+  const trimGridH = impo.rows * trimHpt + Math.max(0, impo.rows - 1) * gutterPt;
   const offXpt = mmToPt(impo.offsetX ?? 0);
   const offYpt = mmToPt(impo.offsetY ?? 0);
-  const cenX = mL + (printableW - totalGridW) / 2 + offXpt;
-  const cenY = mmToPt(impo.marginB ?? 0) + (printableH - totalGridH) / 2 - offYpt;
+  // cenX/cenY = bottom-left of first TRIM cell
+  const cenX = mL + (printableW - trimGridW) / 2 + offXpt;
+  const cenY = mB + (printableH - trimGridH) / 2 - offYpt;
+  // Cell step = trim + gutter (not cell + cellGap)
+  const trimStepW = trimWpt + gutterPt;
+  const trimStepH = trimHpt + gutterPt;
 
   // Detect orientation mismatch
   const pdfPg = opts.pdfPageSizes?.[0];
@@ -663,7 +646,6 @@ async function exportNUp(
 
   const pdfPageCount = embeddedPages.length;
   const sheetsNeeded = pdfPageCount;
-  const bleedPt = mmToPt(opts.bleed || 0);
   const maxSheets = 50;
 
   const isDuplex = !!opts.isDuplex && pdfPageCount >= 2;
@@ -678,8 +660,11 @@ async function exportNUp(
         if (pageIdx < embeddedPages.length) {
           const epObj = embeddedPages[pageIdx];
           const epPage = epObj.page;
-          const frontCellX = cenX + col * (pieceW + gutterPt);
-          const cellY = cenY + (impo.rows - 1 - row) * (pieceH + gutterPt);
+          // Trim position on grid, then offset by bleed for cell placement
+          const frontTrimX = cenX + col * trimStepW;
+          const trimY = cenY + (impo.rows - 1 - row) * trimStepH;
+          const frontCellX = frontTrimX - bleedPt;
+          const cellY = trimY - bleedPt;
 
           // Unified page placement
           const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
@@ -724,47 +709,58 @@ async function exportNUp(
     // When preserving source marks, skip masking + own crop marks
     if (!opts.keepSourceMarks) {
       const white = cmyk(0, 0, 0, 0);
-      const maskCenX = isBackSide ? (paperWpt - cenX - totalGridW) : cenX;
+      const maskCenX = isBackSide ? (paperWpt - cenX - trimGridW) : cenX;
 
-      // Gutter masks
-      if (gutterPt > 0.5) {
+      // Asymmetric gutter masks — mask area between cells where internal bleed is 0 or reduced
+      // Progressive internal bleed: gutter=0 → 0, gutter<2*bleed → gutter/2, else full bleed
+      const intBleedPt = gutterPt <= 0 ? 0 : (gutterPt >= 2 * bleedPt ? bleedPt : gutterPt / 2);
+      if (gutterPt > 0.1) {
         for (let gc = 0; gc < impo.cols - 1; gc++) {
-          const gx = maskCenX + gc * (pieceW + gutterPt) + pieceW;
-          const gutL = gx + Math.min(bleedPt, gutterPt / 2);
-          const gutR = gx + gutterPt - Math.min(bleedPt, gutterPt / 2);
+          // Gutter starts after right trim edge
+          const gx = maskCenX + (gc + 1) * trimWpt + gc * gutterPt;
+          const gutL = gx + intBleedPt;
+          const gutR = gx + gutterPt - intBleedPt;
           if (gutR > gutL + 0.5) page.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
         }
         for (let gr = 0; gr < impo.rows - 1; gr++) {
-          const gy = cenY + gr * (pieceH + gutterPt) + pieceH;
-          const gutB = gy + Math.min(bleedPt, gutterPt / 2);
-          const gutT = gy + gutterPt - Math.min(bleedPt, gutterPt / 2);
+          const gy = cenY + (gr + 1) * trimHpt + gr * gutterPt;
+          const gutB = gy + intBleedPt;
+          const gutT = gy + gutterPt - intBleedPt;
           if (gutT > gutB + 0.5) page.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
         }
       }
+      // When gutter=0 (μονοτομή), mask the entire internal bleed zone between trims
+      if (gutterPt <= 0 && bleedPt > 0.1) {
+        // Vertical cuts between columns
+        for (let gc = 0; gc < impo.cols - 1; gc++) {
+          const cutX = maskCenX + (gc + 1) * trimWpt + gc * gutterPt;
+          page.drawRectangle({ x: cutX - bleedPt, y: 0, width: 2 * bleedPt, height: paperHpt, color: white });
+        }
+        // Horizontal cuts between rows
+        for (let gr = 0; gr < impo.rows - 1; gr++) {
+          const cutY = cenY + (gr + 1) * trimHpt + gr * gutterPt;
+          page.drawRectangle({ x: 0, y: cutY - bleedPt, width: paperWpt, height: 2 * bleedPt, color: white });
+        }
+      }
 
-      // Margin masks
-      const gridL = maskCenX;
-      const gridB = cenY;
-      const gridR = maskCenX + totalGridW;
-      const gridT = cenY + totalGridH;
+      // Margin masks — extend to cover bleed on external sides
+      const gridL = maskCenX - bleedPt;
+      const gridB = cenY - bleedPt;
+      const gridR = maskCenX + trimGridW + bleedPt;
+      const gridT = cenY + trimGridH + bleedPt;
       drawMarginalMasks(page, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
 
       const sheetLabel = isDuplex
         ? ascii((opts.jobDescription || 'Job') + (isBackSide ? ' (Back)' : ' (Front)'))
         : ascii(opts.jobDescription || 'Job');
 
-      // Use the embedded page's actual trim offset for mark positioning
-      // This reads the PDF's TrimBox position, not PressCal's bleed setting
-      const ep0 = embeddedPages[0];
-      const actualTrimOffMM = ep0 ? (ep0.trimOffsetX || 0) / MM : (opts.bleed || 0);
-      const marksGutterMM = (opts.gutter || 0) - 2 * actualTrimOffMM;
       drawPDFMarks(page, paperWpt, paperHpt, {
         marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
         marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
-        pieceW: impo.pieceW, pieceH: impo.pieceH,
+        trimW: impo.trimW, trimH: impo.trimH,
         cols: impo.cols, rows: impo.rows,
-        gutterMM: marksGutterMM,
-        bleedMM: actualTrimOffMM,
+        gutterMM: opts.gutter || 0,
+        bleedMM: opts.bleed || 0,
         offsetX: impo.offsetX, offsetY: impo.offsetY,
         cropMarks: opts.showCropMarks,
       }, {
@@ -1111,50 +1107,66 @@ async function exportCutStack(
 
   const paperWpt = mmToPt(impo.paperW);
   const paperHpt = mmToPt(impo.paperH);
+  const bleedPt = mmToPt(opts.bleed || 0);
+  const gutterPt = mmToPt(opts.gutter || 0);
+  const trimWpt = mmToPt(impo.trimW);
+  const trimHpt = mmToPt(impo.trimH);
   const pieceW = mmToPt(impo.pieceW);
   const pieceH = mmToPt(impo.pieceH);
-  // Gutter = trim-to-trim; convert to cell-to-cell gap
-  const csBleedPt = mmToPt(opts.bleed || 0);
-  const gutterPt = mmToPt(opts.gutter || 0) - 2 * csBleedPt;
-  const printableW = paperWpt - mmToPt(impo.marginL ?? 0) - mmToPt(impo.marginR ?? 0);
-  const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mmToPt(impo.marginB ?? 0);
-  const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
-  const totalGridH = impo.rows * pieceH + Math.max(0, impo.rows - 1) * gutterPt;
+  const mLcs = mmToPt(impo.marginL ?? 0);
+  const mBcs = mmToPt(impo.marginB ?? 0);
+  const printableW = paperWpt - mLcs - mmToPt(impo.marginR ?? 0);
+  const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mBcs;
+  // Trim-based grid
+  const trimGridW = impo.cols * trimWpt + Math.max(0, impo.cols - 1) * gutterPt;
+  const trimGridH = impo.rows * trimHpt + Math.max(0, impo.rows - 1) * gutterPt;
   const offXpt = mmToPt(impo.offsetX || 0);
   const offYpt = mmToPt(impo.offsetY || 0);
-  const cenX = mmToPt(impo.marginL ?? 0) + (printableW - totalGridW) / 2 + offXpt;
-  const cenY = mmToPt(impo.marginB ?? 0) + (printableH - totalGridH) / 2 - offYpt;
+  const cenX = mLcs + (printableW - trimGridW) / 2 + offXpt;
+  const cenY = mBcs + (printableH - trimGridH) / 2 - offYpt;
+  const csTrimStepW = trimWpt + gutterPt;
+  const csTrimStepH = trimHpt + gutterPt;
 
   const numPdfColor = (opts.numberColor === '#cc0000') ? cmyk(0, 1, 1, 0) : cmyk(0, 0, 0, 1);
   const startNum = opts.numberStartNum || 1;
 
-  const bleedPt = mmToPt(opts.bleed || 0);
   const isH2H = (opts.duplexOrient || 'h2h') === 'h2h';
 
   const sheetsNeeded = opts.csStackSize || Math.max(1, embeddedPages.length);
 
-  // Helper: draw masking on a page
+  // Helper: draw masking on a page (asymmetric gutter masks)
+  const intBleedCs = gutterPt <= 0 ? 0 : (gutterPt >= 2 * bleedPt ? bleedPt : gutterPt / 2);
   const csMask = (pg: PDFPage, mirrored: boolean) => {
     const white = cmyk(0, 0, 0, 0);
-    const mCenX = mirrored ? (paperWpt - cenX - totalGridW) : cenX;
-    if (gutterPt > 0.5) {
+    const mCenX = mirrored ? (paperWpt - cenX - trimGridW) : cenX;
+    if (gutterPt > 0.1) {
       for (let gc = 0; gc < impo.cols - 1; gc++) {
-        const gx = mCenX + gc * (pieceW + gutterPt) + pieceW;
-        const gutL = gx + Math.min(bleedPt, gutterPt / 2);
-        const gutR = gx + gutterPt - Math.min(bleedPt, gutterPt / 2);
+        const gx = mCenX + (gc + 1) * trimWpt + gc * gutterPt;
+        const gutL = gx + intBleedCs;
+        const gutR = gx + gutterPt - intBleedCs;
         if (gutR > gutL + 0.5) pg.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
       }
       for (let gr = 0; gr < impo.rows - 1; gr++) {
-        const gy = cenY + gr * (pieceH + gutterPt) + pieceH;
-        const gutB = gy + Math.min(bleedPt, gutterPt / 2);
-        const gutT = gy + gutterPt - Math.min(bleedPt, gutterPt / 2);
+        const gy = cenY + (gr + 1) * trimHpt + gr * gutterPt;
+        const gutB = gy + intBleedCs;
+        const gutT = gy + gutterPt - intBleedCs;
         if (gutT > gutB + 0.5) pg.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
+      }
+    }
+    if (gutterPt <= 0 && bleedPt > 0.1) {
+      for (let gc = 0; gc < impo.cols - 1; gc++) {
+        const cutX = mCenX + (gc + 1) * trimWpt;
+        pg.drawRectangle({ x: cutX - bleedPt, y: 0, width: 2 * bleedPt, height: paperHpt, color: white });
+      }
+      for (let gr = 0; gr < impo.rows - 1; gr++) {
+        const cutY = cenY + (gr + 1) * trimHpt;
+        pg.drawRectangle({ x: 0, y: cutY - bleedPt, width: paperWpt, height: 2 * bleedPt, color: white });
       }
     }
     const gridL = mCenX - bleedPt;
     const gridB = cenY - bleedPt;
-    const gridR = mCenX + totalGridW + bleedPt;
-    const gridT = cenY + totalGridH + bleedPt;
+    const gridR = mCenX + trimGridW + bleedPt;
+    const gridT = cenY + trimGridH + bleedPt;
     drawMarginalMasks(pg, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
   }
 
@@ -1176,8 +1188,9 @@ async function exportCutStack(
         if (embeddedPages.length > 0) {
           const ep = embeddedPages[pageIdx];
           const epPage = ep.page;
-          const cellX = cenX + col * (pieceW + gutterPt) + cOffX;
-          const cellY = cenY + (impo.rows - 1 - row) * (pieceH + gutterPt) - cOffY;
+          // Trim position → cell position (offset by bleed)
+          const cellX = cenX + col * csTrimStepW - bleedPt + cOffX;
+          const cellY = cenY + (impo.rows - 1 - row) * csTrimStepH - bleedPt - cOffY;
           const epW = epPage.width || pieceW;
           const epH = epPage.height || pieceH;
           page.drawPage(epPage, { x: cellX, y: cellY, xScale: pieceW / epW, yScale: pieceH / epH });
@@ -1189,8 +1202,8 @@ async function exportCutStack(
           const csStack2 = opts.csStackSize || Math.max(1, embeddedPages.length);
           const seqNumber = startNum + stackNum * csStack2 + s;
           const numStr = formatNumber(opts.numberPrefix || '', seqNumber, opts.numberDigits || 4);
-          const cellXn = cenX + col * (pieceW + gutterPt) + cOffX;
-          const cellYn = cenY + (impo.rows - 1 - row) * (pieceH + gutterPt) - cOffY;
+          const cellXn = cenX + col * csTrimStepW - bleedPt + cOffX;
+          const cellYn = cenY + (impo.rows - 1 - row) * csTrimStepH - bleedPt - cOffY;
           const pdfNumFS = Math.max(6, Math.min((opts.numberFontSize || 12) * pieceW / 150, pieceW * 0.15, pieceH * 0.12));
           const numXpt = cellXn + numPos.x * pieceW;
           const numYpt = cellYn + (1 - numPos.y) * pieceH;
@@ -1206,17 +1219,13 @@ async function exportCutStack(
     }
 
     csMask(page, false);
-    // Use embedded page's trim offset for mark positioning (reads TrimBox)
-    const csEp0 = embeddedPages[0];
-    const csActualTrimOff = csEp0 ? (csEp0.trimOffsetX || 0) / MM : (opts.bleed || 0);
-    const csMarksGutterMM = (opts.gutter || 0) - 2 * csActualTrimOff;
     const marksImpo = {
       marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
       marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
-      pieceW: impo.pieceW, pieceH: impo.pieceH,
+      trimW: impo.trimW, trimH: impo.trimH,
       cols: impo.cols, rows: impo.rows,
-      gutterMM: csMarksGutterMM,
-      bleedMM: csActualTrimOff,
+      gutterMM: opts.gutter || 0,
+      bleedMM: opts.bleed || 0,
       offsetX: impo.offsetX, offsetY: impo.offsetY,
       cropMarks: opts.showCropMarks,
     };
@@ -1243,8 +1252,8 @@ async function exportCutStack(
 
         for (let bRow = 0; bRow < impo.rows; bRow++) {
           for (let bCol = 0; bCol < impo.cols; bCol++) {
-            const frontCellX = cenX + bCol * (pieceW + gutterPt);
-            const fCellY = cenY + (impo.rows - 1 - bRow) * (pieceH + gutterPt);
+            const frontCellX = cenX + bCol * csTrimStepW - bleedPt;
+            const fCellY = cenY + (impo.rows - 1 - bRow) * csTrimStepH - bleedPt;
             const bCellX = isH2H ? (paperWpt - frontCellX - pieceW) : frontCellX;
             const bCellY = isH2H ? fCellY : (paperHpt - fCellY - pieceH);
             backPage.drawPage(bEpPage, { x: bCellX, y: bCellY, xScale: pieceW / bEpW, yScale: pieceH / bEpH });
@@ -1480,73 +1489,95 @@ async function exportGangRun(
 
   const paperWpt = mmToPt(impo.paperW);
   const paperHpt = mmToPt(impo.paperH);
-  const mL = mmToPt(impo.marginL ?? 0);
-  const mT = mmToPt(impo.marginT ?? 0);
+  const mLgr = mmToPt(impo.marginL ?? 0);
+  const mBgr = mmToPt(impo.marginB ?? 0);
+  const bleedPt = mmToPt(opts.bleed || 0);
+  const gutterPt = mmToPt(opts.gutter || 0);
+  const trimWpt = mmToPt(impo.trimW);
+  const trimHpt = mmToPt(impo.trimH);
   const pieceW = mmToPt(impo.pieceW);
   const pieceH = mmToPt(impo.pieceH);
-  // Gutter = trim-to-trim; convert to cell-to-cell gap
-  const grBleedPt = mmToPt(opts.bleed || 0);
-  const gutterPt = mmToPt(opts.gutter || 0) - 2 * grBleedPt;
-  const printableW = paperWpt - mL - mmToPt(impo.marginR ?? 0);
-  const printableH = paperHpt - mT - mmToPt(impo.marginB ?? 0);
-  const totalGridW = impo.cols * pieceW + Math.max(0, impo.cols - 1) * gutterPt;
-  const totalGridH = impo.rows * pieceH + Math.max(0, impo.rows - 1) * gutterPt;
+  const printableW = paperWpt - mLgr - mmToPt(impo.marginR ?? 0);
+  const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mBgr;
+  const trimGridW = impo.cols * trimWpt + Math.max(0, impo.cols - 1) * gutterPt;
+  const trimGridH = impo.rows * trimHpt + Math.max(0, impo.rows - 1) * gutterPt;
   const offXpt = mmToPt(impo.offsetX || 0);
   const offYpt = mmToPt(impo.offsetY || 0);
-  const cenX = mL + (printableW - totalGridW) / 2 + offXpt;
-  const cenY = mmToPt(impo.marginB ?? 0) + (printableH - totalGridH) / 2 - offYpt;
+  const cenX = mLgr + (printableW - trimGridW) / 2 + offXpt;
+  const cenY = mBgr + (printableH - trimGridH) / 2 - offYpt;
+  const grTrimStepW = trimWpt + gutterPt;
+  const grTrimStepH = trimHpt + gutterPt;
 
   const page = doc.addPage([paperWpt, paperHpt]);
   const grUserRot = opts.rotation || 0;
   const grBaseRot = (grUserRot === 180 || grUserRot === 270) ? 180 : 0;
 
-  // Multi-PDF: cellAssign maps posIdx → 1-based "page number" which is really jobIdx+1
   const hasMultiPdf = gangJobEmbedded && gangJobEmbedded.some(arr => arr.length > 0);
 
   for (let row = 0; row < impo.rows; row++) {
     for (let col = 0; col < impo.cols; col++) {
       const posIdx = row * impo.cols + col;
       const pageNum = gangData?.cellAssign?.[posIdx] || 1;
-      const jobIdx = pageNum - 1; // 0-based job index
+      const jobIdx = pageNum - 1;
 
-      // Pick embedded page: multi-PDF uses per-job page 0, legacy uses single PDF pageIdx
       let epObj: EmbeddedPageInfo | undefined;
       if (hasMultiPdf) {
         const jobPages = gangJobEmbedded![jobIdx];
-        epObj = jobPages?.[0]; // page 0 of this job's PDF
+        epObj = jobPages?.[0];
       } else {
         epObj = jobIdx >= 0 && jobIdx < embeddedPages.length ? embeddedPages[jobIdx] : undefined;
       }
 
       if (epObj) {
         const epPage = epObj.page;
-        const cellX = cenX + col * (pieceW + gutterPt);
-        const cellY = cenY + (impo.rows - 1 - row) * (pieceH + gutterPt);
+        // Trim position → offset by bleed for cell placement
+        const cellX = cenX + col * grTrimStepW - bleedPt;
+        const cellY = cenY + (impo.rows - 1 - row) * grTrimStepH - bleedPt;
         let grExtraRot = grBaseRot;
         if (opts.duplexOrient === 'h2f' && (row % 2 === 1)) grExtraRot = (grExtraRot + 180) % 360;
-        drawEmbeddedPage(page, epObj, cellX + grBleedPt - epObj.trimOffsetX, cellY + grBleedPt - epObj.trimOffsetY, epPage.width, epPage.height, grExtraRot);
+        drawEmbeddedPage(page, epObj, cellX + bleedPt - epObj.trimOffsetX, cellY + bleedPt - epObj.trimOffsetY, epPage.width, epPage.height, grExtraRot);
       }
     }
   }
 
-  // Masking
-  const bleedPt = mmToPt(opts.bleed || 0);
-  drawGutterMasks(page, paperWpt, paperHpt, cenX, cenY, impo.cols, impo.rows, pieceW, pieceH, gutterPt, bleedPt, totalGridH);
+  // Asymmetric gutter masks
+  const intBleedGr = gutterPt <= 0 ? 0 : (gutterPt >= 2 * bleedPt ? bleedPt : gutterPt / 2);
+  const white = cmyk(0, 0, 0, 0);
+  if (gutterPt > 0.1) {
+    for (let gc = 0; gc < impo.cols - 1; gc++) {
+      const gx = cenX + (gc + 1) * trimWpt + gc * gutterPt;
+      const gutL = gx + intBleedGr;
+      const gutR = gx + gutterPt - intBleedGr;
+      if (gutR > gutL + 0.5) page.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
+    }
+    for (let gr = 0; gr < impo.rows - 1; gr++) {
+      const gy = cenY + (gr + 1) * trimHpt + gr * gutterPt;
+      const gutB = gy + intBleedGr;
+      const gutT = gy + gutterPt - intBleedGr;
+      if (gutT > gutB + 0.5) page.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
+    }
+  }
+  if (gutterPt <= 0 && bleedPt > 0.1) {
+    for (let gc = 0; gc < impo.cols - 1; gc++) {
+      const cutX = cenX + (gc + 1) * trimWpt;
+      page.drawRectangle({ x: cutX - bleedPt, y: 0, width: 2 * bleedPt, height: paperHpt, color: white });
+    }
+    for (let gr = 0; gr < impo.rows - 1; gr++) {
+      const cutY = cenY + (gr + 1) * trimHpt;
+      page.drawRectangle({ x: 0, y: cutY - bleedPt, width: paperWpt, height: 2 * bleedPt, color: white });
+    }
+  }
 
   const gridL = cenX - bleedPt, gridB = cenY - bleedPt;
-  const gridR = cenX + totalGridW + bleedPt, gridT = cenY + totalGridH + bleedPt;
+  const gridR = cenX + trimGridW + bleedPt, gridT = cenY + trimGridH + bleedPt;
   drawMarginalMasks(page, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
 
-  // Use embedded page's trim offset for mark positioning (reads TrimBox)
-  const grEp0 = embeddedPages[0];
-  const grActualTrimOff = grEp0 ? (grEp0.trimOffsetX || 0) / MM : (opts.bleed || 0);
-  const grMarksGutterMM = (opts.gutter || 0) - 2 * grActualTrimOff;
   drawPDFMarks(page, paperWpt, paperHpt, {
     marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
     marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
-    pieceW: impo.pieceW, pieceH: impo.pieceH,
+    trimW: impo.trimW, trimH: impo.trimH,
     cols: impo.cols, rows: impo.rows,
-    gutterMM: grMarksGutterMM, bleedMM: grActualTrimOff,
+    gutterMM: opts.gutter || 0, bleedMM: opts.bleed || 0,
     offsetX: impo.offsetX, offsetY: impo.offsetY,
     cropMarks: opts.showCropMarks,
   }, {
