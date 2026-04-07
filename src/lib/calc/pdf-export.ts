@@ -688,38 +688,36 @@ async function exportNUp(
           const epRawW = epPage.width || pieceW;
           const epRawH = epPage.height || pieceH;
 
+          // Scale PDF to fit TRIM area (not cell) — bleed must not affect zoom
           const needsSwap = (totalRot === 90 || totalRot === 270);
-          const scaleX = needsSwap ? (pieceH / epRawW) : (pieceW / epRawW);
-          const scaleY = needsSwap ? (pieceW / epRawH) : (pieceH / epRawH);
+          const scaleX = needsSwap ? (trimHpt / epRawW) : (trimWpt / epRawW);
+          const scaleY = needsSwap ? (trimWpt / epRawH) : (trimHpt / epRawH);
 
-          // Cell position
+          // Place PDF at TRIM position (not cell) — PDF is scaled to trim size
           let visX: number, visY: number;
           if (isBackSide && opts.duplexOrient === 'h2f') {
-            visX = frontCellX;
-            visY = paperHpt - cellY - pieceH;
+            visX = frontTrimX;
+            visY = paperHpt - trimYpos - trimHpt;
           } else {
-            visX = isBackSide ? (paperWpt - frontCellX - pieceW) : frontCellX;
-            visY = cellY;
+            visX = isBackSide ? (paperWpt - frontTrimX - trimWpt) : frontTrimX;
+            visY = trimYpos;
           }
 
-          // Clip rectangle — must match actual draw position (mirrored for back side)
+          // Clip rectangle — visX/visY are now trim positions
           // For back H2H: L↔R swap. For back H2F: T↔B swap.
           let vcBL = cBL, vcBR = cBR, vcBT = cBT, vcBB = cBB;
           if (isBackSide && opts.duplexOrient !== 'h2f') { vcBL = cBR; vcBR = cBL; }
           if (isBackSide && opts.duplexOrient === 'h2f') { vcBT = cBB; vcBB = cBT; }
-          // visTrimX/Y = cell origin + bleed on that side
-          const visTrimX = visX + bleedPt; // cell always placed at trimX - bleedPt
-          const visTrimY = visY + bleedPt;
-          const clipX = visTrimX - vcBL;
-          const clipY = visTrimY - vcBB;
+          const clipX = visX - vcBL;
+          const clipY = visY - vcBB;
           const clipW = trimWpt + vcBL + vcBR;
           const clipH = trimHpt + vcBT + vcBB;
 
-          // Adjust draw origin for rotation
+          // Adjust draw origin for rotation (using trim dimensions)
           let drawX = visX, drawY = visY;
-          if (totalRot === 90) { drawX = visX + pieceW; }
-          else if (totalRot === 270) { drawY = visY + pieceH; }
-          else if (totalRot === 180) { drawX = visX + pieceW; drawY = visY + pieceH; }
+          if (totalRot === 90) { drawX = visX + trimWpt; }
+          else if (totalRot === 270) { drawY = visY + trimHpt; }
+          else if (totalRot === 180) { drawX = visX + trimWpt; drawY = visY + trimHpt; }
 
           // Clip to asymmetric cell bounds, then draw
           page.pushOperators(pushGraphicsState(), rectangle(clipX, clipY, clipW, clipH), clip(), endPath());
