@@ -178,10 +178,10 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
 
   const { w: pw, h: ph } = printable(area);
 
-  // When forcing, ignore machine margins — use full paper
+  // Always fit on FULL paper dimensions — margins are advisory, not restrictive
   const isForced = !!(forceUps || forceCols || forceRows);
-  const fitW = isForced ? area.paperW : pw;
-  const fitH = isForced ? area.paperH : ph;
+  const fitW = area.paperW;
+  const fitH = area.paperH;
 
   // Normalize rotation to 0-359
   const rot = ((rotation || 0) % 360 + 360) % 360;
@@ -211,7 +211,7 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     while (cols * rows > forceUps && rows > 1) rows--;
   } else {
     // Try both orientations, pick the one with more ups
-    const best = bestOrientation(pw, ph, tW, tH, bleed, gutter);
+    const best = bestOrientation(area.paperW, area.paperH, tW, tH, bleed, gutter);
     cols = best.cols;
     rows = best.rows;
     if (best.rotated) {
@@ -231,12 +231,11 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
 
   const rawSheets = Math.ceil(qty / ups);
 
-  // Center the trim grid in printable area
-  // gridStartX/Y = top-left of first TRIM cell (not bleed)
-  const cenAreaW = isForced ? area.paperW : pw;
-  const cenAreaH = isForced ? area.paperH : ph;
-  const cenBaseX = isForced ? 0 : area.marginLeft;
-  const cenBaseY = isForced ? 0 : area.marginTop;
+  // Center the trim grid in printable area (margins define center, not fitting limits)
+  const cenAreaW = pw;
+  const cenAreaH = ph;
+  const cenBaseX = area.marginLeft;
+  const cenBaseY = area.marginTop;
   const trimGridW = cols * tW + (cols - 1) * gutter;
   const trimGridH = rows * tH + (rows - 1) * gutter;
   const gridStartX = cenBaseX + (cenAreaW - trimGridW) / 2;
@@ -251,6 +250,9 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   // pieceW/H = max cell size (external cell: trim + 2*bleed) for backward compat
   const maxCellW = tW + 2 * bleed;
   const maxCellH = tH + 2 * bleed;
+
+  // Check if grid extends into machine margins
+  const marginWarning = usedW > pw || usedH > ph;
 
   return {
     mode: 'nup',
@@ -268,6 +270,7 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     wastePercent: wastePercent(area.paperW, area.paperH, usedW, usedH),
     cells,
     totalSheets: rawSheets,
+    marginWarning,
     ...marginInfo(area),
   };
 }

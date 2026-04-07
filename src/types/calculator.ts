@@ -207,6 +207,9 @@ export interface ImpositionResult {
   totalSheets?: number;
   signatures?: number;
 
+  // Warning: grid extends beyond printable area (into machine margins)
+  marginWarning?: boolean;
+
   // Margins (mm)
   marginL?: number;
   marginR?: number;

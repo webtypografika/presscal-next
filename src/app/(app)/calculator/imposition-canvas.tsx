@@ -138,24 +138,12 @@ function drawSheet(
   ctx.fill();
   ctx.stroke();
 
-  // Margins — for offset: marginTop=gripper goes to bottom, marginBottom=tail goes to top
+  // Margin dimensions (drawing deferred after cells for correct z-order)
   const isOffset = machCat === 'offset';
   const mL = marginLeft * scale;
   const mR = marginRight * scale;
   const mT = (isOffset ? marginBottom : marginTop) * scale;  // visual top
   const mB = (isOffset ? marginTop : marginBottom) * scale;   // visual bottom (gripper for offset)
-
-  ctx.fillStyle = COLORS.margin;
-  ctx.fillRect(offX, offY, drawW, mT);
-  ctx.fillRect(offX, offY + drawH - mB, drawW, mB);
-  ctx.fillRect(offX, offY + mT, mL, drawH - mT - mB);
-  ctx.fillRect(offX + drawW - mR, offY + mT, mR, drawH - mT - mB);
-
-  ctx.setLineDash([3, 3]);
-  ctx.strokeStyle = COLORS.marginStroke;
-  ctx.lineWidth = 0.6;
-  ctx.strokeRect(offX + mL, offY + mT, drawW - mL - mR, drawH - mT - mB);
-  ctx.setLineDash([]);
 
   // Gripper/Tail labels (offset)
   // DB convention: marginTop = gripper (off_gripper), marginBottom = tail (off_margin_tail)
@@ -617,6 +605,18 @@ function drawSheet(
     }
   }
 
+  // ─── MARGINS OVERLAY (drawn ON TOP of cells/PDFs with transparency) ───
+  ctx.fillStyle = COLORS.margin;
+  ctx.fillRect(offX, offY, drawW, mT);
+  ctx.fillRect(offX, offY + drawH - mB, drawW, mB);
+  ctx.fillRect(offX, offY + mT, mL, drawH - mT - mB);
+  ctx.fillRect(offX + drawW - mR, offY + mT, mR, drawH - mT - mB);
+  ctx.setLineDash([3, 3]);
+  ctx.strokeStyle = COLORS.marginStroke;
+  ctx.lineWidth = 0.6;
+  ctx.strokeRect(offX + mL, offY + mT, drawW - mL - mR, drawH - mT - mB);
+  ctx.setLineDash([]);
+
   // ─── COLOR BAR ───
   if (showColorBar) {
     const cbS = colorBarScale / 100;
@@ -1077,6 +1077,13 @@ export default function ImpositionCanvas({
     ctx.fillStyle = COLORS.info;
     ctx.textAlign = 'center';
     ctx.fillText(parts.join(' · '), cW / 2, cH - 5);
+
+    // Margin warning
+    if (impo.marginWarning) {
+      ctx.fillStyle = 'rgba(239,68,68,0.85)';
+      ctx.font = '700 9px Inter, DM Sans, sans-serif';
+      ctx.fillText('ΕΚΤΟΣ ΟΡΙΩΝ ΜΗΧΑΝΗΣ', cW / 2, cH - 16);
+    }
 
   }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate, onOffsetChange, contentScale]);
 
