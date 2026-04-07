@@ -689,21 +689,30 @@ async function exportNUp(
           const epRawW = epPage.width || pieceW;
           const epRawH = epPage.height || pieceH;
 
-          // Scale PDF so its content fills the CELL (trim + bleed on all sides)
-          // This ensures TrimBox aligns with trim area and bleed extends beyond
+          // Scale so embedded PDF's TrimBox fills our trim area exactly
+          // TrimBox size in pt = epObj.trimW × epObj.trimH
+          // If no TrimBox info, fall back to full page → trim (same as before)
+          const epTW = epObj.trimW || epRawW;
+          const epTH = epObj.trimH || epRawH;
           const cScaleFactor = (opts.contentScale || 100) / 100;
           const needsSwap = (totalRot === 90 || totalRot === 270);
-          const scaleX = (needsSwap ? (pieceH / epRawW) : (pieceW / epRawW)) * cScaleFactor;
-          const scaleY = (needsSwap ? (pieceW / epRawH) : (pieceH / epRawH)) * cScaleFactor;
+          const scaleX = (needsSwap ? (trimHpt / epTW) : (trimWpt / epTW)) * cScaleFactor;
+          const scaleY = (needsSwap ? (trimWpt / epTH) : (trimHpt / epTH)) * cScaleFactor;
 
-          // Place PDF at CELL position (trim - bleed) — reuse frontCellX/cellY from above
+          // Place PDF so its TrimBox aligns with our trim position
+          // PDF origin is CropBox bottom-left; TrimBox starts at trimOffsetX/Y inside
+          // After scaling, the trim offset in output coords:
+          const scaledOffX = epObj.trimOffsetX * scaleX / cScaleFactor;
+          const scaledOffY = epObj.trimOffsetY * scaleY / cScaleFactor;
+          // visX/visY = where to place PDF origin so TrimBox lands on frontTrimX/trimYpos
           let visX: number, visY: number;
           if (isBackSide && opts.duplexOrient === 'h2f') {
-            visX = frontCellX;
-            visY = paperHpt - cellY - pieceH;
+            visX = frontTrimX - scaledOffX;
+            visY = (paperHpt - trimYpos - trimHpt) - scaledOffY;
           } else {
-            visX = isBackSide ? (paperWpt - frontCellX - pieceW) : frontCellX;
-            visY = cellY;
+            const ftx = isBackSide ? (paperWpt - frontTrimX - trimWpt) : frontTrimX;
+            visX = ftx - scaledOffX;
+            visY = trimYpos - scaledOffY;
           }
 
           // Clip rectangle — based on trim position with asymmetric bleed
@@ -711,19 +720,21 @@ async function exportNUp(
           let vcBL = cBL, vcBR = cBR, vcBT = cBT, vcBB = cBB;
           if (isBackSide && opts.duplexOrient !== 'h2f') { vcBL = cBR; vcBR = cBL; }
           if (isBackSide && opts.duplexOrient === 'h2f') { vcBT = cBB; vcBB = cBT; }
-          // visX is cell pos (trim - bleed), so trim pos = visX + bleedPt
-          const visTrimX = visX + bleedPt;
-          const visTrimY = visY + bleedPt;
+          // visX + scaledOffX = trim position
+          const visTrimX = visX + scaledOffX;
+          const visTrimY = visY + scaledOffY;
           const clipX = visTrimX - vcBL;
           const clipY = visTrimY - vcBB;
           const clipW = trimWpt + vcBL + vcBR;
           const clipH = trimHpt + vcBT + vcBB;
 
-          // Adjust draw origin for rotation (using cell/piece dimensions)
+          // Adjust draw origin for rotation
+          const rendW = epRawW * scaleX / cScaleFactor;
+          const rendH = epRawH * scaleY / cScaleFactor;
           let drawX = visX, drawY = visY;
-          if (totalRot === 90) { drawX = visX + pieceW; }
-          else if (totalRot === 270) { drawY = visY + pieceH; }
-          else if (totalRot === 180) { drawX = visX + pieceW; drawY = visY + pieceH; }
+          if (totalRot === 90) { drawX = visX + rendW; }
+          else if (totalRot === 270) { drawY = visY + rendH; }
+          else if (totalRot === 180) { drawX = visX + rendW; drawY = visY + rendH; }
 
           // Clip to asymmetric cell bounds, then draw
           page.pushOperators(pushGraphicsState(), rectangle(clipX, clipY, clipW, clipH), clip(), endPath());
