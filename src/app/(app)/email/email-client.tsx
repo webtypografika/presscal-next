@@ -36,6 +36,10 @@ export default function EmailClient() {
   const [creatingQuote, setCreatingQuote] = useState(false);
   const [matchedCustomer, setMatchedCustomer] = useState<any>(null);
   const [linkedEmailMap, setLinkedEmailMap] = useState<Record<string, string>>({}); // emailId → quoteNumber
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+  const [linkSearch, setLinkSearch] = useState('');
+  const [linkQuotes, setLinkQuotes] = useState<any[]>([]);
+  const [linkLoading, setLinkLoading] = useState(false);
   const [customerLoading, setCustomerLoading] = useState(false);
 
   // ─── FETCH MESSAGES ───
@@ -501,6 +505,82 @@ export default function EmailClient() {
                     {creatingQuote ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-file-invoice" />}
                     Προσφορά
                   </button>
+                  {/* Link to existing quote */}
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={async () => {
+                        setShowLinkPicker(p => !p);
+                        if (!showLinkPicker) {
+                          setLinkLoading(true);
+                          try {
+                            const { getQuotes } = await import('../quotes/actions');
+                            const qs = await getQuotes();
+                            setLinkQuotes(qs.filter(q => q.status !== 'cancelled').slice(0, 50));
+                          } catch {} finally { setLinkLoading(false); }
+                        }
+                      }}
+                      title="Σύνδεση σε υπάρχουσα προσφορά"
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        padding: '5px 8px', borderRadius: 6, fontSize: '0.68rem', fontWeight: 600,
+                        border: '1px solid var(--border)', background: 'transparent',
+                        color: linkedEmailMap[detail?.id] ? '#14b8a6' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <i className="fas fa-link" />
+                      {linkedEmailMap[detail?.id] ? linkedEmailMap[detail.id] : 'Σύνδεση'}
+                    </button>
+                    {showLinkPicker && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 999,
+                        background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                        borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                        width: 260, maxHeight: 300, overflow: 'hidden',
+                      }}>
+                        <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
+                          <input
+                            autoFocus
+                            value={linkSearch}
+                            onChange={e => setLinkSearch(e.target.value)}
+                            placeholder="Αναζήτηση προσφοράς..."
+                            style={{ width: '100%', border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.75rem', outline: 'none', fontFamily: 'inherit' }}
+                          />
+                        </div>
+                        <div style={{ overflowY: 'auto', maxHeight: 240 }}>
+                          {linkLoading ? (
+                            <div style={{ padding: 12, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}><i className="fas fa-spinner fa-spin" /></div>
+                          ) : linkQuotes
+                            .filter(q => !linkSearch || q.number?.toLowerCase().includes(linkSearch.toLowerCase()) || q.title?.toLowerCase().includes(linkSearch.toLowerCase()) || q.company?.name?.toLowerCase().includes(linkSearch.toLowerCase()))
+                            .map(q => (
+                            <button
+                              key={q.id}
+                              onClick={async () => {
+                                if (!detail) return;
+                                await linkEmailToQuote(q.id, detail.id, detail.threadId);
+                                setLinkedEmailMap(prev => ({ ...prev, [detail.id]: q.number }));
+                                setShowLinkPicker(false);
+                                setLinkSearch('');
+                              }}
+                              style={{
+                                display: 'block', width: '100%', padding: '8px 10px', border: 'none',
+                                background: 'transparent', color: 'var(--text)', fontSize: '0.72rem',
+                                cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                                borderBottom: '1px solid rgba(255,255,255,0.04)',
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                            >
+                              <div style={{ fontWeight: 700, color: 'var(--accent)' }}>{q.number}</div>
+                              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                {q.title || q.company?.name || '—'} · {q.grandTotal?.toFixed(2)}€
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <ActionBtn icon="fa-reply" title="Απαντηση" onClick={handleReply} />
                   <ActionBtn icon="fa-share" title="Προωθηση" onClick={handleForward} />
                 </div>
