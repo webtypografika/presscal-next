@@ -3174,6 +3174,8 @@ export default function CalculatorShell() {
                   setImpoOffsetY(y);
                 } : undefined}
                 contentScale={impoContentScale}
+                onGutterChange={v => setImpoGutter(v)}
+                onBleedChange={v => setImpoBleedOverride(v)}
               />
               {/* PDF upload overlay (top-left) */}
               <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>

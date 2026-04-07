@@ -57,6 +57,8 @@ interface ImpositionCanvasProps {
   onRotate?: () => void;  // rotate content 90°
   onOffsetChange?: (x: number, y: number) => void;  // drag to move grid offset
   contentScale?: number;  // % content scale (100 = 1:1, default)
+  onGutterChange?: (v: number) => void;
+  onBleedChange?: (v: number) => void;
 }
 
 type ViewMode = 'single' | 'dual';
@@ -688,6 +690,7 @@ export default function ImpositionCanvas({
   pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
   gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate, onSmBlockMove,
   onGridResize, onRotate, onOffsetChange, contentScale,
+  onGutterChange, onBleedChange,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1548,6 +1551,53 @@ export default function ImpositionCanvas({
             }}
             onBlur={() => setEditDist(null)}
           />
+        </div>
+      )}
+
+      {/* Gutter & Bleed scroll controls (bottom-left of canvas) */}
+      {(onGutterChange || onBleedChange) && (
+        <div style={{
+          position: 'absolute', bottom: 26, left: 8, zIndex: 3,
+          display: 'flex', gap: 4, alignItems: 'center',
+        }}>
+          {onGutterChange && (
+            <div
+              title="Scroll ή drag για αλλαγή Gutter"
+              style={{
+                background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+                borderRadius: 5, padding: '2px 6px', cursor: 'ns-resize', userSelect: 'none',
+                fontSize: '0.6rem', fontWeight: 700, color: '#94a3b8', letterSpacing: '0.03em',
+                display: 'flex', alignItems: 'center', gap: 3,
+              }}
+              onWheel={(e) => {
+                e.preventDefault(); e.stopPropagation();
+                const delta = e.deltaY > 0 ? -0.5 : 0.5;
+                onGutterChange(Math.max(0, Math.round((gutter + delta) * 10) / 10));
+              }}
+            >
+              <span style={{ color: '#64748b' }}>G</span>
+              <span style={{ color: '#f58220' }}>{gutter.toFixed(1)}</span>
+            </div>
+          )}
+          {onBleedChange && (
+            <div
+              title="Scroll ή drag για αλλαγή Bleed"
+              style={{
+                background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+                borderRadius: 5, padding: '2px 6px', cursor: 'ns-resize', userSelect: 'none',
+                fontSize: '0.6rem', fontWeight: 700, color: '#94a3b8', letterSpacing: '0.03em',
+                display: 'flex', alignItems: 'center', gap: 3,
+              }}
+              onWheel={(e) => {
+                e.preventDefault(); e.stopPropagation();
+                const delta = e.deltaY > 0 ? -0.5 : 0.5;
+                onBleedChange(Math.max(0, Math.round((bleed + delta) * 10) / 10));
+              }}
+            >
+              <span style={{ color: '#64748b' }}>B</span>
+              <span style={{ color: '#ef4444' }}>{bleed.toFixed(1)}</span>
+            </div>
+          )}
         </div>
       )}
 
