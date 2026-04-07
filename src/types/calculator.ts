@@ -113,12 +113,17 @@ export interface CalculatorResult {
 export interface ImpositionCell {
   col: number;
   row: number;
-  x: number;
+  x: number;      // cell top-left (includes bleed)
   y: number;
-  w: number;
-  h: number;
+  w: number;       // cell width (trim + bleedL + bleedR)
+  h: number;       // cell height (trim + bleedT + bleedB)
   pageNum?: number;
   rotation?: number;
+  // Per-side bleed (asymmetric: internal sides may be 0 or reduced)
+  bleedL: number;  // mm
+  bleedR: number;
+  bleedT: number;
+  bleedB: number;
 }
 
 // ─── BOOKLET SIGNATURE MAP ───

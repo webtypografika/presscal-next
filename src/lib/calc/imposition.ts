@@ -58,8 +58,18 @@ export interface ImpositionInput {
 
 // ─── CORE HELPERS ───
 
-/** How many cells fit along `available` mm with given cellSize and gutter */
-export function fitCount(available: number, cellSize: number, gutter: number): number {
+/** How many trims fit along `available` mm (trim-based fitting).
+ *  Total = 2*bleed + N*trimSize + (N-1)*gutter <= available */
+export function fitCount(available: number, trimSize: number, bleed: number, gutter: number): number {
+  const needed = 2 * bleed + trimSize;
+  if (trimSize <= 0 || available < needed) return 0;
+  const step = trimSize + gutter;
+  if (step <= 0) return 1;
+  return 1 + Math.floor((available - needed) / step);
+}
+
+/** Legacy fitCount for modes that pass cellSize + cellGap directly */
+export function fitCountLegacy(available: number, cellSize: number, gutter: number): number {
   if (cellSize <= 0 || available < cellSize) return 0;
   const step = cellSize + gutter;
   if (step <= 0) return 1;
@@ -74,18 +84,26 @@ export function printable(a: PrintableArea): { w: number; h: number } {
   };
 }
 
+/** Progressive internal bleed: how much bleed a cell gets on a side facing another cell.
+ *  gutter=0 → 0 (μονοτομή), gutter<2*bleed → gutter/2, gutter>=2*bleed → full bleed */
+export function internalBleed(gutter: number, bleed: number): number {
+  if (gutter <= 0) return 0;
+  if (gutter >= 2 * bleed) return bleed;
+  return gutter / 2;
+}
+
 /** Try both orientations, return the one with more UPs */
 function bestOrientation(
   pw: number, ph: number,
-  cellW: number, cellH: number,
-  gutter: number,
+  trimW: number, trimH: number,
+  bleed: number, gutter: number,
 ): { cols: number; rows: number; rotated: boolean } {
-  const cols1 = fitCount(pw, cellW, gutter);
-  const rows1 = fitCount(ph, cellH, gutter);
+  const cols1 = fitCount(pw, trimW, bleed, gutter);
+  const rows1 = fitCount(ph, trimH, bleed, gutter);
   const ups1 = cols1 * rows1;
 
-  const cols2 = fitCount(pw, cellH, gutter);
-  const rows2 = fitCount(ph, cellW, gutter);
+  const cols2 = fitCount(pw, trimH, bleed, gutter);
+  const rows2 = fitCount(ph, trimW, bleed, gutter);
   const ups2 = cols2 * rows2;
 
   if (ups2 > ups1) {
@@ -94,26 +112,36 @@ function bestOrientation(
   return { cols: cols1, rows: rows1, rotated: false };
 }
 
-/** Build cell array for a grid */
+/** Build cell array with asymmetric per-cell bleed.
+ *  Positions based on trim grid; each cell's bleed depends on its neighbours. */
 function buildCells(
   cols: number, rows: number,
-  cellW: number, cellH: number,
-  gutter: number,
-  offsetX: number, offsetY: number,
+  trimW: number, trimH: number,
+  bleed: number, gutter: number,
+  gridStartX: number, gridStartY: number,
   rotation: number = 0,
 ): ImpositionCell[] {
+  const intBleed = internalBleed(gutter, bleed);
   const cells: ImpositionCell[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
+      const bL = c === 0 ? bleed : intBleed;
+      const bR = c === cols - 1 ? bleed : intBleed;
+      const bT = r === 0 ? bleed : intBleed;
+      const bB = r === rows - 1 ? bleed : intBleed;
+      // Trim position on the regular grid
+      const trimX = gridStartX + c * (trimW + gutter);
+      const trimY = gridStartY + r * (trimH + gutter);
       cells.push({
         col: c,
         row: r,
-        x: offsetX + c * (cellW + gutter),
-        y: offsetY + r * (cellH + gutter),
-        w: cellW,
-        h: cellH,
+        x: trimX - bL,
+        y: trimY - bT,
+        w: trimW + bL + bR,
+        h: trimH + bT + bB,
         pageNum: r * cols + c + 1,
         rotation,
+        bleedL: bL, bleedR: bR, bleedT: bT, bleedB: bB,
       });
     }
   }
@@ -148,13 +176,7 @@ function wastePercent(paperW: number, paperH: number, usedW: number, usedH: numb
 export function calcNUp(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, sides, gutter, area, forceUps, forceCols, forceRows, rotation } = input;
 
-  const rawCellW = trimW + bleed * 2;
-  const rawCellH = trimH + bleed * 2;
   const { w: pw, h: ph } = printable(area);
-
-  // Gutter = trim-to-trim distance. Convert to cell-to-cell gap:
-  // cellGap = gutter - 2*bleed (shared bleeds between adjacent cells)
-  const cellGap = gutter - 2 * bleed;
 
   // When forcing, ignore machine margins — use full paper
   const isForced = !!(forceUps || forceCols || forceRows);
@@ -163,12 +185,10 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
 
   // Normalize rotation to 0-359
   const rot = ((rotation || 0) % 360 + 360) % 360;
-  // 90°-ish or 270°-ish: cells are placed rotated (swap W↔H)
+  // 90°-ish or 270°-ish: swap trim dimensions
   let isSwapped = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
-  // Cell dimensions after rotation swap
-  let cellW = isSwapped ? rawCellH : rawCellW;
-  let cellH = isSwapped ? rawCellW : rawCellH;
-  // Content rotation applied to rendering
+  let tW = isSwapped ? trimH : trimW;
+  let tH = isSwapped ? trimW : trimH;
   let contentRotation = rot;
 
   let cols: number, rows: number;
@@ -178,50 +198,59 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     rows = forceRows;
   } else if (forceCols) {
     cols = forceCols;
-    rows = fitCount(fitH, cellH, cellGap);
+    rows = fitCount(fitH, tH, bleed, gutter);
   } else if (forceRows) {
     rows = forceRows;
-    cols = fitCount(fitW, cellW, cellGap);
+    cols = fitCount(fitW, tW, bleed, gutter);
   } else if (forceUps) {
-    cols = fitCount(fitW, cellW, cellGap);
-    rows = fitCount(fitH, cellH, cellGap);
-    // If nothing fits naturally, force at least 1×1
+    cols = fitCount(fitW, tW, bleed, gutter);
+    rows = fitCount(fitH, tH, bleed, gutter);
     if (cols === 0) cols = 1;
     if (rows === 0) rows = 1;
     while (cols * rows > forceUps && cols > 1) cols--;
     while (cols * rows > forceUps && rows > 1) rows--;
   } else {
     // Try both orientations, pick the one with more ups
-    const best = bestOrientation(pw, ph, cellW, cellH, cellGap);
+    const best = bestOrientation(pw, ph, tW, tH, bleed, gutter);
     cols = best.cols;
     rows = best.rows;
     if (best.rotated) {
-      // Rotated orientation gives more ups — swap cell dims
       isSwapped = !isSwapped;
-      cellW = isSwapped ? rawCellH : rawCellW;
-      cellH = isSwapped ? rawCellW : rawCellH;
+      tW = isSwapped ? trimH : trimW;
+      tH = isSwapped ? trimW : trimH;
       contentRotation = (rot + 90) % 360;
     }
   }
 
   const ups = Math.max(cols * rows, 1);
-  const actualCellW = cellW;
-  const actualCellH = cellH;
   const rotated = isSwapped;
 
-  const usedW = cols * actualCellW + (cols - 1) * cellGap;
-  const usedH = rows * actualCellH + (rows - 1) * cellGap;
+  // Total footprint: 2*bleed (external) + N*trim + (N-1)*gutter
+  const usedW = 2 * bleed + cols * tW + (cols - 1) * gutter;
+  const usedH = 2 * bleed + rows * tH + (rows - 1) * gutter;
 
   const rawSheets = Math.ceil(qty / ups);
 
-  // Center grid in printable area (when forced, use full paper)
-  const cenOffX = isForced ? (area.paperW - usedW) / 2 : area.marginLeft + (pw - usedW) / 2;
-  const cenOffY = isForced ? (area.paperH - usedH) / 2 : area.marginTop + (ph - usedH) / 2;
+  // Center the trim grid in printable area
+  // gridStartX/Y = top-left of first TRIM cell (not bleed)
+  const cenAreaW = isForced ? area.paperW : pw;
+  const cenAreaH = isForced ? area.paperH : ph;
+  const cenBaseX = isForced ? 0 : area.marginLeft;
+  const cenBaseY = isForced ? 0 : area.marginTop;
+  const trimGridW = cols * tW + (cols - 1) * gutter;
+  const trimGridH = rows * tH + (rows - 1) * gutter;
+  const gridStartX = cenBaseX + (cenAreaW - trimGridW) / 2;
+  const gridStartY = cenBaseY + (cenAreaH - trimGridH) / 2;
+
   const cells = buildCells(
-    cols, rows, actualCellW, actualCellH, cellGap,
-    cenOffX, cenOffY,
+    cols, rows, tW, tH, bleed, gutter,
+    gridStartX, gridStartY,
     contentRotation,
   );
+
+  // pieceW/H = max cell size (external cell: trim + 2*bleed) for backward compat
+  const maxCellW = tW + 2 * bleed;
+  const maxCellH = tH + 2 * bleed;
 
   return {
     mode: 'nup',
@@ -231,10 +260,10 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     rows,
     paperW: area.paperW,
     paperH: area.paperH,
-    pieceW: actualCellW,
-    pieceH: actualCellH,
-    trimW,
-    trimH,
+    pieceW: maxCellW,
+    pieceH: maxCellH,
+    trimW: tW,
+    trimH: tH,
     rotated,
     wastePercent: wastePercent(area.paperW, area.paperH, usedW, usedH),
     cells,
@@ -390,9 +419,9 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   const spreadW = cellW * 2 + gutter;
   const spreadH = cellH;
 
-  // How many spreads fit on the sheet
-  const spreadCols = fitCount(pw, spreadW, gutter);
-  const spreadRows = fitCount(ph, spreadH, gutter);
+  // How many spreads fit on the sheet (booklet uses its own cell model)
+  const spreadCols = fitCountLegacy(pw, spreadW, gutter);
+  const spreadRows = fitCountLegacy(ph, spreadH, gutter);
   const spreadsPerSheet = Math.max(spreadCols * spreadRows, 1);
 
   // Each spread = 4 pages (2 front, 2 back)
@@ -413,6 +442,7 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
       const baseY = area.marginTop + sr * (spreadH + gutter);
 
       // Left page (front left = first element of front pair)
+      // Booklet: left page has face bleed on left, spine=0 on right
       cells.push({
         col: sc * 2,
         row: sr,
@@ -421,8 +451,10 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
         w: cellW,
         h: cellH,
         pageNum: sig.front[0],
+        bleedL: bleed, bleedR: 0, bleedT: bleed, bleedB: bleed,
       });
       // Right page (front right = second element of front pair)
+      // Booklet: right page has spine=0 on left, face bleed on right
       cells.push({
         col: sc * 2 + 1,
         row: sr,
@@ -431,6 +463,7 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
         w: cellW,
         h: cellH,
         pageNum: sig.front[1],
+        bleedL: 0, bleedR: bleed, bleedT: bleed, bleedB: bleed,
       });
       sigIdx++;
     }
@@ -608,6 +641,7 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
           w: cellW, h: cellH,
           pageNum,
           rotation: rot,
+          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
         });
       }
     }
@@ -670,11 +704,11 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const halfH = isTumble ? ph / 2 : ph;
 
   // ─── Step 1: Auto-orient — find best base orientation ───
-  const cols1 = fitCount(halfW, cellW, gutter);
-  const rows1 = fitCount(halfH, cellH, gutter);
+  const cols1 = fitCountLegacy(halfW, cellW, gutter);
+  const rows1 = fitCountLegacy(halfH, cellH, gutter);
   const fit1 = cols1 * rows1;
-  const cols2 = fitCount(halfW, cellH, gutter);
-  const rows2 = fitCount(halfH, cellW, gutter);
+  const cols2 = fitCountLegacy(halfW, cellH, gutter);
+  const rows2 = fitCountLegacy(halfH, cellW, gutter);
   const fit2 = cols2 * rows2;
 
   let autoRotated = fit2 > fit1;
@@ -692,8 +726,8 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const actualCellH = userSwaps ? baseCellW : baseCellH;
 
   // Re-compute fit with final cell dimensions
-  const cols = fitCount(halfW, actualCellW, gutter);
-  const rows = fitCount(halfH, actualCellH, gutter);
+  const cols = fitCountLegacy(halfW, actualCellW, gutter);
+  const rows = fitCountLegacy(halfH, actualCellH, gutter);
   const fitsPerHalf = cols * rows;
 
   if (fitsPerHalf === 0) {
@@ -746,6 +780,7 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
           w: actualCellW, h: actualCellH,
           pageNum: 1,
           rotation: frontRot,
+          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
         });
       }
     }
@@ -759,6 +794,7 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
           w: actualCellW, h: actualCellH,
           pageNum: 2,
           rotation: backRot,
+          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
         });
       }
     }
@@ -774,6 +810,7 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
           w: actualCellW, h: actualCellH,
           pageNum: 1,
           rotation: frontRot,
+          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
         });
       }
       // Right half — back (page 2), same positions shifted right + 180° content
@@ -785,6 +822,7 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
           w: actualCellW, h: actualCellH,
           pageNum: 2,
           rotation: backRot,
+          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
         });
       }
     }
@@ -1162,6 +1200,7 @@ export function calcStepMulti(input: ImpositionInput): ImpositionResult {
           h: cellH,
           pageNum: block.pageNum,
           rotation: rot,
+          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
         });
       }
     }

@@ -116,10 +116,7 @@ function drawSheet(
 ) {
   const scale = drawW / sheetW;
   const hasBleed = bleed > 0;
-  // Gutter = trim-to-trim distance; convert to cell-to-cell gap for nup/cutstack/gangrun
   const isNUpLike = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun';
-  const cellGap = isNUpLike ? gutter - 2 * bleed : gutter;
-  const hasGutter = cellGap !== 0;
   const markLen = cropMarks ? 8 : 0;
 
   // Shadow
@@ -173,15 +170,18 @@ function drawSheet(
   const printAreaW = drawW - mL - mR;
   const printAreaH = drawH - mT - mB;
 
-  // Cell grid
+  // Trim grid — cells are positioned by their trim coordinates
+  const trimWpx = impo.trimW * scale;
+  const trimHpx = impo.trimH * scale;
+  const bleedPx = hasBleed ? bleed * scale : 0;
+  // pw/ph = max cell size (trim + 2*bleed) for backward compat
   const pw = impo.pieceW * scale;
   const ph = impo.pieceH * scale;
-  const gutterPx = cellGap * scale;
-  const bleedPx = hasBleed ? bleed * scale : 0;
-  const totalGridW = impo.cols * pw + Math.max(0, impo.cols - 1) * gutterPx;
-  const totalGridH = impo.rows * ph + Math.max(0, impo.rows - 1) * gutterPx;
-  const cenX = paX + (printAreaW - totalGridW) / 2 + gridOffsetX * scale;
-  const cenY = paY + (printAreaH - totalGridH) / 2 + gridOffsetY * scale;
+  const trimGridW = impo.cols * trimWpx + Math.max(0, impo.cols - 1) * gutter * scale;
+  const trimGridH = impo.rows * trimHpx + Math.max(0, impo.rows - 1) * gutter * scale;
+  // cenX/cenY = top-left of first TRIM in printable area
+  const cenX = paX + (printAreaW - trimGridW) / 2 + gridOffsetX * scale;
+  const cenY = paY + (printAreaH - trimGridH) / 2 + gridOffsetY * scale;
 
   // W&T and Step Multi use actual cell coordinates, others use uniform grid
   const isWT = impo.mode === 'workturn';
@@ -233,33 +233,40 @@ function drawSheet(
         }
       }
 
+      // Per-cell bleed (asymmetric: may be 0 on internal sides)
+      const cBL = (cell.bleedL ?? bleed) * scale;
+      const cBR = (cell.bleedR ?? bleed) * scale;
+      const cBT = (cell.bleedT ?? bleed) * scale;
+      const cBB = (cell.bleedB ?? bleed) * scale;
+
       const x = offX + cell.x * scale + gridOffsetX * scale;
       const y = offY + cell.y * scale + gridOffsetY * scale;
       // Step multi: per-cell dimensions (blocks can have different trim sizes)
-      const cpw = isSM && cell.w ? cell.w * scale : pw;
-      const cph = isSM && cell.h ? cell.h * scale : ph;
+      const cpw = isSM && cell.w ? cell.w * scale : (cell.w * scale);
+      const cph = isSM && cell.h ? cell.h * scale : (cell.h * scale);
       const isRotated = cell.rotation && cell.rotation !== 0;
 
-      // Bleed zone
-      if (hasBleed) {
+      // Bleed zones (asymmetric per side)
+      const hasCellBleed = cBL > 0 || cBR > 0 || cBT > 0 || cBB > 0;
+      if (hasCellBleed) {
         ctx.fillStyle = COLORS.bleedBand;
-        ctx.fillRect(x, y, cpw, bleedPx);
-        ctx.fillRect(x, y + cph - bleedPx, cpw, bleedPx);
-        ctx.fillRect(x, y + bleedPx, bleedPx, cph - 2 * bleedPx);
-        ctx.fillRect(x + cpw - bleedPx, y + bleedPx, bleedPx, cph - 2 * bleedPx);
+        if (cBT > 0) ctx.fillRect(x, y, cpw, cBT);
+        if (cBB > 0) ctx.fillRect(x, y + cph - cBB, cpw, cBB);
+        if (cBL > 0) ctx.fillRect(x, y + cBT, cBL, cph - cBT - cBB);
+        if (cBR > 0) ctx.fillRect(x + cpw - cBR, y + cBT, cBR, cph - cBT - cBB);
 
         ctx.setLineDash([3, 2]);
         ctx.strokeStyle = COLORS.bleedStroke;
         ctx.lineWidth = 0.6;
-        ctx.strokeRect(x + bleedPx, y + bleedPx, cpw - 2 * bleedPx, cph - 2 * bleedPx);
+        ctx.strokeRect(x + cBL, y + cBT, cpw - cBL - cBR, cph - cBT - cBB);
         ctx.setLineDash([]);
       }
 
-      // Trim area
-      const trimX = x + (hasBleed ? bleedPx : 0);
-      const trimY = y + (hasBleed ? bleedPx : 0);
-      const trimW = hasBleed ? cpw - 2 * bleedPx : cpw;
-      const trimH = hasBleed ? cph - 2 * bleedPx : cph;
+      // Trim area (inside bleed)
+      const trimX = x + cBL;
+      const trimY = y + cBT;
+      const trimW = cpw - cBL - cBR;
+      const trimH = cph - cBT - cBB;
 
       // PDF page to show
       const mode = impo.mode;
@@ -360,9 +367,9 @@ function drawSheet(
           const cellFitW = effSwap ? cph : cpw;
           const cellFitH = effSwap ? cpw : cph;
           sc = Math.min(cellFitW / drawRendW, cellFitH / drawRendH);
-          // Offset: bleedPx shifts from trim center to cell center
-          drawTOffX = bleedPx;
-          drawTOffY = bleedPx;
+          // Offset: cell bleed shifts from trim center to cell center
+          drawTOffX = cBL;
+          drawTOffY = cBT;
         }
         const finalW = drawRendW * sc;
         const finalH = drawRendH * sc;
@@ -496,120 +503,71 @@ function drawSheet(
     ctx.restore();
   }
 
-  // Actual trim offset: from PDF's TrimBox if available, else PressCal's bleed
-  const pg0trim = isNUpLike ? pdf?.pageSizes?.[0] : null;
-  const actualTrimOff = (pg0trim?.trimOffX != null ? pg0trim.trimOffX : bleed) * scale;
-
-  // Gutter lines (skip for W&T — cells use actual coordinates with fold gap)
-  // N-Up-like: gutter = trim-to-trim, fill between trim edges
-  const stepW = pw + gutterPx;
-  const stepH = ph + gutterPx;
-  const trimGutterPx = isNUpLike ? gutter * scale : gutterPx;
-  if (trimGutterPx > 0.5 && !isWT && !isSM) {
+  // Gutter fill between trims (skip for W&T, StepMulti)
+  const gutterPxTrim = gutter * scale;
+  const trimStepW = trimWpx + gutterPxTrim;
+  const trimStepH = trimHpx + gutterPxTrim;
+  if (gutterPxTrim > 0.5 && !isWT && !isSM) {
     ctx.fillStyle = COLORS.gutterFill;
-    for (let col = 1; col < impo.cols; col++) {
-      // Right trim of prev col → left trim of this col
-      const gx = cenX + (col - 1) * stepW + pw - actualTrimOff;
-      ctx.fillRect(gx, cenY, trimGutterPx, totalGridH);
+    for (let col = 0; col < impo.cols - 1; col++) {
+      // Gutter starts at right trim edge of col, width = gutterPxTrim
+      const gx = cenX + (col + 1) * trimWpx + col * gutterPxTrim;
+      ctx.fillRect(gx, cenY - bleedPx, gutterPxTrim, trimGridH + 2 * bleedPx);
     }
-    for (let row = 1; row < impo.rows; row++) {
-      const gy = cenY + (row - 1) * stepH + ph - actualTrimOff;
-      ctx.fillRect(cenX, gy, totalGridW, trimGutterPx);
+    for (let row = 0; row < impo.rows - 1; row++) {
+      const gy = cenY + (row + 1) * trimHpx + row * gutterPxTrim;
+      ctx.fillRect(cenX - bleedPx, gy, trimGridW + 2 * bleedPx, gutterPxTrim);
     }
   }
 
-  // Crop marks (skip for W&T — uses cell coordinates, marks drawn correctly in PDF export)
+  // Crop marks — ONLY on perimeter of grid, aligned to trim edges
   if (cropMarks && !isWT && !isSM) {
     ctx.strokeStyle = COLORS.cropMark;
     ctx.lineWidth = 0.5;
-    if (isNUpLike) {
-      // N-Up/CutStack/GangRun: crop marks at actual TRIM edges from PDF's TrimBox
-      const trimXs: number[] = [];
-      for (let col = 0; col < impo.cols; col++) {
-        const cellX = cenX + col * stepW;
-        trimXs.push(cellX + actualTrimOff);          // left trim edge (from PDF TrimBox)
-        trimXs.push(cellX + pw - actualTrimOff);     // right trim edge
-      }
-      trimXs.sort((a, b) => a - b);
-      const uX = [trimXs[0]];
-      for (let i = 1; i < trimXs.length; i++) {
-        if (trimXs[i] - uX[uX.length - 1] > 0.3) uX.push(trimXs[i]);
-      }
 
-      const trimYs: number[] = [];
-      for (let row = 0; row < impo.rows; row++) {
-        const cellY = cenY + row * stepH;
-        trimYs.push(cellY + actualTrimOff);          // top trim edge (from PDF TrimBox)
-        trimYs.push(cellY + ph - actualTrimOff);     // bottom trim edge
-      }
-      trimYs.sort((a, b) => a - b);
-      const uY = [trimYs[0]];
-      for (let i = 1; i < trimYs.length; i++) {
-        if (trimYs[i] - uY[uY.length - 1] > 0.3) uY.push(trimYs[i]);
-      }
-
-      // Perimeter marks
-      const gridT = uY[0], gridB = uY[uY.length - 1];
-      const gridL = uX[0], gridR = uX[uX.length - 1];
-      for (const vx of uX) {
-        ctx.beginPath();
-        ctx.moveTo(vx, gridT - markLen); ctx.lineTo(vx, gridT - 2);
-        ctx.moveTo(vx, gridB + 2); ctx.lineTo(vx, gridB + markLen);
-        ctx.stroke();
-      }
-      for (const hy of uY) {
-        ctx.beginPath();
-        ctx.moveTo(gridL - markLen, hy); ctx.lineTo(gridL - 2, hy);
-        ctx.moveTo(gridR + 2, hy); ctx.lineTo(gridR + markLen, hy);
-        ctx.stroke();
-      }
-
-      // Gutter marks between trims (if positive trim gap)
-      if (trimGutterPx > 1) {
-        for (let col = 0; col < impo.cols - 1; col++) {
-          const rightTrim = cenX + col * stepW + pw - actualTrimOff;
-          const leftTrim = rightTrim + trimGutterPx;
-          const gutMarkLen = Math.min(markLen, trimGutterPx / 2 - 0.5);
-          if (gutMarkLen > 0.5) {
-            for (const hy of uY) {
-              ctx.beginPath();
-              ctx.moveTo(rightTrim + 1, hy); ctx.lineTo(rightTrim + gutMarkLen, hy);
-              ctx.moveTo(leftTrim - 1, hy); ctx.lineTo(leftTrim - gutMarkLen, hy);
-              ctx.stroke();
-            }
-          }
-        }
-        for (let row = 0; row < impo.rows - 1; row++) {
-          const bottomTrim = cenY + row * stepH + ph - actualTrimOff;
-          const topTrim = bottomTrim + trimGutterPx;
-          const gutMarkLen = Math.min(markLen, trimGutterPx / 2 - 0.5);
-          if (gutMarkLen > 0.5) {
-            for (const vx of uX) {
-              ctx.beginPath();
-              ctx.moveTo(vx, bottomTrim + 1); ctx.lineTo(vx, bottomTrim + gutMarkLen);
-              ctx.moveTo(vx, topTrim - 1); ctx.lineTo(vx, topTrim - gutMarkLen);
-              ctx.stroke();
-            }
-          }
-        }
-      }
-    } else {
-      // Other modes: original crop marks at cell edges
-      for (let row = 0; row <= impo.rows; row++) {
-        for (let col = 0; col <= impo.cols; col++) {
-          const cx = cenX + col * (pw + gutterPx) - (col > 0 ? gutterPx : 0);
-          const cy = cenY + row * (ph + gutterPx) - (row > 0 ? gutterPx : 0);
-          ctx.beginPath();
-          ctx.moveTo(cx - markLen, cy); ctx.lineTo(cx - 2, cy);
-          ctx.moveTo(cx + pw + 2, cy); ctx.lineTo(cx + pw + markLen, cy);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(cx, cy - markLen); ctx.lineTo(cx, cy - 2);
-          ctx.moveTo(cx, cy + ph + 2); ctx.lineTo(cx, cy + ph + markLen);
-          ctx.stroke();
-        }
-      }
+    // Collect perimeter trim X/Y positions
+    const perimXs: number[] = [];
+    for (let col = 0; col < impo.cols; col++) {
+      perimXs.push(cenX + col * trimStepW);                    // left trim edge
+      perimXs.push(cenX + col * trimStepW + trimWpx);          // right trim edge
     }
+    // Deduplicate close values
+    perimXs.sort((a, b) => a - b);
+    const uX = [perimXs[0]];
+    for (let i = 1; i < perimXs.length; i++) {
+      if (perimXs[i] - uX[uX.length - 1] > 0.3) uX.push(perimXs[i]);
+    }
+
+    const perimYs: number[] = [];
+    for (let row = 0; row < impo.rows; row++) {
+      perimYs.push(cenY + row * trimStepH);                    // top trim edge
+      perimYs.push(cenY + row * trimStepH + trimHpx);          // bottom trim edge
+    }
+    perimYs.sort((a, b) => a - b);
+    const uY = [perimYs[0]];
+    for (let i = 1; i < perimYs.length; i++) {
+      if (perimYs[i] - uY[uY.length - 1] > 0.3) uY.push(perimYs[i]);
+    }
+
+    // Grid perimeter bounds (outermost trims)
+    const gridL = uX[0], gridR = uX[uX.length - 1];
+    const gridT = uY[0], gridB = uY[uY.length - 1];
+
+    // Only perimeter marks — vertical lines at top & bottom edges
+    for (const vx of uX) {
+      ctx.beginPath();
+      ctx.moveTo(vx, gridT - markLen); ctx.lineTo(vx, gridT - 2);
+      ctx.moveTo(vx, gridB + 2); ctx.lineTo(vx, gridB + markLen);
+      ctx.stroke();
+    }
+    // Horizontal lines at left & right edges
+    for (const hy of uY) {
+      ctx.beginPath();
+      ctx.moveTo(gridL - markLen, hy); ctx.lineTo(gridL - 2, hy);
+      ctx.moveTo(gridR + 2, hy); ctx.lineTo(gridR + markLen, hy);
+      ctx.stroke();
+    }
+    // NO gutter/internal crop marks — only perimeter
   }
 
   // ─── STEP MULTI BLOCK BOUNDARIES + DRAG HANDLES ───
