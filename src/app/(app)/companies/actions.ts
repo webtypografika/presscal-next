@@ -105,7 +105,7 @@ export async function createCompany(data: {
       _count: { select: { quotes: true } },
     },
   });
-  revalidatePath('/companies');
+  revalidatePath('/contacts');
   revalidatePath('/quotes');
   return company;
 }
@@ -132,14 +132,14 @@ export async function updateCompany(id: string, data: {
       _count: { select: { quotes: true } },
     },
   });
-  revalidatePath('/companies');
+  revalidatePath('/contacts');
   revalidatePath('/quotes');
   return company;
 }
 
 export async function deleteCompany(id: string) {
-  await prisma.company.delete({ where: { id } });
-  revalidatePath('/companies');
+  await prisma.company.update({ where: { id }, data: { deletedAt: new Date() } });
+  revalidatePath('/contacts');
   revalidatePath('/quotes');
 }
 
@@ -191,7 +191,7 @@ export async function createContact(data: {
     });
   }
 
-  revalidatePath('/companies');
+  revalidatePath('/contacts');
   return contact;
 }
 
@@ -207,13 +207,13 @@ export async function updateContact(id: string, data: {
     where: { id },
     data,
   });
-  revalidatePath('/companies');
+  revalidatePath('/contacts');
   return contact;
 }
 
 export async function deleteContact(id: string) {
-  await prisma.contact.delete({ where: { id } });
-  revalidatePath('/companies');
+  await prisma.contact.update({ where: { id }, data: { deletedAt: new Date() } });
+  revalidatePath('/contacts');
 }
 
 // ─── COMPANY ↔ CONTACT LINKS ───
@@ -232,7 +232,7 @@ export async function linkContactToCompany(data: {
       isPrimary: data.isPrimary ?? false,
     },
   });
-  revalidatePath('/companies');
+  revalidatePath('/contacts');
   return link;
 }
 
@@ -240,7 +240,7 @@ export async function unlinkContactFromCompany(companyId: string, contactId: str
   await prisma.companyContact.deleteMany({
     where: { companyId, contactId },
   });
-  revalidatePath('/companies');
+  revalidatePath('/contacts');
 }
 
 export async function setPrimaryContact(companyId: string, contactId: string) {
@@ -254,24 +254,27 @@ export async function setPrimaryContact(companyId: string, contactId: string) {
     where: { companyId, contactId },
     data: { isPrimary: true },
   });
-  revalidatePath('/companies');
+  revalidatePath('/contacts');
 }
 
 // ─── SEARCH (for dropdowns) ───
 
 export async function searchCompanies(q: string) {
   if (!q.trim()) return [];
-  const term = q.trim().toLowerCase();
+  const term = q.trim();
+  const norm = normalize(term);
+  const greeklish = normalizeGreeklish(term);
+  const variants = [term, norm, greeklish].filter((v, i, a) => a.indexOf(v) === i);
   return prisma.company.findMany({
     where: {
       orgId: ORG_ID,
       deletedAt: null,
-      OR: [
-        { name: { contains: term, mode: 'insensitive' } },
-        { email: { contains: term, mode: 'insensitive' } },
-        { afm: { contains: term } },
-        { phone: { contains: term } },
-      ],
+      OR: variants.flatMap(s => [
+        { name: { contains: s, mode: 'insensitive' as const } },
+        { email: { contains: s, mode: 'insensitive' as const } },
+        { afm: { contains: s } },
+        { phone: { contains: s } },
+      ]),
     },
     include: {
       companyContacts: {
@@ -283,6 +286,147 @@ export async function searchCompanies(q: string) {
     take: 20,
     orderBy: { name: 'asc' },
   });
+}
+
+// ─── CONTACTS WITH COMPANIES (for People tab) ───
+
+export async function getContactsWithCompanies(opts?: { search?: string; skip?: number; take?: number }) {
+  const take = opts?.take ?? 50;
+  const skip = opts?.skip ?? 0;
+  const search = opts?.search?.trim();
+
+  const where: any = { orgId: ORG_ID, deletedAt: null };
+  if (search) {
+    const norm = normalize(search);
+    const greeklish = normalizeGreeklish(search);
+    const variants = [search, norm, greeklish].filter((v, i, a) => a.indexOf(v) === i);
+
+    where.OR = variants.flatMap(s => [
+      { name: { contains: s, mode: 'insensitive' } },
+      { email: { contains: s, mode: 'insensitive' } },
+      { phone: { contains: s } },
+      { mobile: { contains: s } },
+      { companyContacts: { some: { company: { name: { contains: s, mode: 'insensitive' } } } } },
+    ]);
+  }
+
+  const [contacts, total] = await Promise.all([
+    prisma.contact.findMany({
+      where,
+      include: {
+        companyContacts: {
+          include: { company: { select: { id: true, name: true } } },
+        },
+        _count: { select: { quotes: true } },
+      },
+      orderBy: { name: 'asc' },
+      skip,
+      take,
+    }),
+    prisma.contact.count({ where }),
+  ]);
+
+  return { contacts, total, hasMore: skip + take < total };
+}
+
+// ─── SEARCH CONTACTS (greeklish-aware, for dropdowns) ───
+
+export async function searchContacts(search?: string) {
+  const where: any = { orgId: ORG_ID, deletedAt: null };
+  if (search?.trim()) {
+    const s = search.trim();
+    const norm = normalize(s);
+    const greeklish = normalizeGreeklish(s);
+    const variants = [s, norm, greeklish].filter((v, i, a) => a.indexOf(v) === i);
+    where.OR = variants.flatMap(v => [
+      { name: { contains: v, mode: 'insensitive' } },
+      { email: { contains: v, mode: 'insensitive' } },
+      { phone: { contains: v } },
+      { mobile: { contains: v } },
+    ]);
+  }
+  return prisma.contact.findMany({
+    where,
+    include: {
+      companyContacts: {
+        include: { company: { select: { id: true, name: true } } },
+        take: 3,
+      },
+    },
+    orderBy: { name: 'asc' },
+    take: 20,
+  });
+}
+
+// ─── CREATE COMPANY FROM ELORUS ───
+
+export async function createCompanyFromElorus(data: {
+  name: string;
+  afm?: string;
+  doy?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  zip?: string;
+  elorusContactId?: string;
+}) {
+  const company = await prisma.company.create({
+    data: {
+      orgId: ORG_ID,
+      name: data.name,
+      afm: data.afm || null,
+      doy: data.doy || null,
+      email: data.email || null,
+      phone: data.phone || null,
+      address: data.address || null,
+      city: data.city || null,
+      zip: data.zip || null,
+      elorusContactId: data.elorusContactId || null,
+    },
+  });
+  revalidatePath('/contacts');
+  revalidatePath('/quotes');
+  return { id: company.id, name: company.name };
+}
+
+// ─── CREATE COMPANY QUICK ───
+
+export async function createCompanyQuick(data: {
+  name: string;
+  email?: string;
+  phone?: string;
+  afm?: string;
+  contactName?: string;
+  contactEmail?: string;
+}) {
+  const company = await prisma.company.create({
+    data: {
+      orgId: ORG_ID,
+      name: data.name,
+      email: data.email || null,
+      phone: data.phone || null,
+      afm: data.afm || null,
+    },
+  });
+
+  if (data.contactName) {
+    const contact = await prisma.contact.create({
+      data: {
+        orgId: ORG_ID,
+        name: data.contactName,
+        email: data.contactEmail || data.email || null,
+        role: 'employee',
+      },
+    });
+    await prisma.companyContact.create({
+      data: { companyId: company.id, contactId: contact.id, isPrimary: true, role: 'employee' },
+    });
+  }
+
+  revalidatePath('/contacts');
+  revalidatePath('/quotes');
+  return company;
 }
 
 export async function matchContactByEmail(email: string) {

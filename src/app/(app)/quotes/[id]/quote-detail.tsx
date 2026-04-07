@@ -577,10 +577,13 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             <div style={{ display: 'flex', gap: 10, color: '#64748b', flexWrap: 'wrap' }}>
               {selectedContact.email && <span>{selectedContact.email}</span>}
               {selectedContact.phone && <span>{selectedContact.phone}</span>}
+              {selectedContact.mobile && <span>{selectedContact.mobile}</span>}
             </div>
           )}
           {showContactPicker && (
-            <ContactPicker currentId={contactId}
+            <ContactPicker currentId={contactId} currentContact={selectedContact}
+              companyId={customerId} linkedEmails={quote.linkedEmails as string[] || []}
+              hasElorus={elorusConfigured}
               onSelect={(id, contact) => { setContactId(id); if (contact) setQuote(prev => ({ ...prev, contact } as any)); setShowContactPicker(false); }}
               onClose={() => setShowContactPicker(false)} toast={toast} />
           )}
@@ -2807,8 +2810,12 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
 // ═══════════════════════════════════════════════════════
 // CONTACT PICKER — dropdown to select contact (who requested the quote)
 // ═══════════════════════════════════════════════════════
-function ContactPicker({ currentId, onSelect, onClose, toast }: {
+function ContactPicker({ currentId, currentContact, companyId, linkedEmails, hasElorus, onSelect, onClose, toast }: {
   currentId: string;
+  currentContact: any;
+  companyId: string;
+  linkedEmails: string[];
+  hasElorus?: boolean;
   onSelect: (id: string, contact?: any) => void;
   onClose: () => void;
   toast: (msg: string, type?: ToastType) => void;
@@ -2816,8 +2823,30 @@ function ContactPicker({ currentId, onSelect, onClose, toast }: {
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'current' | 'list' | 'new' | 'edit'>(currentId && currentContact ? 'current' : 'list');
   const ref = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Edit form state
+  const [formName, setFormName] = useState('');
+  const [formEmail, setFormEmail] = useState('');
+  const [formPhone, setFormPhone] = useState('');
+  const [formMobile, setFormMobile] = useState('');
+  const [formRole, setFormRole] = useState('contact');
+  const [editId, setEditId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [emailSender, setEmailSender] = useState<{ name: string; email: string } | null>(null);
+  const [linkToCompany, setLinkToCompany] = useState(true);
+
+  const roleLabels: Record<string, string> = {
+    employee: 'Υπάλληλος', designer: 'Γραφίστας', freelancer: 'Freelancer',
+    broker: 'Μεσάζων', contact: 'Επαφή', owner: 'Ιδιοκτήτης',
+  };
+
+  const inp: React.CSSProperties = {
+    width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+    borderRadius: 6, padding: '7px 10px', color: 'var(--text)', fontSize: '0.85rem', outline: 'none',
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -2828,8 +2857,24 @@ function ContactPicker({ currentId, onSelect, onClose, toast }: {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [onClose]);
 
+  // Extract sender info from first linked email
+  useEffect(() => {
+    if (!linkedEmails?.length) return;
+    fetch(`/api/email/messages/${linkedEmails[0]}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(msg => {
+        if (!msg?.from) return;
+        const emailMatch = msg.from.match(/<([^>]+)>/);
+        const email = emailMatch ? emailMatch[1] : msg.from.trim();
+        const name = msg.from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
+        setEmailSender({ name, email });
+      })
+      .catch(() => {});
+  }, [linkedEmails]);
+
   // Debounced search
   useEffect(() => {
+    if (mode !== 'list') return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
       setLoading(true);
@@ -2840,91 +2885,291 @@ function ContactPicker({ currentId, onSelect, onClose, toast }: {
       } finally { setLoading(false); }
     }, search ? 300 : 0);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [search]);
+  }, [search, mode]);
 
-  const inp: React.CSSProperties = {
-    width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
-    borderRadius: 6, padding: '7px 10px', color: 'var(--text)', fontSize: '0.85rem', outline: 'none',
-  };
+  function openNew() {
+    setFormName(emailSender?.name || '');
+    setFormEmail(emailSender?.email || '');
+    setFormPhone('');
+    setFormMobile('');
+    setFormRole('contact');
+    setLinkToCompany(!!companyId);
+    setEditId('');
+    setMode('new');
+  }
+
+  function openEdit(c: any) {
+    setEditId(c.id);
+    setFormName(c.name || '');
+    setFormEmail(c.email || '');
+    setFormPhone(c.phone || '');
+    setFormMobile(c.mobile || '');
+    setFormRole(c.role || 'contact');
+    setMode('edit');
+  }
+
+  async function saveContact() {
+    if (!formName.trim()) { toast('Εισάγετε όνομα', 'error'); return; }
+    setSaving(true);
+    try {
+      const { createContact, updateContact, linkContactToCompany } = await import('../../companies/actions');
+      if (mode === 'new') {
+        const contact = await createContact({
+          name: formName.trim(),
+          email: formEmail.trim() || undefined,
+          phone: formPhone.trim() || undefined,
+          mobile: formMobile.trim() || undefined,
+          role: formRole,
+          companyId: linkToCompany && companyId ? companyId : undefined,
+        });
+        toast('Επαφή δημιουργήθηκε');
+        onSelect(contact.id, contact);
+      } else {
+        await updateContact(editId, {
+          name: formName.trim(),
+          email: formEmail.trim() || null,
+          phone: formPhone.trim() || null,
+          mobile: formMobile.trim() || null,
+          role: formRole,
+        });
+        toast('Επαφή ενημερώθηκε');
+        onSelect(editId, { id: editId, name: formName.trim(), email: formEmail.trim() || null, phone: formPhone.trim() || null, mobile: formMobile.trim() || null, role: formRole });
+      }
+    } catch (e) {
+      toast('Σφάλμα: ' + (e as Error).message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div ref={ref} style={{
       position: 'absolute', top: '100%', left: 0, marginTop: 6, zIndex: 50,
-      width: 340, maxHeight: 380, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      width: 360, maxHeight: 420, overflow: 'hidden', display: 'flex', flexDirection: 'column',
       background: '#141e37', border: '1px solid var(--border)',
       borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
     }}>
-      {/* Search */}
-      <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6 }}>
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Αναζήτηση επαφής..."
-          autoFocus style={{ ...inp, flex: 1 }}
-        />
-      </div>
-
-      {/* Results */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {/* Remove contact option */}
-        {currentId && (
-          <div
-            onClick={() => onSelect('', null)}
-            style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.82rem', color: '#64748b', fontStyle: 'italic' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-          >
-            <i className="fas fa-times" style={{ marginRight: 6, fontSize: '0.6rem' }} />Χωρίς επαφή
-          </div>
-        )}
-
-        {loading && (
-          <div style={{ padding: '12px', fontSize: '0.78rem', color: '#64748b' }}>
-            <i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Αναζήτηση...
-          </div>
-        )}
-
-        {!loading && results.length === 0 && (
-          <div style={{ padding: '16px 12px', fontSize: '0.82rem', color: '#475569', textAlign: 'center' }}>
-            {search ? 'Δεν βρέθηκαν επαφές' : 'Πληκτρολογήστε για αναζήτηση'}
-          </div>
-        )}
-
-        {results.map(c => (
-          <div
-            key={c.id}
-            onClick={() => onSelect(c.id, c)}
-            style={{
-              padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
-              background: c.id === currentId ? 'rgba(255,255,255,0.03)' : 'transparent',
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
-            onMouseLeave={e => (e.currentTarget.style.background = c.id === currentId ? 'rgba(255,255,255,0.03)' : 'transparent')}
-          >
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-              background: 'color-mix(in srgb, var(--teal) 12%, transparent)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--teal)', fontSize: '0.65rem', fontWeight: 700,
-            }}>
-              {c.name.charAt(0).toUpperCase()}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                {c.name}
-                {c.id === currentId && <i className="fas fa-check" style={{ marginLeft: 6, fontSize: '0.6rem', color: 'var(--success)' }} />}
-              </div>
-              <div style={{ fontSize: '0.72rem', color: '#64748b', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {c.email && <span>{c.email}</span>}
-                {c.companyContacts?.map((cc: any) => (
-                  <span key={cc.company.id} style={{ color: '#475569' }}>
-                    <i className="fas fa-building" style={{ fontSize: '0.5rem', marginRight: 2 }} />{cc.company.name}
+      {mode === 'current' && currentContact ? (
+        /* Current contact quick-view */
+        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{currentContact.name}</div>
+            {currentContact.role && currentContact.role !== 'contact' && (
+              <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 1 }}>{roleLabels[currentContact.role] || currentContact.role}</div>
+            )}
+            {currentContact.email && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 1 }}>{currentContact.email}</div>}
+            {currentContact.phone && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 1 }}>{currentContact.phone}</div>}
+            {currentContact.mobile && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 1 }}>{currentContact.mobile}</div>}
+            {/* Linked companies */}
+            {currentContact.companyContacts?.length > 0 && (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                {currentContact.companyContacts.map((cc: any) => (
+                  <span key={cc.company?.id || cc.id} style={{
+                    padding: '2px 8px', borderRadius: 12, fontSize: '0.72rem', fontWeight: 600,
+                    background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--blue) 20%, transparent)',
+                    color: 'var(--blue)',
+                  }}>
+                    <i className="fas fa-building" style={{ fontSize: '0.5rem', marginRight: 3 }} />
+                    {cc.company?.name || '—'}
                   </span>
                 ))}
               </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => openEdit(currentContact)} style={{
+              flex: 1, padding: '8px 0', borderRadius: 6, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--blue)', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            }}>
+              <i className="fas fa-pen" style={{ fontSize: '0.6rem' }} />Επεξεργασία
+            </button>
+            <button onClick={() => setMode('list')} style={{
+              flex: 1, padding: '8px 0', borderRadius: 6, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            }}>
+              <i className="fas fa-exchange-alt" style={{ fontSize: '0.6rem' }} />Αλλαγή
+            </button>
+            <button onClick={() => onSelect('', null)} style={{
+              padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--danger)', fontSize: '0.75rem', cursor: 'pointer',
+            }} title="Αφαίρεση επαφής">
+              <i className="fas fa-times" />
+            </button>
+          </div>
+        </div>
+      ) : mode === 'list' ? (
+        <>
+          {/* Search + New button */}
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6 }}>
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Αναζήτηση επαφής..." autoFocus style={{ ...inp, flex: 1 }} />
+            <button onClick={openNew} style={{
+              padding: '0 12px', borderRadius: 6, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--teal)', fontSize: '0.82rem',
+              cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: 600,
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(20,184,166,0.1)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <i className="fas fa-plus" style={{ marginRight: 4, fontSize: '0.65rem' }} />Νέο
+            </button>
+          </div>
+
+          {/* Email sender hint */}
+          {emailSender && !results.some(c => c.email?.toLowerCase() === emailSender.email.toLowerCase()) && (
+            <div onClick={openNew} style={{
+              padding: '8px 12px', borderBottom: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+              background: 'rgba(20,184,166,0.04)',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(20,184,166,0.08)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(20,184,166,0.04)')}
+            >
+              <i className="fas fa-envelope" style={{ fontSize: '0.65rem', color: 'var(--teal)' }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.82rem', color: 'var(--teal)', fontWeight: 600 }}>Δημιουργία από email</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{emailSender.name} · {emailSender.email}</div>
+              </div>
+              <i className="fas fa-plus" style={{ fontSize: '0.6rem', color: 'var(--teal)' }} />
+            </div>
+          )}
+
+          {/* Results */}
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            {/* Remove contact option */}
+            <div onClick={() => onSelect('', null)} style={{
+              padding: '8px 12px', cursor: 'pointer', fontSize: '0.85rem',
+              color: !currentId ? 'var(--teal)' : 'var(--text-muted)', fontStyle: 'italic',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              — Χωρίς επαφή —
+            </div>
+
+            {loading && (
+              <div style={{ padding: '12px', fontSize: '0.78rem', color: '#64748b' }}>
+                <i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Αναζήτηση...
+              </div>
+            )}
+
+            {!loading && results.length === 0 && search && (
+              <div style={{ padding: '16px 12px', fontSize: '0.82rem', color: '#475569', textAlign: 'center' }}>
+                Δεν βρέθηκαν επαφές
+              </div>
+            )}
+
+            {results.map(c => (
+              <div key={c.id} style={{
+                padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                background: c.id === currentId ? 'rgba(255,255,255,0.03)' : 'transparent',
+              }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                onMouseLeave={e => (e.currentTarget.style.background = c.id === currentId ? 'rgba(255,255,255,0.03)' : 'transparent')}
+              >
+                <div style={{ flex: 1, minWidth: 0 }} onClick={() => onSelect(c.id, c)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                      background: 'color-mix(in srgb, var(--teal) 12%, transparent)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: 'var(--teal)', fontSize: '0.65rem', fontWeight: 700,
+                    }}>{c.name.charAt(0).toUpperCase()}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 500 }}>
+                        {c.name}
+                        {c.role && c.role !== 'contact' && <span style={{ fontSize: '0.72rem', color: '#64748b', marginLeft: 6 }}>{roleLabels[c.role] || c.role}</span>}
+                        {c.id === currentId && <i className="fas fa-check" style={{ marginLeft: 6, fontSize: '0.6rem', color: 'var(--success)' }} />}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 1 }}>
+                        {c.email && <span>{c.email}</span>}
+                        {c.companyContacts?.map((cc: any) => (
+                          <span key={cc.company?.id || cc.id} style={{ marginLeft: 6, color: '#475569' }}>
+                            <i className="fas fa-building" style={{ fontSize: '0.5rem', marginRight: 2 }} />{cc.company?.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Edit button */}
+                <button onClick={(e) => { e.stopPropagation(); openEdit(c); }} style={{
+                  padding: '4px 8px', border: 'none', background: 'transparent',
+                  color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.65rem',
+                  borderRadius: 4, flexShrink: 0,
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--teal)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+                  title="Επεξεργασία"
+                >
+                  <i className="fas fa-pen" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        /* New / Edit form */
+        <>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => setMode('list')} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <i className="fas fa-arrow-left" />
+            </button>
+            <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>{mode === 'new' ? 'Νέα Επαφή' : 'Επεξεργασία Επαφής'}</span>
+          </div>
+          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto' }}>
+            <div>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Όνομα *</label>
+              <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Ονοματεπώνυμο" style={inp} autoFocus />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Email</label>
+              <input value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="email@example.com" type="email" style={inp} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Τηλέφωνο</label>
+                <input value={formPhone} onChange={e => setFormPhone(e.target.value)} placeholder="+30..." style={inp} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Κινητό</label>
+                <input value={formMobile} onChange={e => setFormMobile(e.target.value)} placeholder="+30 69..." style={inp} />
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Ρόλος</label>
+              <select value={formRole} onChange={e => setFormRole(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                {Object.entries(roleLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            {/* Link to company checkbox (only on new + when company is selected) */}
+            {mode === 'new' && companyId && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={linkToCompany} onChange={e => setLinkToCompany(e.target.checked)}
+                  style={{ accentColor: 'var(--teal)' }} />
+                <i className="fas fa-link" style={{ fontSize: '0.6rem', color: '#64748b' }} />
+                Σύνδεση με τρέχουσα εταιρεία
+              </label>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <button onClick={() => setMode('list')} style={{
+                flex: 1, padding: '8px 0', borderRadius: 6, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer',
+              }}>Ακύρωση</button>
+              <button onClick={saveContact} disabled={saving || !formName.trim()} style={{
+                flex: 1, padding: '8px 0', borderRadius: 6, border: 'none',
+                background: 'var(--teal)', color: '#fff', fontSize: '0.85rem', fontWeight: 700,
+                cursor: 'pointer', opacity: (saving || !formName.trim()) ? 0.5 : 1,
+              }}>
+                {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+              </button>
             </div>
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </div>
   );
 }

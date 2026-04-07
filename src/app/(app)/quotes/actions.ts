@@ -254,7 +254,28 @@ export async function unlinkEmailFromQuote(quoteId: string, messageId: string) {
   revalidatePath(`/quotes/${quoteId}`);
 }
 
-// ─── COMPANIES (for selector) ───
+// ─── WRAPPERS — delegate to companies/actions ───
+
+export async function searchContacts(search?: string) {
+  const mod = await import('../companies/actions');
+  return mod.searchContacts(search);
+}
+
+export async function createCompanyQuick(data: {
+  name: string; email?: string; phone?: string; afm?: string;
+  contactName?: string; contactEmail?: string;
+}) {
+  const mod = await import('../companies/actions');
+  return mod.createCompanyQuick(data);
+}
+
+export async function createCompanyFromElorus(data: {
+  name: string; afm?: string; doy?: string; email?: string; phone?: string;
+  address?: string; city?: string; zip?: string; elorusContactId?: string;
+}) {
+  const mod = await import('../companies/actions');
+  return mod.createCompanyFromElorus(data);
+}
 
 export async function getCompaniesForQuotes(search?: string) {
   const where: any = { orgId: ORG_ID, deletedAt: null };
@@ -285,67 +306,6 @@ export async function getCompaniesForQuotes(search?: string) {
   });
 }
 
-export async function searchContacts(search?: string) {
-  const where: any = { orgId: ORG_ID, deletedAt: null };
-  if (search?.trim()) {
-    const s = search.trim();
-    where.OR = [
-      { name: { contains: s, mode: 'insensitive' } },
-      { email: { contains: s, mode: 'insensitive' } },
-      { phone: { contains: s } },
-    ];
-  }
-  return prisma.contact.findMany({
-    where,
-    include: {
-      companyContacts: {
-        include: { company: { select: { id: true, name: true } } },
-        take: 3,
-      },
-    },
-    orderBy: { name: 'asc' },
-    take: 20,
-  });
-}
-
-export async function createCompanyQuick(data: {
-  name: string;
-  email?: string;
-  phone?: string;
-  afm?: string;
-  contactName?: string;  // auto-create a primary contact
-  contactEmail?: string;
-}) {
-  const company = await prisma.company.create({
-    data: {
-      orgId: ORG_ID,
-      name: data.name,
-      email: data.email || null,
-      phone: data.phone || null,
-      afm: data.afm || null,
-    },
-  });
-
-  // Auto-create primary contact if provided
-  if (data.contactName) {
-    const contact = await prisma.contact.create({
-      data: {
-        orgId: ORG_ID,
-        name: data.contactName,
-        email: data.contactEmail || data.email || null,
-        role: 'employee',
-      },
-    });
-    await prisma.companyContact.create({
-      data: { companyId: company.id, contactId: contact.id, isPrimary: true, role: 'employee' },
-    });
-  }
-
-  revalidatePath('/quotes');
-  revalidatePath('/companies');
-  return company;
-}
-
 // ─── QUOTE RECIPIENTS ───
 
 export async function addQuoteRecipient(quoteId: string, contactId: string, type: 'to' | 'cc' = 'to') {
@@ -362,7 +322,8 @@ export async function removeQuoteRecipient(quoteId: string, contactId: string) {
   revalidatePath(`/quotes/${quoteId}`);
 }
 
-// ─── DEPRECATED: keep for backward compat ───
+// ─── DEPRECATED COMPAT WRAPPERS ───
+// These delegate to companies/actions for the new Company+Contact model
 
 export async function getCustomers() {
   return prisma.customer.findMany({
@@ -377,89 +338,20 @@ export async function createCustomer(data: {
   email?: string;
   phone?: string;
 }) {
-  // Create as Company + Contact in new model
-  const company = await prisma.company.create({
-    data: {
-      orgId: ORG_ID,
-      name: data.company || data.name,
-      email: data.email || null,
-      phone: data.phone || null,
-    },
+  const { createCompanyQuick } = await import('../companies/actions');
+  const company = await createCompanyQuick({
+    name: data.company || data.name,
+    email: data.email,
+    phone: data.phone,
+    contactName: data.name,
+    contactEmail: data.email,
   });
-  const contact = await prisma.contact.create({
-    data: {
-      orgId: ORG_ID,
-      name: data.name,
-      email: data.email || null,
-      role: data.company ? 'employee' : 'contact',
-    },
-  });
-  await prisma.companyContact.create({
-    data: { companyId: company.id, contactId: contact.id, isPrimary: true },
-  });
-  revalidatePath('/quotes');
-  revalidatePath('/companies');
-  // Return company-like object for backward compat
   return { id: company.id, name: company.name, company: company.name, email: company.email };
 }
 
-export async function createCompanyFromElorus(data: {
-  name: string;
-  afm?: string;
-  doy?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  zip?: string;
-  elorusContactId?: string;
-}) {
-  const company = await prisma.company.create({
-    data: {
-      orgId: ORG_ID,
-      name: data.name,
-      afm: data.afm || null,
-      doy: data.doy || null,
-      email: data.email || null,
-      phone: data.phone || null,
-      address: data.address || null,
-      city: data.city || null,
-      zip: data.zip || null,
-      elorusContactId: data.elorusContactId || null,
-    },
-  });
-  revalidatePath('/quotes');
-  revalidatePath('/companies');
-  return { id: company.id, name: company.name };
-}
-
 export async function updateCustomer(id: string, data: Record<string, unknown>) {
-  // Try updating as Company first (new model), fall back to old Customer
-  try {
-    const company = await prisma.company.update({
-      where: { id },
-      data: {
-        name: data.name as string | undefined,
-        afm: data.afm as string | undefined,
-        doy: data.doy as string | undefined,
-        address: data.address as string | undefined,
-        city: data.city as string | undefined,
-        zip: data.zip as string | undefined,
-        phone: data.phone as string | undefined,
-        email: data.email as string | undefined,
-        notes: data.notes as string | undefined,
-        folderPath: data.folderPath as string | undefined,
-      },
-    });
-    revalidatePath('/quotes');
-    revalidatePath('/companies');
-    return company;
-  } catch {
-    // Fallback to old Customer table
-    const customer = await prisma.customer.update({ where: { id }, data: data as any });
-    revalidatePath('/quotes');
-    return customer;
-  }
+  const { updateCompany } = await import('../companies/actions');
+  return updateCompany(id, data as any);
 }
 
 // ─── SAVE EMAIL ATTACHMENTS TO STORAGE ───

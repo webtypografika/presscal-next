@@ -28,7 +28,7 @@ const NAV_ITEMS = [
   { href: '/quotes', icon: FileText, labelEl: 'Προσφορές', labelEn: 'Quotes' },
   { href: '/jobs', icon: ClipboardList, labelEl: 'Εργασίες', labelEn: 'Jobs' },
   { href: '/calendar', icon: CalendarDays, labelEl: 'Ημερολόγιο', labelEn: 'Calendar' },
-  { href: '/companies', icon: Users, labelEl: 'Επαφές', labelEn: 'Contacts' },
+  { href: '/contacts', icon: Users, labelEl: 'Επαφές', labelEn: 'Contacts' },
   { href: '/machines', icon: Printer, labelEl: 'Μηχανήματα', labelEn: 'Machines' },
   { href: '/inventory', icon: Warehouse, labelEl: 'Αποθήκη', labelEn: 'Inventory' },
   { href: '/products', icon: Package, labelEl: 'Προϊόντα', labelEn: 'Products' },
