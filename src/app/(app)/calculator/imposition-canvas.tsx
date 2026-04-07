@@ -1518,6 +1518,8 @@ export default function ImpositionCanvas({
     // Capture data synchronously (dataTransfer is cleared after event)
     const files = e.dataTransfer.files;
     const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list') || '';
+    // DEBUG: log what we receive
+    console.log('[DROP]', { filesCount: files.length, text, types: Array.from(e.dataTransfer.types), items: Array.from(e.dataTransfer.items).map(i => ({ kind: i.kind, type: i.type })) });
     // Standard file drop
     if (files.length > 0) { onDrop(files); return; }
     // Fallback: PressKit may send file path as text/plain or URL
