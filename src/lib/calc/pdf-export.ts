@@ -729,19 +729,7 @@ async function exportNUp(
           if (gutT > gutB + 0.5) page.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
         }
       }
-      // When gutter=0 (μονοτομή), mask the entire internal bleed zone between trims
-      if (gutterPt <= 0 && bleedPt > 0.1) {
-        // Vertical cuts between columns
-        for (let gc = 0; gc < impo.cols - 1; gc++) {
-          const cutX = maskCenX + (gc + 1) * trimWpt + gc * gutterPt;
-          page.drawRectangle({ x: cutX - bleedPt, y: 0, width: 2 * bleedPt, height: paperHpt, color: white });
-        }
-        // Horizontal cuts between rows
-        for (let gr = 0; gr < impo.rows - 1; gr++) {
-          const cutY = cenY + (gr + 1) * trimHpt + gr * gutterPt;
-          page.drawRectangle({ x: 0, y: cutY - bleedPt, width: paperWpt, height: 2 * bleedPt, color: white });
-        }
-      }
+      // Gutter=0 (μονοτομή): no masking — bleeds overlap naturally at cut line
 
       // Margin masks — extend to cover bleed on external sides
       const gridL = maskCenX - bleedPt;
@@ -1153,16 +1141,7 @@ async function exportCutStack(
         if (gutT > gutB + 0.5) pg.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
       }
     }
-    if (gutterPt <= 0 && bleedPt > 0.1) {
-      for (let gc = 0; gc < impo.cols - 1; gc++) {
-        const cutX = mCenX + (gc + 1) * trimWpt;
-        pg.drawRectangle({ x: cutX - bleedPt, y: 0, width: 2 * bleedPt, height: paperHpt, color: white });
-      }
-      for (let gr = 0; gr < impo.rows - 1; gr++) {
-        const cutY = cenY + (gr + 1) * trimHpt;
-        pg.drawRectangle({ x: 0, y: cutY - bleedPt, width: paperWpt, height: 2 * bleedPt, color: white });
-      }
-    }
+    // Gutter=0 (μονοτομή): no masking — bleeds overlap naturally at cut line
     const gridL = mCenX - bleedPt;
     const gridB = cenY - bleedPt;
     const gridR = mCenX + trimGridW + bleedPt;
@@ -1557,16 +1536,7 @@ async function exportGangRun(
       if (gutT > gutB + 0.5) page.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
     }
   }
-  if (gutterPt <= 0 && bleedPt > 0.1) {
-    for (let gc = 0; gc < impo.cols - 1; gc++) {
-      const cutX = cenX + (gc + 1) * trimWpt;
-      page.drawRectangle({ x: cutX - bleedPt, y: 0, width: 2 * bleedPt, height: paperHpt, color: white });
-    }
-    for (let gr = 0; gr < impo.rows - 1; gr++) {
-      const cutY = cenY + (gr + 1) * trimHpt;
-      page.drawRectangle({ x: 0, y: cutY - bleedPt, width: paperWpt, height: 2 * bleedPt, color: white });
-    }
-  }
+  // Gutter=0 (μονοτομή): no masking — bleeds overlap naturally at cut line
 
   const gridL = cenX - bleedPt, gridB = cenY - bleedPt;
   const gridR = cenX + trimGridW + bleedPt, gridT = cenY + trimGridH + bleedPt;
