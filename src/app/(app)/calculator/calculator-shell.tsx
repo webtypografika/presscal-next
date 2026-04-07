@@ -1832,6 +1832,21 @@ export default function CalculatorShell() {
 
             {/* ── PAPER PANEL ── */}
             {activePanel === 'paper' && (<>
+              {/* Selected paper indicator */}
+              {paper && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                  padding: '6px 10px', borderRadius: 7,
+                  background: 'color-mix(in srgb, var(--teal) 10%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--teal) 25%, transparent)',
+                }}>
+                  <i className="fas fa-check-circle" style={{ color: 'var(--teal)', fontSize: '0.65rem' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{paper.name}</div>
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{paper.gsm}gsm · {paper.sheetW}×{paper.sheetH}mm · €{paper.pricePerSheet?.toFixed(3) || '—'}</div>
+                  </div>
+                </div>
+              )}
               {/* Search — full width */}
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', height: 32,
