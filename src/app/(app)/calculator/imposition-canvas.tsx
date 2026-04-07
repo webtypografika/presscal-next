@@ -984,9 +984,9 @@ export default function ImpositionCanvas({
       }
 
       if (onRotate) {
-        // Rotate button — top-center of grid
+        // Rotate button — center of grid
         const rotBtnX = sGridX + sTrimGridW / 2;
-        const rotBtnY = sGridY - 16;
+        const rotBtnY = sGridY + sTrimGridH / 2;
         const rotR = 9;
         ctx.fillStyle = 'rgba(245,130,32,0.85)';
         ctx.beginPath();
@@ -1157,12 +1157,12 @@ export default function ImpositionCanvas({
     const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
     const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
     const cx = gridStartX + trimGridWmm / 2;
-    // Convert 16px drawing offset to mm using the same scale as canvas
+    // Center of grid
+    const cy = gridStartY + trimGridHmm / 2;
     const markLen = cropMarks ? 8 : 0;
     const scX = (750 - 24 - markLen * 2) / sheetW;
     const scY = (625 - 20 - 22 - markLen * 2) / sheetH;
     const sc = Math.min(scX, scY);
-    const cy = gridStartY - 16 / sc;
     const hitR = 9 / sc;
     const dist = Math.sqrt((mmX - cx) ** 2 + (mmY - cy) ** 2);
     return dist < hitR;
