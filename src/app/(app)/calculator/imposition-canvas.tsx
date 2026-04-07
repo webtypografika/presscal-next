@@ -1077,10 +1077,16 @@ export default function ImpositionCanvas({
     const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
     const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
     const cx = gridStartX + trimGridWmm / 2;
-    const cy = gridStartY - 3; // ~3mm above grid
+    // Convert 16px drawing offset to mm using the same scale as canvas
+    const markLen = cropMarks ? 8 : 0;
+    const scX = (750 - 24 - markLen * 2) / sheetW;
+    const scY = (625 - 20 - 22 - markLen * 2) / sheetH;
+    const sc = Math.min(scX, scY);
+    const cy = gridStartY - 16 / sc;
+    const hitR = 9 / sc;
     const dist = Math.sqrt((mmX - cx) ** 2 + (mmY - cy) ** 2);
-    return dist < 5;
-  }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY]);
+    return dist < hitR;
+  }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY, cropMarks]);
 
   // ─── STEP MULTI DRAG ───
   const smDragRef = useRef<{
