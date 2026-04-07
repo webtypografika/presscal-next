@@ -696,9 +696,7 @@ async function exportNUp(
           const scaleX = (needsSwap ? (pieceH / epRawW) : (pieceW / epRawW)) * cScaleFactor;
           const scaleY = (needsSwap ? (pieceW / epRawH) : (pieceH / epRawH)) * cScaleFactor;
 
-          // Place PDF at CELL position (trim - bleed)
-          const frontCellX = frontTrimX - bleedPt;
-          const cellY = trimYpos - bleedPt;
+          // Place PDF at CELL position (trim - bleed) — reuse frontCellX/cellY from above
           let visX: number, visY: number;
           if (isBackSide && opts.duplexOrient === 'h2f') {
             visX = frontCellX;
