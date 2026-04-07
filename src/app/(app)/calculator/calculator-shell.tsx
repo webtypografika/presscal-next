@@ -1553,10 +1553,10 @@ export default function CalculatorShell() {
                   <button onClick={async () => {
                     setPdfMenuOpen(false);
                     try {
-                      // Fetch quote's jobFolderPath
+                      // Fetch quote's jobFolderPath, fallback to linkedFile folder
                       const qRes = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
                       const qData = qRes.ok ? await qRes.json() : null;
-                      const jobFolder = qData?.jobFolderPath;
+                      const jobFolder = qData?.jobFolderPath || (linkedFile?.path ? linkedFile.path.replace(/[/\\][^/\\]+$/, '') : null);
                       if (!jobFolder) { alert('Δεν υπάρχει φάκελος εργασίας'); return; }
                       const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
                       const bytes = await exportImpositionPDF(pdfExportOpts);
