@@ -1380,7 +1380,7 @@ export default function ImpositionCanvas({
     if (zoom <= 1.02) return;
     draggingRef.current = true;
     dragLastRef.current = { x: e.clientX, y: e.clientY };
-  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle, findSmBlock, onGridResize, onRotate, onOffsetChange, findGridHandle, findRotateBtn, findGridBody]);
+  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle, findSmBlock, onGridResize, onRotate, onOffsetChange, onGutterChange, onBleedChange, findGridHandle, findRotateBtn, findGridBody, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     // N-Up grid drag resize
     if (gridDragRef.current) {
