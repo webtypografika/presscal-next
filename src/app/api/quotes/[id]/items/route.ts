@@ -7,14 +7,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params
     const quote = await prisma.quote.findUnique({
       where: { id },
-      select: { items: true }
+      select: { items: true, jobFolderPath: true }
     })
 
     if (!quote) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    return NextResponse.json({ items: quote.items })
+    return NextResponse.json({ items: quote.items, jobFolderPath: quote.jobFolderPath })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
