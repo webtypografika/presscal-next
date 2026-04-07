@@ -1517,25 +1517,22 @@ export default function ImpositionCanvas({
     if (!onDrop) return;
     // Capture data synchronously (dataTransfer is cleared after event)
     const files = e.dataTransfer.files;
-    const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list') || '';
-    // DEBUG: log what we receive
-    console.log('[DROP]', { filesCount: files.length, text, types: Array.from(e.dataTransfer.types), items: Array.from(e.dataTransfer.items).map(i => ({ kind: i.kind, type: i.type })) });
+    const items = e.dataTransfer.items;
     // Standard file drop
     if (files.length > 0) { onDrop(files); return; }
-    // Fallback: PressKit may send file path as text/plain or URL
-    if (text && (text.toLowerCase().includes('.pdf'))) {
-      const filePath = text.replace('file:///', '').replace('file://', '');
-      const url = filePath.startsWith('http') ? filePath : `http://localhost:17824/?path=${encodeURIComponent(filePath)}`;
-      fetch(url).then(res => {
-        if (!res.ok) return;
-        return res.blob().then(blob => {
-          const fileName = filePath.split(/[/\\]/).pop() || 'file.pdf';
-          const file = new File([blob], fileName, { type: 'application/pdf' });
-          const dt = new DataTransfer();
-          dt.items.add(file);
-          onDrop(dt.files);
-        });
-      }).catch(err => console.error('Drop URL fetch error:', err));
+    // Fallback: extract file from items (PressKit sometimes has items but not files)
+    if (items.length > 0) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file') {
+          const file = items[i].getAsFile();
+          if (file) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            onDrop(dt.files);
+            return;
+          }
+        }
+      }
     }
   }, [onDrop]);
 
