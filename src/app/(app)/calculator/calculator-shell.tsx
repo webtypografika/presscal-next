@@ -3215,6 +3215,45 @@ export default function CalculatorShell() {
                   </>
                 )}
               </div>
+              {/* G/B toolbar (top-right) */}
+              <div style={{
+                position: 'absolute', top: 6, right: 6, display: 'flex', gap: 3, alignItems: 'center', zIndex: 2,
+              }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 2,
+                  background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+                  borderRadius: 5, padding: '2px 4px',
+                }}>
+                  <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#f58220' }}>G</span>
+                  <input
+                    type="number" step="0.5" min="0"
+                    value={impoGutter}
+                    onChange={e => setImpoGutter(Math.max(0, parseFloat(e.target.value) || 0))}
+                    style={{
+                      width: 36, height: 18, fontSize: '0.6rem', fontWeight: 600, textAlign: 'center',
+                      border: '1px solid rgba(245,130,32,0.3)', borderRadius: 3,
+                      background: 'rgba(0,0,0,0.4)', color: '#f58220', outline: 'none', padding: 0,
+                    }}
+                  />
+                </div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 2,
+                  background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+                  borderRadius: 5, padding: '2px 4px',
+                }}>
+                  <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#ef4444' }}>B</span>
+                  <input
+                    type="number" step="0.5" min="0"
+                    value={effectiveBleed}
+                    onChange={e => setImpoBleedOverride(Math.max(0, parseFloat(e.target.value) || 0))}
+                    style={{
+                      width: 36, height: 18, fontSize: '0.6rem', fontWeight: 600, textAlign: 'center',
+                      border: '1px solid rgba(239,68,68,0.3)', borderRadius: 3,
+                      background: 'rgba(0,0,0,0.4)', color: '#ef4444', outline: 'none', padding: 0,
+                    }}
+                  />
+                </div>
+              </div>
               {/* Info chips overlay (bottom-right) */}
               <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4, pointerEvents: 'none', zIndex: 2 }}>
                 {machine?.cat !== 'offset' && <ImpoChip><i className={feedEdge === 'sef' ? 'fas fa-arrows-alt-v' : 'fas fa-arrows-alt-h'} style={{ fontSize: '0.5rem' }} /> {feedEdge === 'sef' ? 'SEF' : 'LEF'}</ImpoChip>}
