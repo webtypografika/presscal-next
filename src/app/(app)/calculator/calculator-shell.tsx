@@ -587,6 +587,8 @@ export default function CalculatorShell() {
   const [calcResult, setCalcResult] = useState<CalculatorResult | null>(null);
   const [calcDebug, setCalcDebug] = useState<Record<string, unknown> | null>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
+  const pdfMenuItemStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 14px', border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.75rem', fontWeight: 500, cursor: 'pointer', textAlign: 'left' as const, fontFamily: 'inherit' };
   const [showPlateOrder, setShowPlateOrder] = useState(false);
   const [calculating, setCalculating] = useState(false);
   const calcTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -993,6 +995,7 @@ export default function CalculatorShell() {
   // ─── CLIENT-SIDE IMPOSITION (instant feedback) ───
   const effectiveBleed = job.bleedOn ? (impoBleedOverride ?? job.bleed) : 0;
   const engineGutter = impoGutter;
+
   const impoInput: ImpositionInput = {
     mode: impoMode,
     trimW: job.width,
@@ -1036,6 +1039,37 @@ export default function CalculatorShell() {
   };
 
   const impo: ImpositionResult = calcImposition(impoInput);
+
+  // Shared PDF export options
+  const pdfExportOpts = {
+    imposition: impo, pdfBytes: pdf?.bytes,
+    pdfPageSizes: pdf?.pageSizes?.map((p: any) => ({ trimW: p.trimW, trimH: p.trimH })),
+    sourceFileName: pdf?.fileName, machineCat: machine.cat as 'digital' | 'offset',
+    machineName: machine.name, paperName: paper?.name,
+    jobW: job.width, jobH: job.height, bleed: effectiveBleed, gutter: impoGutter,
+    contentScale: impoContentScale, showCropMarks: impoCropMarks,
+    showRegistration: machine.cat === 'offset', showColorBar: impoColorBar,
+    colorBarType: impoColorBarType as 'cmyk' | 'cmyk_tint50',
+    colorBarEdge: impoColorBarEdge as 'tail' | 'gripper',
+    colorBarOffsetY: impoColorBarOffY, colorBarScale: impoColorBarScale,
+    showPlateSlug: impoPlateSlug, plateSlugEdge: impoPlateSlugEdge,
+    keepSourceMarks: impoKeepSourceMarks, isDuplex: job.sides === 2,
+    duplexOrient: impoDuplexOrient, rotation: impoRotation, turnType: impoTurnType,
+    stackPositions: impo.stackPositions,
+    csStackSize: impo.totalSheets || Math.ceil(job.qty / Math.max(impo.ups, 1)),
+    csGetStackNum: impo.stackPositions ? (posIdx: number) => impo.stackPositions![posIdx]?.stackNum ?? posIdx : undefined,
+    numberingEnabled: impoMode === 'cutstack' && csNumbering,
+    numberPrefix: csNumPrefix, numberStartNum: csStartNum, numberDigits: csNumDigits,
+    numberFontSize: csNumFontSize, numberColor: csNumColor === 'red' ? '#cc0000' : '#000000',
+    numberFont: csNumFont, numberRotation: csNumRotation || undefined,
+    numberGlobalPos: { x: csNumPosX, y: csNumPosY },
+    fixedBack: impoMode === 'cutstack' && csFixedBack, fixedBackPdfBytes: csBackPdf?.bytes,
+    gangJobPdfBytes: impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf?.bytes) : undefined,
+    blocks: impoMode === 'stepmulti' ? impo.blocks : undefined,
+    smBlockPdfBytes: impoMode === 'stepmulti' ? smBlockPdfs.map(p => p?.bytes) : undefined,
+    jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
+  };
+
   const ups = Math.max(impo.ups, 1);
   const rawSheetsBase = impo.totalSheets || Math.ceil(job.qty / ups);
   const rawSheets = rawSheetsBase * prodMultiplier;
@@ -1463,129 +1497,80 @@ export default function CalculatorShell() {
           >
             <i className="fas fa-cart-plus" /> Καλάθι
           </button>
-          <button onClick={async () => {
-            try {
-              await downloadImpositionPDF({
-                imposition: impo,
-                pdfBytes: pdf?.bytes,
-                pdfPageSizes: pdf?.pageSizes?.map(p => ({ trimW: p.trimW, trimH: p.trimH })),
-                sourceFileName: pdf?.fileName,
-                machineCat: machine.cat as 'digital' | 'offset',
-                machineName: machine.name,
-                paperName: paper?.name,
-                jobW: job.width,
-                jobH: job.height,
-                bleed: effectiveBleed,
-                gutter: engineGutter,
-                contentScale: impoContentScale,
-                showCropMarks: impoCropMarks,
-                showRegistration: machine.cat === 'offset',
-                showColorBar: impoColorBar,
-                colorBarType: impoColorBarType as 'cmyk' | 'cmyk_tint50',
-                colorBarEdge: impoColorBarEdge as 'tail' | 'gripper',
-                colorBarOffsetY: impoColorBarOffY,
-                colorBarScale: impoColorBarScale,
-                showPlateSlug: impoPlateSlug,
-                plateSlugEdge: impoPlateSlugEdge,
-                keepSourceMarks: impoKeepSourceMarks,
-                isDuplex: job.sides === 2,
-                duplexOrient: impoDuplexOrient,
-                rotation: impoRotation,
-                turnType: impoTurnType,
-                // Cut & Stack
-                stackPositions: impo.stackPositions,
-                csStackSize: impo.totalSheets || Math.ceil(job.qty / Math.max(impo.ups, 1)),
-                csGetStackNum: impo.stackPositions
-                  ? (posIdx: number) => impo.stackPositions![posIdx]?.stackNum ?? posIdx
-                  : undefined,
-                numberingEnabled: impoMode === 'cutstack' && csNumbering,
-                numberPrefix: csNumPrefix,
-                numberStartNum: csStartNum,
-                numberDigits: csNumDigits,
-                numberFontSize: csNumFontSize,
-                numberColor: csNumColor === 'red' ? '#cc0000' : '#000000',
-                numberFont: csNumFont,
-                numberRotation: csNumRotation || undefined,
-                numberGlobalPos: { x: csNumPosX, y: csNumPosY },
-                fixedBack: impoMode === 'cutstack' && csFixedBack,
-                fixedBackPdfBytes: csBackPdf?.bytes,
-                // Gang Run multi-PDF
-                gangJobPdfBytes: impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf?.bytes) : undefined,
-                // Step Multi
-                blocks: impoMode === 'stepmulti' ? impo.blocks : undefined,
-                smBlockPdfBytes: impoMode === 'stepmulti' ? smBlockPdfs.map(p => p?.bytes) : undefined,
-                jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
-              });
-            } catch (e) {
-              console.error('PDF export error:', e);
-              alert('PDF export error: ' + (e as Error).message);
-            }
-          }} style={{
-            padding: '7px 10px', borderRadius: 7,
-            background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)',
-            fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 5,
-            transition: 'all 0.2s', flexShrink: 0,
-          }} title="Εξαγωγή imposition PDF">
-            <i className="fas fa-file-pdf" /> PDF
-          </button>
-          {linkedFile && (
-            <button onClick={async () => {
-              try {
-                const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
-                const pdfBytes = await exportImpositionPDF({
-                  imposition: impo, pdfBytes: pdf?.bytes,
-                  pdfPageSizes: pdf?.pageSizes?.map(p => ({ trimW: p.trimW, trimH: p.trimH })),
-                  sourceFileName: pdf?.fileName,
-                  machineCat: machine.cat as 'digital' | 'offset',
-                  machineName: machine.name, paperName: paper?.name,
-                  jobW: job.width, jobH: job.height, bleed: effectiveBleed, gutter: engineGutter,
-                  contentScale: impoContentScale,
-                  showCropMarks: impoCropMarks, showRegistration: machine.cat === 'offset',
-                  isDuplex: job.sides === 2, duplexOrient: impoDuplexOrient,
-                  rotation: impoRotation, turnType: impoTurnType,
-                  stackPositions: impo.stackPositions,
-                  csStackSize: impo.totalSheets || Math.ceil(job.qty / Math.max(impo.ups, 1)),
-                  numberingEnabled: impoMode === 'cutstack' && csNumbering,
-                  numberPrefix: csNumPrefix, numberStartNum: csStartNum, numberDigits: csNumDigits,
-                  numberFontSize: csNumFontSize,
-                  numberColor: csNumColor === 'red' ? '#cc0000' : '#000000',
-                  numberFont: csNumFont, numberRotation: csNumRotation || undefined,
-                  numberGlobalPos: { x: csNumPosX, y: csNumPosY },
-                  fixedBack: impoMode === 'cutstack' && csFixedBack,
-                  fixedBackPdfBytes: csBackPdf?.bytes,
-                  gangJobPdfBytes: impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf?.bytes) : undefined,
-                  blocks: impoMode === 'stepmulti' ? impo.blocks : undefined,
-                  smBlockPdfBytes: impoMode === 'stepmulti' ? smBlockPdfs.map(p => p?.bytes) : undefined,
-                  jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
-                });
-                const folder = linkedFile.path.replace(/[/\\][^/\\]+$/, '');
-                const sep = folder.includes('\\') ? '\\' : '/';
-                const baseName = (pdf?.fileName || 'imposed').replace(/\.pdf$/i, '');
-                const fileName = `${baseName}_imposition.pdf`;
-                const savePath = `${folder}${sep}${fileName}`;
-                // Save via PressKit file server
-                const res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
-                  method: 'POST', body: new Blob([pdfBytes as BlobPart]),
-                });
-                if (res.ok) {
-                  // Visual feedback
-                  const btn = document.activeElement as HTMLElement;
-                  if (btn) { btn.style.color = '#4ade80'; setTimeout(() => { btn.style.color = ''; }, 1500); }
-                } else {
-                  alert('Αποτυχία αποθήκευσης στον φάκελο');
-                }
-              } catch (e) { alert('PDF export error: ' + (e as Error).message); }
-            }} style={{
+          {/* PDF Export dropdown */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button onClick={() => setPdfMenuOpen(p => !p)} style={{
               padding: '7px 10px', borderRadius: 7,
-              background: 'rgba(245,130,32,0.08)', color: '#f58220', border: '1px solid rgba(245,130,32,0.25)',
+              background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)',
               fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 5,
-              transition: 'all 0.2s', flexShrink: 0,
-            }} title="Αποθήκευση PDF στον φάκελο πελάτη">
-              <i className="fas fa-folder-open" />
+              transition: 'all 0.2s',
+            }}>
+              <i className="fas fa-file-pdf" /> PDF <i className="fas fa-caret-down" style={{ fontSize: '0.55rem' }} />
             </button>
-          )}
+            {pdfMenuOpen && (
+              <div style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                minWidth: 200, overflow: 'hidden',
+              }}>
+                {/* Download */}
+                <button onClick={async () => {
+                  setPdfMenuOpen(false);
+                  try {
+                    await downloadImpositionPDF(pdfExportOpts);
+                  } catch (e) { alert('PDF export error: ' + (e as Error).message); }
+                }} style={pdfMenuItemStyle}>
+                  <i className="fas fa-download" style={{ width: 16 }} /> Λήψη (Downloads)
+                </button>
+                {/* Save to customer folder */}
+                {linkedFile && (
+                  <button onClick={async () => {
+                    setPdfMenuOpen(false);
+                    try {
+                      const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
+                      const bytes = await exportImpositionPDF(pdfExportOpts);
+                      const folder = linkedFile.path.replace(/[/\\][^/\\]+$/, '');
+                      const sep = folder.includes('\\') ? '\\' : '/';
+                      const baseName = (pdf?.fileName || 'imposed').replace(/\.pdf$/i, '');
+                      const savePath = `${folder}${sep}${baseName}_imposition.pdf`;
+                      const res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
+                        method: 'POST', body: new Blob([bytes as BlobPart]),
+                      });
+                      if (!res.ok) alert('Αποτυχία αποθήκευσης');
+                    } catch (e) { alert('PDF export error: ' + (e as Error).message); }
+                  }} style={pdfMenuItemStyle}>
+                    <i className="fas fa-folder" style={{ width: 16, color: '#f58220' }} /> Φάκελος πελάτη
+                  </button>
+                )}
+                {/* Save to quote job folder */}
+                {quoteLink?.quoteId && (
+                  <button onClick={async () => {
+                    setPdfMenuOpen(false);
+                    try {
+                      // Fetch quote's jobFolderPath
+                      const qRes = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
+                      const qData = qRes.ok ? await qRes.json() : null;
+                      const jobFolder = qData?.jobFolderPath;
+                      if (!jobFolder) { alert('Δεν υπάρχει φάκελος εργασίας'); return; }
+                      const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
+                      const bytes = await exportImpositionPDF(pdfExportOpts);
+                      const sep = jobFolder.includes('\\') ? '\\' : '/';
+                      const baseName = (pdf?.fileName || 'imposed').replace(/\.pdf$/i, '');
+                      const savePath = `${jobFolder}${sep}${baseName}_imposition.pdf`;
+                      const res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
+                        method: 'POST', body: new Blob([bytes as BlobPart]),
+                      });
+                      if (!res.ok) alert('Αποτυχία αποθήκευσης');
+                    } catch (e) { alert('PDF export error: ' + (e as Error).message); }
+                  }} style={pdfMenuItemStyle}>
+                    <i className="fas fa-briefcase" style={{ width: 16, color: 'var(--teal)' }} /> Φάκελος προσφοράς
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           {machine.cat === 'offset' && (color.platesFront + color.platesBack) > 0 && (
             <button onClick={() => setShowPlateOrder(true)} style={{
               padding: '7px 10px', borderRadius: 7,
