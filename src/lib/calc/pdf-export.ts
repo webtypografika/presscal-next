@@ -689,20 +689,27 @@ async function exportNUp(
           const epRawW = epPage.width || pieceW;
           const epRawH = epPage.height || pieceH;
 
-          // Scale PDF to fit TRIM area (not cell) — bleed must not affect zoom
+          // Scale so PDF's TrimBox fills our trim area (bleed extends beyond)
+          // If embedded page has trimW/H info, use that for scaling reference
+          const epTrimW = epObj.trimW || epRawW;
+          const epTrimH = epObj.trimH || epRawH;
           const cScaleFactor = (opts.contentScale || 100) / 100;
           const needsSwap = (totalRot === 90 || totalRot === 270);
-          const scaleX = (needsSwap ? (trimHpt / epRawW) : (trimWpt / epRawW)) * cScaleFactor;
-          const scaleY = (needsSwap ? (trimWpt / epRawH) : (trimHpt / epRawH)) * cScaleFactor;
+          const scaleX = (needsSwap ? (trimHpt / epTrimW) : (trimWpt / epTrimW)) * cScaleFactor;
+          const scaleY = (needsSwap ? (trimWpt / epTrimH) : (trimHpt / epTrimH)) * cScaleFactor;
 
-          // Place PDF at TRIM position (not cell) — PDF is scaled to trim size
+          // Place PDF so its TrimBox aligns with our trim position
+          // The embedded page origin is at CropBox bottom-left; trimOffset tells us where TrimBox starts
+          const epOffX = epObj.trimOffsetX * scaleX / cScaleFactor; // trim offset in output coords
+          const epOffY = epObj.trimOffsetY * scaleY / cScaleFactor;
           let visX: number, visY: number;
           if (isBackSide && opts.duplexOrient === 'h2f') {
-            visX = frontTrimX;
-            visY = paperHpt - trimYpos - trimHpt;
+            visX = frontTrimX - epOffX;
+            visY = paperHpt - trimYpos - trimHpt - epOffY;
           } else {
-            visX = isBackSide ? (paperWpt - frontTrimX - trimWpt) : frontTrimX;
-            visY = trimYpos;
+            const ftx = isBackSide ? (paperWpt - frontTrimX - trimWpt) : frontTrimX;
+            visX = ftx - epOffX;
+            visY = trimYpos - epOffY;
           }
 
           // Clip rectangle — visX/visY are now trim positions
