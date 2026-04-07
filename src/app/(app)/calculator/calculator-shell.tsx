@@ -1843,7 +1843,7 @@ export default function CalculatorShell() {
                   <i className="fas fa-check-circle" style={{ color: 'var(--teal)', fontSize: '0.65rem' }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{paper.name}</div>
-                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{paper.gsm}gsm · {paper.sheetW}×{paper.sheetH}mm · €{paper.pricePerSheet?.toFixed(3) || '—'}</div>
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>{paper.width}×{paper.height}mm{paper.thickness ? ` · ${paper.thickness}μm` : ''}{paper.costPerUnit ? ` · €${paper.costPerUnit.toFixed(3)}` : ''}</div>
                   </div>
                 </div>
               )}
