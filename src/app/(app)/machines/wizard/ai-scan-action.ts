@@ -6,6 +6,22 @@ function getGeminiUrl() {
   return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
 }
 
+/** Fetch with retry for 503/429 (Gemini rate limits / overload) */
+async function fetchWithRetry(url: string, init: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url, init);
+    if (res.status === 503 || res.status === 429) {
+      if (attempt < maxRetries) {
+        const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+    }
+    return res;
+  }
+  return fetch(url, init); // fallback (shouldn't reach)
+}
+
 interface ScanResult {
   success: boolean;
   specs: Record<string, unknown>;
@@ -105,7 +121,7 @@ Return a JSON object with these fields:
 IMPORTANT: Return ONLY the JSON object, no markdown, no explanation. For consumable prices use current EUR market prices (OEM or compatible). If the machine uses liquid ink (HP Indigo), fill the HP Indigo fields and leave toner fields null, and vice versa.`;
 
   try {
-    const res = await fetch(getGeminiUrl(), {
+    const res = await fetchWithRetry(getGeminiUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -237,7 +253,7 @@ Return a JSON object with these fields:
 IMPORTANT: Return ONLY the JSON object, no markdown, no explanation.`;
 
   try {
-    const res = await fetch(getGeminiUrl(), {
+    const res = await fetchWithRetry(getGeminiUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
