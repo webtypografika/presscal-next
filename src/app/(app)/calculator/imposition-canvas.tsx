@@ -1576,7 +1576,7 @@ export default function ImpositionCanvas({
       {/* Zoom indicator */}
       {zoom > 1.02 && (
         <div style={{
-          position: 'absolute', top: 8, right: 8,
+          position: 'absolute', top: 30, right: 8,
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
           borderRadius: 6, padding: '3px 8px', fontSize: '0.65rem',
           fontWeight: 600, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6,
