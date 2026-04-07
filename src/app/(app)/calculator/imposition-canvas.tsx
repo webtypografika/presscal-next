@@ -702,6 +702,9 @@ export default function ImpositionCanvas({
   const isDuplex = (sides ?? 1) === 2 && impo.mode !== 'workturn';
   const [viewMode, setViewMode] = useState<ViewMode>('single');
 
+  // Editable distance input (click on ruler number to edit)
+  const [editDist, setEditDist] = useState<{ side: 'left' | 'right' | 'top' | 'bottom'; x: number; y: number; value: string } | null>(null);
+
   const LOGICAL_W = 750;
   const LOGICAL_H = 625;
 
@@ -1236,7 +1239,9 @@ export default function ImpositionCanvas({
   }, [smBlocks, impo]);
 
   // ─── PAN ───
+  const isNUpLikeCheck = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun';
   const onMouseDown = useCallback((e: React.MouseEvent) => {
+    setEditDist(null); // dismiss any open distance input
     // N-Up grid: resize handle or rotate button
     if (onGridResize || onRotate) {
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
@@ -1254,6 +1259,35 @@ export default function ImpositionCanvas({
         gridDragRef.current = { cols: impo.cols, rows: impo.rows, mode: 'move', startMmX: mmX, startMmY: mmY, origOffX: offsetX || 0, origOffY: offsetY || 0 };
         e.preventDefault();
         return;
+      }
+      // Clickable distance labels — detect click on ruler numbers
+      if (onOffsetChange && isNUpLikeCheck) {
+        const pw2 = sheetW - marginLeft - marginRight;
+        const ph2 = sheetH - marginTop - marginBottom;
+        const tgW = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
+        const tgH = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+        const goX = (pw2 - tgW) / 2 + (offsetX || 0);
+        const goY = (ph2 - tgH) / 2 + (offsetY || 0);
+        const dL = goX - bleed, dR = pw2 - goX - tgW - bleed;
+        const dT = goY - bleed, dB = ph2 - goY - tgH - bleed;
+        const hitW = 12, hitH = 6; // mm hit zone around label
+        // Convert canvas click to client px for positioning the input
+        const rect = containerRef.current?.getBoundingClientRect();
+        const cx2 = rect ? e.clientX - rect.left : 0;
+        const cy2 = rect ? e.clientY - rect.top : 0;
+        const midY = goY + tgH / 2, midX = goX + tgW / 2;
+        if (dL > 0.3 && Math.abs(mmX - (goX - bleed) / 2) < hitW && Math.abs(mmY - midY) < hitH) {
+          setEditDist({ side: 'left', x: cx2, y: cy2, value: dL.toFixed(1) }); e.preventDefault(); return;
+        }
+        if (dR > 0.3 && Math.abs(mmX - (goX + tgW + bleed + pw2) / 2) < hitW && Math.abs(mmY - midY) < hitH) {
+          setEditDist({ side: 'right', x: cx2, y: cy2, value: dR.toFixed(1) }); e.preventDefault(); return;
+        }
+        if (dT > 0.3 && Math.abs(mmY - (goY - bleed) / 2) < hitH && Math.abs(mmX - midX) < hitW) {
+          setEditDist({ side: 'top', x: cx2, y: cy2, value: dT.toFixed(1) }); e.preventDefault(); return;
+        }
+        if (dB > 0.3 && Math.abs(mmY - (goY + tgH + bleed + ph2) / 2) < hitH && Math.abs(mmX - midX) < hitW) {
+          setEditDist({ side: 'bottom', x: cx2, y: cy2, value: dB.toFixed(1) }); e.preventDefault(); return;
+        }
       }
     }
     // Step multi: resize handle takes priority, then block move
@@ -1318,8 +1352,12 @@ export default function ImpositionCanvas({
           }
         }
         const ax = gridDragRef.current.axis;
-        const newOffX = Math.round((gridDragRef.current.origOffX + (ax !== 'y' ? dx : 0)) * 10) / 10;
-        const newOffY = Math.round((gridDragRef.current.origOffY + (ax !== 'x' ? dy : 0)) * 10) / 10;
+        let newOffX = Math.round((gridDragRef.current.origOffX + (ax !== 'y' ? dx : 0)) * 10) / 10;
+        let newOffY = Math.round((gridDragRef.current.origOffY + (ax !== 'x' ? dy : 0)) * 10) / 10;
+        // Magnetic snap to center (offset=0 = centered)
+        const snapT = 1.5; // mm threshold
+        if (Math.abs(newOffX) < snapT) newOffX = 0;
+        if (Math.abs(newOffY) < snapT) newOffY = 0;
         onOffsetChange(newOffX, newOffY);
       }
       return;
@@ -1462,6 +1500,49 @@ export default function ImpositionCanvas({
       onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDropHandler}
     >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', transformOrigin: '0 0' }} />
+
+      {/* Floating distance input (click on ruler number to edit) */}
+      {editDist && onOffsetChange && (
+        <div style={{
+          position: 'absolute', left: editDist.x - 28, top: editDist.y - 12, zIndex: 10,
+        }}>
+          <input
+            autoFocus
+            type="number"
+            step="0.1"
+            defaultValue={editDist.value}
+            style={{
+              width: 56, height: 22, fontSize: '0.65rem', fontWeight: 700, textAlign: 'center',
+              border: '1px solid var(--impo)', borderRadius: 4, outline: 'none',
+              background: 'rgba(0,0,0,0.85)', color: '#f58220', padding: '0 4px',
+            }}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter') {
+                const val = parseFloat((ev.target as HTMLInputElement).value) || 0;
+                const pw2 = sheetW - marginLeft - marginRight;
+                const ph2 = sheetH - marginTop - marginBottom;
+                const tgW = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
+                const tgH = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+                // Convert desired distance to offset
+                // distance = (printable - grid) / 2 + offset - bleed → offset = distance + bleed - (printable - grid) / 2
+                if (editDist.side === 'left') {
+                  onOffsetChange(val + bleed - (pw2 - tgW) / 2, offsetY || 0);
+                } else if (editDist.side === 'right') {
+                  onOffsetChange(-val - bleed + (pw2 - tgW) / 2, offsetY || 0);
+                } else if (editDist.side === 'top') {
+                  onOffsetChange(offsetX || 0, val + bleed - (ph2 - tgH) / 2);
+                } else if (editDist.side === 'bottom') {
+                  onOffsetChange(offsetX || 0, -val - bleed + (ph2 - tgH) / 2);
+                }
+                setEditDist(null);
+              } else if (ev.key === 'Escape') {
+                setEditDist(null);
+              }
+            }}
+            onBlur={() => setEditDist(null)}
+          />
+        </div>
+      )}
 
       {/* View mode toggle (bottom-right, dual only) */}
       {isDuplex && (
