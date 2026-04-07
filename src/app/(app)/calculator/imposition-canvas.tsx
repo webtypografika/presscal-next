@@ -924,7 +924,7 @@ export default function ImpositionCanvas({
 
     // ─── N-UP GRID RESIZE HANDLE + ROTATE BUTTON (drawn in main draw, not drawSheet) ───
     const isNUpLikeMode = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun';
-    if (isNUpLikeMode && impo.cols > 0 && impo.rows > 0 && !isDuplex) {
+    if (isNUpLikeMode && impo.cols > 0 && impo.rows > 0) {
       // Compute grid position in canvas pixels (replicate single-view sheet positioning)
       const sScX = (cW - 24 - markLen * 2) / sheetW;
       const sScY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;

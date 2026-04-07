@@ -614,6 +614,8 @@ export default function CalculatorShell() {
           width: Math.round(pg.trimW * 10) / 10,
           height: Math.round(pg.trimH * 10) / 10,
           bleed: pg.bleedDetected > 0 ? pg.bleedDetected : prev.bleed,
+          // 1-page PDF → default to single side (user can override to duplex)
+          ...(parsed.pageCount === 1 ? { sides: 1 as const } : {}),
           // Cut&Stack: qty = PDF page count
           ...(impoMode === 'cutstack' && parsed.pageCount > 1 ? { qty: parsed.pageCount } : {}),
         }));
