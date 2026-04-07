@@ -507,7 +507,8 @@ function drawSheet(
   const gutterPxTrim = gutter * scale;
   const trimStepW = trimWpx + gutterPxTrim;
   const trimStepH = trimHpx + gutterPxTrim;
-  if (gutterPxTrim > 0.5 && !isWT && !isSM) {
+  const isBookletLike = impo.mode === 'booklet' || impo.mode === 'perfect_bound';
+  if (gutterPxTrim > 0.5 && !isWT && !isSM && !isBookletLike) {
     ctx.fillStyle = COLORS.gutterFill;
     for (let col = 0; col < impo.cols - 1; col++) {
       // Gutter starts at right trim edge of col, width = gutterPxTrim
