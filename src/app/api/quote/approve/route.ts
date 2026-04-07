@@ -40,7 +40,8 @@ export async function GET(req: NextRequest) {
   .item .info { flex: 1; }
   .item .name { font-size: 14px; font-weight: 600; }
   .item .details { font-size: 12px; color: #94a3b8; margin-top: 2px; }
-  .item .price { font-size: 14px; font-weight: 700; color: #1e293b; white-space: nowrap; }
+  .item .qty { font-size: 13px; color: #64748b; white-space: nowrap; text-align: right; min-width: 60px; }
+  .item .price { font-size: 14px; font-weight: 700; color: #1e293b; white-space: nowrap; min-width: 80px; text-align: right; }
   .item .status { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
   .status-approved { background: #dcfce7; color: #16a34a; }
   .status-pending { background: #f1f5f9; color: #94a3b8; }
@@ -81,8 +82,8 @@ export async function GET(req: NextRequest) {
             <div class="name">${item.name || '—'}</div>
             ${item.description ? `<div class="details">${item.description}</div>` : ''}
             ${item.calcData?.paperName || item.calcData?.colors ? `<div class="details">${[item.calcData?.paperName, item.calcData?.colors, item.calcData?.finishing].filter(Boolean).join(' · ')}</div>` : ''}
-            <div class="details">${item.qty || ''} ${item.unit || ''}</div>
           </div>
+          <div class="qty">${item.qty || ''} ${item.unit || 'τεμ'}</div>
           <div class="price">${fmt(item.finalPrice || 0)}</div>
           ${already ? '<span class="status status-approved">Εγκρίθηκε</span>' : ''}
         </label>`;
