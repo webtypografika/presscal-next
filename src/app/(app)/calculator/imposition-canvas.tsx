@@ -1489,9 +1489,30 @@ export default function ImpositionCanvas({
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); }, []);
   const onDragEnter = useCallback((e: React.DragEvent) => { e.preventDefault(); dragCountRef.current++; setDragOver(true); }, []);
   const onDragLeave = useCallback((e: React.DragEvent) => { dragCountRef.current--; if (dragCountRef.current <= 0) { dragCountRef.current = 0; setDragOver(false); } }, []);
-  const onDropHandler = useCallback((e: React.DragEvent) => {
+  const onDropHandler = useCallback(async (e: React.DragEvent) => {
     e.preventDefault(); e.stopPropagation(); dragCountRef.current = 0; setDragOver(false);
-    if (onDrop && e.dataTransfer.files.length) onDrop(e.dataTransfer.files);
+    // Standard file drop
+    if (onDrop && e.dataTransfer.files.length) { onDrop(e.dataTransfer.files); return; }
+    // Fallback: PressKit may send file path as text/plain or URL
+    if (onDrop) {
+      const text = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list') || '';
+      if (text && (text.endsWith('.pdf') || text.endsWith('.PDF') || text.includes('.pdf'))) {
+        try {
+          // Try fetching via FileHelper local server
+          const filePath = text.replace('file:///', '').replace('file://', '');
+          const url = filePath.startsWith('http') ? filePath : `http://localhost:17824/?path=${encodeURIComponent(filePath)}`;
+          const res = await fetch(url);
+          if (res.ok) {
+            const blob = await res.blob();
+            const fileName = filePath.split(/[/\\]/).pop() || 'file.pdf';
+            const file = new File([blob], fileName, { type: 'application/pdf' });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            onDrop(dt.files);
+          }
+        } catch (err) { console.error('Drop URL fetch error:', err); }
+      }
+    }
   }, [onDrop]);
 
   // ─── PILL STYLE ───
