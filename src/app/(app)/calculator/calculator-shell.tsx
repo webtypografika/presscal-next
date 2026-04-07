@@ -636,12 +636,37 @@ export default function CalculatorShell() {
         } : b));
         setSmBlockPdfs(prev => { const next = [...prev]; next[0] = parsed; return next; });
       }
+      // If linked to a quote, update the item's linkedFile with PDF info
+      if (quoteLink?.quoteId && quoteLink?.itemId) {
+        try {
+          const pg = parsed.pageSizes[0];
+          const fileInfo = {
+            name: pdfFiles[0].name,
+            pages: parsed.pageCount,
+            width: pg ? Math.round(pg.trimW * 10) / 10 : undefined,
+            height: pg ? Math.round(pg.trimH * 10) / 10 : undefined,
+            bleed: pg?.bleedDetected > 0 ? pg.bleedDetected : undefined,
+            colors: parsed.pageCount >= 2 ? `${parsed.pageCount}σελ` : undefined,
+          };
+          const { updateQuote } = await import('../quotes/actions');
+          const res = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
+          if (res.ok) {
+            const data = await res.json();
+            const qItems = (data.items as any[]) || [];
+            const idx = qItems.findIndex((i: any) => i.id === quoteLink.itemId);
+            if (idx >= 0) {
+              qItems[idx] = { ...qItems[idx], linkedFile: fileInfo };
+              await updateQuote(quoteLink.quoteId, { items: qItems });
+            }
+          }
+        } catch (e) { console.error('Link file to quote error:', e); }
+      }
     } catch (err) {
       console.error('PDF parse error:', err);
     } finally {
       setPdfLoading(false);
     }
-  }, []);
+  }, [quoteLink]);
 
   // ─── FETCH DATA FROM DB ───
   useEffect(() => {
