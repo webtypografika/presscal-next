@@ -1556,8 +1556,9 @@ export default function CalculatorShell() {
                       // Fetch quote's jobFolderPath, fallback to linkedFile folder
                       const qRes = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
                       const qData = qRes.ok ? await qRes.json() : null;
+                      console.log('[Export] quoteId:', quoteLink.quoteId, 'jobFolderPath:', qData?.jobFolderPath, 'linkedFile:', linkedFile?.path);
                       const jobFolder = qData?.jobFolderPath || (linkedFile?.path ? linkedFile.path.replace(/[/\\][^/\\]+$/, '') : null);
-                      if (!jobFolder) { alert('Δεν υπάρχει φάκελος εργασίας'); return; }
+                      if (!jobFolder) { alert('Δεν υπάρχει φάκελος εργασίας. Δημιουργήστε φάκελο από το tab Αρχεία στην προσφορά.'); return; }
                       const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
                       const bytes = await exportImpositionPDF(pdfExportOpts);
                       const sep = jobFolder.includes('\\') ? '\\' : '/';
