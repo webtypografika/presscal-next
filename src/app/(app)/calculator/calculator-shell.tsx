@@ -588,6 +588,7 @@ export default function CalculatorShell() {
   const [calcDebug, setCalcDebug] = useState<Record<string, unknown> | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
+  const pdfBtnRef = useRef<HTMLDivElement>(null);
   const pdfMenuItemStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 14px', border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.75rem', fontWeight: 500, cursor: 'pointer', textAlign: 'left' as const, fontFamily: 'inherit' };
   const [showPlateOrder, setShowPlateOrder] = useState(false);
   const [calculating, setCalculating] = useState(false);
@@ -1498,7 +1499,7 @@ export default function CalculatorShell() {
             <i className="fas fa-cart-plus" /> Καλάθι
           </button>
           {/* PDF Export dropdown */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
+          <div style={{ position: 'relative', flexShrink: 0 }} ref={pdfBtnRef}>
             <button onClick={() => setPdfMenuOpen(p => !p)} style={{
               padding: '7px 10px', borderRadius: 7,
               background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)',
@@ -1506,11 +1507,14 @@ export default function CalculatorShell() {
               display: 'flex', alignItems: 'center', gap: 5,
               transition: 'all 0.2s',
             }}>
-              <i className="fas fa-file-pdf" /> PDF <i className="fas fa-caret-down" style={{ fontSize: '0.55rem' }} />
+              <i className="fas fa-file-export" /> Export <i className="fas fa-caret-down" style={{ fontSize: '0.55rem' }} />
             </button>
-            {pdfMenuOpen && (
-              <div style={{
-                position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 999,
+            {pdfMenuOpen && createPortal(
+              <><div onClick={() => setPdfMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} /><div style={{
+                position: 'fixed',
+                top: (pdfBtnRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                left: (pdfBtnRef.current?.getBoundingClientRect().right ?? 0) - 200,
+                zIndex: 9999,
                 background: 'var(--bg-elevated)', border: '1px solid var(--border)',
                 borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                 minWidth: 200, overflow: 'hidden',
@@ -1568,8 +1572,8 @@ export default function CalculatorShell() {
                     <i className="fas fa-briefcase" style={{ width: 16, color: 'var(--teal)' }} /> Φάκελος προσφοράς
                   </button>
                 )}
-              </div>
-            )}
+              </div></>
+            , document.body)}
           </div>
           {machine.cat === 'offset' && (color.platesFront + color.platesBack) > 0 && (
             <button onClick={() => setShowPlateOrder(true)} style={{
