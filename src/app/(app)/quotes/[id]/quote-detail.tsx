@@ -762,10 +762,12 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
               onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; }}
             ><i className="fas fa-calculator" /></a>
-            {/* Link file from Helper */}
-            {(selectedCustomer as any)?.folderPath ? (
+            {/* Link file from Helper — uses customer folder or quote job folder */}
+            {(() => {
+              const pickFolder = (selectedCustomer as any)?.folderPath || (quote as any).jobFolderPath;
+              return pickFolder ? (
               <a
-                href={`presscal-fh://pick-file-for-item?quoteId=${quote.id}&itemId=${item.id}&folder=${encodeURIComponent((selectedCustomer as any).folderPath)}`}
+                href={`presscal-fh://pick-file-for-item?quoteId=${quote.id}&itemId=${item.id}&folder=${encodeURIComponent(pickFolder)}`}
                 title={item.linkedFile ? `📎 ${item.linkedFile.name}` : 'Σύνδεση αρχείου'}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -779,10 +781,11 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 <i className="fas fa-paperclip" />
               </a>
             ) : (
-              <span style={{ opacity: 0.2, fontSize: '0.85rem', color: 'var(--text-muted)' }} title="Ορίστε πρώτα φάκελο πελάτη">
+              <span style={{ opacity: 0.2, fontSize: '0.85rem', color: 'var(--text-muted)' }} title="Ορίστε φάκελο πελάτη ή δημιουργήστε φάκελο εργασίας">
                 <i className="fas fa-paperclip" />
               </span>
-            )}
+            );
+            })()}
           </div>
         ))}
 
