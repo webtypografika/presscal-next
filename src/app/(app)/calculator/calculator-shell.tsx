@@ -500,7 +500,7 @@ export default function CalculatorShell() {
   const [finish, setFinish] = useState<FinishData>({ guillotineId: '', guillotineName: 'Χωρίς', lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς', lamSides: 1, binding: 'none', bindingMachineId: '' });
 
   // Imposition settings
-  const [impoGutter, setImpoGutter] = useState(0);
+  const [impoGutter, setImpoGutter] = useState(3);
   const [impoBleedOverride, setImpoBleedOverride] = useState<number | null>(null); // null = use job.bleed
   const [impoCropMarks, setImpoCropMarks] = useState(true);
   const [impoKeepSourceMarks, setImpoKeepSourceMarks] = useState(false);
