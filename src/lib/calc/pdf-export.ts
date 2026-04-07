@@ -52,6 +52,7 @@ export interface ExportOptions {
   jobH?: number;
   bleed?: number;
   gutter?: number;
+  contentScale?: number;  // % content scale (100 = 1:1, default)
 
   // Marks
   showCropMarks?: boolean;
@@ -689,9 +690,10 @@ async function exportNUp(
           const epRawH = epPage.height || pieceH;
 
           // Scale PDF to fit TRIM area (not cell) — bleed must not affect zoom
+          const cScaleFactor = (opts.contentScale || 100) / 100;
           const needsSwap = (totalRot === 90 || totalRot === 270);
-          const scaleX = needsSwap ? (trimHpt / epRawW) : (trimWpt / epRawW);
-          const scaleY = needsSwap ? (trimWpt / epRawH) : (trimHpt / epRawH);
+          const scaleX = (needsSwap ? (trimHpt / epRawW) : (trimWpt / epRawW)) * cScaleFactor;
+          const scaleY = (needsSwap ? (trimWpt / epRawH) : (trimHpt / epRawH)) * cScaleFactor;
 
           // Place PDF at TRIM position (not cell) — PDF is scaled to trim size
           let visX: number, visY: number;

@@ -502,6 +502,7 @@ export default function CalculatorShell() {
   // Imposition settings
   const [impoGutter, setImpoGutter] = useState(3);
   const [impoBleedOverride, setImpoBleedOverride] = useState<number | null>(null); // null = use job.bleed
+  const [impoContentScale, setImpoContentScale] = useState(100); // % content scale (100 = 1:1)
   const [impoCropMarks, setImpoCropMarks] = useState(true);
   const [impoKeepSourceMarks, setImpoKeepSourceMarks] = useState(false);
   const [impoForceUps, setImpoForceUps] = useState<number | null>(null);
@@ -1449,6 +1450,7 @@ export default function CalculatorShell() {
                 jobH: job.height,
                 bleed: effectiveBleed,
                 gutter: engineGutter,
+                contentScale: impoContentScale,
                 showCropMarks: impoCropMarks,
                 showRegistration: machine.cat === 'offset',
                 showColorBar: impoColorBar,
@@ -1511,6 +1513,7 @@ export default function CalculatorShell() {
                   machineCat: machine.cat as 'digital' | 'offset',
                   machineName: machine.name, paperName: paper?.name,
                   jobW: job.width, jobH: job.height, bleed: effectiveBleed, gutter: engineGutter,
+                  contentScale: impoContentScale,
                   showCropMarks: impoCropMarks, showRegistration: machine.cat === 'offset',
                   isDuplex: job.sides === 2, duplexOrient: impoDuplexOrient,
                   rotation: impoRotation, turnType: impoTurnType,
@@ -1599,6 +1602,7 @@ export default function CalculatorShell() {
             jobW: job.width,
             jobH: job.height,
             bleed: effectiveBleed,
+            contentScale: impoContentScale,
             showCropMarks: impoCropMarks,
             showRegistration: true,
             isDuplex: job.sides === 2,
@@ -2387,6 +2391,21 @@ export default function CalculatorShell() {
                     <MfStepper value={effectiveBleed} onChange={v => setImpoBleedOverride(Number(v) || 0)} step={0.5} min={0} />
                   </div>
                 </div>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <MfLabel>ΚΛΙΜΑΚΑ (%)</MfLabel>
+                    <MfStepper value={impoContentScale} onChange={v => setImpoContentScale(Math.max(10, Math.min(200, Number(v) || 100)))} step={1} min={10} max={200} />
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
+                    {impoContentScale !== 100 && (
+                      <button onClick={() => setImpoContentScale(100)} style={{
+                        border: '1px solid rgba(245,130,32,0.3)', background: 'rgba(245,130,32,0.1)',
+                        color: 'var(--impo)', fontSize: '0.6rem', fontWeight: 600, borderRadius: 4,
+                        padding: '3px 8px', cursor: 'pointer',
+                      }}>Reset 100%</button>
+                    )}
+                  </div>
+                </div>
 
                 {/* N-Up: Force Cols/Rows */}
                 {(impoMode === 'nup' || impoMode === 'cutstack') && (
@@ -3154,6 +3173,7 @@ export default function CalculatorShell() {
                   setImpoOffsetX(x);
                   setImpoOffsetY(y);
                 } : undefined}
+                contentScale={impoContentScale}
               />
               {/* PDF upload overlay (top-left) */}
               <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>

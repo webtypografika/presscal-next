@@ -56,6 +56,7 @@ interface ImpositionCanvasProps {
   onGridResize?: (cols: number, rows: number) => void;  // drag to resize grid
   onRotate?: () => void;  // rotate content 90°
   onOffsetChange?: (x: number, y: number) => void;  // drag to move grid offset
+  contentScale?: number;  // % content scale (100 = 1:1, default)
 }
 
 type ViewMode = 'single' | 'dual';
@@ -117,6 +118,7 @@ function drawSheet(
   gangJobPdfs?: (ParsedPDF | undefined)[],
   gangCellAssign?: Record<number, number>,
   smBlockPdfs?: (ParsedPDF | undefined)[],
+  contentScale?: number,
 ) {
   const scale = drawW / sheetW;
   const hasBleed = bleed > 0;
@@ -375,10 +377,14 @@ function drawSheet(
           drawTOffX = 0;
           drawTOffY = 0;
         }
-        const finalW = drawRendW * sc;
-        const finalH = drawRendH * sc;
+        // Apply content scale (100% = 1:1, user-adjustable)
+        const cScale = (contentScale || 100) / 100;
+        const finalW = drawRendW * sc * cScale;
+        const finalH = drawRendH * sc * cScale;
+        const scOffX = drawTOffX * cScale;
+        const scOffY = drawTOffY * cScale;
 
-        ctx.drawImage(thumb, -fitW / 2 - drawTOffX, -fitH / 2 - drawTOffY, finalW, finalH);
+        ctx.drawImage(thumb, -fitW * cScale / 2 - scOffX, -fitH * cScale / 2 - scOffY, finalW, finalH);
         ctx.restore();
 
         ctx.strokeStyle = 'rgba(255,255,255,0.1)';
@@ -681,7 +687,7 @@ export default function ImpositionCanvas({
   showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
   pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
   gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate, onSmBlockMove,
-  onGridResize, onRotate, onOffsetChange,
+  onGridResize, onRotate, onOffsetChange, contentScale,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -745,14 +751,14 @@ export default function ImpositionCanvas({
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs);
+        machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale);
 
       // Back
       drawSheet(ctx, baseX + drawW + gap, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs);
+        machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale);
     } else {
       // ═══ SINGLE VIEW: one sheet, pagination ═══
       const scaleX = (cW - 24 - markLen * 2) / sheetW;
@@ -776,7 +782,7 @@ export default function ImpositionCanvas({
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs);
+        machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale);
 
       // ─── STEP MULTI DIMENSION LINES (during drag) ───
       if (impo.mode === 'stepmulti' && smDragRef.current && impo.blocks) {
@@ -1069,7 +1075,7 @@ export default function ImpositionCanvas({
     ctx.textAlign = 'center';
     ctx.fillText(parts.join(' · '), cW / 2, cH - 5);
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate, onOffsetChange]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate, onOffsetChange, contentScale]);
 
   useEffect(() => { draw(); }, [draw]);
 
