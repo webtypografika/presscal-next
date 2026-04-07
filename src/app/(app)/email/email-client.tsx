@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { GmailMessageMeta, GmailFullMessage, GmailLabel } from '@/lib/gmail';
 import { parseAddress, getInitials, avatarColor, timeAgo, formatDate, formatSize, attIconClass } from '@/lib/email-utils';
-import { createQuote, updateQuote, linkEmailToQuote, getLinkedEmailMap } from '../quotes/actions';
+import { createQuote, updateQuote, linkEmailToQuote, saveEmailAttachments, getLinkedEmailMap } from '../quotes/actions';
 
 // ─── TYPES ───
 type Folder = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all';
@@ -229,8 +229,9 @@ export default function EmailClient() {
         description: `Email από: ${senderName}`,
       });
 
-      // Link email
+      // Link email + auto-save attachments
       await linkEmailToQuote(q.id, detail.id, detail.threadId);
+      saveEmailAttachments(q.id, [detail.id]).catch(() => {});
 
       // Redirect immediately — don't wait for AI
       router.push(`/quotes/${q.id}`);
@@ -558,6 +559,8 @@ export default function EmailClient() {
                               onClick={async () => {
                                 if (!detail) return;
                                 await linkEmailToQuote(q.id, detail.id, detail.threadId);
+                                // Auto-save attachments to quote job folder
+                                saveEmailAttachments(q.id, [detail.id]).catch(() => {});
                                 setLinkedEmailMap(prev => ({ ...prev, [detail.id]: q.number }));
                                 setShowLinkPicker(false);
                                 setLinkSearch('');
