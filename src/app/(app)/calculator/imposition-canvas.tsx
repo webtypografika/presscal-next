@@ -1108,7 +1108,7 @@ export default function ImpositionCanvas({
   }, [zoom]);
 
   // ─── N-UP GRID DRAG (resize) ───
-  const gridDragRef = useRef<{ cols: number; rows: number; mode: 'resize' | 'move'; startMmX: number; startMmY: number; origOffX: number; origOffY: number } | null>(null);
+  const gridDragRef = useRef<{ cols: number; rows: number; mode: 'resize' | 'move'; startMmX: number; startMmY: number; origOffX: number; origOffY: number; axis?: 'x' | 'y' | null } | null>(null);
 
   const findGridHandle = useCallback((mmX: number, mmY: number): boolean => {
     if (!onGridResize || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun')) return false;
@@ -1305,8 +1305,15 @@ export default function ImpositionCanvas({
       } else if (gridDragRef.current.mode === 'move' && onOffsetChange) {
         const dx = mmX - gridDragRef.current.startMmX;
         const dy = mmY - gridDragRef.current.startMmY;
-        const newOffX = Math.round((gridDragRef.current.origOffX + dx) * 10) / 10;
-        const newOffY = Math.round((gridDragRef.current.origOffY + dy) * 10) / 10;
+        // Lock to X or Y axis after initial movement threshold (1mm)
+        if (!gridDragRef.current.axis) {
+          if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+            gridDragRef.current.axis = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+          }
+        }
+        const ax = gridDragRef.current.axis;
+        const newOffX = Math.round((gridDragRef.current.origOffX + (ax !== 'y' ? dx : 0)) * 10) / 10;
+        const newOffY = Math.round((gridDragRef.current.origOffY + (ax !== 'x' ? dy : 0)) * 10) / 10;
         onOffsetChange(newOffX, newOffY);
       }
       return;
