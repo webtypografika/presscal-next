@@ -2125,7 +2125,7 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
   const inp = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px', color: 'var(--text)', fontSize: '0.92rem', width: '100%', outline: 'none' } as const;
 
   return createPortal(
-    <div onClick={onClose} style={{
+    <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
       backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
       background: 'rgba(0,0,0,0.2)',
@@ -3300,7 +3300,7 @@ function ElorusInvoiceModal({ quoteId, quoteNumber, customerName, customerAfm, c
   }
 
   return createPortal(
-    <div onClick={onClose} style={{
+    <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
       backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
       background: 'rgba(0,0,0,0.2)',

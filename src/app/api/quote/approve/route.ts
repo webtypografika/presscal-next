@@ -79,7 +79,8 @@ export async function GET(req: NextRequest) {
           <input type="checkbox" name="items" value="${idx}" ${already ? 'checked disabled' : ''} onchange="updateUI()">
           <div class="info">
             <div class="name">${item.name || '—'}</div>
-            ${item.notes ? `<div class="details">${item.notes}</div>` : ''}
+            ${item.description ? `<div class="details">${item.description}</div>` : ''}
+            ${item.calcData?.paperName || item.calcData?.colors ? `<div class="details">${[item.calcData?.paperName, item.calcData?.colors, item.calcData?.finishing].filter(Boolean).join(' · ')}</div>` : ''}
             <div class="details">${item.qty || ''} ${item.unit || ''}</div>
           </div>
           <div class="price">${fmt(item.finalPrice || 0)}</div>
