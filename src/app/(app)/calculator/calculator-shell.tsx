@@ -1782,21 +1782,6 @@ export default function CalculatorShell() {
                 </button>
                 </>)}
 
-                <MfLabel>FORCE</MfLabel>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.55rem', color: '#64748b', marginBottom: 2, textAlign: 'center' }}>Ups</div>
-                    <MfInput value={impoForceUps ?? ''} onChange={(v) => setImpoForceUps(v ? Number(v) : null)} style={{ width: '100%', textAlign: 'center' }} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.55rem', color: '#64748b', marginBottom: 2, textAlign: 'center' }}>Cols</div>
-                    <MfInput value={impoForceCols ?? ''} onChange={(v) => setImpoForceCols(v ? Number(v) : null)} style={{ width: '100%', textAlign: 'center' }} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '0.55rem', color: '#64748b', marginBottom: 2, textAlign: 'center' }}>Rows</div>
-                    <MfInput value={impoForceRows ?? ''} onChange={(v) => setImpoForceRows(v ? Number(v) : null)} style={{ width: '100%', textAlign: 'center' }} />
-                  </div>
-                </div>
 
                 <MfLabel>ΦΥΡΑ (φύλλα μοντάζ)</MfLabel>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 12 }}>
@@ -1985,14 +1970,6 @@ export default function CalculatorShell() {
                 )}
               </div>
 
-              {/* Force UPs */}
-              <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <MfLabel>FORCE UP</MfLabel>
-                  <MfInput value={impoForceUps ?? ''} onChange={(v) => setImpoForceUps(v ? Number(v) : null)} style={{ width: '100%', textAlign: 'center' }} />
-                </div>
-                <div style={{ flex: 1 }} />
-              </div>
 
               {/* Divider */}
               <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0 12px' }} />
@@ -2383,16 +2360,6 @@ export default function CalculatorShell() {
               {impoModeTab === 'spacing' && (<>
                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                   <div style={{ flex: 1 }}>
-                    <MfLabel>GUTTER (MM)</MfLabel>
-                    <MfStepper value={impoGutter} onChange={v => setImpoGutter(Number(v) || 0)} step={0.5} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <MfLabel>BLEED (MM)</MfLabel>
-                    <MfStepper value={effectiveBleed} onChange={v => setImpoBleedOverride(Number(v) || 0)} step={0.5} min={0} />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                  <div style={{ flex: 1 }}>
                     <MfLabel>ΚΛΙΜΑΚΑ (%)</MfLabel>
                     <MfStepper value={impoContentScale} onChange={v => setImpoContentScale(Math.max(10, Math.min(200, Number(v) || 100)))} step={1} min={10} max={200} />
                   </div>
@@ -2406,20 +2373,6 @@ export default function CalculatorShell() {
                     )}
                   </div>
                 </div>
-
-                {/* N-Up: Force Cols/Rows */}
-                {(impoMode === 'nup' || impoMode === 'cutstack') && (
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                    <div style={{ flex: 1 }}>
-                      <MfLabel>FORCE COLS</MfLabel>
-                      <MfStepper value={impoForceCols ?? ''} onChange={v => setImpoForceCols(v ? Number(v) : null)} step={1} min={1} max={20} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <MfLabel>FORCE ROWS</MfLabel>
-                      <MfStepper value={impoForceRows ?? ''} onChange={v => setImpoForceRows(v ? Number(v) : null)} step={1} min={1} max={20} />
-                    </div>
-                  </div>
-                )}
 
                 {/* Cut & Stack */}
                 {impoMode === 'cutstack' && (<>
