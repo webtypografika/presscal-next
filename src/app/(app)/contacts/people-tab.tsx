@@ -7,7 +7,7 @@ import { inp, inpFocus, lbl, SectionTitle } from './shared-styles';
 interface CompanyLink { id: string; company: { id: string; name: string } }
 interface ContactData {
   id: string; name: string; email: string | null; phone: string | null;
-  mobile: string | null; role: string; notes: string;
+  mobile: string | null; role: string; notes: string; folderPath: string | null;
   companyContacts: CompanyLink[];
   _count: { quotes: number };
 }
@@ -102,7 +102,14 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete }: {
         <Field label="ΚΙΝΗΤΟ" value={contact.mobile || ''} onChange={v => onUpdate(contact.id, { mobile: v })} />
       </div>
 
-      {/* Row 3: Linked companies + quote count */}
+      {/* Row 3: Folder (shown when no linked companies) */}
+      {contact.companyContacts.length === 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <Field label="ΦΑΚΕΛΟΣ ΠΕΛΑΤΗ" value={contact.folderPath || ''} onChange={v => onUpdate(contact.id, { folderPath: v } as any)} placeholder="Path φακέλου..." />
+        </div>
+      )}
+
+      {/* Row 4: Linked companies + quote count */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: '0.62rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>Εταιρείες:</span>
         {contact.companyContacts.map(cc => (

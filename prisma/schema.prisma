@@ -494,6 +494,9 @@ model Contact {
   // employee | designer | freelancer | broker | contact
   role      String   @default("contact")
 
+  // Folder path for standalone contacts (ιδιώτες without company)
+  folderPath String?
+
   // Relations
   companyContacts CompanyContact[]
   quoteRecipients QuoteRecipient[]

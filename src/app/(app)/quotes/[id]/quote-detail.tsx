@@ -2834,6 +2834,7 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
   const [formPhone, setFormPhone] = useState('');
   const [formMobile, setFormMobile] = useState('');
   const [formRole, setFormRole] = useState('contact');
+  const [formFolder, setFormFolder] = useState('');
   const [editId, setEditId] = useState('');
   const [saving, setSaving] = useState(false);
   const [emailSender, setEmailSender] = useState<{ name: string; email: string } | null>(null);
@@ -2894,6 +2895,7 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
     setFormPhone('');
     setFormMobile('');
     setFormRole('contact');
+    setFormFolder('');
     setLinkToCompany(!!companyId);
     setEditId('');
     setMode('new');
@@ -2906,6 +2908,7 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
     setFormPhone(c.phone || '');
     setFormMobile(c.mobile || '');
     setFormRole(c.role || 'contact');
+    setFormFolder(c.folderPath || '');
     setMode('edit');
   }
 
@@ -2913,7 +2916,7 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
     if (!formName.trim()) { toast('Εισάγετε όνομα', 'error'); return; }
     setSaving(true);
     try {
-      const { createContact, updateContact, linkContactToCompany } = await import('../../companies/actions');
+      const { createContact, updateContact } = await import('../../companies/actions');
       if (mode === 'new') {
         const contact = await createContact({
           name: formName.trim(),
@@ -2923,8 +2926,12 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
           role: formRole,
           companyId: linkToCompany && companyId ? companyId : undefined,
         });
+        // Save folderPath separately if provided
+        if (formFolder.trim()) {
+          await updateContact(contact.id, { folderPath: formFolder.trim() } as any);
+        }
         toast('Επαφή δημιουργήθηκε');
-        onSelect(contact.id, contact);
+        onSelect(contact.id, { ...contact, folderPath: formFolder.trim() || null });
       } else {
         await updateContact(editId, {
           name: formName.trim(),
@@ -2932,9 +2939,10 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
           phone: formPhone.trim() || null,
           mobile: formMobile.trim() || null,
           role: formRole,
-        });
+          folderPath: formFolder.trim() || null,
+        } as any);
         toast('Επαφή ενημερώθηκε');
-        onSelect(editId, { id: editId, name: formName.trim(), email: formEmail.trim() || null, phone: formPhone.trim() || null, mobile: formMobile.trim() || null, role: formRole });
+        onSelect(editId, { id: editId, name: formName.trim(), email: formEmail.trim() || null, phone: formPhone.trim() || null, mobile: formMobile.trim() || null, role: formRole, folderPath: formFolder.trim() || null });
       }
     } catch (e) {
       toast('Σφάλμα: ' + (e as Error).message, 'error');
@@ -3145,6 +3153,25 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
                 {Object.entries(roleLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
+            {/* Folder path — useful for standalone contacts without company */}
+            {(!companyId || !linkToCompany) && (
+              <div>
+                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
+                  <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.65rem' }} />Φάκελος Πελάτη
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input value={formFolder} onChange={e => setFormFolder(e.target.value)} placeholder="Paste path ή επιλογή μέσω PressKit →" style={{ ...inp, flex: 1, fontFamily: 'monospace', fontSize: '0.8rem' }} />
+                  {editId && (
+                    <a href={`presscal-fh://pick-folder?customerId=${editId}`} title="Επιλογή μέσω PressKit"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(245,130,32,0.06)', color: '#f58220', cursor: 'pointer', textDecoration: 'none', flexShrink: 0 }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.12)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.06)')}>
+                      <i className="fas fa-folder-open" style={{ fontSize: '0.75rem' }} />
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
             {/* Link to company checkbox (only on new + when company is selected) */}
             {mode === 'new' && companyId && (
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text-muted)', cursor: 'pointer' }}>

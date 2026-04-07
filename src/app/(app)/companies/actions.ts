@@ -202,6 +202,7 @@ export async function updateContact(id: string, data: {
   mobile?: string | null;
   notes?: string;
   role?: string;
+  folderPath?: string | null;
 }) {
   const contact = await prisma.contact.update({
     where: { id },
