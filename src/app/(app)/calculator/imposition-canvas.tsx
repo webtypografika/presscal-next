@@ -1011,7 +1011,7 @@ export default function ImpositionCanvas({
     ctx.textAlign = 'center';
     ctx.fillText(parts.join(' · '), cW / 2, cH - 5);
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate]);
 
   useEffect(() => { draw(); }, [draw]);
 
