@@ -654,6 +654,9 @@ async function exportNUp(
     const isBackSide = isDuplex && (s % 2 === 1);
     const page = doc.addPage([paperWpt, paperHpt]);
 
+    // Per-cell asymmetric bleed: compute internal bleed for clipping
+    const intBleedPlace = gutterPt <= 0 ? 0 : (gutterPt >= 2 * bleedPt ? bleedPt : gutterPt / 2);
+
     for (let row = 0; row < impo.rows; row++) {
       for (let col = 0; col < impo.cols; col++) {
         const pageIdx = s;
@@ -662,9 +665,21 @@ async function exportNUp(
           const epPage = epObj.page;
           // Trim position on grid, then offset by bleed for cell placement
           const frontTrimX = cenX + col * trimStepW;
-          const trimY = cenY + (impo.rows - 1 - row) * trimStepH;
+          const trimYpos = cenY + (impo.rows - 1 - row) * trimStepH;
           const frontCellX = frontTrimX - bleedPt;
-          const cellY = trimY - bleedPt;
+          const cellY = trimYpos - bleedPt;
+
+          // Per-cell bleed (asymmetric)
+          const cBL = col === 0 ? bleedPt : intBleedPlace;
+          const cBR = col === impo.cols - 1 ? bleedPt : intBleedPlace;
+          const cBB = row === impo.rows - 1 ? bleedPt : intBleedPlace; // row is visual (top-down), PDF Y is bottom-up
+          const cBT = row === 0 ? bleedPt : intBleedPlace;
+
+          // Clip rectangle = asymmetric cell bounds (trim + per-side bleed)
+          const clipX = frontTrimX - cBL;
+          const clipY = trimYpos - cBB;
+          const clipW = trimWpt + cBL + cBR;
+          const clipH = trimHpt + cBT + cBB;
 
           // Unified page placement
           const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
@@ -699,9 +714,12 @@ async function exportNUp(
           else if (totalRot === 270) { drawY = visY + pieceH; }
           else if (totalRot === 180) { drawX = visX + pieceW; drawY = visY + pieceH; }
 
+          // Clip to asymmetric cell bounds, then draw
+          page.pushOperators(pushGraphicsState(), rectangle(clipX, clipY, clipW, clipH), clip(), endPath());
           const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: scaleX, yScale: scaleY };
           if (totalRot) drawOpts.rotate = degrees(totalRot);
           page.drawPage(epPage, drawOpts);
+          page.pushOperators(popGraphicsState());
         }
       }
     }
