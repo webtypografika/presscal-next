@@ -168,8 +168,9 @@ export async function POST(req: NextRequest) {
       if (!org.apiElorus || !org.elorusOrgId) return NextResponse.json({ error: 'Not connected' }, { status: 400 });
       const hdrs = elorusHeaders(org.apiElorus, org.elorusOrgId);
       const res = await fetch(`${ELORUS_BASE}/v1.2/unitofmeasurement/?page_size=100`, { headers: hdrs });
-      const raw = await res.text();
-      return NextResponse.json({ status: res.status, raw: raw.slice(0, 2000) });
+      const data = await res.json();
+      const first3 = (data.results || []).slice(0, 3);
+      return NextResponse.json({ status: res.status, count: data.count, fields: first3.length ? Object.keys(first3[0]) : [], samples: first3 });
     }
 
     // ─── DISCONNECT: clear all Elorus settings ───
