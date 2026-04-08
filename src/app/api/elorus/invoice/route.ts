@@ -86,15 +86,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Δεν βρέθηκε ή δημιουργήθηκε επαφή Elorus' }, { status: 400 });
     }
 
-    // Unit mapping: app unit → Elorus unit ID
-    const unitMap = (org as any).elorusUnitMap as Record<string, string> | null;
-    const defaultUnit = org.elorusDefaultUnitId || (org.elorusUnitMeasures as { id: string }[] | null)?.[0]?.id || '2';
+    // Resolve unit measure: find v1.1 ID from cached unit measures
+    const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string; v1Id?: string }[] | null) || [];
+    const defaultV2Id = org.elorusDefaultUnitId || cachedUnits[0]?.id || '';
+    const defaultUnit = cachedUnits.find(u => u.id === defaultV2Id)?.v1Id || '2';
 
-    function resolveUnit(itemUnit: string): string {
-      if (unitMap) {
-        const mapped = unitMap[itemUnit];
-        if (mapped) return mapped;
-      }
+    function resolveUnit(_itemUnit: string): string {
       return defaultUnit;
     }
 
@@ -148,7 +145,7 @@ export async function POST(req: NextRequest) {
     if (org.elorusDefaultDocType) invoicePayload.documenttype = org.elorusDefaultDocType;
     if (org.elorusDefaultMyData) invoicePayload.mydata_document_type = org.elorusDefaultMyData;
 
-    const invRes = await fetch(`${ELORUS_BASE}/v1.2/invoices/`, {
+    const invRes = await fetch(`${ELORUS_BASE}/v1.1/invoices/`, {
       method: 'POST', headers: hdrs, body: JSON.stringify(invoicePayload),
     });
 

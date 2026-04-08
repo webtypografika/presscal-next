@@ -35,14 +35,26 @@ async function fetchElorusMetadata(apiKey: string, orgId: string) {
   const taxes = (txData.results || []).map((t: Record<string, string>) => ({
     id: t.id, title: t.title, percentage: t.percentage,
   }));
-  let unitMeasures: { id: string; title: string }[] = [];
+  let unitMeasures: { id: string; title: string; v1Id?: string }[] = [];
   if (umRes.ok) {
     const umData = await umRes.json();
     const all = umData.results || [];
     unitMeasures = all
       .filter((u: Record<string, unknown>) => u.active !== false)
-      .map((u: Record<string, string>) => ({ id: String(u.id), title: u.title || String(u.id) }));
+      .map((u: Record<string, unknown>) => ({ id: String(u.id), title: (u.title as string) || String(u.id) }));
   }
+  // Fetch v1.1 units to get their simple numeric IDs, then match by title
+  try {
+    const v1Res = await fetch(`${ELORUS_BASE}/v1.1/unitmeasures/`, { headers });
+    if (v1Res.ok) {
+      const v1Data = await v1Res.json();
+      const v1Units = v1Data.results || v1Data || [];
+      for (const um of unitMeasures) {
+        const match = (Array.isArray(v1Units) ? v1Units : []).find((v: any) => v.title === um.title);
+        if (match) um.v1Id = String(match.id);
+      }
+    }
+  } catch { /* non-critical */ }
   return { docTypes, taxes, unitMeasures };
 }
 
