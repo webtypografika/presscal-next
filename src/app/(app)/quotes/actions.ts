@@ -21,6 +21,7 @@ export async function getQuotes() {
           },
         },
       },
+      contact: true,
       // DEPRECATED: keep for backward compat during transition
       customer: true,
     },

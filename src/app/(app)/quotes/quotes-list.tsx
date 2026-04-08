@@ -126,7 +126,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
     if (ARCHIVED_STATUSES.includes(q.status)) return false;
     if (search) {
       return fuzzyMatch(q.number, search) ||
-        fuzzyMatch((q as any).company?.name || q.customer?.name || '', search) ||
+        fuzzyMatch((q as any).company?.name || (q as any).contact?.name || q.customer?.name || '', search) ||
         fuzzyMatch(q.title || '', search);
     }
     return true;
@@ -262,7 +262,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
                   <div style={{ textAlign: 'center', padding: '16px 0', fontSize: '0.92rem', color: 'var(--text-muted)', opacity: 0.4 }}>—</div>
                 )}
                 {colQuotes.map(q => {
-                  const name = (q as any).company?.name ?? q.customer?.name ?? (q as any).company?.email ?? q.customer?.email ?? '—';
+                  const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? (q as any).company?.email ?? q.customer?.email ?? '—';
                   const items = Array.isArray(q.items) ? q.items as any[] : [];
                   const desc = q.title || q.description || items.map((i: any) => i.name).filter(Boolean).join(' · ') || '';
                   return (
@@ -379,7 +379,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
               </div>
             )}
             {archivedQuotes.map(q => {
-              const name = (q as any).company?.name ?? q.customer?.name ?? '—';
+              const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? '—';
               return (
                 <div key={q.id} onClick={() => router.push(`/quotes/${q.id}`)}
                   style={{
