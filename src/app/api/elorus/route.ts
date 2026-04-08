@@ -181,6 +181,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, docTypes: meta.docTypes, taxes: meta.taxes, unitMeasures: meta.unitMeasures });
     }
 
+    // ─── DEBUG: OPTIONS on v1.1 invoices ───
+    if (action === 'debugInvoice') {
+      if (!org.apiElorus || !org.elorusOrgId) return NextResponse.json({ error: 'Not connected' }, { status: 400 });
+      const hdrs = elorusHeaders(org.apiElorus, org.elorusOrgId);
+      const res = await fetch(`${ELORUS_BASE}/v1.1/invoices/`, { method: 'OPTIONS', headers: hdrs });
+      const data = await res.json();
+      const unitField = data?.actions?.POST?.items?.child?.children?.unit_measure;
+      return NextResponse.json({ unitField });
+    }
+
     // ─── DISCONNECT: clear all Elorus settings ───
     if (action === 'disconnect') {
       await prisma.org.update({
