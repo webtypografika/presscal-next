@@ -87,9 +87,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve unit measure: find v1.1 ID from cached unit measures
+    // v1.1 uses simple numeric IDs, v1.2 uses long string IDs
     const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string; v1Id?: string }[] | null) || [];
     const defaultV2Id = org.elorusDefaultUnitId || cachedUnits[0]?.id || '';
-    const defaultUnit = cachedUnits.find(u => u.id === defaultV2Id)?.v1Id || '2';
+    // Title→v1.1 fallback map for common Greek units
+    const titleToV1: Record<string, string> = {
+      'Υπηρεσία': '1', 'Τεμάχιο': '2', 'Κιλό': '3', 'Λίτρο': '4',
+      'Κυβικό μέτρο': '5', 'Χιλιόμετρο': '6', 'Τετραγωνικό μέτρο': '7', 'Ώρα': '8',
+      'Πακέτο': '9', 'Κιβώτιο': '10', 'Μέτρο': '11',
+    };
+    const defaultCached = cachedUnits.find(u => u.id === defaultV2Id);
+    const defaultUnit = defaultCached?.v1Id || (defaultCached?.title ? titleToV1[defaultCached.title] : null) || '2';
 
     function resolveUnit(_itemUnit: string): string {
       return defaultUnit;
