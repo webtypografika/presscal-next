@@ -24,7 +24,7 @@ async function fetchElorusMetadata(apiKey: string, orgId: string) {
   const [dtRes, txRes, umRes] = await Promise.all([
     fetch(`${ELORUS_BASE}/v1.2/documenttypes/?page_size=100`, { headers }),
     fetch(`${ELORUS_BASE}/v1.2/taxes/?page_size=100`, { headers }),
-    fetch(`${ELORUS_BASE}/v1.2/unitmeasures/?page_size=100`, { headers }),
+    fetch(`${ELORUS_BASE}/v1.2/unitofmeasurement/?page_size=100`, { headers }),
   ]);
   if (!dtRes.ok || !txRes.ok) return null;
   const dtData = await dtRes.json();

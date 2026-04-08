@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
         defaultUnit = cached[0].id;
       } else {
         // Last resort: fetch from API
-        const umRes = await fetch(`${ELORUS_BASE}/v1.2/unitmeasures/?page_size=100`, { headers: hdrs });
+        const umRes = await fetch(`${ELORUS_BASE}/v1.2/unitofmeasurement/?page_size=100`, { headers: hdrs });
         if (umRes.ok) {
           const active = ((await umRes.json()).results || []).find((u: any) => !u.is_archived);
           if (active) defaultUnit = String(active.id);
