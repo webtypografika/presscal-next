@@ -35,11 +35,18 @@ async function fetchElorusMetadata(apiKey: string, orgId: string) {
   const taxes = (txData.results || []).map((t: Record<string, string>) => ({
     id: t.id, title: t.title, percentage: t.percentage,
   }));
-  const unitMeasures = umRes.ok
-    ? ((await umRes.json()).results || [])
-        .filter((u: Record<string, unknown>) => !u.is_archived)
-        .map((u: Record<string, string>) => ({ id: u.id, title: u.title }))
-    : [];
+  let unitMeasures: { id: string; title: string }[] = [];
+  if (umRes.ok) {
+    const umData = await umRes.json();
+    const all = umData.results || umData || [];
+    unitMeasures = (Array.isArray(all) ? all : [])
+      .filter((u: Record<string, unknown>) => u.status !== 'archived' && !u.is_archived)
+      .map((u: Record<string, string>) => ({ id: String(u.id), title: u.title || u.name || String(u.id) }));
+    if (unitMeasures.length === 0 && Array.isArray(all) && all.length > 0) {
+      // If filter removed everything, return all (API may not have status/is_archived)
+      unitMeasures = all.map((u: Record<string, string>) => ({ id: String(u.id), title: u.title || u.name || String(u.id) }));
+    }
+  }
   return { docTypes, taxes, unitMeasures };
 }
 

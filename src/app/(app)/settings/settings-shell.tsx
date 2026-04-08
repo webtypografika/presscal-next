@@ -305,10 +305,59 @@ export function SettingsShell({ org }: { org: Org }) {
 
       {/* ═══ INTEGRATIONS TAB ═══ */}
       {tab === 'integrations' && (
-        <div className="panel" style={{ maxWidth: 700 }}>
-          <ElorusSettings org={org} inputCls={inputCls} />
-          <CourierSettings inputCls={inputCls} />
+        <IntegrationsPanel org={org} inputCls={inputCls}
+          apiGmail={apiGmail} setApiGmail={setApiGmail}
+          apiGemini={apiGemini} setApiGemini={setApiGemini}
+          apiFilehelper={apiFilehelper} setApiFilehelper={setApiFilehelper}
+          jobFolderRoot={jobFolderRoot} setJobFolderRoot={setJobFolderRoot}
+          saving={saving} saved={saved} handleSave={handleSave}
+        />
+      )}
+    </div>
+  );
+}
 
+const INT_TABS: { id: string; label: string; icon: string; color: string }[] = [
+  { id: 'elorus', label: 'Elorus', icon: 'fa-file-invoice', color: '#4f46e5' },
+  { id: 'courier', label: 'Courier', icon: 'fa-truck', color: '#10b981' },
+  { id: 'gmail', label: 'Gmail', icon: 'fa-envelope', color: '#ea4335' },
+  { id: 'ai', label: 'Gemini AI', icon: 'fa-robot', color: 'var(--blue)' },
+  { id: 'presskit', label: 'PressKit', icon: 'fa-folder-open', color: '#f58220' },
+  { id: 'folders', label: 'Φάκελοι', icon: 'fa-folder-tree', color: 'var(--teal)' },
+];
+
+function IntegrationsPanel({ org, inputCls, apiGmail, setApiGmail, apiGemini, setApiGemini, apiFilehelper, setApiFilehelper, jobFolderRoot, setJobFolderRoot, saving, saved, handleSave }: {
+  org: Org; inputCls: string;
+  apiGmail: string; setApiGmail: (v: string) => void;
+  apiGemini: string; setApiGemini: (v: string) => void;
+  apiFilehelper: string; setApiFilehelper: (v: string) => void;
+  jobFolderRoot: string; setJobFolderRoot: (v: string) => void;
+  saving: boolean; saved: boolean; handleSave: () => void;
+}) {
+  const [intTab, setIntTab] = useState('elorus');
+
+  return (
+    <div style={{ maxWidth: 700 }}>
+      {/* Sub-tabs */}
+      <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginBottom: 20 }}>
+        {INT_TABS.map(t => (
+          <button key={t.id} onClick={() => setIntTab(t.id)} style={{
+            padding: '7px 14px', borderRadius: 8, border: 'none',
+            fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+            color: intTab === t.id ? t.color : 'var(--text-muted)',
+            background: intTab === t.id ? `color-mix(in srgb, ${t.color} 10%, transparent)` : 'transparent',
+            display: 'flex', alignItems: 'center', gap: 5,
+          }}>
+            <i className={`fas ${t.icon}`} style={{ fontSize: '0.65rem' }} />{t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="panel">
+        {intTab === 'elorus' && <ElorusSettings org={org} inputCls={inputCls} />}
+        {intTab === 'courier' && <CourierSettings inputCls={inputCls} />}
+
+        {intTab === 'gmail' && (
           <Section icon="fa-envelope" iconColor="#ea4335" title="GMAIL — ΑΠΟΣΤΟΛΗ EMAIL">
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
               App Password για αποστολή email μέσω Gmail (Παραγγελίες, Προσφορές).
@@ -317,7 +366,9 @@ export function SettingsShell({ org }: { org: Org }) {
               <input className={inputCls} type="password" value={apiGmail} onChange={e => setApiGmail(e.target.value)} placeholder="xxxx xxxx xxxx xxxx" />
             </Field>
           </Section>
+        )}
 
+        {intTab === 'ai' && (
           <Section icon="fa-robot" iconColor="var(--blue)" title="GEMINI AI — SCAN & IMPORT">
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
               Override Gemini API key (αν θέλετε δικό σας αντί του default).
@@ -326,7 +377,9 @@ export function SettingsShell({ org }: { org: Org }) {
               <input className={inputCls} type="password" value={apiGemini} onChange={e => setApiGemini(e.target.value)} placeholder="AIza..." />
             </Field>
           </Section>
+        )}
 
+        {intTab === 'presskit' && (
           <Section icon="fa-folder-open" iconColor="#f58220" title="PRESSKIT — DESKTOP APP">
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
               API key για σύνδεση με την desktop εφαρμογή PressKit (preview, preflight, διαχείριση αρχείων).
@@ -350,9 +403,7 @@ export function SettingsShell({ org }: { org: Org }) {
                 </button>
                 {apiFilehelper && (
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(apiFilehelper);
-                    }}
+                    onClick={() => { navigator.clipboard.writeText(apiFilehelper); }}
                     style={{
                       padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
                       background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
@@ -367,7 +418,7 @@ export function SettingsShell({ org }: { org: Org }) {
             </Field>
             {apiFilehelper && (
               <a
-                href={`presscal-fh://connect?url=${encodeURIComponent(window.location.origin)}&apiKey=${encodeURIComponent(apiFilehelper)}`}
+                href={`presscal-fh://connect?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}&apiKey=${encodeURIComponent(apiFilehelper)}`}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8,
                   padding: '10px 16px', borderRadius: 8,
@@ -380,30 +431,23 @@ export function SettingsShell({ org }: { org: Org }) {
               </a>
             )}
           </Section>
+        )}
 
+        {intTab === 'folders' && (
           <Section icon="fa-folder-tree" iconColor="var(--teal)" title="ΦΑΚΕΛΟΣ ΕΡΓΑΣΙΩΝ">
             <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
-              Τοπικός φάκελος για αυτόματη δημιουργία υποφακέλων ανά εργασία. Αν ο πελάτης έχει δικό του φάκελο, χρησιμοποιείται αυτός.
+              Τοπικός φάκελος για αυτόματη δημιουργία υποφακέλων ανά εργασία.
             </p>
             <Field label="Global Root Path">
               <div style={{ display: 'flex', gap: 6 }}>
-                <input
-                  className={inputCls}
-                  type="text"
-                  value={jobFolderRoot}
-                  onChange={e => setJobFolderRoot(e.target.value)}
-                  placeholder="D:\Εργασίες"
-                  style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.72rem' }}
-                />
-                <a
-                  href="presscal-fh://pick-folder?target=jobFolderRoot"
-                  style={{
-                    padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
-                    background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
-                    cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                  }}
-                >
+                <input className={inputCls} type="text" value={jobFolderRoot} onChange={e => setJobFolderRoot(e.target.value)}
+                  placeholder="D:\Εργασίες" style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.72rem' }} />
+                <a href="presscal-fh://pick-folder?target=jobFolderRoot" style={{
+                  padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                  background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
+                  cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
                   <i className="fas fa-folder-open" /> Επιλογή
                 </a>
               </div>
@@ -419,7 +463,10 @@ export function SettingsShell({ org }: { org: Org }) {
               Όταν η εργασία ολοκληρωθεί, ο φάκελος μετακινείται σε <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 4px', borderRadius: 4 }}>_Archive</code>
             </div>
           </Section>
+        )}
 
+        {/* Save button for Gmail/Gemini/PressKit/Folders tabs */}
+        {['gmail', 'ai', 'presskit', 'folders'].includes(intTab) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20 }}>
             <button onClick={handleSave} disabled={saving} style={{
               padding: '10px 28px', borderRadius: 10, border: 'none',
@@ -435,8 +482,8 @@ export function SettingsShell({ org }: { org: Org }) {
               </span>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
