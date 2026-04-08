@@ -93,10 +93,11 @@ export async function POST(req: NextRequest) {
       'Κυβικό μέτρο': '5', 'Χιλιόμετρο': '6', 'Τετραγωνικό μέτρο': '7', 'Ώρα': '8',
       'Πακέτο': '9', 'Κιβώτιο': '10', 'Μέτρο': '11',
     };
-    // Use v1.2 for invoices too — pass unit_measure as v1.2 ID string
-    const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string }[] | null) || [];
+    // v1.2 unit_measure expects the symbol (e.g. "τεμ", "m²"), not the ID
+    const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string; symbol?: string }[] | null) || [];
     const selectedV2Id = org.elorusDefaultUnitId || cachedUnits[0]?.id || '';
-    const defaultUnit = selectedV2Id;
+    const selectedUnit = cachedUnits.find(u => u.id === selectedV2Id);
+    const defaultUnit = selectedUnit?.symbol || 'τεμ';
 
     function resolveUnit(_itemUnit: string): string {
       return defaultUnit;

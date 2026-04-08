@@ -41,7 +41,7 @@ async function fetchElorusMetadata(apiKey: string, orgId: string) {
     const all = umData.results || [];
     unitMeasures = all
       .filter((u: Record<string, unknown>) => u.active !== false)
-      .map((u: Record<string, unknown>) => ({ id: String(u.id), title: (u.title as string) || String(u.id) }));
+      .map((u: Record<string, unknown>) => ({ id: String(u.id), title: (u.title as string) || String(u.id), symbol: (u.symbol as string) || '' }));
   }
   // Fetch v1.1 units to get their simple numeric IDs, then match by title
   try {
