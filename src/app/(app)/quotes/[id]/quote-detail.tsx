@@ -1234,25 +1234,27 @@ function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }
   const papersNeeded = items
     .filter(i => i.calcData?.paperName)
     .map(i => ({
+      paperId: i.calcData.paperId as string | undefined,
       paperName: i.calcData.paperName as string,
       sheets: i.calcData.sheets as number || 0,
       itemName: i.name as string,
     }));
 
-  // Group by paper name and sum sheets
-  const paperMap = new Map<string, { name: string; totalSheets: number; items: string[] }>();
+  // Group by paperId (Material.id) when available, fall back to name
+  const paperMap = new Map<string, { name: string; paperId?: string; totalSheets: number; items: string[] }>();
   for (const p of papersNeeded) {
-    const key = p.paperName.toLowerCase();
-    if (!paperMap.has(key)) paperMap.set(key, { name: p.paperName, totalSheets: 0, items: [] });
+    const key = p.paperId || p.paperName.toLowerCase();
+    if (!paperMap.has(key)) paperMap.set(key, { name: p.paperName, paperId: p.paperId, totalSheets: 0, items: [] });
     const entry = paperMap.get(key)!;
     entry.totalSheets += p.sheets;
     entry.items.push(p.itemName);
   }
 
-  // Match with materials from DB to get supplier info — prefer records with supplierEmail
+  // Match with materials from DB — use paperId for exact match, fall back to name
   const paperEntries = [...paperMap.values()].map(p => {
-    const matches = materials.filter(m => m.name.toLowerCase() === p.name.toLowerCase());
-    const mat = matches.find(m => m.supplierEmail) || matches[0] || null;
+    const mat = p.paperId
+      ? materials.find(m => m.id === p.paperId) || null
+      : (materials.filter(m => m.name.toLowerCase() === p.name.toLowerCase()).find(m => m.supplierEmail) || materials.find(m => m.name.toLowerCase() === p.name.toLowerCase()) || null);
     return { ...p, material: mat };
   });
 
