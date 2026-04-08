@@ -171,6 +171,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, docTypes: meta.docTypes, taxes: meta.taxes, unitMeasures: meta.unitMeasures });
     }
 
+    // ─── DEBUG: raw unit measures from Elorus ───
+    if (action === 'debugUnits') {
+      if (!org.apiElorus || !org.elorusOrgId) return NextResponse.json({ error: 'Not connected' }, { status: 400 });
+      const hdrs = elorusHeaders(org.apiElorus, org.elorusOrgId);
+      const res = await fetch(`${ELORUS_BASE}/v1.2/unitofmeasurement/?page_size=100`, { headers: hdrs });
+      const raw = await res.text();
+      return NextResponse.json({ status: res.status, raw: raw.slice(0, 2000) });
+    }
+
     // ─── DISCONNECT: clear all Elorus settings ───
     if (action === 'disconnect') {
       await prisma.org.update({
