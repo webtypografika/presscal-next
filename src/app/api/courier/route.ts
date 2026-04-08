@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       if (!quote) return NextResponse.json({ error: 'Προσφορά δεν βρέθηκε' }, { status: 404 });
 
       const payload: Record<string, unknown> = {
-        ReceiverName: receiverName,
+        ReceiverName: String(receiverName || '').slice(0, 64),
         ReceiverAddress: receiverAddress,
         ReceiverCity: receiverCity,
         ReceiverPostal: parseInt(receiverZip) || 0,

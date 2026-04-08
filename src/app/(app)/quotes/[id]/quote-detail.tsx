@@ -3713,8 +3713,8 @@ function CourierVoucherModal({ quoteId, company, onClose, onCreated }: {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
-            <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>Παραλήπτης *</label>
-            <input value={name} onChange={e => setName(e.target.value)} style={inp} />
+            <label style={{ fontSize: '0.72rem', color: name.length > 64 ? '#ef4444' : '#94a3b8', display: 'block', marginBottom: 2 }}>Παραλήπτης * {name.length > 50 && <span style={{ float: 'right' }}>{name.length}/64</span>}</label>
+            <input value={name} onChange={e => setName(e.target.value)} maxLength={64} style={{ ...inp, borderColor: name.length > 64 ? '#ef4444' : undefined }} />
           </div>
           <div>
             <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>Τηλέφωνο *</label>
