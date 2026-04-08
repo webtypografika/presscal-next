@@ -181,14 +181,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, docTypes: meta.docTypes, taxes: meta.taxes, unitMeasures: meta.unitMeasures });
     }
 
-    // ─── DEBUG: OPTIONS on v1.1 invoices ───
+    // ─── DEBUG: discover v1.1 unit_measure choices ───
     if (action === 'debugInvoice') {
       if (!org.apiElorus || !org.elorusOrgId) return NextResponse.json({ error: 'Not connected' }, { status: 400 });
-      const hdrs = elorusHeaders(org.apiElorus, org.elorusOrgId);
-      const res = await fetch(`${ELORUS_BASE}/v1.1/invoices/`, { method: 'OPTIONS', headers: hdrs });
-      const data = await res.json();
-      const unitField = data?.actions?.POST?.items?.child?.children?.unit_measure;
-      return NextResponse.json({ unitField });
+      const h = elorusHeaders(org.apiElorus, org.elorusOrgId);
+      const results: Record<string, unknown> = {};
+      // Try OPTIONS
+      try {
+        const r1 = await fetch(ELORUS_BASE + '/v1.1/invoices/', { method: 'OPTIONS', headers: h });
+        const d1 = await r1.json();
+        results.options = d1?.actions?.POST?.items?.child?.children?.unit_measure || 'not found';
+      } catch (e) { results.optionsError = String(e); }
+      // Try products (they have unit_measure)
+      try {
+        const r2 = await fetch(ELORUS_BASE + '/v1.1/products/?page_size=3', { headers: h });
+        const d2 = await r2.json();
+        results.products = (d2.results || []).map((p: any) => ({ title: p.title, unit_measure: p.unit_measure }));
+      } catch (e) { results.productsError = String(e); }
+      return NextResponse.json(results);
     }
 
     // ─── DISCONNECT: clear all Elorus settings ───
