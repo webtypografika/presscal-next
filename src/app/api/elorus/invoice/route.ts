@@ -93,23 +93,10 @@ export async function POST(req: NextRequest) {
       'Κυβικό μέτρο': '5', 'Χιλιόμετρο': '6', 'Τετραγωνικό μέτρο': '7', 'Ώρα': '8',
       'Πακέτο': '9', 'Κιβώτιο': '10', 'Μέτρο': '11',
     };
-    // Return the raw v1.1 payload with unit_measure debug info
-    // v1.1 OPTIONS call to discover valid unit_measure choices
-    let defaultUnit = 'piece';
-    try {
-      const optRes = await fetch(`${ELORUS_BASE}/v1.1/invoices/`, { method: 'OPTIONS', headers: hdrs });
-      if (optRes.ok) {
-        const optData = await optRes.json();
-        // Log to find the correct field format
-        const itemFields = optData?.actions?.POST?.items?.child?.children?.unit_measure;
-        if (itemFields?.choices) {
-          const choices = itemFields.choices as { value: string; display_name: string }[];
-          const temaxio = choices.find(c => c.display_name === 'Τεμάχιο');
-          const firstChoice = choices.find(c => !c.display_name.includes('αρχειοθ'));
-          defaultUnit = (temaxio || firstChoice || choices[0])?.value || 'piece';
-        }
-      }
-    } catch { /* fallback */ }
+    // Use v1.2 for invoices too — pass unit_measure as v1.2 ID string
+    const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string }[] | null) || [];
+    const selectedV2Id = org.elorusDefaultUnitId || cachedUnits[0]?.id || '';
+    const defaultUnit = selectedV2Id;
 
     function resolveUnit(_itemUnit: string): string {
       return defaultUnit;
@@ -132,7 +119,7 @@ export async function POST(req: NextRequest) {
           quantity: String(qty),
           unit_measure: resolveUnit((item.unit as string) || 'τεμ'),
           unit_value: unitValue.toFixed(2),
-          taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
+          taxes: org.elorusDefaultTaxId ? [{ tax: org.elorusDefaultTaxId }] : [],
           ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),
           ...(org.elorusDefaultClassType ? { mydata_classification_type: org.elorusDefaultClassType } : {}),
         };
@@ -146,13 +133,13 @@ export async function POST(req: NextRequest) {
         quantity: '1',
         unit_measure: defaultUnit,
         unit_value: (quote.subtotal || quote.grandTotal || 0).toFixed(2),
-        taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
+        taxes: org.elorusDefaultTaxId ? [{ tax: org.elorusDefaultTaxId }] : [],
         ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),
         ...(org.elorusDefaultClassType ? { mydata_classification_type: org.elorusDefaultClassType } : {}),
       });
     }
 
-    // Create invoice (v1.1 — stable)
+    // Create invoice via v1.2
     const invoicePayload: Record<string, unknown> = {
       calculator_mode: 'initial',
       currency_code: 'EUR',
@@ -165,7 +152,7 @@ export async function POST(req: NextRequest) {
     if (org.elorusDefaultDocType) invoicePayload.documenttype = org.elorusDefaultDocType;
     if (org.elorusDefaultMyData) invoicePayload.mydata_document_type = org.elorusDefaultMyData;
 
-    const invRes = await fetch(`${ELORUS_BASE}/v1.1/invoices/`, {
+    const invRes = await fetch(`${ELORUS_BASE}/v1.2/invoices/`, {
       method: 'POST', headers: hdrs, body: JSON.stringify(invoicePayload),
     });
 
