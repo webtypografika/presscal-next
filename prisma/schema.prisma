@@ -106,6 +106,7 @@ model Org {
   elorusTaxes          Json?    // Cached: [{id,title,percentage}]
   elorusUnitMeasures   Json?    // Cached: [{id,title}]
   elorusDefaultUnitId  String?  // Default unit measure ID for invoices
+  elorusUnitMap        Json?    // Unit mapping: {"τεμ":"elorusId","m²":"elorusId"}
 
   // Quote terms & conditions (supports numbered sections in JSON)
   quoteTerms   Json?    // [{title: string, text: string}]

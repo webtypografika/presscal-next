@@ -86,21 +86,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Δεν βρέθηκε ή δημιουργήθηκε επαφή Elorus' }, { status: 400 });
     }
 
-    // Unit measure: use saved default, or fetch first active from Elorus, or hardcoded fallback
-    let defaultUnit = org.elorusDefaultUnitId || '';
-    if (!defaultUnit) {
-      const cached = (org.elorusUnitMeasures as { id: string }[] | null);
-      if (cached?.length) {
-        defaultUnit = cached[0].id;
-      } else {
-        // Last resort: fetch from API
-        const umRes = await fetch(`${ELORUS_BASE}/v1.2/unitofmeasurement/?page_size=100`, { headers: hdrs });
-        if (umRes.ok) {
-          const active = ((await umRes.json()).results || []).find((u: any) => !u.is_archived);
-          if (active) defaultUnit = String(active.id);
-        }
+    // Unit mapping: app unit → Elorus unit ID
+    const unitMap = (org as any).elorusUnitMap as Record<string, string> | null;
+    const defaultUnit = org.elorusDefaultUnitId || (org.elorusUnitMeasures as { id: string }[] | null)?.[0]?.id || '2';
+
+    function resolveUnit(itemUnit: string): string {
+      if (unitMap) {
+        const mapped = unitMap[itemUnit];
+        if (mapped) return mapped;
       }
-      if (!defaultUnit) defaultUnit = '2'; // absolute fallback
+      return defaultUnit;
     }
 
     // Build invoice items
@@ -118,7 +113,7 @@ export async function POST(req: NextRequest) {
           title: (item.name as string) || 'Είδος',
           description: (item.description as string) || '',
           quantity: String(qty),
-          unit_measure: defaultUnit,
+          unit_measure: resolveUnit((item.unit as string) || 'τεμ'),
           unit_value: unitValue.toFixed(2),
           taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
           ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),

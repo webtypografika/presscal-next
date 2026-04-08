@@ -562,6 +562,8 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
   const [defaultDocType, setDefaultDocType] = useState('');
   const [defaultTaxId, setDefaultTaxId] = useState('');
   const [defaultUnitId, setDefaultUnitId] = useState('');
+  const [unitMapTem, setUnitMapTem] = useState('');
+  const [unitMapM2, setUnitMapM2] = useState('');
   const [defaultMyDataType, setDefaultMyDataType] = useState('');
   const [defaultClassCategory, setDefaultClassCategory] = useState('');
   const [defaultClassType, setDefaultClassType] = useState('');
@@ -585,6 +587,9 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
       setDefaultDocType(d.defaultDocType || '');
       setDefaultTaxId(d.defaultTaxId || '');
       setDefaultUnitId(d.defaultUnitId || '');
+      const umap = d.unitMap || {};
+      setUnitMapTem(umap['τεμ'] || d.defaultUnitId || '');
+      setUnitMapM2(umap['m²'] || '');
       setDefaultMyDataType(d.defaultMyDataType || '');
       setDefaultClassCategory(d.defaultClassCategory || '');
       setDefaultClassType(d.defaultClassType || '');
@@ -624,7 +629,9 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'saveDefaults',
-          defaultDocType, defaultTaxId, defaultUnitId, defaultMyDataType,
+          defaultDocType, defaultTaxId, defaultUnitId: unitMapTem || defaultUnitId,
+          unitMap: { 'τεμ': unitMapTem, 'm²': unitMapM2 },
+          defaultMyDataType,
           defaultClassCategory, defaultClassType,
           aadeUsername, aadePassword: aadePassword || undefined, aadeAfm,
         }),
@@ -720,8 +727,14 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
                   {taxes.map(tx => <option key={tx.id} value={tx.id}>{tx.title} ({tx.percentage}%)</option>)}
                 </select>
               </Field>
-              <Field label="Μονάδα Μέτρησης">
-                <select className={selectCls} value={defaultUnitId} onChange={e => setDefaultUnitId(e.target.value)}>
+              <Field label="Μονάδα: Τεμάχιο (τεμ)">
+                <select className={selectCls} value={unitMapTem} onChange={e => setUnitMapTem(e.target.value)}>
+                  <option value="">— Επιλέξτε —</option>
+                  {unitMeasures.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
+                </select>
+              </Field>
+              <Field label="Μονάδα: Τετραγωνικό (m²)">
+                <select className={selectCls} value={unitMapM2} onChange={e => setUnitMapM2(e.target.value)}>
                   <option value="">— Επιλέξτε —</option>
                   {unitMeasures.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
                 </select>
