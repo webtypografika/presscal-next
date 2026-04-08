@@ -107,6 +107,7 @@ model Org {
   elorusUnitMeasures   Json?    // Cached: [{id,title}]
   elorusDefaultUnitId  String?  // Default unit measure ID for invoices
   elorusUnitMap        Json?    // Unit mapping: {"τεμ":"elorusId","m²":"elorusId"}
+  elorusSelectedUnits  Json?    // User's selected unit IDs: ["id1","id2"]
 
   // Quote terms & conditions (supports numbered sections in JSON)
   quoteTerms   Json?    // [{title: string, text: string}]

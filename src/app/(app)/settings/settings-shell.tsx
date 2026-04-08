@@ -562,8 +562,7 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
   const [defaultDocType, setDefaultDocType] = useState('');
   const [defaultTaxId, setDefaultTaxId] = useState('');
   const [defaultUnitId, setDefaultUnitId] = useState('');
-  const [unitMapTem, setUnitMapTem] = useState('');
-  const [unitMapM2, setUnitMapM2] = useState('');
+  const [selectedUnits, setSelectedUnits] = useState<string[]>([]);
   const [defaultMyDataType, setDefaultMyDataType] = useState('');
   const [defaultClassCategory, setDefaultClassCategory] = useState('');
   const [defaultClassType, setDefaultClassType] = useState('');
@@ -587,11 +586,7 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
       setDefaultDocType(d.defaultDocType || '');
       setDefaultTaxId(d.defaultTaxId || '');
       setDefaultUnitId(d.defaultUnitId || '');
-      const umap = d.unitMap || {};
-      const ums = (d.unitMeasures || []) as { id: string; title: string }[];
-      const findByTitle = (t: string) => ums.find(u => u.title.toLowerCase().includes(t))?.id || '';
-      setUnitMapTem(umap['τεμ'] || d.defaultUnitId || findByTitle('τεμάχι') || ums[0]?.id || '');
-      setUnitMapM2(umap['m²'] || findByTitle('τετραγωνικό μέτρο') || findByTitle('τετραγων') || ums[0]?.id || '');
+      setSelectedUnits(d.selectedUnits || (d.defaultUnitId ? [d.defaultUnitId] : []));
       setDefaultMyDataType(d.defaultMyDataType || '');
       setDefaultClassCategory(d.defaultClassCategory || '');
       setDefaultClassType(d.defaultClassType || '');
@@ -631,8 +626,7 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'saveDefaults',
-          defaultDocType, defaultTaxId, defaultUnitId: unitMapTem || defaultUnitId,
-          unitMap: { 'τεμ': unitMapTem, 'm²': unitMapM2 },
+          defaultDocType, defaultTaxId, defaultUnitId, selectedUnits,
           defaultMyDataType,
           defaultClassCategory, defaultClassType,
           aadeUsername, aadePassword: aadePassword || undefined, aadeAfm,
@@ -729,16 +723,41 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
                   {taxes.map(tx => <option key={tx.id} value={tx.id}>{tx.title} ({tx.percentage}%)</option>)}
                 </select>
               </Field>
-              <Field label="Τεμάχιο (τεμ) →">
-                <select className={selectCls} value={unitMapTem} onChange={e => setUnitMapTem(e.target.value)}>
-                  {unitMeasures.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
-                </select>
-              </Field>
-              <Field label="Τετραγωνικό (m²) →">
-                <select className={selectCls} value={unitMapM2} onChange={e => setUnitMapM2(e.target.value)}>
-                  {unitMeasures.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
-                </select>
-              </Field>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Μονάδες Μέτρησης</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {unitMeasures.map(u => {
+                    const active = selectedUnits.includes(u.id);
+                    const isDefault = defaultUnitId === u.id;
+                    return (
+                      <button key={u.id} onClick={() => {
+                        if (active) {
+                          setSelectedUnits(prev => prev.filter(id => id !== u.id));
+                          if (isDefault) setDefaultUnitId(selectedUnits.find(id => id !== u.id) || '');
+                        } else {
+                          setSelectedUnits(prev => [...prev, u.id]);
+                          if (!defaultUnitId) setDefaultUnitId(u.id);
+                        }
+                      }} style={{
+                        padding: '5px 10px', borderRadius: 7, fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+                        border: `1px solid ${active ? 'color-mix(in srgb, var(--teal) 50%, transparent)' : 'var(--border)'}`,
+                        background: active ? 'color-mix(in srgb, var(--teal) 10%, transparent)' : 'transparent',
+                        color: active ? 'var(--teal)' : 'var(--text-muted)',
+                        display: 'flex', alignItems: 'center', gap: 5,
+                      }}>
+                        <i className={`fas fa-${active ? 'check' : 'plus'}`} style={{ fontSize: '0.55rem' }} />
+                        {u.title}
+                        {active && (
+                          <i className={`fas fa-star`} onClick={e => { e.stopPropagation(); setDefaultUnitId(u.id); }} style={{
+                            fontSize: '0.5rem', marginLeft: 2, cursor: 'pointer',
+                            color: isDefault ? '#f59e0b' : 'var(--text-muted)', opacity: isDefault ? 1 : 0.3,
+                          }} title={isDefault ? 'Προεπιλογή' : 'Ορισμός ως προεπιλογή'} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <Field label="MyDATA Τύπος">
                 <select className={selectCls} value={defaultMyDataType} onChange={e => setDefaultMyDataType(e.target.value)}>
                   <option value="">— Επιλέξτε —</option>

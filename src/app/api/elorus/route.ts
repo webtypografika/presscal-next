@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
         unitMeasures: org.elorusUnitMeasures ?? [],
         defaultUnitId: org.elorusDefaultUnitId ?? '',
         unitMap: (org as any).elorusUnitMap ?? {},
+        selectedUnits: (org as any).elorusSelectedUnits ?? [],
       });
     }
 
@@ -143,6 +144,7 @@ export async function POST(req: NextRequest) {
       if (body.defaultClassCategory !== undefined) data.elorusDefaultClassCat = body.defaultClassCategory || null;
       if (body.defaultClassType !== undefined) data.elorusDefaultClassType = body.defaultClassType || null;
       if (body.defaultUnitId !== undefined) data.elorusDefaultUnitId = body.defaultUnitId || null;
+      if (body.selectedUnits !== undefined) (data as any).elorusSelectedUnits = body.selectedUnits || null;
       if (body.unitMap !== undefined) (data as any).elorusUnitMap = body.unitMap || null;
       if (body.aadeUsername !== undefined) data.aadeUsername = body.aadeUsername || null;
       if (body.aadePassword !== undefined) data.aadePassword = body.aadePassword || null;
