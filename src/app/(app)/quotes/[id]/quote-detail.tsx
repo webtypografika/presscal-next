@@ -221,6 +221,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [showContactPicker, setShowContactPicker] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [emailSender, setEmailSender] = useState<{ name: string; email: string } | null>(null);
 
   const toast = useCallback((message: string, type: ToastType = 'success') => {
     setToasts(prev => [...prev, { message, type, id: ++toastId }]);
@@ -238,8 +239,25 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const selectedCompany = customers.find((c: any) => c.id === customerId) ?? quote.company;
   const selectedCustomer = selectedCompany; // backward compat alias
   const primaryContact = selectedCompany?.companyContacts?.find((cc: any) => cc.isPrimary)?.contact;
-  const customerName = selectedCompany?.name ?? quote.customer?.name ?? '—';
+  const customerName = selectedCompany?.name ?? (quote as any).contact?.name ?? quote.customer?.name ?? emailSender?.name ?? emailSender?.email ?? '—';
+  const customerInfoEmail = selectedCompany?.email || (!selectedCompany && ((quote as any).contact?.email || emailSender?.email)) || '';
+  const customerInfoPhone = selectedCompany?.phone || (!selectedCompany && (quote as any).contact?.phone) || '';
   const selectedContact = (quote as any).contact ?? null;
+
+  // Fetch sender from first linked email as last-resort fallback
+  useEffect(() => {
+    if (customerId || contactId || !(quote.linkedEmails as string[])?.length) return;
+    fetch(`/api/email/messages/${(quote.linkedEmails as string[])[0]}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(msg => {
+        if (!msg?.from) return;
+        const m = msg.from.match(/<([^>]+)>/);
+        const email = m ? m[1] : msg.from.trim();
+        const name = msg.from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
+        setEmailSender({ name: name !== email ? name : '', email });
+      })
+      .catch(() => {});
+  }, [customerId, contactId, quote.linkedEmails]);
 
   // Autosave with debounce (1s after last change)
   const mountedRef = useRef(false);
@@ -551,8 +569,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             <i className={`fas fa-${showCustomerPicker ? 'chevron-up' : 'pen'}`} style={{ fontSize: '0.42rem', opacity: showCustomerPicker ? 0.8 : 0.3 }} />
           </div>
           <div style={{ display: 'flex', gap: 10, color: '#64748b', flexWrap: 'wrap' }}>
-            {selectedCompany?.email && <span>{selectedCompany.email}</span>}
-            {selectedCompany?.phone && <span>{selectedCompany.phone}</span>}
+            {customerInfoEmail && <span>{customerInfoEmail}</span>}
+            {customerInfoPhone && <span>{customerInfoPhone}</span>}
             {selectedCompany?.folderPath && (
               <a href={`presscal-fh://open-folder?path=${encodeURIComponent(selectedCompany.folderPath)}${selectedCompany?.email ? `&email=${encodeURIComponent(selectedCompany.email)}` : ''}&quoteId=${quote.id}`}
                 style={{ color: '#f58220', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
