@@ -493,10 +493,11 @@ interface ElorusData {
   configured: boolean;
   orgName: string; orgId: string; orgSlug: string;
   apiKeyMasked: string;
-  defaultDocType: string; defaultTaxId: string;
+  defaultDocType: string; defaultTaxId: string; defaultUnitId: string;
   defaultMyDataType: string; defaultClassCategory: string; defaultClassType: string;
   aadeConfigured: boolean; aadeUsername: string; aadeAfm: string;
   docTypes: ElorusDocType[]; taxes: ElorusTax[];
+  unitMeasures: { id: string; title: string }[];
 }
 
 function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; elorusOrgId?: string | null }; inputCls: string }) {
@@ -513,6 +514,7 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
   // Defaults form
   const [defaultDocType, setDefaultDocType] = useState('');
   const [defaultTaxId, setDefaultTaxId] = useState('');
+  const [defaultUnitId, setDefaultUnitId] = useState('');
   const [defaultMyDataType, setDefaultMyDataType] = useState('');
   const [defaultClassCategory, setDefaultClassCategory] = useState('');
   const [defaultClassType, setDefaultClassType] = useState('');
@@ -535,6 +537,7 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
       setData(d);
       setDefaultDocType(d.defaultDocType || '');
       setDefaultTaxId(d.defaultTaxId || '');
+      setDefaultUnitId(d.defaultUnitId || '');
       setDefaultMyDataType(d.defaultMyDataType || '');
       setDefaultClassCategory(d.defaultClassCategory || '');
       setDefaultClassType(d.defaultClassType || '');
@@ -574,7 +577,7 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'saveDefaults',
-          defaultDocType, defaultTaxId, defaultMyDataType,
+          defaultDocType, defaultTaxId, defaultUnitId, defaultMyDataType,
           defaultClassCategory, defaultClassType,
           aadeUsername, aadePassword: aadePassword || undefined, aadeAfm,
         }),
@@ -624,6 +627,7 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
   const connected = data?.configured;
   const docTypes = (data?.docTypes || []) as ElorusDocType[];
   const taxes = (data?.taxes || []) as ElorusTax[];
+  const unitMeasures = (data?.unitMeasures || []) as { id: string; title: string }[];
 
   return (
     <Section icon="fa-file-invoice-dollar" iconColor="#4f46e5" title="ELORUS — ΤΙΜΟΛΟΓΗΣΗ">
@@ -667,6 +671,12 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
                 <select className={selectCls} value={defaultTaxId} onChange={e => setDefaultTaxId(e.target.value)}>
                   <option value="">— Επιλέξτε —</option>
                   {taxes.map(tx => <option key={tx.id} value={tx.id}>{tx.title} ({tx.percentage}%)</option>)}
+                </select>
+              </Field>
+              <Field label="Μονάδα Μέτρησης">
+                <select className={selectCls} value={defaultUnitId} onChange={e => setDefaultUnitId(e.target.value)}>
+                  <option value="">— Επιλέξτε —</option>
+                  {unitMeasures.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
                 </select>
               </Field>
               <Field label="MyDATA Τύπος">

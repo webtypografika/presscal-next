@@ -21,9 +21,10 @@ function masked(key: string) {
 // ─── Fetch doc types & taxes from Elorus ───
 async function fetchElorusMetadata(apiKey: string, orgId: string) {
   const headers = elorusHeaders(apiKey, orgId);
-  const [dtRes, txRes] = await Promise.all([
+  const [dtRes, txRes, umRes] = await Promise.all([
     fetch(`${ELORUS_BASE}/v1.2/documenttypes/?page_size=100`, { headers }),
     fetch(`${ELORUS_BASE}/v1.2/taxes/?page_size=100`, { headers }),
+    fetch(`${ELORUS_BASE}/v1.2/unitmeasures/?page_size=100`, { headers }),
   ]);
   if (!dtRes.ok || !txRes.ok) return null;
   const dtData = await dtRes.json();
@@ -34,7 +35,12 @@ async function fetchElorusMetadata(apiKey: string, orgId: string) {
   const taxes = (txData.results || []).map((t: Record<string, string>) => ({
     id: t.id, title: t.title, percentage: t.percentage,
   }));
-  return { docTypes, taxes };
+  const unitMeasures = umRes.ok
+    ? ((await umRes.json()).results || [])
+        .filter((u: Record<string, unknown>) => !u.is_archived)
+        .map((u: Record<string, string>) => ({ id: u.id, title: u.title }))
+    : [];
+  return { docTypes, taxes, unitMeasures };
 }
 
 // ═══ POST /api/elorus ═══
@@ -66,6 +72,8 @@ export async function POST(req: NextRequest) {
         aadeAfm: org.aadeAfm ?? '',
         docTypes: org.elorusDocTypes ?? [],
         taxes: org.elorusTaxes ?? [],
+        unitMeasures: org.elorusUnitMeasures ?? [],
+        defaultUnitId: org.elorusDefaultUnitId ?? '',
       });
     }
 
@@ -108,6 +116,7 @@ export async function POST(req: NextRequest) {
           elorusOrgName: orgName || null,
           elorusDocTypes: meta?.docTypes ?? [],
           elorusTaxes: meta?.taxes ?? [],
+          elorusUnitMeasures: meta?.unitMeasures ?? [],
         },
       });
 
@@ -117,6 +126,7 @@ export async function POST(req: NextRequest) {
         apiKeyMasked: masked(apiKey),
         docTypes: meta?.docTypes ?? [],
         taxes: meta?.taxes ?? [],
+        unitMeasures: meta?.unitMeasures ?? [],
       });
     }
 
@@ -128,6 +138,7 @@ export async function POST(req: NextRequest) {
       if (body.defaultMyDataType !== undefined) data.elorusDefaultMyData = body.defaultMyDataType || null;
       if (body.defaultClassCategory !== undefined) data.elorusDefaultClassCat = body.defaultClassCategory || null;
       if (body.defaultClassType !== undefined) data.elorusDefaultClassType = body.defaultClassType || null;
+      if (body.defaultUnitId !== undefined) data.elorusDefaultUnitId = body.defaultUnitId || null;
       if (body.aadeUsername !== undefined) data.aadeUsername = body.aadeUsername || null;
       if (body.aadePassword !== undefined) data.aadePassword = body.aadePassword || null;
       if (body.aadeAfm !== undefined) data.aadeAfm = body.aadeAfm || null;
@@ -146,9 +157,9 @@ export async function POST(req: NextRequest) {
 
       await prisma.org.update({
         where: { id: ORG_ID },
-        data: { elorusDocTypes: meta.docTypes, elorusTaxes: meta.taxes },
+        data: { elorusDocTypes: meta.docTypes, elorusTaxes: meta.taxes, elorusUnitMeasures: meta.unitMeasures },
       });
-      return NextResponse.json({ ok: true, docTypes: meta.docTypes, taxes: meta.taxes });
+      return NextResponse.json({ ok: true, docTypes: meta.docTypes, taxes: meta.taxes, unitMeasures: meta.unitMeasures });
     }
 
     // ─── DISCONNECT: clear all Elorus settings ───
@@ -159,7 +170,8 @@ export async function POST(req: NextRequest) {
           apiElorus: null, elorusOrgId: null, elorusOrgSlug: null, elorusOrgName: null,
           elorusDefaultDocType: null, elorusDefaultTaxId: null, elorusDefaultMyData: null,
           elorusDefaultClassCat: null, elorusDefaultClassType: null,
-          elorusDocTypes: Prisma.JsonNull, elorusTaxes: Prisma.JsonNull,
+          elorusDocTypes: Prisma.JsonNull, elorusTaxes: Prisma.JsonNull, elorusUnitMeasures: Prisma.JsonNull,
+          elorusDefaultUnitId: null,
         },
       });
       return NextResponse.json({ ok: true });

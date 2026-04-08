@@ -104,6 +104,8 @@ model Org {
   elorusDefaultClassType String? // e.g. "E3_561_001"
   elorusDocTypes       Json?    // Cached: [{id,title,category}]
   elorusTaxes          Json?    // Cached: [{id,title,percentage}]
+  elorusUnitMeasures   Json?    // Cached: [{id,title}]
+  elorusDefaultUnitId  String?  // Default unit measure ID for invoices
 
   // Quote terms & conditions (supports numbered sections in JSON)
   quoteTerms   Json?    // [{title: string, text: string}]

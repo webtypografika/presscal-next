@@ -86,13 +86,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Δεν βρέθηκε ή δημιουργήθηκε επαφή Elorus' }, { status: 400 });
     }
 
-    // Fetch active unit measures from Elorus to find a valid one
-    const umRes = await fetch(`${ELORUS_BASE}/v1.2/unitmeasures/?page_size=100`, { headers: hdrs });
-    let defaultUnit = '2'; // fallback
-    if (umRes.ok) {
-      const umData = await umRes.json();
-      const active = (umData.results || []).find((u: any) => !u.is_archived);
-      if (active) defaultUnit = String(active.id);
+    // Unit measure: use saved default, or fetch first active from Elorus, or hardcoded fallback
+    let defaultUnit = org.elorusDefaultUnitId || '';
+    if (!defaultUnit) {
+      const cached = (org.elorusUnitMeasures as { id: string }[] | null);
+      if (cached?.length) {
+        defaultUnit = cached[0].id;
+      } else {
+        // Last resort: fetch from API
+        const umRes = await fetch(`${ELORUS_BASE}/v1.2/unitmeasures/?page_size=100`, { headers: hdrs });
+        if (umRes.ok) {
+          const active = ((await umRes.json()).results || []).find((u: any) => !u.is_archived);
+          if (active) defaultUnit = String(active.id);
+        }
+      }
+      if (!defaultUnit) defaultUnit = '2'; // absolute fallback
     }
 
     // Build invoice items
