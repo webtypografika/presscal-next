@@ -86,22 +86,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Δεν βρέθηκε ή δημιουργήθηκε επαφή Elorus' }, { status: 400 });
     }
 
-    // Resolve unit measure: find v1.1 ID from cached unit measures
+    // Resolve unit measure for v1.1 invoices
     // v1.1 uses simple numeric IDs, v1.2 uses long string IDs
-    const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string; v1Id?: string }[] | null) || [];
-    const defaultV2Id = org.elorusDefaultUnitId || cachedUnits[0]?.id || '';
-    // Title→v1.1 fallback map for common Greek units
     const titleToV1: Record<string, string> = {
       'Υπηρεσία': '1', 'Τεμάχιο': '2', 'Κιλό': '3', 'Λίτρο': '4',
       'Κυβικό μέτρο': '5', 'Χιλιόμετρο': '6', 'Τετραγωνικό μέτρο': '7', 'Ώρα': '8',
       'Πακέτο': '9', 'Κιβώτιο': '10', 'Μέτρο': '11',
     };
-    const defaultCached = cachedUnits.find(u => u.id === defaultV2Id);
-    // If v1.2 ID looks like a long number (v1.2 format), resolve to v1.1
-    const isV2Id = defaultV2Id.length > 10;
-    const defaultUnit = isV2Id
-      ? (defaultCached?.v1Id || (defaultCached?.title ? titleToV1[defaultCached.title] : null) || '2')
-      : (defaultV2Id || '2'); // already a v1.1 ID
+    // Fetch active v1.1 units directly to find a valid one
+    let defaultUnit = '2';
+    try {
+      const v1Res = await fetch(`${ELORUS_BASE}/v1.1/unitmeasures/`, { headers: hdrs });
+      if (v1Res.ok) {
+        const v1Data = await v1Res.json();
+        const v1Units = v1Data.results || v1Data || [];
+        // Find first non-archived unit, prefer Τεμάχιο
+        const temaxio = (Array.isArray(v1Units) ? v1Units : []).find((u: any) => u.title === 'Τεμάχιο');
+        const firstActive = (Array.isArray(v1Units) ? v1Units : []).find((u: any) => !u.is_archived && u.active !== false);
+        defaultUnit = String((temaxio || firstActive)?.id || '2');
+      }
+    } catch { /* use fallback */ }
 
     function resolveUnit(_itemUnit: string): string {
       return defaultUnit;
