@@ -1288,6 +1288,19 @@ function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }
   }
   const supplierGroups = [...bySupplier.entries()];
 
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const visibleEntries = paperEntries.filter(p => !excluded.has(p.paperId || p.name));
+  const visibleBySupplier = new Map<string, { supplier: string; email: string; papers: typeof paperEntries }>();
+  const visibleNoSupplier: typeof paperEntries = [];
+  for (const pe of visibleEntries) {
+    const email = pe.material?.supplierEmail;
+    if (!email) { visibleNoSupplier.push(pe); continue; }
+    const key = email.toLowerCase();
+    if (!visibleBySupplier.has(key)) visibleBySupplier.set(key, { supplier: pe.material?.supplier || email, email, papers: [] });
+    visibleBySupplier.get(key)!.papers.push(pe);
+  }
+  const visibleSupplierGroups = [...visibleBySupplier.entries()];
+
   const [quantities, setQuantities] = useState<Record<string, string>>(() => {
     const q: Record<string, string> = {};
     for (const pe of paperEntries) q[pe.name] = String(pe.totalSheets);
@@ -1382,7 +1395,7 @@ function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }
           </div>
 
           {/* Papers by supplier */}
-          {supplierGroups.map(([key, group]) => (
+          {visibleSupplierGroups.map(([key, group]) => (
             <div key={key} style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <i className="fas fa-truck" style={{ color: 'var(--teal)', fontSize: '0.7rem' }} />
@@ -1410,6 +1423,13 @@ function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }
                       placeholder="Ποσ."
                     />
                     <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', width: 40 }}>φύλλα</span>
+                    <button onClick={() => setExcluded(prev => new Set(prev).add(p.paperId || p.name))}
+                      style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px 6px', borderRadius: 4, fontSize: '0.65rem', opacity: 0.5 }}
+                      onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ef4444'; }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = '#64748b'; }}
+                      title="Αφαίρεση">
+                      <i className="fas fa-times" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1417,15 +1437,22 @@ function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }
           ))}
 
           {/* Papers without supplier */}
-          {noSupplier.length > 0 && (
+          {visibleNoSupplier.length > 0 && (
             <div style={{ padding: '10px 12px', borderRadius: 8, background: 'color-mix(in srgb, var(--accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)', marginBottom: 12 }}>
               <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>
-                <i className="fas fa-exclamation-triangle" style={{ marginRight: 4 }} />{noSupplier.length} χαρτιά χωρίς προμηθευτή:
+                <i className="fas fa-exclamation-triangle" style={{ marginRight: 4 }} />{visibleNoSupplier.length} χαρτιά χωρίς προμηθευτή:
               </p>
-              {noSupplier.map(p => (
+              {visibleNoSupplier.map(p => (
                 <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                   <span style={{ flex: 1 }}>{p.name}</span>
                   <span>{quantities[p.name] || p.totalSheets} φύλλα</span>
+                  <button onClick={() => setExcluded(prev => new Set(prev).add(p.paperId || p.name))}
+                    style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px 6px', borderRadius: 4, fontSize: '0.65rem', opacity: 0.5 }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ef4444'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.color = '#64748b'; }}
+                    title="Αφαίρεση">
+                    <i className="fas fa-times" />
+                  </button>
                 </div>
               ))}
               <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: 4 }}>Προσθέστε email προμηθευτή στην Αποθήκη</p>
@@ -1465,7 +1492,7 @@ function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }
         <div style={{ padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={onClose} style={{ padding: '10px 16px', borderRadius: 8, border: 'none', background: 'transparent', color: '#94a3b8', fontSize: '0.82rem', cursor: 'pointer' }}>Ακύρωση</button>
           <div style={{ flex: 1 }} />
-          {supplierGroups.map(([key, group]) => {
+          {visibleSupplierGroups.map(([key, group]) => {
             const targetEmail = emails[key] || group.email;
             return (
               <div key={key} style={{ display: 'flex', gap: 4 }}>
