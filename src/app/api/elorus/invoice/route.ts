@@ -93,30 +93,23 @@ export async function POST(req: NextRequest) {
       'Κυβικό μέτρο': '5', 'Χιλιόμετρο': '6', 'Τετραγωνικό μέτρο': '7', 'Ώρα': '8',
       'Πακέτο': '9', 'Κιβώτιο': '10', 'Μέτρο': '11',
     };
-    // Use v1.2 unitofmeasurement to find the v1.1 numeric ID
-    // v1.1 invoices accept unit_measure as a numeric ID matching the v1.2 unit's position/id
-    const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string }[] | null) || [];
-    const selectedV2Id = org.elorusDefaultUnitId || '';
-    const selectedUnit = cachedUnits.find(u => u.id === selectedV2Id);
-
-    // Fetch v1.2 units with full data to get the correct v1.1-compatible ID
-    let defaultUnit = '';
+    // Return the raw v1.1 payload with unit_measure debug info
+    // v1.1 OPTIONS call to discover valid unit_measure choices
+    let defaultUnit = 'piece';
     try {
-      const umRes = await fetch(`${ELORUS_BASE}/v1.2/unitofmeasurement/?page_size=100`, { headers: hdrs });
-      if (umRes.ok) {
-        const umData = await umRes.json();
-        const allUnits = umData.results || [];
-        // Find the selected unit or first active one
-        const target = selectedV2Id
-          ? allUnits.find((u: any) => String(u.id) === selectedV2Id)
-          : allUnits.find((u: any) => u.title === 'Τεμάχιο' && u.active) || allUnits.find((u: any) => u.active);
-        if (target) {
-          // v1.1 accepts the v1.2 URL format for unit_measure
-          defaultUnit = `${ELORUS_BASE}/v1.2/unitofmeasurement/${target.id}/`;
+      const optRes = await fetch(`${ELORUS_BASE}/v1.1/invoices/`, { method: 'OPTIONS', headers: hdrs });
+      if (optRes.ok) {
+        const optData = await optRes.json();
+        // Log to find the correct field format
+        const itemFields = optData?.actions?.POST?.items?.child?.children?.unit_measure;
+        if (itemFields?.choices) {
+          const choices = itemFields.choices as { value: string; display_name: string }[];
+          const temaxio = choices.find(c => c.display_name === 'Τεμάχιο');
+          const firstChoice = choices.find(c => !c.display_name.includes('αρχειοθ'));
+          defaultUnit = (temaxio || firstChoice || choices[0])?.value || 'piece';
         }
       }
-    } catch { /* use fallback */ }
-    if (!defaultUnit) defaultUnit = `${ELORUS_BASE}/v1.2/unitofmeasurement/${selectedV2Id || cachedUnits[0]?.id}/`;
+    } catch { /* fallback */ }
 
     function resolveUnit(_itemUnit: string): string {
       return defaultUnit;
