@@ -93,13 +93,10 @@ export async function POST(req: NextRequest) {
       'Κυβικό μέτρο': '5', 'Χιλιόμετρο': '6', 'Τετραγωνικό μέτρο': '7', 'Ώρα': '8',
       'Πακέτο': '9', 'Κιβώτιο': '10', 'Μέτρο': '11',
     };
-    // Resolve unit_measure: v1.1 uses symbol, v1.2 uses symbol
-    const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string; symbol?: string }[] | null) || [];
-    const selectedV2Id = org.elorusDefaultUnitId || cachedUnits[0]?.id || '';
-    const selectedUnit = cachedUnits.find(u => u.id === selectedV2Id);
-    const defaultUnit = selectedUnit?.symbol || 'item';
+    // v1.1 unit_measure is a numeric index (0=Τεμάχιο based on products data)
+    const defaultUnit = 0;
 
-    function resolveUnit(_itemUnit: string): string {
+    function resolveUnit(_itemUnit: string): number {
       return defaultUnit;
     }
 
