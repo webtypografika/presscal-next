@@ -93,11 +93,11 @@ export async function POST(req: NextRequest) {
       'Κυβικό μέτρο': '5', 'Χιλιόμετρο': '6', 'Τετραγωνικό μέτρο': '7', 'Ώρα': '8',
       'Πακέτο': '9', 'Κιβώτιο': '10', 'Μέτρο': '11',
     };
-    // v1.2 unit_measure expects the symbol (e.g. "τεμ", "m²"), not the ID
+    // Resolve unit_measure: v1.1 uses symbol, v1.2 uses symbol
     const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string; symbol?: string }[] | null) || [];
     const selectedV2Id = org.elorusDefaultUnitId || cachedUnits[0]?.id || '';
     const selectedUnit = cachedUnits.find(u => u.id === selectedV2Id);
-    const defaultUnit = selectedUnit?.symbol || 'τεμ';
+    const defaultUnit = selectedUnit?.symbol || 'item';
 
     function resolveUnit(_itemUnit: string): string {
       return defaultUnit;
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
           quantity: String(qty),
           unit_measure: resolveUnit((item.unit as string) || 'τεμ'),
           unit_value: unitValue.toFixed(2),
-          taxes: org.elorusDefaultTaxId ? [{ tax: org.elorusDefaultTaxId }] : [],
+          taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
           ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),
           ...(org.elorusDefaultClassType ? { mydata_classification_type: org.elorusDefaultClassType } : {}),
         };
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
         quantity: '1',
         unit_measure: defaultUnit,
         unit_value: (quote.subtotal || quote.grandTotal || 0).toFixed(2),
-        taxes: org.elorusDefaultTaxId ? [{ tax: org.elorusDefaultTaxId }] : [],
+        taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
         ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),
         ...(org.elorusDefaultClassType ? { mydata_classification_type: org.elorusDefaultClassType } : {}),
       });
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
     if (org.elorusDefaultDocType) invoicePayload.documenttype = org.elorusDefaultDocType;
     if (org.elorusDefaultMyData) invoicePayload.mydata_document_type = org.elorusDefaultMyData;
 
-    const invRes = await fetch(`${ELORUS_BASE}/v1.2/invoices/`, {
+    const invRes = await fetch(`${ELORUS_BASE}/v1.1/invoices/`, {
       method: 'POST', headers: hdrs, body: JSON.stringify(invoicePayload),
     });
 
