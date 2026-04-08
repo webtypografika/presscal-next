@@ -588,8 +588,10 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
       setDefaultTaxId(d.defaultTaxId || '');
       setDefaultUnitId(d.defaultUnitId || '');
       const umap = d.unitMap || {};
-      setUnitMapTem(umap['τεμ'] || d.defaultUnitId || '');
-      setUnitMapM2(umap['m²'] || '');
+      const ums = (d.unitMeasures || []) as { id: string; title: string }[];
+      const findByTitle = (t: string) => ums.find(u => u.title.toLowerCase().includes(t))?.id || '';
+      setUnitMapTem(umap['τεμ'] || d.defaultUnitId || findByTitle('τεμάχι') || ums[0]?.id || '');
+      setUnitMapM2(umap['m²'] || findByTitle('τετραγωνικό μέτρο') || findByTitle('τετραγων') || ums[0]?.id || '');
       setDefaultMyDataType(d.defaultMyDataType || '');
       setDefaultClassCategory(d.defaultClassCategory || '');
       setDefaultClassType(d.defaultClassType || '');
@@ -727,15 +729,13 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
                   {taxes.map(tx => <option key={tx.id} value={tx.id}>{tx.title} ({tx.percentage}%)</option>)}
                 </select>
               </Field>
-              <Field label="Μονάδα: Τεμάχιο (τεμ)">
+              <Field label="Τεμάχιο (τεμ) →">
                 <select className={selectCls} value={unitMapTem} onChange={e => setUnitMapTem(e.target.value)}>
-                  <option value="">— Επιλέξτε —</option>
                   {unitMeasures.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
                 </select>
               </Field>
-              <Field label="Μονάδα: Τετραγωνικό (m²)">
+              <Field label="Τετραγωνικό (m²) →">
                 <select className={selectCls} value={unitMapM2} onChange={e => setUnitMapM2(e.target.value)}>
-                  <option value="">— Επιλέξτε —</option>
                   {unitMeasures.map(u => <option key={u.id} value={u.id}>{u.title}</option>)}
                 </select>
               </Field>
