@@ -98,12 +98,12 @@ export async function POST(req: NextRequest) {
         const price = (item.finalPrice as number) || (item.unitPrice as number) || 0;
         const unitValue = qty > 0 ? (price / qty) : price;
         // Map unit to Elorus unit_measure: 1=τεμάχιο, 7=τετραγωνικό μέτρο
-        const unitMap: Record<string, string> = { 'τεμ': '1', 'm²': '7', 'φύλ': '1', 'σετ': '1' };
+        const unitMap: Record<string, string> = { 'τεμ': '2', 'm²': '7', 'φύλ': '2', 'σετ': '2' };
         return {
           title: (item.name as string) || 'Υπηρεσία',
           description: (item.description as string) || '',
           quantity: String(qty),
-          unit_measure: unitMap[(item.unit as string) || 'τεμ'] || '1',
+          unit_measure: unitMap[(item.unit as string) || 'τεμ'] || '2',
           unit_value: unitValue.toFixed(2),
           taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
           ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
         title: quote.title || quote.number,
         description: '',
         quantity: '1',
-        unit_measure: '1',
+        unit_measure: '2',
         unit_value: (quote.subtotal || quote.grandTotal || 0).toFixed(2),
         taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
         ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),
