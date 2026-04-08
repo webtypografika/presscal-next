@@ -97,7 +97,11 @@ export async function POST(req: NextRequest) {
       'Πακέτο': '9', 'Κιβώτιο': '10', 'Μέτρο': '11',
     };
     const defaultCached = cachedUnits.find(u => u.id === defaultV2Id);
-    const defaultUnit = defaultCached?.v1Id || (defaultCached?.title ? titleToV1[defaultCached.title] : null) || '2';
+    // If v1.2 ID looks like a long number (v1.2 format), resolve to v1.1
+    const isV2Id = defaultV2Id.length > 10;
+    const defaultUnit = isV2Id
+      ? (defaultCached?.v1Id || (defaultCached?.title ? titleToV1[defaultCached.title] : null) || '2')
+      : (defaultV2Id || '2'); // already a v1.1 ID
 
     function resolveUnit(_itemUnit: string): string {
       return defaultUnit;
