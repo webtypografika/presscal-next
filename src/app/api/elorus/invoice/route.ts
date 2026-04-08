@@ -93,19 +93,30 @@ export async function POST(req: NextRequest) {
       'Κυβικό μέτρο': '5', 'Χιλιόμετρο': '6', 'Τετραγωνικό μέτρο': '7', 'Ώρα': '8',
       'Πακέτο': '9', 'Κιβώτιο': '10', 'Μέτρο': '11',
     };
-    // Fetch active v1.1 units directly to find a valid one
-    let defaultUnit = '2';
+    // Use v1.2 unitofmeasurement to find the v1.1 numeric ID
+    // v1.1 invoices accept unit_measure as a numeric ID matching the v1.2 unit's position/id
+    const cachedUnits = (org.elorusUnitMeasures as { id: string; title: string }[] | null) || [];
+    const selectedV2Id = org.elorusDefaultUnitId || '';
+    const selectedUnit = cachedUnits.find(u => u.id === selectedV2Id);
+
+    // Fetch v1.2 units with full data to get the correct v1.1-compatible ID
+    let defaultUnit = '';
     try {
-      const v1Res = await fetch(`${ELORUS_BASE}/v1.1/unitmeasures/`, { headers: hdrs });
-      if (v1Res.ok) {
-        const v1Data = await v1Res.json();
-        const v1Units = v1Data.results || v1Data || [];
-        // Find first non-archived unit, prefer Τεμάχιο
-        const temaxio = (Array.isArray(v1Units) ? v1Units : []).find((u: any) => u.title === 'Τεμάχιο');
-        const firstActive = (Array.isArray(v1Units) ? v1Units : []).find((u: any) => !u.is_archived && u.active !== false);
-        defaultUnit = String((temaxio || firstActive)?.id || '2');
+      const umRes = await fetch(`${ELORUS_BASE}/v1.2/unitofmeasurement/?page_size=100`, { headers: hdrs });
+      if (umRes.ok) {
+        const umData = await umRes.json();
+        const allUnits = umData.results || [];
+        // Find the selected unit or first active one
+        const target = selectedV2Id
+          ? allUnits.find((u: any) => String(u.id) === selectedV2Id)
+          : allUnits.find((u: any) => u.title === 'Τεμάχιο' && u.active) || allUnits.find((u: any) => u.active);
+        if (target) {
+          // v1.1 accepts the v1.2 URL format for unit_measure
+          defaultUnit = `${ELORUS_BASE}/v1.2/unitofmeasurement/${target.id}/`;
+        }
       }
     } catch { /* use fallback */ }
+    if (!defaultUnit) defaultUnit = `${ELORUS_BASE}/v1.2/unitofmeasurement/${selectedV2Id || cachedUnits[0]?.id}/`;
 
     function resolveUnit(_itemUnit: string): string {
       return defaultUnit;
