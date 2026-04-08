@@ -598,7 +598,7 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
       });
       const d = await res.json();
       if (d.ok) {
-        setData(prev => prev ? { ...prev, docTypes: d.docTypes, taxes: d.taxes } : prev);
+        setData(prev => prev ? { ...prev, docTypes: d.docTypes, taxes: d.taxes, unitMeasures: d.unitMeasures || [] } : prev);
         setMsg('Ανανεώθηκε!');
       } else { setMsg(d.error || 'Σφάλμα'); }
     } catch { setMsg('Network error'); }
