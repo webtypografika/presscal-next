@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
     if (org.elorusDefaultDocType) invoicePayload.documenttype = org.elorusDefaultDocType;
     if (org.elorusDefaultMyData) invoicePayload.mydata_document_type = org.elorusDefaultMyData;
 
-    const invRes = await fetch(`${ELORUS_BASE}/v1.1/invoices/`, {
+    const invRes = await fetch(`${ELORUS_BASE}/v1.2/invoices/`, {
       method: 'POST', headers: hdrs, body: JSON.stringify(invoicePayload),
     });
 
