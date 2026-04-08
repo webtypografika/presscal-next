@@ -627,14 +627,24 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             </button>
           )}
           {courierVoucher && (
-            <span style={{
+            <button onClick={async () => {
+              const res = await fetch('/api/courier', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'printVoucher', quoteId: quote.id }),
+              });
+              if (!res.ok) { toast('Σφάλμα λήψης voucher', 'error'); return; }
+              const blob = await res.blob();
+              const url = URL.createObjectURL(blob);
+              const w = window.open(url);
+              if (w) w.addEventListener('afterprint', () => URL.revokeObjectURL(url));
+            }} style={{
               padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
               background: 'color-mix(in srgb, #10b981 12%, transparent)',
               border: '1px solid color-mix(in srgb, #10b981 25%, transparent)',
-              color: '#10b981', display: 'flex', alignItems: 'center', gap: 4,
+              color: '#10b981', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
             }}>
-              <i className="fas fa-truck" style={{ fontSize: '0.5rem' }} />{courierVoucher}
-            </span>
+              <i className="fas fa-print" style={{ fontSize: '0.5rem' }} />{courierVoucher}
+            </button>
           )}
           {elorusConfigured && !quote.elorusInvoiceId && (
             <button onClick={() => setShowInvoiceModal(true)} style={{
@@ -1191,11 +1201,21 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           quoteId={quote.id}
           company={selectedCompany}
           onClose={() => setShowCourierModal(false)}
-          onCreated={(voucherId) => {
+          onCreated={async (voucherId) => {
             setCourierVoucher(voucherId);
             setCourierStatus('Δημιουργήθηκε');
             setShowCourierModal(false);
             toast('Voucher δημιουργήθηκε');
+            // Auto-open PDF for printing
+            const res = await fetch('/api/courier', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'printVoucher', quoteId: quote.id }),
+            });
+            if (res.ok) {
+              const blob = await res.blob();
+              const url = URL.createObjectURL(blob);
+              window.open(url);
+            }
           }}
         />
       )}
