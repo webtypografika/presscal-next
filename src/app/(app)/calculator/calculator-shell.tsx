@@ -1581,10 +1581,19 @@ export default function CalculatorShell() {
                       const sep = folder.includes('\\') ? '\\' : '/';
                       const baseName = (pdf?.fileName || 'imposed').replace(/\.pdf$/i, '');
                       const savePath = `${folder}${sep}${baseName}_imposition.pdf`;
-                      const res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
-                        method: 'POST', body: new Blob([bytes as BlobPart]),
-                      });
-                      if (!res.ok) alert('Αποτυχία αποθήκευσης');
+                      let res: Response;
+                      try {
+                        res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
+                          method: 'POST', body: new Blob([bytes as BlobPart]),
+                        });
+                      } catch {
+                        alert('Δεν βρέθηκε το PressKit στη θύρα 17824. Βεβαιώσου ότι το PressKit τρέχει.');
+                        return;
+                      }
+                      if (!res.ok) {
+                        const detail = await res.text().catch(() => '');
+                        alert(`Αποτυχία αποθήκευσης (${res.status}) στο\n${savePath}\n\n${detail}`);
+                      }
                     } catch (e) { alert('PDF export error: ' + (e as Error).message); }
                   }} style={pdfMenuItemStyle}>
                     <i className="fas fa-folder" style={{ width: 16, color: '#f58220' }} /> Φάκελος πελάτη
@@ -1606,10 +1615,19 @@ export default function CalculatorShell() {
                       const sep = jobFolderPath.includes('\\') ? '\\' : '/';
                       const baseName = (pdf?.fileName || 'imposed').replace(/\.pdf$/i, '');
                       const savePath = `${jobFolderPath}${sep}${baseName}_imposition.pdf`;
-                      const res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
-                        method: 'POST', body: new Blob([bytes as BlobPart]),
-                      });
-                      if (!res.ok) alert('Αποτυχία αποθήκευσης');
+                      let res: Response;
+                      try {
+                        res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
+                          method: 'POST', body: new Blob([bytes as BlobPart]),
+                        });
+                      } catch {
+                        alert('Δεν βρέθηκε το PressKit στη θύρα 17824. Βεβαιώσου ότι το PressKit τρέχει.');
+                        return;
+                      }
+                      if (!res.ok) {
+                        const detail = await res.text().catch(() => '');
+                        alert(`Αποτυχία αποθήκευσης (${res.status}) στο\n${savePath}\n\n${detail}`);
+                      }
                     } catch (e) { alert('PDF export error: ' + (e as Error).message); }
                   }} style={pdfMenuItemStyle}>
                     <i className="fas fa-briefcase" style={{ width: 16, color: 'var(--teal)' }} /> Φάκελος προσφοράς
