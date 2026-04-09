@@ -31,7 +31,6 @@ interface ImpositionCanvasProps {
   showPlateSlug?: boolean;
   plateSlugEdge?: 'tail' | 'gripper';
   pdf?: ParsedPDF | null;
-  onDrop?: (files: FileList) => void;
   feedEdge?: 'sef' | 'lef';
   activeSigSheet?: number;   // signature navigator: which sheet to display
   sigShowBack?: boolean;     // signature navigator: show back side
@@ -688,7 +687,7 @@ export default function ImpositionCanvas({
   impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
   bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
   showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
-  pdf, onDrop, feedEdge, activeSigSheet, sigShowBack, csNumbering,
+  pdf, feedEdge, activeSigSheet, sigShowBack, csNumbering,
   gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate, onSmBlockMove,
   onGridResize, onRotate, onOffsetChange, contentScale,
   onGutterChange, onBleedChange,
@@ -1506,57 +1505,6 @@ export default function ImpositionCanvas({
   const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; gridDragRef.current = null; setSnapGuide({ x: false, y: false }); }, []);
   const onDoubleClick = useCallback(() => { setZoom(1); panRef.current = { x: 0, y: 0 }; }, []);
 
-  // ─── DROP ───
-  const [dragOver, setDragOver] = useState(false);
-  const dragCountRef = useRef(0);
-  const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); }, []);
-  const onDragEnter = useCallback((e: React.DragEvent) => { e.preventDefault(); dragCountRef.current++; setDragOver(true); }, []);
-  const onDragLeave = useCallback((e: React.DragEvent) => { dragCountRef.current--; if (dragCountRef.current <= 0) { dragCountRef.current = 0; setDragOver(false); } }, []);
-  const onDropHandler = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation(); dragCountRef.current = 0; setDragOver(false);
-    if (!onDrop) return;
-    const files = e.dataTransfer.files;
-    const items = e.dataTransfer.items;
-    console.log('[DROP]', { filesCount: files.length, itemsCount: items.length, types: Array.from(e.dataTransfer.types), itemDetails: Array.from(items).map(i => ({ kind: i.kind, type: i.type })) });
-    // 1. Standard file drop
-    if (files.length > 0) { onDrop(files); return; }
-    // 2. Extract from items
-    if (items.length > 0) {
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.kind === 'file') {
-          const file = item.getAsFile();
-          console.log('[DROP] item.getAsFile():', file?.name, file?.size);
-          if (file) {
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            onDrop(dt.files);
-            return;
-          }
-        }
-        // 3. String item — might be a file path
-        if (item.kind === 'string') {
-          item.getAsString(str => {
-            console.log('[DROP] string item:', str);
-            if (str && str.toLowerCase().includes('.pdf')) {
-              const filePath = str.replace(/^file:\/\/\/?/, '');
-              const url = `http://localhost:17824/?path=${encodeURIComponent(filePath)}`;
-              fetch(url).then(res => res.ok ? res.blob() : null).then(blob => {
-                if (!blob) return;
-                const fileName = filePath.split(/[/\\]/).pop() || 'file.pdf';
-                const f = new File([blob], fileName, { type: 'application/pdf' });
-                const dt = new DataTransfer();
-                dt.items.add(f);
-                onDrop(dt.files);
-              }).catch(err => console.error('[DROP] fetch error:', err));
-            }
-          });
-          return;
-        }
-      }
-    }
-  }, [onDrop]);
-
   // ─── PILL STYLE ───
   const pillStyle = (active: boolean): React.CSSProperties => ({
     padding: '3px 10px', borderRadius: 6, border: 'none', fontSize: '0.62rem', fontWeight: 700,
@@ -1571,12 +1519,11 @@ export default function ImpositionCanvas({
       style={{
         position: 'relative', width: '100%', height: '100%', overflow: 'hidden',
         borderRadius: 10, cursor: zoom > 1.02 ? 'grab' : 'default',
-        border: dragOver ? '2px dashed var(--accent)' : '2px solid rgba(255,255,255,0.06)',
+        border: '2px solid rgba(255,255,255,0.06)',
         background: 'rgba(0,0,0,0.25)',
       }}
       onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp} onDoubleClick={onDoubleClick}
-      onDragOver={onDragOver} onDragEnter={onDragEnter} onDragLeave={onDragLeave} onDrop={onDropHandler}
     >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', transformOrigin: '0 0' }} />
 
@@ -1656,17 +1603,6 @@ export default function ImpositionCanvas({
         </div>
       )}
 
-      {/* Drop overlay */}
-      {dragOver && (
-        <div style={{
-          position: 'absolute', inset: 0, background: 'rgba(245,130,32,0.08)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-        }}>
-          <div style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <i className="fas fa-file-pdf" style={{ fontSize: '1.2rem' }} /> Drop PDF
-          </div>
-        </div>
-      )}
     </div>
   );
 }

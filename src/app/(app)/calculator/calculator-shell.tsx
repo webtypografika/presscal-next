@@ -583,7 +583,6 @@ export default function CalculatorShell() {
   // PDF
   const [pdf, setPdf] = useState<ParsedPDF | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const [calcResult, setCalcResult] = useState<CalculatorResult | null>(null);
   const [calcDebug, setCalcDebug] = useState<Record<string, unknown> | null>(null);
@@ -604,7 +603,12 @@ export default function CalculatorShell() {
     setActivePanel(key);
   }, []);
 
-  // ─── PDF UPLOAD ───
+  // ─── PARSE PDF (internal — used by the auto-load flow only) ───
+  // Drag-drop and manual PDF upload have been removed from the calc. This
+  // helper is still used by the "auto-load linked PDF" effect: when the calc
+  // opens with a linkedFile, we fetch the bytes and parse them for preview +
+  // auto-fill job dimensions. No DB writes happen here — the linkedFile is
+  // owned by the item and only mutated via the "🔗 Σύνδεση αρχείου" menu.
   const handlePdfFiles = useCallback(async (files: FileList) => {
     const pdfFiles = Array.from(files).filter(f => f.type === 'application/pdf');
     if (pdfFiles.length === 0) return;
@@ -612,7 +616,6 @@ export default function CalculatorShell() {
     try {
       const parsed = await parsePDF(pdfFiles[0]);
       setPdf(parsed);
-      // Auto-set job dimensions from PDF trim size
       if (parsed.pageSizes.length > 0) {
         const pg = parsed.pageSizes[0];
         setJob(prev => ({
@@ -620,17 +623,13 @@ export default function CalculatorShell() {
           width: Math.round(pg.trimW * 10) / 10,
           height: Math.round(pg.trimH * 10) / 10,
           bleed: pg.bleedDetected > 0 ? pg.bleedDetected : prev.bleed,
-          // 1-page PDF → default to single side (user can override to duplex)
           ...(parsed.pageCount === 1 ? { sides: 1 as const } : {}),
-          // Cut&Stack: qty = PDF page count
           ...(impoMode === 'cutstack' && parsed.pageCount > 1 ? { qty: parsed.pageCount } : {}),
         }));
       }
-      // Auto-set coverage from PDF analysis
       if (parsed.coverage) {
         setColor(prev => ({ ...prev, coverage: 'pdf' as const }));
       }
-      // Step Multi: update first block's trim + PDF from global upload
       if (impoMode === 'stepmulti' && parsed.pageSizes.length > 0) {
         const pg = parsed.pageSizes[0];
         setSmBlocks(prev => prev.map((b, i) => i === 0 ? {
@@ -641,45 +640,12 @@ export default function CalculatorShell() {
         } : b));
         setSmBlockPdfs(prev => { const next = [...prev]; next[0] = parsed; return next; });
       }
-      // If linked to a quote, update the item's linkedFile with PDF info.
-      // Merge with existing linkedFile so we DON'T wipe a previously-stored
-      // path that came from PressKit's file picker.
-      if (quoteLink?.quoteId && quoteLink?.itemId) {
-        try {
-          const pg = parsed.pageSizes[0];
-          const fileInfo: Record<string, unknown> = {
-            name: pdfFiles[0].name,
-            pages: parsed.pageCount,
-            width: pg ? Math.round(pg.trimW * 10) / 10 : undefined,
-            height: pg ? Math.round(pg.trimH * 10) / 10 : undefined,
-            bleed: pg?.bleedDetected > 0 ? pg.bleedDetected : undefined,
-            colors: parsed.pageCount >= 2 ? `${parsed.pageCount}σελ` : undefined,
-          };
-          const { updateQuote } = await import('../quotes/actions');
-          const res = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
-          if (res.ok) {
-            const data = await res.json();
-            const qItems = (data.items as any[]) || [];
-            const idx = qItems.findIndex((i: any) => i.id === quoteLink.itemId);
-            if (idx >= 0) {
-              const existing = (qItems[idx].linkedFile as Record<string, unknown>) || {};
-              // Only keep existing.path if the new upload matches the same filename
-              const keepPath = existing.path && existing.name === pdfFiles[0].name;
-              qItems[idx] = {
-                ...qItems[idx],
-                linkedFile: { ...existing, ...fileInfo, ...(keepPath ? { path: existing.path } : {}) },
-              };
-              await updateQuote(quoteLink.quoteId, { items: qItems });
-            }
-          }
-        } catch (e) { console.error('Link file to quote error:', e); }
-      }
     } catch (err) {
       console.error('PDF parse error:', err);
     } finally {
       setPdfLoading(false);
     }
-  }, [quoteLink]);
+  }, [impoMode]);
 
   // ─── FETCH DATA FROM DB ───
   useEffect(() => {
@@ -3227,7 +3193,6 @@ export default function CalculatorShell() {
                 showPlateSlug={impoPlateSlug}
                 plateSlugEdge={impoPlateSlugEdge}
                 pdf={pdf}
-                onDrop={handlePdfFiles}
                 feedEdge={machine?.cat === 'offset' ? undefined : feedEdge}
                 activeSigSheet={(pdf || impo.signatureMap) ? activeSigSheet : undefined}
                 sigShowBack={job.sides === 2 ? sigShowBack : undefined}
@@ -3267,44 +3232,23 @@ export default function CalculatorShell() {
                 onGutterChange={v => setImpoGutter(v)}
                 onBleedChange={v => setImpoBleedOverride(v)}
               />
-              {/* PDF upload overlay (top-left) */}
-              <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>
-                <button onClick={() => pdfInputRef.current?.click()} style={{
-                  display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px',
-                  borderRadius: 5, border: `1px solid ${pdf ? 'color-mix(in srgb, var(--success) 30%, transparent)' : 'rgba(255,255,255,0.1)'}`,
-                  background: pdf ? 'rgba(16,185,129,0.12)' : 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
-                  color: pdf ? 'var(--success)' : '#64748b',
-                  fontSize: '0.62rem', fontWeight: 600, cursor: 'pointer',
-                }}>
-                  <i className={pdfLoading ? 'fas fa-spinner fa-spin' : 'fas fa-file-pdf'} style={{ fontSize: '0.58rem' }} />
-                  {pdf ? pdf.fileName.slice(0, 20) : 'PDF'}
-                </button>
-                {/* Folder pick via PressKit file server */}
-                {linkedFile && (
-                  <FolderPdfPicker folder={linkedFile.path.replace(/[/\\][^/\\]+$/, '')} excludeFile={linkedFile.name} onSelect={async (filePath, fileName) => {
-                    try {
-                      setPdfLoading(true);
-                      const res = await fetch(`http://localhost:17824/?path=${encodeURIComponent(filePath)}`);
-                      if (!res.ok) return;
-                      const blob = await res.blob();
-                      const file = new File([blob], fileName, { type: 'application/pdf' });
-                      const dt = new DataTransfer();
-                      dt.items.add(file);
-                      await handlePdfFiles(dt.files);
-                    } catch {} finally { setPdfLoading(false); }
-                  }} />
-                )}
-                {pdf && (
-                  <>
-                    <span style={{ fontSize: '0.58rem', color: '#94a3b8', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', padding: '2px 5px', borderRadius: 4 }}>
-                      {pdf.pageCount}pg · {pdf.pageSizes[0]?.trimW}×{pdf.pageSizes[0]?.trimH}
-                    </span>
-                    <button onClick={() => setPdf(null)} style={{ border: 'none', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', color: '#64748b', cursor: 'pointer', fontSize: '0.55rem', padding: '2px 5px', borderRadius: 4 }}>
-                      <i className="fas fa-times" />
-                    </button>
-                  </>
-                )}
-              </div>
+              {/* PDF info chip (top-left) — shown when a linked PDF is loaded */}
+              {pdf && (
+                <div style={{ position: 'absolute', top: 6, left: 6, display: 'flex', gap: 4, alignItems: 'center', zIndex: 2 }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px',
+                    borderRadius: 5, border: '1px solid color-mix(in srgb, var(--success) 30%, transparent)',
+                    background: 'rgba(16,185,129,0.12)', backdropFilter: 'blur(8px)',
+                    color: 'var(--success)', fontSize: '0.62rem', fontWeight: 600,
+                  }}>
+                    <i className={pdfLoading ? 'fas fa-spinner fa-spin' : 'fas fa-file-pdf'} style={{ fontSize: '0.58rem' }} />
+                    {pdf.fileName.slice(0, 20)}
+                  </div>
+                  <span style={{ fontSize: '0.58rem', color: '#94a3b8', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', padding: '2px 5px', borderRadius: 4 }}>
+                    {pdf.pageCount}pg · {pdf.pageSizes[0]?.trimW}×{pdf.pageSizes[0]?.trimH}
+                  </span>
+                </div>
+              )}
               {/* G/B toolbar (top-right) */}
               <div style={{
                 position: 'absolute', top: 6, right: 6, display: 'flex', gap: 3, alignItems: 'center', zIndex: 2,
@@ -3353,9 +3297,6 @@ export default function CalculatorShell() {
                 {calculating && <ImpoChip><i className="fas fa-spinner fa-spin" /></ImpoChip>}
               </div>
             </div>
-            <input ref={pdfInputRef} type="file" accept=".pdf" style={{ display: 'none' }}
-              onChange={e => { if (e.target.files?.length) handlePdfFiles(e.target.files); e.target.value = ''; }}
-            />
           </div>
 
           {/* DEV PANELS removed — now in fixed right sidebar */}
@@ -3581,71 +3522,6 @@ function CostLine({ label, val }: { label: string; val: string }) {
 }
 
 // ─── BACK PDF PICKER (folder files via PressKit localhost:17824) ───
-// ─── FOLDER PDF PICKER (for canvas PDF import from customer folder) ───
-function FolderPdfPicker({ folder, excludeFile, onSelect }: {
-  folder: string;
-  excludeFile?: string;
-  onSelect: (filePath: string, fileName: string) => void;
-}) {
-  const [files, setFiles] = useState<string[]>([]);
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const loadFiles = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`http://localhost:17824/?list=${encodeURIComponent(folder)}`);
-      if (res.ok) {
-        const all: string[] = await res.json();
-        setFiles(all.filter(f => f.toLowerCase().endsWith('.pdf') && f !== excludeFile));
-      }
-    } catch {}
-    setLoading(false);
-    setOpen(true);
-  }, [folder, excludeFile]);
-
-  const sep = folder.includes('\\') ? '\\' : '/';
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <button onClick={loadFiles} title="PDF από φάκελο πελάτη" style={{
-        display: 'flex', alignItems: 'center', gap: 3, padding: '3px 7px',
-        borderRadius: 5, border: '1px solid rgba(245,130,32,0.25)',
-        background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
-        color: '#f58220', fontSize: '0.58rem', fontWeight: 600, cursor: 'pointer',
-      }}>
-        <i className={loading ? 'fas fa-spinner fa-spin' : 'fas fa-folder-open'} style={{ fontSize: '0.5rem' }} />
-      </button>
-      {open && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 98 }} onClick={() => setOpen(false)} />
-          <div style={{
-            position: 'absolute', top: '100%', left: 0, zIndex: 99, marginTop: 4,
-            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
-            minWidth: 200, maxHeight: 250, overflowY: 'auto', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-          }}>
-            {files.length === 0 ? (
-              <div style={{ padding: '10px 12px', fontSize: '0.65rem', color: '#64748b' }}>Δεν βρέθηκαν PDF</div>
-            ) : files.map(f => (
-              <button key={f} onClick={() => { onSelect(`${folder}${sep}${f}`, f); setOpen(false); }} style={{
-                display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px',
-                border: 'none', background: 'transparent', color: 'var(--text-dim)',
-                fontSize: '0.65rem', cursor: 'pointer', fontFamily: 'inherit',
-              }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.1)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-              >
-                <i className="fas fa-file-pdf" style={{ marginRight: 6, color: '#f58220', fontSize: '0.55rem' }} />
-                {f}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 function BackPdfPicker({ linkedFile, csBackPdf, setCsBackPdf }: {
   linkedFile: { path: string; name: string } | null;
   csBackPdf: { bytes: Uint8Array; name: string } | null;
