@@ -1194,87 +1194,96 @@ export default function CalculatorShell() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)', marginTop: -8 }}>
 
-      {/* ═══ QUOTE LINK BANNER ═══ */}
+      {/* ═══ QUOTE LINK + LINKED FILE BANNER (single row, split left/right) ═══ */}
       {quoteLink && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px',
-          background: 'color-mix(in srgb, var(--blue) 8%, transparent)',
-          borderBottom: '1px solid color-mix(in srgb, var(--blue) 20%, transparent)',
+          display: 'flex', alignItems: 'center', gap: 16, padding: '6px 14px',
+          background: 'rgba(255,255,255,0.02)',
+          borderBottom: '1px solid var(--border)',
           fontSize: '0.78rem', flexShrink: 0,
         }}>
-          <i className="fas fa-link" style={{ color: 'var(--blue)', fontSize: '0.65rem' }} />
-          <span style={{ color: 'var(--text-muted)' }}>Κοστολόγηση για:</span>
-          {quoteLink.quoteNumber && (
-            <span style={{
-              fontWeight: 800, color: 'var(--blue)', fontSize: '0.8rem',
-              padding: '2px 8px', borderRadius: 5,
-              background: 'color-mix(in srgb, var(--blue) 15%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--blue) 30%, transparent)',
-            }}>{quoteLink.quoteNumber}</span>
-          )}
-          {quoteLink.desc && <span style={{ fontWeight: 600, color: 'var(--text)' }}>{quoteLink.desc}</span>}
-          <div style={{ flex: 1 }} />
-          <a href={`/quotes/${quoteLink.quoteId}`}
-            title="Έξοδος στην προσφορά χωρίς αποθήκευση αλλαγών στον calculator"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
-              borderRadius: 6, border: '1px solid color-mix(in srgb, var(--blue) 25%, transparent)',
-              background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
-              color: 'var(--blue)', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
-            }}>
-            <i className="fas fa-arrow-left" style={{ fontSize: '0.55rem' }} /> Πίσω (χωρίς αποθήκευση)
-          </a>
-          <button
-            onClick={() => { setQuoteLink(null); router.replace('/calculator'); }}
-            title="Αποσύνδεση από προσφορά"
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 22, height: 22, borderRadius: 5, fontSize: '0.65rem',
-              border: '1px solid var(--border)', background: 'transparent',
-              color: 'var(--text-muted)', cursor: 'pointer',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.borderColor = 'var(--danger)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
-          >
-            <i className="fas fa-times" />
-          </button>
-        </div>
-      )}
-
-      {/* ═══ LINKED FILE BANNER (always shown when linked to a quote) ═══ */}
-      {quoteLink && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px',
-          background: linkedFile ? 'rgba(245,130,32,0.06)' : 'rgba(255,255,255,0.02)',
-          borderBottom: linkedFile ? '1px solid rgba(245,130,32,0.15)' : '1px solid var(--border)',
-          fontSize: '0.78rem', flexShrink: 0,
-        }}>
-          <i className="fas fa-paperclip" style={{ color: linkedFile ? '#f58220' : 'var(--text-muted)', fontSize: '0.65rem' }} />
-          <span style={{ color: 'var(--text-muted)' }}>Αρχείο:</span>
-          {linkedFile ? (
-            <span style={{ fontWeight: 600, color: '#f58220' }}>{linkedFile.name}</span>
-          ) : (
-            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Κανένα</span>
-          )}
-          <div style={{ flex: 1 }} />
-          {linkedFile && (
-            <a
-              href={`presscal-fh://open-folder?path=${encodeURIComponent(linkedFile.path.replace(/[/\\][^/\\]+$/, ''))}${quoteLink?.quoteId ? `&quoteId=${quoteLink.quoteId}` : ''}`}
+          {/* ── LEFT: Quote link (blue) ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+            <i className="fas fa-link" style={{ color: 'var(--blue)', fontSize: '0.65rem' }} />
+            <span style={{ color: 'var(--text-muted)' }}>Κοστολόγηση για:</span>
+            {quoteLink.quoteNumber && (
+              <span style={{
+                fontWeight: 800, color: 'var(--blue)', fontSize: '0.8rem',
+                padding: '2px 8px', borderRadius: 5,
+                background: 'color-mix(in srgb, var(--blue) 15%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--blue) 30%, transparent)',
+                flexShrink: 0,
+              }}>{quoteLink.quoteNumber}</span>
+            )}
+            {quoteLink.desc && (
+              <span style={{
+                fontWeight: 600, color: 'var(--text)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{quoteLink.desc}</span>
+            )}
+            <a href={`/quotes/${quoteLink.quoteId}`}
+              title="Έξοδος στην προσφορά χωρίς αποθήκευση αλλαγών στον calculator"
               style={{
                 display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
-                borderRadius: 6, border: '1px solid rgba(245,130,32,0.3)',
-                background: 'rgba(245,130,32,0.1)',
-                color: '#f58220', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
-              }}
-            >
-              <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} /> Άνοιγμα φακέλου
+                borderRadius: 6, border: '1px solid color-mix(in srgb, var(--blue) 25%, transparent)',
+                background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
+                color: 'var(--blue)', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
+                flexShrink: 0,
+              }}>
+              <i className="fas fa-arrow-left" style={{ fontSize: '0.55rem' }} /> Πίσω
             </a>
-          )}
-          <CalcLinkFileMenu
-            quoteId={quoteLink.quoteId}
-            itemId={quoteLink.itemId}
-            hasLinkedFile={!!linkedFile}
-          />
+            <button
+              onClick={() => { setQuoteLink(null); router.replace('/calculator'); }}
+              title="Αποσύνδεση από προσφορά"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 22, height: 22, borderRadius: 5, fontSize: '0.65rem',
+                border: '1px solid var(--border)', background: 'transparent',
+                color: 'var(--text-muted)', cursor: 'pointer', flexShrink: 0,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.borderColor = 'var(--danger)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+            >
+              <i className="fas fa-times" />
+            </button>
+          </div>
+
+          {/* ── Divider ── */}
+          <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--border)' }} />
+
+          {/* ── RIGHT: Linked file (orange) ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+            <i className="fas fa-paperclip" style={{ color: linkedFile ? '#f58220' : 'var(--text-muted)', fontSize: '0.65rem' }} />
+            <span style={{ color: 'var(--text-muted)' }}>Αρχείο:</span>
+            {linkedFile ? (
+              <span style={{
+                fontWeight: 600, color: '#f58220',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}>{linkedFile.name}</span>
+            ) : (
+              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Κανένα</span>
+            )}
+            {linkedFile && (
+              <a
+                href={`presscal-fh://open-folder?path=${encodeURIComponent(linkedFile.path.replace(/[/\\][^/\\]+$/, ''))}${quoteLink?.quoteId ? `&quoteId=${quoteLink.quoteId}` : ''}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+                  borderRadius: 6, border: '1px solid rgba(245,130,32,0.3)',
+                  background: 'rgba(245,130,32,0.1)',
+                  color: '#f58220', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
+                  flexShrink: 0,
+                }}
+              >
+                <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} /> Άνοιγμα
+              </a>
+            )}
+            <CalcLinkFileMenu
+              quoteId={quoteLink.quoteId}
+              itemId={quoteLink.itemId}
+              hasLinkedFile={!!linkedFile}
+            />
+          </div>
         </div>
       )}
 
@@ -3287,14 +3296,6 @@ export default function CalculatorShell() {
                     }}
                   />
                 </div>
-              </div>
-              {/* Info chips overlay (bottom-right) */}
-              <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4, pointerEvents: 'none', zIndex: 2 }}>
-                {machine?.cat !== 'offset' && <ImpoChip><i className={feedEdge === 'sef' ? 'fas fa-arrows-alt-v' : 'fas fa-arrows-alt-h'} style={{ fontSize: '0.5rem' }} /> {feedEdge === 'sef' ? 'SEF' : 'LEF'}</ImpoChip>}
-                <ImpoChip><strong>{ups}</strong>-up</ImpoChip>
-                <ImpoChip><strong>{sheets}</strong> φύλ</ImpoChip>
-                <ImpoChip><i className="fas fa-clock" /><strong>~{timeMin >= 60 ? `${(timeMin / 60).toFixed(1)}h` : `${timeMin}'`}</strong></ImpoChip>
-                {calculating && <ImpoChip><i className="fas fa-spinner fa-spin" /></ImpoChip>}
               </div>
             </div>
           </div>
