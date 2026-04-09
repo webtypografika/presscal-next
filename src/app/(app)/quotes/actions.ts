@@ -444,15 +444,15 @@ export async function updateFileLinkThumbnail(id: string, thumbnail: string) {
 
 // ─── GET LINKED EMAIL MAP ───
 
-export async function getLinkedEmailMap(): Promise<Record<string, string>> {
+export async function getLinkedEmailMap(): Promise<Record<string, { number: string; id: string }>> {
   const quotes = await prisma.quote.findMany({
     where: { orgId: ORG_ID, deletedAt: null, linkedEmails: { isEmpty: false } },
-    select: { number: true, linkedEmails: true },
+    select: { id: true, number: true, linkedEmails: true },
   });
-  const map: Record<string, string> = {};
+  const map: Record<string, { number: string; id: string }> = {};
   for (const q of quotes) {
     for (const emailId of (q.linkedEmails || [])) {
-      map[emailId] = q.number;
+      map[emailId] = { number: q.number, id: q.id };
     }
   }
   return map;

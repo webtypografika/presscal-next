@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { GmailMessageMeta, GmailFullMessage, GmailLabel } from '@/lib/gmail';
 import { parseAddress, getInitials, avatarColor, timeAgo, formatDate, formatSize, attIconClass } from '@/lib/email-utils';
-import { createQuote, updateQuote, linkEmailToQuote, saveEmailAttachments, getLinkedEmailMap } from '../quotes/actions';
+import { createQuote, updateQuote, linkEmailToQuote, unlinkEmailFromQuote, saveEmailAttachments, getLinkedEmailMap } from '../quotes/actions';
 
 // ─── TYPES ───
 type Folder = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all';
@@ -35,12 +35,13 @@ export default function EmailClient() {
   const [nextPage, setNextPage] = useState<string | undefined>();
   const [creatingQuote, setCreatingQuote] = useState(false);
   const [matchedCustomer, setMatchedCustomer] = useState<any>(null);
-  const [linkedEmailMap, setLinkedEmailMap] = useState<Record<string, string>>({}); // emailId → quoteNumber
+  const [linkedEmailMap, setLinkedEmailMap] = useState<Record<string, { number: string; id: string }>>({}); // emailId → { number, id }
   const [showLinkPicker, setShowLinkPicker] = useState(false);
   const [linkSearch, setLinkSearch] = useState('');
   const [linkQuotes, setLinkQuotes] = useState<any[]>([]);
   const [linkLoading, setLinkLoading] = useState(false);
   const [customerLoading, setCustomerLoading] = useState(false);
+  const linkBtnRef = useRef<HTMLDivElement>(null);
 
   // ─── FETCH MESSAGES ───
   const fetchMessages = useCallback(async (f: Folder, q?: string, label?: string | null) => {
@@ -94,6 +95,17 @@ export default function EmailClient() {
   // ─── INITIAL LOAD ───
   useEffect(() => { fetchMessages(folder); }, [folder, fetchMessages]);
   useEffect(() => { getLinkedEmailMap().then(setLinkedEmailMap).catch(() => {}); }, []);
+
+  // Close link picker on outside click
+  useEffect(() => {
+    if (!showLinkPicker) return;
+    const handle = (e: MouseEvent) => {
+      if (linkBtnRef.current?.contains(e.target as Node)) return;
+      setShowLinkPicker(false);
+    };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [showLinkPicker]);
 
   // ─── SELECT EMAIL ───
   function handleSelect(id: string) {
@@ -420,7 +432,7 @@ export default function EmailClient() {
                     <p style={{ fontSize: '0.78rem', fontWeight: isUnread ? 700 : 500, color: isUnread ? 'var(--text)' : 'var(--text-muted)', margin: '2px 0', display: 'flex', alignItems: 'center', gap: 5 }}>
                       {linkedEmailMap[email.id] && (
                         <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
-                          {linkedEmailMap[email.id]}
+                          {linkedEmailMap[email.id].number}
                         </span>
                       )}
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.subject || '(χωρις θεμα)'}</span>
@@ -506,84 +518,128 @@ export default function EmailClient() {
                     {creatingQuote ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-file-invoice" />}
                     Προσφορά
                   </button>
-                  {/* Link to existing quote */}
-                  <div style={{ position: 'relative' }}>
-                    <button
-                      onClick={async () => {
-                        setShowLinkPicker(p => !p);
-                        if (!showLinkPicker) {
-                          setLinkLoading(true);
-                          try {
-                            const { getQuotes } = await import('../quotes/actions');
-                            const qs = await getQuotes();
-                            setLinkQuotes(qs.filter(q => q.status !== 'cancelled').slice(0, 50));
-                          } catch {} finally { setLinkLoading(false); }
-                        }
-                      }}
-                      title="Σύνδεση σε υπάρχουσα προσφορά"
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 4,
-                        padding: '5px 8px', borderRadius: 6, fontSize: '0.68rem', fontWeight: 600,
-                        border: '1px solid var(--border)', background: 'transparent',
-                        color: linkedEmailMap[detail?.id] ? '#14b8a6' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <i className="fas fa-link" />
-                      {linkedEmailMap[detail?.id] ? linkedEmailMap[detail.id] : 'Σύνδεση'}
-                    </button>
-                    {showLinkPicker && (
-                      <div style={{
-                        position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 999,
-                        background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                        borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                        width: 260, maxHeight: 300, overflow: 'hidden',
-                      }}>
-                        <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
-                          <input
-                            autoFocus
-                            value={linkSearch}
-                            onChange={e => setLinkSearch(e.target.value)}
-                            placeholder="Αναζήτηση προσφοράς..."
-                            style={{ width: '100%', border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.75rem', outline: 'none', fontFamily: 'inherit' }}
-                          />
-                        </div>
-                        <div style={{ overflowY: 'auto', maxHeight: 240 }}>
-                          {linkLoading ? (
-                            <div style={{ padding: 12, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}><i className="fas fa-spinner fa-spin" /></div>
-                          ) : linkQuotes
-                            .filter(q => !linkSearch || q.number?.toLowerCase().includes(linkSearch.toLowerCase()) || q.title?.toLowerCase().includes(linkSearch.toLowerCase()) || q.company?.name?.toLowerCase().includes(linkSearch.toLowerCase()))
-                            .map(q => (
-                            <button
-                              key={q.id}
-                              onClick={async () => {
-                                if (!detail) return;
-                                await linkEmailToQuote(q.id, detail.id, detail.threadId);
-                                // Auto-save attachments to quote job folder
-                                saveEmailAttachments(q.id, [detail.id]).catch(() => {});
-                                setLinkedEmailMap(prev => ({ ...prev, [detail.id]: q.number }));
-                                setShowLinkPicker(false);
-                                setLinkSearch('');
-                              }}
-                              style={{
-                                display: 'block', width: '100%', padding: '8px 10px', border: 'none',
-                                background: 'transparent', color: 'var(--text)', fontSize: '0.72rem',
-                                cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                                borderBottom: '1px solid rgba(255,255,255,0.04)',
-                              }}
-                              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                            >
-                              <div style={{ fontWeight: 700, color: 'var(--accent)' }}>{q.number}</div>
-                              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                                {q.title || q.company?.name || '—'} · {q.grandTotal?.toFixed(2)}€
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  {/* Link to existing quote / quick access */}
+                  {linkedEmailMap[detail?.id] ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                      <button
+                        onClick={() => router.push(`/quotes/${linkedEmailMap[detail.id].id}`)}
+                        title="Άνοιγμα προσφοράς"
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '5px 10px', borderRadius: '6px 0 0 6px', fontSize: '0.68rem', fontWeight: 700,
+                          border: '1px solid color-mix(in srgb, #14b8a6 30%, transparent)',
+                          borderRight: 'none',
+                          background: 'color-mix(in srgb, #14b8a6 10%, transparent)',
+                          color: '#14b8a6', cursor: 'pointer',
+                        }}
+                      >
+                        <i className="fas fa-file-invoice" style={{ fontSize: '0.6rem' }} />
+                        {linkedEmailMap[detail.id].number}
+                        <i className="fas fa-external-link-alt" style={{ fontSize: '0.5rem', opacity: 0.6 }} />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const linked = linkedEmailMap[detail.id];
+                          await unlinkEmailFromQuote(linked.id, detail.id);
+                          setLinkedEmailMap(prev => { const next = { ...prev }; delete next[detail.id]; return next; });
+                        }}
+                        title="Αποσύνδεση από προσφορά"
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          width: 26, height: 28, borderRadius: '0 6px 6px 0', fontSize: '0.6rem',
+                          border: '1px solid color-mix(in srgb, #14b8a6 30%, transparent)',
+                          background: 'color-mix(in srgb, #14b8a6 10%, transparent)',
+                          color: '#14b8a6', cursor: 'pointer', opacity: 0.7,
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = '#14b8a6'; }}
+                      >
+                        <i className="fas fa-unlink" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ position: 'relative' }} ref={linkBtnRef}>
+                      <button
+                        onClick={async () => {
+                          setShowLinkPicker(p => !p);
+                          if (!showLinkPicker) {
+                            setLinkLoading(true);
+                            try {
+                              const { getQuotes } = await import('../quotes/actions');
+                              const qs = await getQuotes();
+                              setLinkQuotes(qs.filter(q => q.status !== 'cancelled').slice(0, 50));
+                            } catch {} finally { setLinkLoading(false); }
+                          }
+                        }}
+                        title="Σύνδεση σε υπάρχουσα προσφορά"
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          padding: '5px 8px', borderRadius: 6, fontSize: '0.68rem', fontWeight: 600,
+                          border: '1px solid var(--border)', background: 'transparent',
+                          color: 'var(--text-muted)', cursor: 'pointer',
+                        }}
+                      >
+                        <i className="fas fa-link" />
+                        Σύνδεση
+                      </button>
+                      {showLinkPicker && createPortal(
+                        <div
+                          style={{
+                            position: 'fixed',
+                            top: (linkBtnRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
+                            left: linkBtnRef.current?.getBoundingClientRect().left ?? 0,
+                            zIndex: 99999,
+                            background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                            borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                            width: 280, maxHeight: 320, overflow: 'hidden',
+                          }}
+                        >
+                          <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
+                            <input
+                              autoFocus
+                              value={linkSearch}
+                              onChange={e => setLinkSearch(e.target.value)}
+                              placeholder="Αναζήτηση προσφοράς..."
+                              style={{ width: '100%', border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.75rem', outline: 'none', fontFamily: 'inherit' }}
+                            />
+                          </div>
+                          <div style={{ overflowY: 'auto', maxHeight: 260 }}>
+                            {linkLoading ? (
+                              <div style={{ padding: 12, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}><i className="fas fa-spinner fa-spin" /></div>
+                            ) : linkQuotes
+                              .filter(q => !linkSearch || q.number?.toLowerCase().includes(linkSearch.toLowerCase()) || q.title?.toLowerCase().includes(linkSearch.toLowerCase()) || q.company?.name?.toLowerCase().includes(linkSearch.toLowerCase()))
+                              .map(q => (
+                              <button
+                                key={q.id}
+                                onClick={async () => {
+                                  if (!detail) return;
+                                  await linkEmailToQuote(q.id, detail.id, detail.threadId);
+                                  saveEmailAttachments(q.id, [detail.id]).catch(() => {});
+                                  setLinkedEmailMap(prev => ({ ...prev, [detail.id]: { number: q.number, id: q.id } }));
+                                  setShowLinkPicker(false);
+                                  setLinkSearch('');
+                                }}
+                                style={{
+                                  display: 'block', width: '100%', padding: '8px 10px', border: 'none',
+                                  background: 'transparent', color: 'var(--text)', fontSize: '0.72rem',
+                                  cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                              >
+                                <div style={{ fontWeight: 700, color: 'var(--accent)' }}>{q.number}</div>
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                  {q.title || q.company?.name || '—'} · {q.grandTotal?.toFixed(2)}€
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>,
+                        document.body,
+                      )}
+                    </div>
+                  )}
                   <ActionBtn icon="fa-reply" title="Απαντηση" onClick={handleReply} />
                   <ActionBtn icon="fa-share" title="Προωθηση" onClick={handleForward} />
                 </div>
