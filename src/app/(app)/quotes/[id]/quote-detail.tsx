@@ -166,6 +166,154 @@ function emptyItem() {
   return { id: crypto.randomUUID(), name: '', type: 'manual' as const, qty: 1, unit: 'τεμ', unitPrice: 0, finalPrice: 0, cost: 0, profit: 0, notes: '', status: 'pending' };
 }
 
+/** Dropdown for linking a file to a quote item — 3 sources (customer folder / quote folder / Windows dialog) */
+function LinkFileMenu({ quoteId, itemId, hasLinkedFile, linkedFileName, customerFolder, jobFolderPath }: {
+  quoteId: string;
+  itemId: string;
+  hasLinkedFile: boolean;
+  linkedFileName?: string;
+  customerFolder?: string;
+  jobFolderPath?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (!open) { setPos(null); return; }
+    const update = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const width = 220;
+      const left = Math.min(Math.max(8, r.right - width), window.innerWidth - width - 8);
+      setPos({ top: r.bottom + 4, left });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (btnRef.current?.contains(e.target as Node)) return;
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  const openPressKit = (folder?: string) => {
+    const url = folder
+      ? `presscal-fh://pick-file-for-item?quoteId=${quoteId}&itemId=${itemId}&folder=${encodeURIComponent(folder)}`
+      : `presscal-fh://pick-file-for-item?quoteId=${quoteId}&itemId=${itemId}`;
+    window.location.href = url;
+    setOpen(false);
+  };
+
+  const openNativeDialog = (startFolder?: string) => {
+    const url = startFolder
+      ? `presscal-fh://pick-file-dialog?quoteId=${quoteId}&itemId=${itemId}&folder=${encodeURIComponent(startFolder)}`
+      : `presscal-fh://pick-file-dialog?quoteId=${quoteId}&itemId=${itemId}`;
+    window.location.href = url;
+    setOpen(false);
+  };
+
+  const handleJobFolder = async () => {
+    // Ensure the quote has a resolved jobFolderPath even if it is still a draft
+    try {
+      const { ensureJobFolder } = await import('../actions');
+      const { jobFolderPath: path } = await ensureJobFolder(quoteId);
+      if (path) openPressKit(path);
+      else alert('Δεν ορίστηκε φάκελος εργασίας. Ρύθμισε global root ή φάκελο πελάτη.');
+    } catch (e) {
+      alert('Σφάλμα: ' + (e as Error).message);
+    }
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={() => setOpen(o => !o)}
+        title={hasLinkedFile ? `📎 ${linkedFileName}` : 'Σύνδεση αρχείου'}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
+          color: hasLinkedFile ? '#f58220' : 'var(--text-muted)',
+          opacity: hasLinkedFile ? 0.8 : 0.4,
+          fontSize: '0.85rem',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = hasLinkedFile ? '0.8' : '0.4'; }}
+      >
+        <i className="fas fa-paperclip" />
+      </button>
+      {open && pos && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 99999,
+            width: 220, background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)', borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)', overflow: 'hidden',
+          }}
+        >
+          <MenuItem
+            icon="fa-user"
+            label="Φάκελος πελάτη"
+            disabled={!customerFolder}
+            disabledHint="Δεν έχει οριστεί φάκελος στην εταιρεία"
+            onClick={() => openPressKit(customerFolder!)}
+          />
+          <MenuItem
+            icon="fa-briefcase"
+            label="Φάκελος προσφοράς"
+            onClick={handleJobFolder}
+          />
+          <MenuItem
+            icon="fa-folder-open"
+            label="Περιήγηση..."
+            hint="Native Windows dialog"
+            onClick={() => openNativeDialog(customerFolder || jobFolderPath)}
+          />
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function MenuItem({ icon, label, hint, disabled, disabledHint, onClick }: {
+  icon: string; label: string; hint?: string;
+  disabled?: boolean; disabledHint?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      title={disabled ? disabledHint : hint}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+        padding: '9px 12px', border: 'none', background: 'transparent',
+        color: disabled ? 'var(--text-muted)' : 'var(--text)',
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontSize: '0.78rem', fontFamily: 'inherit', textAlign: 'left',
+      }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <i className={`fas ${icon}`} style={{ fontSize: '0.72rem', width: 14, color: '#f58220' }} />
+      <span>{label}</span>
+    </button>
+  );
+}
+
 /** Convert AI parsed product to a rich line item */
 function aiToItem(ai: any) {
   // Build descriptive name: "Πανό 250×50cm 4/0 — Λευκό βινύλιο"
@@ -806,30 +954,15 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
               onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; }}
             ><i className="fas fa-calculator" /></a>
-            {/* Link file from Helper — uses customer folder or quote job folder */}
-            {(() => {
-              const pickFolder = (selectedCustomer as any)?.folderPath || (quote as any).jobFolderPath;
-              return pickFolder ? (
-              <a
-                href={`presscal-fh://pick-file-for-item?quoteId=${quote.id}&itemId=${item.id}&folder=${encodeURIComponent(pickFolder)}`}
-                title={item.linkedFile ? `📎 ${item.linkedFile.name}` : 'Σύνδεση αρχείου'}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: item.linkedFile ? '#f58220' : 'var(--text-muted)',
-                  opacity: item.linkedFile ? 0.8 : 0.4,
-                  fontSize: '0.85rem', textDecoration: 'none',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
-                onMouseLeave={e => { e.currentTarget.style.opacity = item.linkedFile ? '0.8' : '0.4'; }}
-              >
-                <i className="fas fa-paperclip" />
-              </a>
-            ) : (
-              <span style={{ opacity: 0.2, fontSize: '0.85rem', color: 'var(--text-muted)' }} title="Ορίστε φάκελο πελάτη ή δημιουργήστε φάκελο εργασίας">
-                <i className="fas fa-paperclip" />
-              </span>
-            );
-            })()}
+            {/* Link file: customer folder / quote folder / native Windows dialog */}
+            <LinkFileMenu
+              quoteId={quote.id}
+              itemId={item.id as string}
+              hasLinkedFile={!!item.linkedFile}
+              linkedFileName={(item.linkedFile as any)?.name}
+              customerFolder={(selectedCustomer as any)?.folderPath}
+              jobFolderPath={(quote as any).jobFolderPath}
+            />
           </div>
         ))}
 

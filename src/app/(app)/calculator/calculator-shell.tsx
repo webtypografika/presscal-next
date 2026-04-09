@@ -641,11 +641,13 @@ export default function CalculatorShell() {
         } : b));
         setSmBlockPdfs(prev => { const next = [...prev]; next[0] = parsed; return next; });
       }
-      // If linked to a quote, update the item's linkedFile with PDF info
+      // If linked to a quote, update the item's linkedFile with PDF info.
+      // Merge with existing linkedFile so we DON'T wipe a previously-stored
+      // path that came from PressKit's file picker.
       if (quoteLink?.quoteId && quoteLink?.itemId) {
         try {
           const pg = parsed.pageSizes[0];
-          const fileInfo = {
+          const fileInfo: Record<string, unknown> = {
             name: pdfFiles[0].name,
             pages: parsed.pageCount,
             width: pg ? Math.round(pg.trimW * 10) / 10 : undefined,
@@ -660,7 +662,13 @@ export default function CalculatorShell() {
             const qItems = (data.items as any[]) || [];
             const idx = qItems.findIndex((i: any) => i.id === quoteLink.itemId);
             if (idx >= 0) {
-              qItems[idx] = { ...qItems[idx], linkedFile: fileInfo };
+              const existing = (qItems[idx].linkedFile as Record<string, unknown>) || {};
+              // Only keep existing.path if the new upload matches the same filename
+              const keepPath = existing.path && existing.name === pdfFiles[0].name;
+              qItems[idx] = {
+                ...qItems[idx],
+                linkedFile: { ...existing, ...fileInfo, ...(keepPath ? { path: existing.path } : {}) },
+              };
               await updateQuote(quoteLink.quoteId, { items: qItems });
             }
           }
