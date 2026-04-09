@@ -207,6 +207,44 @@ export async function updateQuoteStatus(id: string, status: string) {
   revalidatePath('/');
 }
 
+// ─── ENSURE JOB FOLDER (works for any status, not just approved) ───
+
+export async function ensureJobFolder(quoteId: string): Promise<{ jobFolderPath: string | null; companyFolderPath: string | null }> {
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: {
+      number: true,
+      title: true,
+      jobFolderPath: true,
+      company: { select: { name: true, folderPath: true } },
+    },
+  });
+  if (!quote) return { jobFolderPath: null, companyFolderPath: null };
+
+  const companyFolderPath = quote.company?.folderPath || null;
+
+  // Already resolved
+  if (quote.jobFolderPath) {
+    return { jobFolderPath: quote.jobFolderPath, companyFolderPath };
+  }
+
+  const org = await prisma.org.findUnique({ where: { id: ORG_ID }, select: { jobFolderRoot: true } });
+  const { buildJobFolderPath } = await import('@/lib/job-folder');
+  const jobFolderPath = buildJobFolderPath({
+    globalRoot: org?.jobFolderRoot || null,
+    companyFolderPath,
+    companyName: quote.company?.name || 'Πελάτης',
+    quoteNumber: quote.number,
+    quoteTitle: quote.title,
+  });
+
+  if (jobFolderPath) {
+    await prisma.quote.update({ where: { id: quoteId }, data: { jobFolderPath } });
+  }
+
+  return { jobFolderPath, companyFolderPath };
+}
+
 // ─── LINK EMAIL ───
 
 export async function linkEmailToQuote(quoteId: string, messageId: string, threadId: string) {
