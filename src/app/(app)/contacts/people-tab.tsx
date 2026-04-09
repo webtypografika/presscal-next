@@ -102,12 +102,18 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete }: {
         <Field label="ΚΙΝΗΤΟ" value={contact.mobile || ''} onChange={v => onUpdate(contact.id, { mobile: v })} />
       </div>
 
-      {/* Row 3: Folder (shown when no linked companies) */}
-      {contact.companyContacts.length === 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <Field label="ΦΑΚΕΛΟΣ ΠΕΛΑΤΗ" value={contact.folderPath || ''} onChange={v => onUpdate(contact.id, { folderPath: v } as any)} placeholder="Path φακέλου..." />
-        </div>
-      )}
+      {/* Row 3: Folder — always visible. For contacts linked to a company,
+           the company folder takes precedence during quote costing. */}
+      <div style={{ marginBottom: 10 }}>
+        <Field
+          label="ΦΑΚΕΛΟΣ ΠΕΛΑΤΗ"
+          value={contact.folderPath || ''}
+          onChange={v => onUpdate(contact.id, { folderPath: v } as any)}
+          placeholder={contact.companyContacts.length > 0
+            ? 'Προαιρετικό — υπερισχύει ο φάκελος της εταιρείας'
+            : 'π.χ. D:\\Πελάτες\\Παπαδόπουλος'}
+        />
+      </div>
 
       {/* Row 4: Linked companies + quote count */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
