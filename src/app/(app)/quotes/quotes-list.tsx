@@ -540,13 +540,19 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
       backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
       background: 'rgba(0,0,0,0.2)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        width: showNewCust ? 480 : 400, background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-        borderRadius: 14, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+        width: showNewCust ? 560 : 400,
+        maxHeight: 'calc(100vh - 40px)',
+        display: 'flex', flexDirection: 'column',
+        background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+        borderRadius: 14, boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
         transition: 'width 0.2s',
+        overflow: 'hidden',
       }}>
-        <h2 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: 16 }}>Νέα Προσφορά</h2>
+        <h2 style={{ fontSize: '0.95rem', fontWeight: 600, padding: '18px 22px 10px', margin: 0, flexShrink: 0 }}>Νέα Προσφορά</h2>
+        <div style={{ padding: '0 22px 18px', overflowY: 'auto', flex: 1 }}>
 
         <label style={lbl}>Πελάτης</label>
         <div ref={custRef} style={{ position: 'relative', marginBottom: 12 }}>
@@ -649,9 +655,14 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
         )}
 
         <label style={{ ...lbl, marginTop: 4 }}>Τίτλος (προαιρετικό)</label>
-        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="π.χ. Φυλλάδια A4 4χρ." style={{ ...inp, marginBottom: 20 }} />
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="π.χ. Φυλλάδια A4 4χρ." style={{ ...inp }} />
+        </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div style={{
+          display: 'flex', justifyContent: 'flex-end', gap: 8,
+          padding: '12px 22px', borderTop: '1px solid var(--border)',
+          background: 'rgba(0,0,0,0.15)', flexShrink: 0,
+        }}>
           <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.92rem', cursor: 'pointer', fontFamily: 'inherit' }}>Ακύρωση</button>
           {!showNewCust && (
             <button onClick={create} disabled={saving} style={{
