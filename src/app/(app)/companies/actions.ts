@@ -370,6 +370,7 @@ export async function createCompanyFromElorus(data: {
   address?: string;
   city?: string;
   zip?: string;
+  folderPath?: string;
   elorusContactId?: string;
 }) {
   const company = await prisma.company.create({
@@ -383,6 +384,7 @@ export async function createCompanyFromElorus(data: {
       address: data.address || null,
       city: data.city || null,
       zip: data.zip || null,
+      folderPath: data.folderPath || null,
       elorusContactId: data.elorusContactId || null,
     },
   });
@@ -398,6 +400,7 @@ export async function createCompanyQuick(data: {
   email?: string;
   phone?: string;
   afm?: string;
+  folderPath?: string;
   contactName?: string;
   contactEmail?: string;
 }) {
@@ -408,6 +411,7 @@ export async function createCompanyQuick(data: {
       email: data.email || null,
       phone: data.phone || null,
       afm: data.afm || null,
+      folderPath: data.folderPath || null,
     },
   });
 

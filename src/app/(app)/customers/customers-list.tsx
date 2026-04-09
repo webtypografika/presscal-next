@@ -513,6 +513,7 @@ export function CustomersList({ customers: initialCustomers, hasElorus }: Props)
                   address: data.address || undefined,
                   city: data.city || undefined,
                   zip: data.zip || undefined,
+                  folderPath: data.folderPath || undefined,
                 });
                 setCustomers(prev => [result as CustomerWithCount, ...prev]);
                 setShowEditor(null);

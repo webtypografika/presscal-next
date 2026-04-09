@@ -11,12 +11,13 @@ export interface CompanyFormData {
   address: string;
   city: string;
   zip: string;
+  folderPath: string;
   contactName: string;
   contactEmail: string;
   elorusContactId?: string;
 }
 
-const EMPTY: CompanyFormData = { name: '', email: '', phone: '', afm: '', doy: '', address: '', city: '', zip: '', contactName: '', contactEmail: '' };
+const EMPTY: CompanyFormData = { name: '', email: '', phone: '', afm: '', doy: '', address: '', city: '', zip: '', folderPath: '', contactName: '', contactEmail: '' };
 
 interface Props {
   hasElorus?: boolean;
@@ -210,6 +211,15 @@ export function NewCompanyForm({ hasElorus, onSave, onCancel, toast, initialData
             <label style={lbl}>ΤΚ</label>
             <input value={f.zip} onChange={e => setF({ zip: e.target.value })} placeholder="00000" style={inp} />
           </div>
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <label style={lbl}><i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.6rem' }} />Φάκελος Πελάτη</label>
+          <input
+            value={f.folderPath}
+            onChange={e => setF({ folderPath: e.target.value })}
+            placeholder="π.χ. D:\Πελάτες\Παπαδόπουλος"
+            style={{ ...inp, fontFamily: "'DM Mono', monospace", fontSize: '0.82rem' }}
+          />
         </div>
         {/* Primary contact (optional) */}
         {!hideContact && (<>

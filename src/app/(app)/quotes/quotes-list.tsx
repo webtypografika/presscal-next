@@ -515,6 +515,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
           address: data.address || undefined,
           city: data.city || undefined,
           zip: data.zip || undefined,
+          folderPath: data.folderPath || undefined,
           elorusContactId: data.elorusContactId,
         });
       } else {
@@ -523,6 +524,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
           email: data.email || undefined,
           phone: data.phone || undefined,
           afm: data.afm || undefined,
+          folderPath: data.folderPath || undefined,
           contactName: data.contactName || undefined,
           contactEmail: data.contactEmail || undefined,
         });

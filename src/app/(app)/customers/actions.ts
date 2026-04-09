@@ -42,6 +42,7 @@ export async function createCustomer(data: {
   address?: string;
   city?: string;
   zip?: string;
+  folderPath?: string;
   notes?: string;
   contacts?: unknown[];
   tags?: string[];
@@ -59,6 +60,7 @@ export async function createCustomer(data: {
       address: data.address || null,
       city: data.city || null,
       zip: data.zip || null,
+      folderPath: data.folderPath || null,
       notes: data.notes || '',
       contacts: (data.contacts ?? []) as any,
       tags: data.tags ?? [],

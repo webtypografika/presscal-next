@@ -302,6 +302,7 @@ export async function searchContacts(search?: string) {
 
 export async function createCompanyQuick(data: {
   name: string; email?: string; phone?: string; afm?: string;
+  folderPath?: string;
   contactName?: string; contactEmail?: string;
 }) {
   const mod = await import('../companies/actions');
@@ -310,7 +311,8 @@ export async function createCompanyQuick(data: {
 
 export async function createCompanyFromElorus(data: {
   name: string; afm?: string; doy?: string; email?: string; phone?: string;
-  address?: string; city?: string; zip?: string; elorusContactId?: string;
+  address?: string; city?: string; zip?: string; folderPath?: string;
+  elorusContactId?: string;
 }) {
   const mod = await import('../companies/actions');
   return mod.createCompanyFromElorus(data);
