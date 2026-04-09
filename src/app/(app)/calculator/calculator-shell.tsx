@@ -861,6 +861,28 @@ export default function CalculatorShell() {
     }
   }, [dataLoaded, searchParams, machines]);
 
+  // ─── REFRESH LINKED FILE FROM DB ON WINDOW FOCUS ───
+  // After the user picks a file in PressKit (separate app) the linkedFile is
+  // written to the DB. When they switch back to this tab, pull the fresh
+  // value so the calc can auto-load the newly linked PDF.
+  useEffect(() => {
+    if (!quoteLink?.quoteId || !quoteLink?.itemId) return;
+    const refresh = async () => {
+      try {
+        const res = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const item = (data.items as any[])?.find(i => i.id === quoteLink.itemId);
+        const lf = item?.linkedFile;
+        if (lf?.path && lf?.name && lf.path !== linkedFile?.path) {
+          setLinkedFile({ path: lf.path, name: lf.name });
+        }
+      } catch {}
+    };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [quoteLink?.quoteId, quoteLink?.itemId, linkedFile?.path]);
+
   // ─── AUTO-LOAD LINKED PDF VIA HELPER FILE SERVER OR STORAGE ───
   useEffect(() => {
     if (!linkedFile?.path || !linkedFile.name.toLowerCase().endsWith('.pdf')) return
@@ -1226,13 +1248,15 @@ export default function CalculatorShell() {
           )}
           {quoteLink.desc && <span style={{ fontWeight: 600, color: 'var(--text)' }}>{quoteLink.desc}</span>}
           <div style={{ flex: 1 }} />
-          <a href={`/quotes/${quoteLink.quoteId}`} style={{
-            display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
-            borderRadius: 6, border: '1px solid color-mix(in srgb, var(--blue) 25%, transparent)',
-            background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
-            color: 'var(--blue)', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
-          }}>
-            <i className="fas fa-arrow-left" style={{ fontSize: '0.55rem' }} /> Επιστροφή στην Προσφορά
+          <a href={`/quotes/${quoteLink.quoteId}`}
+            title="Έξοδος στην προσφορά χωρίς αποθήκευση αλλαγών στον calculator"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+              borderRadius: 6, border: '1px solid color-mix(in srgb, var(--blue) 25%, transparent)',
+              background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
+              color: 'var(--blue)', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
+            }}>
+            <i className="fas fa-arrow-left" style={{ fontSize: '0.55rem' }} /> Πίσω (χωρίς αποθήκευση)
           </a>
           <button
             onClick={() => { setQuoteLink(null); router.replace('/calculator'); }}
@@ -1251,29 +1275,40 @@ export default function CalculatorShell() {
         </div>
       )}
 
-      {/* ═══ LINKED FILE BANNER ═══ */}
-      {linkedFile && (
+      {/* ═══ LINKED FILE BANNER (always shown when linked to a quote) ═══ */}
+      {quoteLink && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px',
-          background: 'rgba(245,130,32,0.06)',
-          borderBottom: '1px solid rgba(245,130,32,0.15)',
+          background: linkedFile ? 'rgba(245,130,32,0.06)' : 'rgba(255,255,255,0.02)',
+          borderBottom: linkedFile ? '1px solid rgba(245,130,32,0.15)' : '1px solid var(--border)',
           fontSize: '0.78rem', flexShrink: 0,
         }}>
-          <i className="fas fa-paperclip" style={{ color: '#f58220', fontSize: '0.65rem' }} />
+          <i className="fas fa-paperclip" style={{ color: linkedFile ? '#f58220' : 'var(--text-muted)', fontSize: '0.65rem' }} />
           <span style={{ color: 'var(--text-muted)' }}>Αρχείο:</span>
-          <span style={{ fontWeight: 600, color: '#f58220' }}>{linkedFile.name}</span>
+          {linkedFile ? (
+            <span style={{ fontWeight: 600, color: '#f58220' }}>{linkedFile.name}</span>
+          ) : (
+            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Κανένα</span>
+          )}
           <div style={{ flex: 1 }} />
-          <a
-            href={`presscal-fh://open-folder?path=${encodeURIComponent(linkedFile.path.replace(/[/\\][^/\\]+$/, ''))}${quoteLink?.quoteId ? `&quoteId=${quoteLink.quoteId}` : ''}`}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
-              borderRadius: 6, border: '1px solid rgba(245,130,32,0.3)',
-              background: 'rgba(245,130,32,0.1)',
-              color: '#f58220', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
-            }}
-          >
-            <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} /> Άνοιγμα στο PressKit
-          </a>
+          {linkedFile && (
+            <a
+              href={`presscal-fh://open-folder?path=${encodeURIComponent(linkedFile.path.replace(/[/\\][^/\\]+$/, ''))}${quoteLink?.quoteId ? `&quoteId=${quoteLink.quoteId}` : ''}`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+                borderRadius: 6, border: '1px solid rgba(245,130,32,0.3)',
+                background: 'rgba(245,130,32,0.1)',
+                color: '#f58220', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none',
+              }}
+            >
+              <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} /> Άνοιγμα φακέλου
+            </a>
+          )}
+          <CalcLinkFileMenu
+            quoteId={quoteLink.quoteId}
+            itemId={quoteLink.itemId}
+            hasLinkedFile={!!linkedFile}
+          />
         </div>
       )}
 
@@ -1477,6 +1512,9 @@ export default function CalculatorShell() {
                 bindingMachineId: finish.bindingMachineId || undefined,
                 overrides: hasOverrides ? overrides : undefined,
               };
+              // NOTE: linkedFile is NOT set here. It is owned by the quote item
+              // in the DB (written by PressKit's pick-file flow or by the PDF
+              // drag-drop sync). The spread below at items[idx] preserves it.
               const itemPayload = {
                 id: quoteLink?.itemId || crypto.randomUUID(),
                 name: `${job.width}×${job.height} ${job.archetype}`,
@@ -1488,8 +1526,6 @@ export default function CalculatorShell() {
                 finalPrice: Math.round(totalPrice * 100) / 100,
                 profit: Math.round(profitAmount * 100) / 100,
                 calcData: calcDataPayload,
-                // Link file from PressKit (if loaded via file server)
-                ...(linkedFile ? { linkedFile: { path: linkedFile.path, name: linkedFile.name } } : {}),
               };
 
               try {
@@ -1528,6 +1564,7 @@ export default function CalculatorShell() {
                 alert('Σφάλμα αποθήκευσης: ' + (e as Error).message);
               }
             }}
+            title={quoteLink ? 'Αποθήκευση προδιαγραφών στο item της προσφοράς' : 'Δημιουργία νέας προσφοράς με αυτό το είδος'}
             style={{
               padding: '7px 14px', borderRadius: 7,
               background: 'var(--accent)', color: '#fff', border: 'none',
@@ -1536,7 +1573,7 @@ export default function CalculatorShell() {
               boxShadow: '0 2px 12px rgba(245,130,32,0.3)', transition: 'all 0.2s', flexShrink: 0,
             }}
           >
-            <i className="fas fa-cart-plus" /> Καλάθι
+            <i className="fas fa-save" /> Αποθήκευση
           </button>
           {/* PDF Export dropdown */}
           <div style={{ position: 'relative', flexShrink: 0 }} ref={pdfBtnRef}>
@@ -3775,5 +3812,169 @@ function MfStepper({ value, onChange, step = 1, min, max, style }: {
       />
       <button type="button" onClick={() => bump(1)} style={btnStyle}>+</button>
     </div>
+  );
+}
+
+// ─── LINK FILE MENU (inside calc banner) ───
+// Small dropdown that lets the user link a file to the quote item
+// from 3 sources: customer folder / quote folder / native Windows dialog.
+// After PressKit writes the linkedFile to the DB, a window-focus listener
+// in the calc re-fetches the item and auto-loads the PDF.
+function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile }: {
+  quoteId: string;
+  itemId: string;
+  hasLinkedFile: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [folders, setFolders] = useState<{ customer: string | null; job: string | null }>({ customer: null, job: null });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Load folders lazily when opening
+  useEffect(() => {
+    if (!open || folders.customer || folders.job) return;
+    fetch(`/api/quotes/${quoteId}/items`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) setFolders({ customer: d.companyFolderPath || null, job: d.jobFolderPath || null });
+      })
+      .catch(() => {});
+  }, [open, quoteId, folders]);
+
+  useEffect(() => {
+    if (!open) { setPos(null); return; }
+    const update = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const width = 240;
+      const left = Math.min(Math.max(8, r.right - width), window.innerWidth - width - 8);
+      setPos({ top: r.bottom + 4, left });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (btnRef.current?.contains(e.target as Node)) return;
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  const openPressKit = (folder?: string) => {
+    const url = folder
+      ? `presscal-fh://pick-file-for-item?quoteId=${quoteId}&itemId=${itemId}&folder=${encodeURIComponent(folder)}`
+      : `presscal-fh://pick-file-for-item?quoteId=${quoteId}&itemId=${itemId}`;
+    window.location.href = url;
+    setOpen(false);
+  };
+
+  const openNativeDialog = (startFolder?: string) => {
+    const url = startFolder
+      ? `presscal-fh://pick-file-dialog?quoteId=${quoteId}&itemId=${itemId}&folder=${encodeURIComponent(startFolder)}`
+      : `presscal-fh://pick-file-dialog?quoteId=${quoteId}&itemId=${itemId}`;
+    window.location.href = url;
+    setOpen(false);
+  };
+
+  const handleJobFolder = async () => {
+    try {
+      const { ensureJobFolder } = await import('../quotes/actions');
+      const { jobFolderPath } = await ensureJobFolder(quoteId);
+      if (jobFolderPath) openPressKit(jobFolderPath);
+      else alert('Δεν ορίστηκε φάκελος εργασίας. Ρύθμισε global root ή φάκελο πελάτη.');
+    } catch (e) {
+      alert('Σφάλμα: ' + (e as Error).message);
+    }
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+          borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+          border: '1px solid rgba(59,130,246,0.3)',
+          background: 'rgba(59,130,246,0.08)',
+          color: 'var(--blue)', cursor: 'pointer', fontFamily: 'inherit',
+        }}
+        title={hasLinkedFile ? 'Αλλαγή αρχείου' : 'Σύνδεση αρχείου στο item'}
+      >
+        <i className="fas fa-link" style={{ fontSize: '0.55rem' }} />
+        {hasLinkedFile ? 'Αλλαγή' : 'Σύνδεση αρχείου'}
+      </button>
+      {open && pos && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed', top: pos.top, left: pos.left, zIndex: 99999,
+            width: 240, background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)', borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)', overflow: 'hidden',
+          }}
+        >
+          <CalcMenuItem
+            icon="fa-user"
+            label="Φάκελος πελάτη"
+            hint={folders.customer || undefined}
+            disabled={!folders.customer}
+            disabledHint="Ορίστε folderPath στην εταιρεία"
+            onClick={() => openPressKit(folders.customer!)}
+          />
+          <CalcMenuItem
+            icon="fa-briefcase"
+            label="Φάκελος προσφοράς"
+            hint={folders.job || 'Θα δημιουργηθεί'}
+            onClick={handleJobFolder}
+          />
+          <CalcMenuItem
+            icon="fa-folder-open"
+            label="Περιήγηση..."
+            hint="Native Windows dialog"
+            onClick={() => openNativeDialog(folders.customer || folders.job || undefined)}
+          />
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function CalcMenuItem({ icon, label, hint, disabled, disabledHint, onClick }: {
+  icon: string; label: string; hint?: string;
+  disabled?: boolean; disabledHint?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      title={disabled ? disabledHint : hint}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+        padding: '10px 14px', border: 'none', background: 'transparent',
+        color: disabled ? 'var(--text-muted)' : 'var(--text)',
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontSize: '0.78rem', fontFamily: 'inherit', textAlign: 'left',
+      }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <i className={`fas ${icon}`} style={{ fontSize: '0.72rem', width: 14, color: '#f58220' }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600 }}>{label}</div>
+        {hint && <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hint}</div>}
+      </div>
+    </button>
   );
 }
