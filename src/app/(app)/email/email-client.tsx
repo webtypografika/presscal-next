@@ -42,6 +42,7 @@ export default function EmailClient() {
   const [linkLoading, setLinkLoading] = useState(false);
   const [customerLoading, setCustomerLoading] = useState(false);
   const linkBtnRef = useRef<HTMLDivElement>(null);
+  const linkPickerRef = useRef<HTMLDivElement>(null);
 
   // ─── FETCH MESSAGES ───
   const fetchMessages = useCallback(async (f: Folder, q?: string, label?: string | null) => {
@@ -101,10 +102,32 @@ export default function EmailClient() {
     if (!showLinkPicker) return;
     const handle = (e: MouseEvent) => {
       if (linkBtnRef.current?.contains(e.target as Node)) return;
+      if (linkPickerRef.current?.contains(e.target as Node)) return;
       setShowLinkPicker(false);
     };
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
+  }, [showLinkPicker]);
+
+  // Track link picker position (follows button on resize/scroll)
+  const [linkPickerPos, setLinkPickerPos] = useState<{ top: number; left: number } | null>(null);
+  useEffect(() => {
+    if (!showLinkPicker) { setLinkPickerPos(null); return; }
+    const update = () => {
+      const r = linkBtnRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const width = 280;
+      // Keep within viewport horizontally
+      const left = Math.min(Math.max(8, r.left), window.innerWidth - width - 8);
+      setLinkPickerPos({ top: r.bottom + 4, left });
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
   }, [showLinkPicker]);
 
   // ─── SELECT EMAIL ───
@@ -448,12 +471,12 @@ export default function EmailClient() {
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDismiss(email.id); }}
-                      title="Απόκρυψη"
+                      title="Διαγραφή από την εφαρμογή (παραμένει στο Gmail)"
                       style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontSize: '0.65rem', color: 'var(--text-muted)', opacity: 0.3, transition: 'all 0.15s' }}
-                      onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
-                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.3')}
+                      onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.color = 'var(--danger)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; }}
                     >
-                      <i className="fas fa-eye-slash" />
+                      <i className="fas fa-trash" />
                     </button>
                     {isUnread && <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--blue)' }} />}
                     {email.hasAttachments && <i className="fas fa-paperclip" style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }} />}
@@ -582,12 +605,13 @@ export default function EmailClient() {
                         <i className="fas fa-link" />
                         Σύνδεση
                       </button>
-                      {showLinkPicker && createPortal(
+                      {showLinkPicker && linkPickerPos && createPortal(
                         <div
+                          ref={linkPickerRef}
                           style={{
                             position: 'fixed',
-                            top: (linkBtnRef.current?.getBoundingClientRect().bottom ?? 0) + 4,
-                            left: linkBtnRef.current?.getBoundingClientRect().left ?? 0,
+                            top: linkPickerPos.top,
+                            left: linkPickerPos.left,
                             zIndex: 99999,
                             background: 'var(--bg-elevated)', border: '1px solid var(--border)',
                             borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
