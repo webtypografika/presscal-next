@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { calcImposition } from '@/lib/calc/imposition';
 import type { ImpositionInput } from '@/lib/calc/imposition';
@@ -468,6 +468,7 @@ function MachinePaperPresets({ machine, sheetW, sheetH, onSelect, onUpdate }: {
 /* ═══ CALCULATOR COMPONENT ═══ */
 export default function CalculatorShell() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   // ─── DB DATA ───
   const [machines, setMachines] = useState<DbMachine[]>(DEMO_MACHINES);
   const [papers, setPapers] = useState<DbMaterial[]>(DEMO_PAPERS);
@@ -594,8 +595,9 @@ export default function CalculatorShell() {
   const [calculating, setCalculating] = useState(false);
   const calcTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Quote link (from URL params)
-  const [quoteLink, setQuoteLink] = useState<{ quoteId: string; itemId: string; desc: string } | null>(null);
+  // Quote link (from URL params only — no sessionStorage fallback to avoid
+  // saving to the wrong quote if the user navigates via sidebar)
+  const [quoteLink, setQuoteLink] = useState<{ quoteId: string; itemId: string; desc: string; quoteNumber: string } | null>(null);
   const [linkedFile, setLinkedFile] = useState<{ path: string; name: string } | null>(null);
 
   const togglePanel = useCallback((key: 'machine' | 'paper' | 'job' | 'color' | 'finish' | 'mode-settings') => {
@@ -826,22 +828,22 @@ export default function CalculatorShell() {
       try { setOverrides(JSON.parse(ovParam)); } catch {}
     }
 
-    // ─── Quote link (persist in sessionStorage to survive refresh) ───
+    // ─── Quote link — URL is the source of truth (refresh keeps query params).
+    // No sessionStorage restore: previously, navigating to /calculator via the
+    // sidebar after costing a different quote would resurrect the old link and
+    // silently save items to the wrong quote.
     const quoteId = searchParams.get('quoteId');
     const itemId = searchParams.get('itemId');
     const desc = searchParams.get('desc');
+    const quoteNumber = searchParams.get('quoteNumber');
     if (quoteId) {
-      const ql = { quoteId, itemId: itemId || '', desc: desc || '' };
-      setQuoteLink(ql);
-      sessionStorage.setItem('calcQuoteLink', JSON.stringify(ql));
+      setQuoteLink({ quoteId, itemId: itemId || '', desc: desc || '', quoteNumber: quoteNumber || '' });
       setActivePanel('machine');
     } else {
-      // Restore from sessionStorage if no URL params
-      try {
-        const saved = sessionStorage.getItem('calcQuoteLink');
-        if (saved) setQuoteLink(JSON.parse(saved));
-      } catch {}
+      setQuoteLink(null);
     }
+    // Clean up any stale entry from older builds
+    try { sessionStorage.removeItem('calcQuoteLink'); } catch {}
 
     // ─── Linked file info ───
     const filePath = searchParams.get('filePath');
@@ -1206,7 +1208,15 @@ export default function CalculatorShell() {
         }}>
           <i className="fas fa-link" style={{ color: 'var(--blue)', fontSize: '0.65rem' }} />
           <span style={{ color: 'var(--text-muted)' }}>Κοστολόγηση για:</span>
-          <span style={{ fontWeight: 600, color: 'var(--text)' }}>{quoteLink.desc || 'Είδος προσφοράς'}</span>
+          {quoteLink.quoteNumber && (
+            <span style={{
+              fontWeight: 800, color: 'var(--blue)', fontSize: '0.8rem',
+              padding: '2px 8px', borderRadius: 5,
+              background: 'color-mix(in srgb, var(--blue) 15%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--blue) 30%, transparent)',
+            }}>{quoteLink.quoteNumber}</span>
+          )}
+          {quoteLink.desc && <span style={{ fontWeight: 600, color: 'var(--text)' }}>{quoteLink.desc}</span>}
           <div style={{ flex: 1 }} />
           <a href={`/quotes/${quoteLink.quoteId}`} style={{
             display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
@@ -1216,6 +1226,20 @@ export default function CalculatorShell() {
           }}>
             <i className="fas fa-arrow-left" style={{ fontSize: '0.55rem' }} /> Επιστροφή στην Προσφορά
           </a>
+          <button
+            onClick={() => { setQuoteLink(null); router.replace('/calculator'); }}
+            title="Αποσύνδεση από προσφορά"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 22, height: 22, borderRadius: 5, fontSize: '0.65rem',
+              border: '1px solid var(--border)', background: 'transparent',
+              color: 'var(--text-muted)', cursor: 'pointer',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; e.currentTarget.style.borderColor = 'var(--danger)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+          >
+            <i className="fas fa-times" />
+          </button>
         </div>
       )}
 

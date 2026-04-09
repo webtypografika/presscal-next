@@ -56,7 +56,7 @@ function initials(name: string): string {
 }
 
 /** Build calculator URL from quote item data */
-function calcUrl(item: Record<string, unknown>, quoteId: string) {
+function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: string) {
   const p = new URLSearchParams();
   const cd = item.calcData as Record<string, unknown> | undefined;
 
@@ -156,6 +156,7 @@ function calcUrl(item: Record<string, unknown>, quoteId: string) {
 
   // Link back to quote
   p.set('quoteId', quoteId);
+  if (quoteNumber) p.set('quoteNumber', quoteNumber);
   if (item.id) p.set('itemId', item.id as string);
 
   return `/calculator?${p.toString()}`;
@@ -801,7 +802,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger)'; }}
               onMouseLeave={e => { e.currentTarget.style.opacity = '0.4'; e.currentTarget.style.color = 'var(--text-muted)'; }}
             ><i className="fas fa-times" /></button>
-            <a href={calcUrl(item, quote.id)} title="Κοστολόγηση" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)', opacity: 0.5, fontSize: '0.85rem', textDecoration: 'none' }}
+            <a href={calcUrl(item, quote.id, quote.number)} title="Κοστολόγηση" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)', opacity: 0.5, fontSize: '0.85rem', textDecoration: 'none' }}
               onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
               onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; }}
             ><i className="fas fa-calculator" /></a>
