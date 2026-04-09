@@ -214,12 +214,62 @@ export function NewCompanyForm({ hasElorus, onSave, onCancel, toast, initialData
         </div>
         <div style={{ marginBottom: 8 }}>
           <label style={lbl}><i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.6rem' }} />Φάκελος Πελάτη</label>
-          <input
-            value={f.folderPath}
-            onChange={e => setF({ folderPath: e.target.value })}
-            placeholder="π.χ. D:\Πελάτες\Παπαδόπουλος"
-            style={{ ...inp, fontFamily: "'DM Mono', monospace", fontSize: '0.82rem' }}
-          />
+          {f.folderPath ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 10px', borderRadius: 8,
+              background: 'color-mix(in srgb, var(--accent) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+            }}>
+              <i className="fas fa-folder-open" style={{ color: '#f58220', fontSize: '0.75rem', flexShrink: 0 }} />
+              <span style={{
+                flex: 1, fontFamily: "'DM Mono', monospace", fontSize: '0.78rem',
+                color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }} title={f.folderPath}>{f.folderPath}</span>
+              <button
+                type="button"
+                onClick={() => setF({ folderPath: '' })}
+                title="Καθαρισμός"
+                style={{
+                  width: 20, height: 20, borderRadius: 4, border: 'none',
+                  background: 'transparent', color: 'var(--text-muted)',
+                  cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+              >
+                <i className="fas fa-times" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const res = await fetch('http://localhost:17824/?pickFolder=1');
+                  if (!res.ok) {
+                    toast('PressKit δεν αποκρίθηκε. Βεβαιώσου ότι τρέχει.', 'error');
+                    return;
+                  }
+                  const data = await res.json();
+                  if (data.canceled || !data.path) return;
+                  setF({ folderPath: data.path });
+                } catch {
+                  toast('Δεν βρέθηκε το PressKit στη θύρα 17824. Βεβαιώσου ότι τρέχει.', 'error');
+                }
+              }}
+              style={{
+                ...inp, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8,
+                background: 'rgba(255,255,255,0.02)', borderStyle: 'dashed',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+            >
+              <i className="fas fa-folder-plus" style={{ fontSize: '0.85rem' }} />
+              Επιλογή φακέλου...
+            </button>
+          )}
         </div>
         {/* Primary contact (optional) */}
         {!hideContact && (<>

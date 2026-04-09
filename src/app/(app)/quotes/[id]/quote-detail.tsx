@@ -166,6 +166,74 @@ function emptyItem() {
   return { id: crypto.randomUUID(), name: '', type: 'manual' as const, qty: 1, unit: 'τεμ', unitPrice: 0, finalPrice: 0, cost: 0, profit: 0, notes: '', status: 'pending' };
 }
 
+/** Folder pick button that opens PressKit's native folder dialog and stores the path */
+function FolderPickerButton({ value, onChange, emptyLabel, toast }: {
+  value: string;
+  onChange: (path: string) => void;
+  emptyLabel: string;
+  toast: (msg: string, type?: ToastType) => void;
+}) {
+  if (value) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '8px 10px', borderRadius: 8,
+        background: 'color-mix(in srgb, var(--accent) 8%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+      }}>
+        <i className="fas fa-folder-open" style={{ color: '#f58220', fontSize: '0.75rem', flexShrink: 0 }} />
+        <span style={{
+          flex: 1, fontFamily: "'DM Mono', monospace", fontSize: '0.75rem',
+          color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }} title={value}>{value}</span>
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          title="Καθαρισμός"
+          style={{
+            width: 20, height: 20, borderRadius: 4, border: 'none',
+            background: 'transparent', color: 'var(--text-muted)',
+            cursor: 'pointer', fontSize: '0.7rem', flexShrink: 0,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+        >
+          <i className="fas fa-times" />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          const res = await fetch('http://localhost:17824/?pickFolder=1');
+          if (!res.ok) { toast('PressKit δεν αποκρίθηκε', 'error'); return; }
+          const data = await res.json();
+          if (data.canceled || !data.path) return;
+          onChange(data.path);
+        } catch {
+          toast('Δεν βρέθηκε το PressKit στη θύρα 17824. Βεβαιώσου ότι τρέχει.', 'error');
+        }
+      }}
+      style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+        padding: '8px 10px', borderRadius: 8,
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px dashed var(--border)',
+        color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.78rem',
+        fontFamily: 'inherit', textAlign: 'left',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+    >
+      <i className="fas fa-folder-plus" style={{ fontSize: '0.85rem' }} />
+      {emptyLabel}
+    </button>
+  );
+}
+
 /** Dropdown for linking a file to a quote item — 3 sources (customer folder / quote folder / Windows dialog) */
 function LinkFileMenu({ quoteId, itemId, hasLinkedFile, linkedFileName, customerFolder, jobFolderPath }: {
   quoteId: string;
@@ -3045,25 +3113,12 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
               <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
                 <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.6rem' }} />Φάκελος Πελάτη
               </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input value={formFolder} onChange={e => setFormFolder(e.target.value)} placeholder="Paste path ή επιλογή μέσω PressKit →" style={{ ...inp, flex: 1, fontFamily: 'monospace', fontSize: '0.78rem' }} />
-                {editId && (
-                  <a
-                    href={`presscal-fh://pick-folder?customerId=${editId}`}
-                    title="Επιλογή μέσω PressKit"
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      padding: '7px 10px', borderRadius: 6,
-                      border: '1px solid var(--border)', background: 'rgba(245,130,32,0.06)',
-                      color: '#f58220', cursor: 'pointer', textDecoration: 'none', flexShrink: 0,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.12)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.06)')}
-                  >
-                    <i className="fas fa-folder-open" style={{ fontSize: '0.72rem' }} />
-                  </a>
-                )}
-              </div>
+              <FolderPickerButton
+                value={formFolder}
+                onChange={setFormFolder}
+                emptyLabel="Επιλογή φακέλου..."
+                toast={toast}
+              />
             </div>
             {/* Elorus / TaxisNet lookup */}
             {hasElorus && (
@@ -3456,13 +3511,13 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
               <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
                 <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.6rem' }} />Φάκελος Πελάτη
               </label>
-              <input
+              <FolderPickerButton
                 value={formFolder}
-                onChange={e => setFormFolder(e.target.value)}
-                placeholder={(companyId && linkToCompany)
-                  ? 'Προαιρετικό — υπερισχύει ο φάκελος της εταιρείας'
-                  : 'π.χ. D:\\Πελάτες\\Παπαδόπουλος'}
-                style={{ ...inp, fontFamily: 'monospace', fontSize: '0.78rem' }}
+                onChange={setFormFolder}
+                emptyLabel={(companyId && linkToCompany)
+                  ? 'Επιλογή φακέλου (προαιρετικό — υπερισχύει της εταιρείας)'
+                  : 'Επιλογή φακέλου...'}
+                toast={toast}
               />
             </div>
             {/* Link to company checkbox (only on new + when company is selected) */}
