@@ -2989,54 +2989,83 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
           </div>
         </>
       ) : (
-        /* Edit form */
-        <>
-          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        /* Edit form — 2-column grid, green-tinted background to signal
+             that this whole block is an expanded editor for the current row */
+        <div style={{
+          background: 'color-mix(in srgb, var(--teal) 5%, transparent)',
+          borderTop: '1px solid color-mix(in srgb, var(--teal) 20%, transparent)',
+          borderBottom: '1px solid color-mix(in srgb, var(--teal) 20%, transparent)',
+        }}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid color-mix(in srgb, var(--teal) 15%, transparent)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => setMode('list')} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}>
               <i className="fas fa-arrow-left" />
             </button>
-            <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>Επεξεργασία Εταιρείας</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--teal)' }}>Επεξεργασία Εταιρείας</span>
           </div>
-          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto' }}>
-            <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Όνομα *</label>
+          <div style={{ padding: '10px 12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, overflow: 'auto' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Όνομα *</label>
               <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Ονοματεπώνυμο" style={inp} />
             </div>
             <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Εταιρεία</label>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Εταιρεία</label>
               <input value={formCompany} onChange={e => setFormCompany(e.target.value)} placeholder="Επωνυμία" style={inp} />
             </div>
             <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Email</label>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Email</label>
               <input value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="email@example.com" type="email" style={inp} />
             </div>
             <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Τηλέφωνο</label>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Τηλέφωνο</label>
               <input value={formPhone} onChange={e => setFormPhone(e.target.value)} placeholder="+30..." style={inp} />
             </div>
             <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>ΑΦΜ</label>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>ΑΦΜ</label>
               <input value={formAfm} onChange={e => setFormAfm(e.target.value)} placeholder="ΑΦΜ" style={inp} />
             </div>
             <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>ΔΟΥ</label>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>ΔΟΥ</label>
               <input value={formDoy} onChange={e => setFormDoy(e.target.value)} placeholder="ΔΟΥ" style={inp} />
             </div>
-            <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Διεύθυνση</label>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Διεύθυνση</label>
               <input value={formAddress} onChange={e => setFormAddress(e.target.value)} placeholder="Οδός αριθμός" style={inp} />
             </div>
             <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Πόλη</label>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Πόλη</label>
               <input value={formCity} onChange={e => setFormCity(e.target.value)} placeholder="Πόλη" style={inp} />
             </div>
             <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>ΤΚ</label>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>ΤΚ</label>
               <input value={formZip} onChange={e => setFormZip(e.target.value)} placeholder="00000" style={inp} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
+                <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.6rem' }} />Φάκελος Πελάτη
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input value={formFolder} onChange={e => setFormFolder(e.target.value)} placeholder="Paste path ή επιλογή μέσω PressKit →" style={{ ...inp, flex: 1, fontFamily: 'monospace', fontSize: '0.78rem' }} />
+                {editId && (
+                  <a
+                    href={`presscal-fh://pick-folder?customerId=${editId}`}
+                    title="Επιλογή μέσω PressKit"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: '7px 10px', borderRadius: 6,
+                      border: '1px solid var(--border)', background: 'rgba(245,130,32,0.06)',
+                      color: '#f58220', cursor: 'pointer', textDecoration: 'none', flexShrink: 0,
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.12)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.06)')}
+                  >
+                    <i className="fas fa-folder-open" style={{ fontSize: '0.72rem' }} />
+                  </a>
+                )}
+              </div>
             </div>
             {/* Elorus / TaxisNet lookup */}
             {hasElorus && (
-              <div>
+              <div style={{ gridColumn: '1 / -1' }}>
                 <ElorusAfmLookup
                   currentAfm={formAfm}
                   currentValues={{ afm: formAfm, doy: formDoy, address: formAddress, city: formCity, zip: formZip }}
@@ -3052,45 +3081,22 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
                 />
               </div>
             )}
-            <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
-                <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.65rem' }} />Φάκελος Πελάτη
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input value={formFolder} onChange={e => setFormFolder(e.target.value)} placeholder="Paste path ή επιλογή μέσω PressKit →" style={{ ...inp, flex: 1, fontFamily: 'monospace', fontSize: '0.8rem' }} />
-                {editId && (
-                  <a
-                    href={`presscal-fh://pick-folder?customerId=${editId}`}
-                    title="Επιλογή μέσω PressKit"
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      padding: '7px 10px', borderRadius: 6,
-                      border: '1px solid var(--border)', background: 'rgba(245,130,32,0.06)',
-                      color: '#f58220', cursor: 'pointer', textDecoration: 'none', flexShrink: 0,
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.12)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.06)')}
-                  >
-                    <i className="fas fa-folder-open" style={{ fontSize: '0.75rem' }} />
-                  </a>
-                )}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            {/* Action buttons — compact, right-aligned, not spread full-width */}
+            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
               <button onClick={() => setMode('list')} style={{
-                flex: 1, padding: '8px 0', borderRadius: 6, border: '1px solid var(--border)',
-                background: 'transparent', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer',
+                padding: '6px 16px', borderRadius: 6, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text-muted)', fontSize: '0.78rem', cursor: 'pointer',
               }}>Ακύρωση</button>
               <button onClick={saveCustomer} disabled={saving || !formName.trim()} style={{
-                flex: 1, padding: '8px 0', borderRadius: 6, border: 'none',
-                background: 'var(--accent)', color: '#fff', fontSize: '0.85rem', fontWeight: 700,
+                padding: '6px 20px', borderRadius: 6, border: 'none',
+                background: 'var(--teal)', color: '#fff', fontSize: '0.78rem', fontWeight: 700,
                 cursor: 'pointer', opacity: (saving || !formName.trim()) ? 0.5 : 1,
               }}>
                 {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -3408,45 +3414,45 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
           </div>
         </>
       ) : (
-        /* New / Edit form */
-        <>
-          <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        /* New / Edit form — 2-column grid, green-tinted background */
+        <div style={{
+          background: 'color-mix(in srgb, var(--teal) 5%, transparent)',
+          borderTop: '1px solid color-mix(in srgb, var(--teal) 20%, transparent)',
+          borderBottom: '1px solid color-mix(in srgb, var(--teal) 20%, transparent)',
+        }}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid color-mix(in srgb, var(--teal) 15%, transparent)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <button onClick={() => setMode('list')} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}>
               <i className="fas fa-arrow-left" />
             </button>
-            <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>{mode === 'new' ? 'Νέα Επαφή' : 'Επεξεργασία Επαφής'}</span>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--teal)' }}>{mode === 'new' ? 'Νέα Επαφή' : 'Επεξεργασία Επαφής'}</span>
           </div>
-          <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10, overflow: 'auto' }}>
-            <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Όνομα *</label>
+          <div style={{ padding: '10px 12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, overflow: 'auto' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Όνομα *</label>
               <input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Ονοματεπώνυμο" style={inp} autoFocus />
             </div>
-            <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Email</label>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Email</label>
               <input value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="email@example.com" type="email" style={inp} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Τηλέφωνο</label>
-                <input value={formPhone} onChange={e => setFormPhone(e.target.value)} placeholder="+30..." style={inp} />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Κινητό</label>
-                <input value={formMobile} onChange={e => setFormMobile(e.target.value)} placeholder="+30 69..." style={inp} />
-              </div>
+            <div>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Τηλέφωνο</label>
+              <input value={formPhone} onChange={e => setFormPhone(e.target.value)} placeholder="+30..." style={inp} />
             </div>
             <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Ρόλος</label>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Κινητό</label>
+              <input value={formMobile} onChange={e => setFormMobile(e.target.value)} placeholder="+30 69..." style={inp} />
+            </div>
+            <div>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>Ρόλος</label>
               <select value={formRole} onChange={e => setFormRole(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                 {Object.entries(roleLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
-            {/* Folder path — always shown. If the contact is linked to a
-                 company, the company folder takes precedence during quote
-                 costing; this per-contact path is a fallback/override. */}
-            <div>
-              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
-                <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.65rem' }} />Φάκελος Πελάτη
+            <div>{/* empty cell to balance grid */}</div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
+                <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.6rem' }} />Φάκελος Πελάτη
               </label>
               <input
                 value={formFolder}
@@ -3454,33 +3460,34 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
                 placeholder={(companyId && linkToCompany)
                   ? 'Προαιρετικό — υπερισχύει ο φάκελος της εταιρείας'
                   : 'π.χ. D:\\Πελάτες\\Παπαδόπουλος'}
-                style={{ ...inp, fontFamily: 'monospace', fontSize: '0.8rem' }}
+                style={{ ...inp, fontFamily: 'monospace', fontSize: '0.78rem' }}
               />
             </div>
             {/* Link to company checkbox (only on new + when company is selected) */}
             {mode === 'new' && companyId && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
                 <input type="checkbox" checked={linkToCompany} onChange={e => setLinkToCompany(e.target.checked)}
                   style={{ accentColor: 'var(--teal)' }} />
                 <i className="fas fa-link" style={{ fontSize: '0.6rem', color: '#64748b' }} />
                 Σύνδεση με τρέχουσα εταιρεία
               </label>
             )}
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            {/* Compact right-aligned action buttons */}
+            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
               <button onClick={() => setMode('list')} style={{
-                flex: 1, padding: '8px 0', borderRadius: 6, border: '1px solid var(--border)',
-                background: 'transparent', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer',
+                padding: '6px 16px', borderRadius: 6, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text-muted)', fontSize: '0.78rem', cursor: 'pointer',
               }}>Ακύρωση</button>
               <button onClick={saveContact} disabled={saving || !formName.trim()} style={{
-                flex: 1, padding: '8px 0', borderRadius: 6, border: 'none',
-                background: 'var(--teal)', color: '#fff', fontSize: '0.85rem', fontWeight: 700,
+                padding: '6px 20px', borderRadius: 6, border: 'none',
+                background: 'var(--teal)', color: '#fff', fontSize: '0.78rem', fontWeight: 700,
                 cursor: 'pointer', opacity: (saving || !formName.trim()) ? 0.5 : 1,
               }}>
                 {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
