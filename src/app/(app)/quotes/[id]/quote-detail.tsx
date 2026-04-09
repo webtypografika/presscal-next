@@ -3441,25 +3441,22 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
                 {Object.entries(roleLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
-            {/* Folder path — useful for standalone contacts without company */}
-            {(!companyId || !linkToCompany) && (
-              <div>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
-                  <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.65rem' }} />Φάκελος Πελάτη
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input value={formFolder} onChange={e => setFormFolder(e.target.value)} placeholder="Paste path ή επιλογή μέσω PressKit →" style={{ ...inp, flex: 1, fontFamily: 'monospace', fontSize: '0.8rem' }} />
-                  {editId && (
-                    <a href={`presscal-fh://pick-folder?customerId=${editId}`} title="Επιλογή μέσω PressKit"
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '7px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(245,130,32,0.06)', color: '#f58220', cursor: 'pointer', textDecoration: 'none', flexShrink: 0 }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.12)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.06)')}>
-                      <i className="fas fa-folder-open" style={{ fontSize: '0.75rem' }} />
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* Folder path — always shown. If the contact is linked to a
+                 company, the company folder takes precedence during quote
+                 costing; this per-contact path is a fallback/override. */}
+            <div>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: 3 }}>
+                <i className="fas fa-folder" style={{ marginRight: 4, fontSize: '0.65rem' }} />Φάκελος Πελάτη
+              </label>
+              <input
+                value={formFolder}
+                onChange={e => setFormFolder(e.target.value)}
+                placeholder={(companyId && linkToCompany)
+                  ? 'Προαιρετικό — υπερισχύει ο φάκελος της εταιρείας'
+                  : 'π.χ. D:\\Πελάτες\\Παπαδόπουλος'}
+                style={{ ...inp, fontFamily: 'monospace', fontSize: '0.8rem' }}
+              />
+            </div>
             {/* Link to company checkbox (only on new + when company is selected) */}
             {mode === 'new' && companyId && (
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
