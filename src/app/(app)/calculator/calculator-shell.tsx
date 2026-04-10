@@ -547,7 +547,7 @@ export default function CalculatorShell() {
   const [impoColorBarScale, setImpoColorBarScale] = useState(100); // % scale
   const [impoPlateSlug, setImpoPlateSlug] = useState(false);
   const [impoPlateSlugEdge, setImpoPlateSlugEdge] = useState<'tail' | 'gripper'>('tail');
-  const [impoModeTab, setImpoModeTab] = useState<'spacing' | 'position' | 'rotation' | 'marks'>('spacing');
+  const [impoModeTab, setImpoModeTab] = useState<'spacing' | 'marks'>('spacing');
   const [activeSigSheet, setActiveSigSheet] = useState(0);
   const [sigShowBack, setSigShowBack] = useState(false);
   // Machine sheet override (null = use machine default)
@@ -2479,8 +2479,6 @@ export default function CalculatorShell() {
               <div style={{ display: 'flex', gap: 2, marginBottom: 10, background: 'rgba(0,0,0,0.2)', borderRadius: 7, padding: 2 }}>
                 {([
                   { k: 'spacing' as const, l: 'Αποστάσεις', i: 'fas fa-arrows-alt-h' },
-                  { k: 'position' as const, l: 'Θέση', i: 'fas fa-crosshairs' },
-                  { k: 'rotation' as const, l: 'Στροφή', i: 'fas fa-sync-alt' },
                   { k: 'marks' as const, l: 'Σημάδια', i: 'fas fa-crop-alt' },
                 ]).map(t => (
                   <button key={t.k} onClick={() => setImpoModeTab(t.k)} style={{
@@ -2498,6 +2496,25 @@ export default function CalculatorShell() {
 
               {/* Tab: Αποστάσεις (Spacing) */}
               {impoModeTab === 'spacing' && (<>
+                <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <MfLabel>GUTTER (mm)</MfLabel>
+                    <MfStepper value={impoGutter} onChange={v => setImpoGutter(Math.max(0, Number(v) || 0))} step={0.5} min={0} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <MfLabel>BLEED (mm)</MfLabel>
+                    <MfStepper value={effectiveBleed} onChange={v => setImpoBleedOverride(Math.max(0, Number(v) || 0))} step={0.5} min={0} />
+                  </div>
+                </div>
+
+                {impoMode !== 'workturn' && impoMode !== 'booklet' && impoMode !== 'perfect_bound' && impoMode !== 'stepmulti' && (
+                  <div style={{ marginBottom: 10 }}>
+                    <MfLabel>ΕΝΑΛΛΑΓΗ ΣΕΙΡΩΝ</MfLabel>
+                    <ToggleBar value={impoDuplexOrient} onChange={v => setImpoDuplexOrient(v as 'h2h' | 'h2f')}
+                      options={[{ v: 'h2h', l: 'Head-Head' }, { v: 'h2f', l: 'Head-Foot' }]} color="var(--impo)" />
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                   <div style={{ flex: 1 }}>
                     <MfLabel>ΚΛΙΜΑΚΑ (%)</MfLabel>
@@ -3032,45 +3049,7 @@ export default function CalculatorShell() {
                 )}
               </>)}
 
-              {/* Tab: Θέση (Position) */}
-              {impoModeTab === 'position' && (<>
-                <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <MfLabel>OFFSET X (MM)</MfLabel>
-                    <MfStepper value={impoOffsetX} onChange={v => setImpoOffsetX(Number(v) || 0)} step={0.5} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <MfLabel>OFFSET Y (MM)</MfLabel>
-                    <MfStepper value={impoOffsetY} onChange={v => setImpoOffsetY(Number(v) || 0)} step={0.5} />
-                  </div>
-                </div>
-                <div style={{ fontSize: '0.6rem', color: '#64748b', marginBottom: 10 }}>
-                  <i className="fas fa-info-circle" style={{ marginRight: 3 }} />
-                  Μετακίνηση ολόκληρου του grid μέσα στο φύλλο
-                </div>
-              </>)}
-
-              {/* Tab: Στροφή (Rotation) */}
-              {impoModeTab === 'rotation' && (<>
-                <MfLabel>ΠΕΡΙΣΤΡΟΦΗ PDF</MfLabel>
-                <div style={{ display: 'flex', gap: 3, marginBottom: 6 }}>
-                  {[0, 90, 180, 270].map(deg => (
-                    <Pill key={deg} active={impoRotation === deg} onClick={() => setImpoRotation(deg)} color="var(--impo)">
-                      {deg}°
-                    </Pill>
-                  ))}
-                </div>
-                <MfStepper value={impoRotation} onChange={v => setImpoRotation(((Number(v) || 0) % 360 + 360) % 360)} step={1} min={0} max={359} />
-                <div style={{ fontSize: '0.55rem', color: '#64748b', marginTop: 3, marginBottom: 10 }}>
-                  <i className="fas fa-info-circle" style={{ marginRight: 3 }} />0-359° ελεύθερη περιστροφή
-                </div>
-
-                {impoMode !== 'workturn' && impoMode !== 'booklet' && impoMode !== 'perfect_bound' && impoMode !== 'stepmulti' && (<>
-                  <MfLabel>ΕΝΑΛΛΑΓΗ ΣΕΙΡΩΝ</MfLabel>
-                  <ToggleBar value={impoDuplexOrient} onChange={v => setImpoDuplexOrient(v as 'h2h' | 'h2f')}
-                    options={[{ v: 'h2h', l: 'Head-Head' }, { v: 'h2f', l: 'Head-Foot' }]} color="var(--impo)" />
-                </>)}
-              </>)}
+              {/* Position/Rotation removed — handled via canvas drag + click */}
 
               {/* Tab: Σημάδια (Marks) */}
               {impoModeTab === 'marks' && (<>
@@ -3286,45 +3265,7 @@ export default function CalculatorShell() {
                   </span>
                 </div>
               )}
-              {/* G/B toolbar (top-right) */}
-              <div style={{
-                position: 'absolute', top: 6, right: 6, display: 'flex', gap: 3, alignItems: 'center', zIndex: 2,
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 2,
-                  background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
-                  borderRadius: 5, padding: '2px 4px',
-                }}>
-                  <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#f58220' }}>Gutter</span>
-                  <input
-                    type="number" step="0.5" min="0"
-                    value={impoGutter}
-                    onChange={e => setImpoGutter(Math.max(0, parseFloat(e.target.value) || 0))}
-                    style={{
-                      width: 36, height: 18, fontSize: '0.6rem', fontWeight: 600, textAlign: 'center',
-                      border: '1px solid rgba(245,130,32,0.3)', borderRadius: 3,
-                      background: 'rgba(0,0,0,0.4)', color: '#f58220', outline: 'none', padding: 0,
-                    }}
-                  />
-                </div>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 2,
-                  background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
-                  borderRadius: 5, padding: '2px 4px',
-                }}>
-                  <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#ef4444' }}>Bleed</span>
-                  <input
-                    type="number" step="0.5" min="0"
-                    value={effectiveBleed}
-                    onChange={e => setImpoBleedOverride(Math.max(0, parseFloat(e.target.value) || 0))}
-                    style={{
-                      width: 36, height: 18, fontSize: '0.6rem', fontWeight: 600, textAlign: 'center',
-                      border: '1px solid rgba(239,68,68,0.3)', borderRadius: 3,
-                      background: 'rgba(0,0,0,0.4)', color: '#ef4444', outline: 'none', padding: 0,
-                    }}
-                  />
-                </div>
-              </div>
+              {/* Gutter/Bleed moved to Mode Settings → Spacing tab */}
             </div>
           </div>
 
