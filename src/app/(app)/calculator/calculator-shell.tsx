@@ -1292,6 +1292,29 @@ export default function CalculatorShell() {
         </div>
       )}
 
+      {/* ═══ STANDALONE PDF UPLOAD (when not linked to a quote) ═══ */}
+      {!quoteLink && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '5px 14px',
+          background: 'rgba(255,255,255,0.02)',
+          borderBottom: '1px solid var(--border)',
+          fontSize: '0.78rem', flexShrink: 0,
+        }}>
+          <i className="fas fa-paperclip" style={{ color: pdf ? '#f58220' : 'var(--text-muted)', fontSize: '0.65rem' }} />
+          <span style={{ color: 'var(--text-muted)' }}>Αρχείο:</span>
+          {pdf ? (
+            <span style={{
+              fontWeight: 600, color: '#f58220',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              minWidth: 0, flex: 1,
+            }}>{pdf.fileName || 'PDF'}</span>
+          ) : (
+            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', flex: 1 }}>Κανένα</span>
+          )}
+          <StandalonePdfUpload hasFile={!!pdf} onUpload={handlePdfFiles} />
+        </div>
+      )}
+
       {/* ═══ HORIZONTAL COST BAR (was right sidebar) ═══ */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px',
@@ -3848,6 +3871,30 @@ function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, presskitEnabled, onB
         </div>,
         document.body,
       )}
+    </>
+  );
+}
+
+/** Simple browser file picker button for standalone calculator (no quote link) */
+function StandalonePdfUpload({ hasFile, onUpload }: { hasFile: boolean; onUpload: (files: FileList) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <input ref={fileRef} type="file" accept=".pdf" onChange={e => { if (e.target.files?.length) onUpload(e.target.files); e.target.value = ''; }} style={{ display: 'none' }} />
+      <button
+        onClick={() => fileRef.current?.click()}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
+          borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+          border: '1px solid rgba(59,130,246,0.3)',
+          background: 'rgba(59,130,246,0.08)',
+          color: 'var(--blue)', cursor: 'pointer', fontFamily: 'inherit',
+          flexShrink: 0,
+        }}
+      >
+        <i className={`fas ${hasFile ? 'fa-sync-alt' : 'fa-file-pdf'}`} style={{ fontSize: '0.55rem' }} />
+        {hasFile ? 'Αλλαγή PDF' : 'Επιλογή PDF'}
+      </button>
     </>
   );
 }
