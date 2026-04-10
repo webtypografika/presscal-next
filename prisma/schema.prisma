@@ -149,6 +149,8 @@ model Org {
   fileLinks        FileLink[]
   plateOrders      PlateOrder[]
   calendarEvents   CalendarEvent[]
+  orgProjects      OrgProject[]
+  orgItems         OrgItem[]
 }
 
 // ─── MACHINES (Digital / Offset / Plotter) ───
@@ -476,6 +478,7 @@ model Company {
   quotes          Quote[]
   fileLinks       FileLink[]
   calendarEvents  CalendarEvent[]
+  orgItems        OrgItem[]
 
   deletedAt DateTime?
   createdAt DateTime @default(now())
@@ -509,6 +512,7 @@ model Contact {
   quoteRecipients QuoteRecipient[]
   calendarEvents  CalendarEvent[]
   quotes          Quote[] @relation("QuoteContact")
+  orgItems        OrgItem[]
 
   deletedAt DateTime?
   createdAt DateTime @default(now())
@@ -706,6 +710,8 @@ model CalendarEvent {
   company   Company? @relation(fields: [companyId], references: [id])
   contactId String?
   contact   Contact? @relation(fields: [contactId], references: [id])
+  orgItemId String?
+  orgItem   OrgItem? @relation(fields: [orgItemId], references: [id])
 
   notes     String   @default("")
   completed Boolean  @default(false)
@@ -717,4 +723,61 @@ model CalendarEvent {
   @@index([orgId, startAt])
   @@index([quoteId])
   @@index([companyId])
+  @@index([orgItemId])
+}
+
+// ─── OFFICE ORGANIZER ───
+
+model OrgProject {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id])
+
+  title     String
+  color     String?
+  icon      String?
+  archived  Boolean  @default(false)
+  sortOrder Int      @default(0)
+
+  items     OrgItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([orgId, archived])
+}
+
+model OrgItem {
+  id          String      @id @default(cuid())
+  orgId       String
+  org         Org         @relation(fields: [orgId], references: [id])
+  projectId   String
+  project     OrgProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title       String
+  notes       String?
+  tags        String[]    @default([])
+  priority    String      @default("normal")
+  deadline    DateTime?
+  completed   Boolean     @default(false)
+  completedAt DateTime?
+  checklist   Json?
+
+  // Links
+  companyId   String?
+  company     Company?    @relation(fields: [companyId], references: [id])
+  contactId   String?
+  contact     Contact?    @relation(fields: [contactId], references: [id])
+  linkedEmails String[]   @default([])
+
+  calendarEvents CalendarEvent[]
+
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([orgId])
+  @@index([projectId])
+  @@index([orgId, completed])
 }

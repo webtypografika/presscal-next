@@ -9,6 +9,7 @@ const TABS = [
   { href: '/email', icon: 'fa-envelope', label: 'Emails' },
   { href: '/quotes', icon: 'fa-file-invoice', label: 'Προσφορες' },
   { href: '/jobs', icon: 'fa-tasks', label: 'Εργασιες' },
+  { href: '/office', icon: 'fa-briefcase', label: 'Γραφειο' },
   { href: '/calendar', icon: 'fa-calendar-alt', label: 'Ημερολογιο' },
   { href: '/companies', icon: 'fa-address-book', label: 'Επαφες' },
 ];
