@@ -265,4 +265,7 @@ export interface ImpositionResult {
   fitsPerHalf?: number;
   halfCols?: number;
   halfRows?: number;
+
+  // Duplex orientation (h2f = alternate rows flipped 180°)
+  duplexOrient?: 'h2h' | 'h2f';
 }

@@ -54,6 +54,9 @@ export interface ImpositionInput {
 
   // Work & Turn specific
   turnType?: WorkTurnType;
+
+  // Duplex orientation (front-side grid flip)
+  duplexOrient?: 'h2h' | 'h2f';
 }
 
 // ─── CORE HELPERS ───
@@ -120,10 +123,14 @@ function buildCells(
   bleed: number, gutter: number,
   gridStartX: number, gridStartY: number,
   rotation: number = 0,
+  duplexOrient?: 'h2h' | 'h2f',
 ): ImpositionCell[] {
   const intBleed = internalBleed(gutter, bleed);
+  const isH2F = duplexOrient === 'h2f';
   const cells: ImpositionCell[] = [];
   for (let r = 0; r < rows; r++) {
+    // H2F: alternate rows get +180° rotation
+    const rowRot = (isH2F && r % 2 === 1) ? (rotation + 180) % 360 : rotation;
     for (let c = 0; c < cols; c++) {
       const bL = c === 0 ? bleed : intBleed;
       const bR = c === cols - 1 ? bleed : intBleed;
@@ -140,7 +147,7 @@ function buildCells(
         w: trimW + bL + bR,
         h: trimH + bT + bB,
         pageNum: r * cols + c + 1,
-        rotation,
+        rotation: rowRot,
         bleedL: bL, bleedR: bR, bleedT: bT, bleedB: bB,
       });
     }
@@ -174,7 +181,7 @@ function wastePercent(paperW: number, paperH: number, usedW: number, usedH: numb
 // ═══════════════════════════════════════════════════════════════
 
 export function calcNUp(input: ImpositionInput): ImpositionResult {
-  const { trimW, trimH, bleed, qty, sides, gutter, area, forceUps, forceCols, forceRows, rotation } = input;
+  const { trimW, trimH, bleed, qty, sides, gutter, area, forceUps, forceCols, forceRows, rotation, duplexOrient } = input;
 
   const { w: pw, h: ph } = printable(area);
 
@@ -245,6 +252,7 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     cols, rows, tW, tH, bleed, gutter,
     gridStartX, gridStartY,
     contentRotation,
+    duplexOrient,
   );
 
   // pieceW/H = max cell size (external cell: trim + 2*bleed) for backward compat
@@ -271,6 +279,7 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     cells,
     totalSheets: rawSheets,
     marginWarning,
+    duplexOrient,
     ...marginInfo(area),
   };
 }

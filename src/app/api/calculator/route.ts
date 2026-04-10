@@ -567,7 +567,9 @@ export async function GET() {
     }),
   ]);
 
-  return Response.json({ machines, materials, postpress, products, films });
+  const org = await prisma.org.findUnique({ where: { id: ORG_ID }, select: { presskitEnabled: true } });
+
+  return Response.json({ machines, materials, postpress, products, films, presskitEnabled: org?.presskitEnabled ?? false });
 }
 
 // ─── PATCH: update machine custom_papers ───

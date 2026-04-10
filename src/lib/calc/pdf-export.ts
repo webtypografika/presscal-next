@@ -682,7 +682,9 @@ async function exportNUp(
           const userRot = opts.rotation || 0;
           const extraRot0 = (userRot === 180 || userRot === 270) ? 180 : 0;
           let extraRot = extraRot0;
+          // H2F: alternate rows flipped 180° on front side
           if (opts.duplexOrient === 'h2f' && (row % 2 === 1)) extraRot = (extraRot + 180) % 360;
+          // H2F back side: flip 180° so back aligns with flipped front rows
           const h2fRot = (isBackSide && opts.duplexOrient === 'h2f') ? 180 : 0;
           const totalRot = (epSrcRot + gridRot + extraRot + h2fRot) % 360;
 
@@ -1552,8 +1554,9 @@ async function exportGangRun(
         // Trim position → offset by bleed for cell placement
         const cellX = cenX + col * grTrimStepW - bleedPt;
         const cellY = cenY + (impo.rows - 1 - row) * grTrimStepH - bleedPt;
-        let grExtraRot = grBaseRot;
-        if (opts.duplexOrient === 'h2f' && (row % 2 === 1)) grExtraRot = (grExtraRot + 180) % 360;
+        // Use cell rotation (includes H2F row flip from engine)
+        const cell = impo.cells[posIdx];
+        const grExtraRot = cell?.rotation ?? grBaseRot;
         drawEmbeddedPage(page, epObj, cellX + bleedPt - epObj.trimOffsetX, cellY + bleedPt - epObj.trimOffsetY, epPage.width, epPage.height, grExtraRot);
       }
     }

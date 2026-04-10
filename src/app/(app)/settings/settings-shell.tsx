@@ -59,6 +59,9 @@ export function SettingsShell({ org }: { org: Org }) {
   const [apiGemini, setApiGemini] = useState(org.apiGemini ?? '');
   const [apiFilehelper, setApiFilehelper] = useState(org.apiFilehelper ?? '');
 
+  // PressKit
+  const [presskitEnabled, setPresskitEnabled] = useState(org.presskitEnabled ?? false);
+
   // Job folders
   const [jobFolderRoot, setJobFolderRoot] = useState(org.jobFolderRoot ?? '');
 
@@ -91,6 +94,7 @@ export function SettingsShell({ org }: { org: Org }) {
       phone: phone || null, email: email || null, website: website || null,
       quoteTerms: JSON.stringify(quoteTerms.filter(t => t.trim())),
       apiGmail: apiGmail || null, apiGemini: apiGemini || null, apiFilehelper: apiFilehelper || null,
+      presskitEnabled,
       jobFolderRoot: jobFolderRoot || null,
     });
     setSaving(false);
@@ -309,6 +313,7 @@ export function SettingsShell({ org }: { org: Org }) {
           apiGmail={apiGmail} setApiGmail={setApiGmail}
           apiGemini={apiGemini} setApiGemini={setApiGemini}
           apiFilehelper={apiFilehelper} setApiFilehelper={setApiFilehelper}
+          presskitEnabled={presskitEnabled} setPresskitEnabled={setPresskitEnabled}
           jobFolderRoot={jobFolderRoot} setJobFolderRoot={setJobFolderRoot}
           saving={saving} saved={saved} handleSave={handleSave}
         />
@@ -322,15 +327,23 @@ const INT_TABS: { id: string; label: string; icon: string; color: string }[] = [
   { id: 'courier', label: 'Courier', icon: 'fa-truck', color: '#10b981' },
   { id: 'gmail', label: 'Gmail', icon: 'fa-envelope', color: '#ea4335' },
   { id: 'ai', label: 'Gemini AI', icon: 'fa-robot', color: 'var(--blue)' },
-  { id: 'presskit', label: 'PressKit', icon: 'fa-folder-open', color: '#f58220' },
-  { id: 'folders', label: 'Φάκελοι', icon: 'fa-folder-tree', color: 'var(--teal)' },
 ];
 
-function IntegrationsPanel({ org, inputCls, apiGmail, setApiGmail, apiGemini, setApiGemini, apiFilehelper, setApiFilehelper, jobFolderRoot, setJobFolderRoot, saving, saved, handleSave }: {
+const PK_BENEFITS = [
+  { icon: 'fa-folder-open', text: 'Διαχείριση αρχείων απευθείας απο τον υπολογιστή σας' },
+  { icon: 'fa-file-pdf', text: 'Σύνδεση PDF στο μοντάζ με live preview & auto-fill διαστάσεων' },
+  { icon: 'fa-print', text: 'Export μοντάζ σε PDF ετοιμο για εκτύπωση' },
+  { icon: 'fa-search', text: 'Preflight ελεγχος αρχείων (ανάλυση, χρώματα, DPI)' },
+  { icon: 'fa-folder-tree', text: 'Αυτόματη δημιουργία φακέλων εργασιών ανά προσφορά' },
+  { icon: 'fa-desktop', text: 'Native Windows integration: ανοιγμα φακέλων, drag & drop' },
+];
+
+function IntegrationsPanel({ org, inputCls, apiGmail, setApiGmail, apiGemini, setApiGemini, apiFilehelper, setApiFilehelper, presskitEnabled, setPresskitEnabled, jobFolderRoot, setJobFolderRoot, saving, saved, handleSave }: {
   org: Org; inputCls: string;
   apiGmail: string; setApiGmail: (v: string) => void;
   apiGemini: string; setApiGemini: (v: string) => void;
   apiFilehelper: string; setApiFilehelper: (v: string) => void;
+  presskitEnabled: boolean; setPresskitEnabled: (v: boolean) => void;
   jobFolderRoot: string; setJobFolderRoot: (v: string) => void;
   saving: boolean; saved: boolean; handleSave: () => void;
 }) {
@@ -338,7 +351,175 @@ function IntegrationsPanel({ org, inputCls, apiGmail, setApiGmail, apiGemini, se
 
   return (
     <div style={{ maxWidth: 700 }}>
-      {/* Sub-tabs */}
+
+      {/* ═══ PRESSKIT — HERO SECTION ═══ */}
+      <div className="panel" style={{ marginBottom: 24, border: '1px solid rgba(245,130,32,0.2)', background: presskitEnabled ? 'rgba(245,130,32,0.03)' : 'rgba(255,255,255,0.02)' }}>
+
+        {/* Header + Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <div style={{
+            width: 42, height: 42, borderRadius: 10,
+            background: 'rgba(245,130,32,0.1)', border: '1px solid rgba(245,130,32,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.1rem', color: '#f58220',
+          }}>
+            <i className="fas fa-box-open" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>PressKit</h3>
+            <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Desktop εφαρμογή για διαχείριση αρχείων & native integration</p>
+          </div>
+          <button
+            onClick={() => setPresskitEnabled(!presskitEnabled)}
+            style={{
+              width: 48, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
+              background: presskitEnabled ? '#f58220' : 'rgba(148,163,184,0.3)',
+              position: 'relative', transition: 'background 0.2s',
+            }}
+          >
+            <div style={{
+              width: 20, height: 20, borderRadius: '50%', background: '#fff',
+              position: 'absolute', top: 3,
+              left: presskitEnabled ? 25 : 3,
+              transition: 'left 0.2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </button>
+        </div>
+
+        {/* ── OFF: Benefits / Onboarding ── */}
+        {!presskitEnabled && (
+          <div style={{ padding: '16px 0 8px' }}>
+            <div style={{
+              padding: '14px 16px', borderRadius: 10,
+              background: 'rgba(245,130,32,0.04)', border: '1px dashed rgba(245,130,32,0.2)',
+            }}>
+              <p style={{ fontSize: '0.78rem', fontWeight: 700, color: '#f58220', marginBottom: 10 }}>
+                <i className="fas fa-info-circle" style={{ marginRight: 6 }} />
+                Πώς λειτουργεί το PressCal χωρίς PressKit;
+              </p>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', lineHeight: 1.7, marginBottom: 12 }}>
+                Χωρίς το PressKit, το PressCal λειτουργεί ως κανονικό web app.
+                Μπορείτε να ανεβάσετε PDF απευθείας απο τον browser για preview
+                στο μοντάζ, αλλά τα αρχεία δεν αποθηκεύονται. Η κοστολόγηση,
+                οι προσφορές και ο calculator λειτουργούν κανονικά.
+              </p>
+              <p style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: 10, color: 'var(--text)' }}>
+                Με το PressKit ξεκλειδώνετε:
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {PK_BENEFITS.map((b, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '6px 0' }}>
+                    <i className={`fas ${b.icon}`} style={{ color: '#f58220', fontSize: '0.65rem', marginTop: 2, minWidth: 14 }} />
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>{b.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── ON: Configuration ── */}
+        {presskitEnabled && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* API Key */}
+            <div>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, display: 'block', letterSpacing: '0.03em' }}>
+                API KEY
+              </span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input className={inputCls} type="text" value={apiFilehelper} readOnly placeholder="fh_..." style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.72rem' }} />
+                <button
+                  onClick={() => {
+                    const key = 'fh_' + crypto.randomUUID().replace(/-/g, '');
+                    setApiFilehelper(key);
+                  }}
+                  style={{
+                    padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                    background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
+                    cursor: 'pointer', whiteSpace: 'nowrap',
+                  }}
+                >
+                  <i className="fas fa-sync-alt" style={{ marginRight: 4 }} />Generate
+                </button>
+                {apiFilehelper && (
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(apiFilehelper); }}
+                    style={{
+                      padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                      background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <i className="fas fa-copy" style={{ marginRight: 4 }} />Copy
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Connect button */}
+            {apiFilehelper && (
+              <a
+                href={`presscal-fh://connect?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}&apiKey=${encodeURIComponent(apiFilehelper)}`}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '10px 16px', borderRadius: 8,
+                  background: '#f58220', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
+                  textDecoration: 'none', cursor: 'pointer',
+                }}
+              >
+                <i className="fas fa-link" style={{ fontSize: '0.65rem' }} />
+                Σύνδεση PressKit
+              </a>
+            )}
+
+            {/* Folders */}
+            <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, display: 'block', letterSpacing: '0.03em' }}>
+                <i className="fas fa-folder-tree" style={{ marginRight: 4, color: 'var(--teal)' }} />
+                ΦΑΚΕΛΟΣ ΕΡΓΑΣΙΩΝ
+              </span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input className={inputCls} type="text" value={jobFolderRoot} onChange={e => setJobFolderRoot(e.target.value)}
+                  placeholder="D:\Εργασίες" style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.72rem' }} />
+                <a href="presscal-fh://pick-folder?target=jobFolderRoot" style={{
+                  padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+                  background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
+                  cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                  <i className="fas fa-folder-open" /> Επιλογή
+                </a>
+              </div>
+              <div style={{ fontSize: '0.62rem', color: '#475569', marginTop: 6, lineHeight: 1.7 }}>
+                <i className="fas fa-info-circle" style={{ marginRight: 4, color: 'var(--teal)' }} />
+                Κάθε εγκεκριμένη προσφορά δημιουργεί: <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 4px', borderRadius: 4 }}>[QT-2026-001] Πελάτης - Τίτλος</code>
+                <br />
+                <i className="fas fa-info-circle" style={{ marginRight: 4, color: 'var(--teal)' }} />
+                Αν ο πελάτης έχει φάκελο, ο υποφάκελος πάει εκεί αντί στο global root.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Save button for PressKit */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
+          <button onClick={handleSave} disabled={saving} style={{
+            padding: '8px 24px', borderRadius: 8, border: 'none',
+            background: '#f58220', color: '#fff', fontSize: '0.78rem', fontWeight: 700,
+            cursor: 'pointer', opacity: saving ? 0.5 : 1,
+          }}>
+            {saving ? 'Αποθήκευση...' : 'Αποθήκευση'}
+          </button>
+          {saved && (
+            <span style={{ fontSize: '0.78rem', color: 'var(--success)', fontWeight: 600 }}>
+              <i className="fas fa-check" style={{ marginRight: 4 }} /> Αποθηκεύτηκε
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ OTHER INTEGRATIONS — Sub-tabs ═══ */}
       <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginBottom: 20 }}>
         {INT_TABS.map(t => (
           <button key={t.id} onClick={() => setIntTab(t.id)} style={{
@@ -379,94 +560,8 @@ function IntegrationsPanel({ org, inputCls, apiGmail, setApiGmail, apiGemini, se
           </Section>
         )}
 
-        {intTab === 'presskit' && (
-          <Section icon="fa-folder-open" iconColor="#f58220" title="PRESSKIT — DESKTOP APP">
-            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
-              API key για σύνδεση με την desktop εφαρμογή PressKit (preview, preflight, διαχείριση αρχείων).
-            </p>
-            <Field label="API Key">
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input className={inputCls} type="text" value={apiFilehelper} readOnly placeholder="fh_..." style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.72rem' }} />
-                <button
-                  onClick={() => {
-                    const key = 'fh_' + crypto.randomUUID().replace(/-/g, '');
-                    setApiFilehelper(key);
-                  }}
-                  style={{
-                    padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
-                    background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
-                    cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                >
-                  <i className="fas fa-sync-alt" style={{ marginRight: 4 }} />
-                  Generate
-                </button>
-                {apiFilehelper && (
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(apiFilehelper); }}
-                    style={{
-                      padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
-                      background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
-                      cursor: 'pointer', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <i className="fas fa-copy" style={{ marginRight: 4 }} />
-                    Copy
-                  </button>
-                )}
-              </div>
-            </Field>
-            {apiFilehelper && (
-              <a
-                href={`presscal-fh://connect?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}&apiKey=${encodeURIComponent(apiFilehelper)}`}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8,
-                  padding: '10px 16px', borderRadius: 8,
-                  background: '#f58220', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
-                  textDecoration: 'none', cursor: 'pointer',
-                }}
-              >
-                <i className="fas fa-link" style={{ fontSize: '0.65rem' }} />
-                Σύνδεση PressKit
-              </a>
-            )}
-          </Section>
-        )}
-
-        {intTab === 'folders' && (
-          <Section icon="fa-folder-tree" iconColor="var(--teal)" title="ΦΑΚΕΛΟΣ ΕΡΓΑΣΙΩΝ">
-            <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 8 }}>
-              Τοπικός φάκελος για αυτόματη δημιουργία υποφακέλων ανά εργασία.
-            </p>
-            <Field label="Global Root Path">
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input className={inputCls} type="text" value={jobFolderRoot} onChange={e => setJobFolderRoot(e.target.value)}
-                  placeholder="D:\Εργασίες" style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.72rem' }} />
-                <a href="presscal-fh://pick-folder?target=jobFolderRoot" style={{
-                  padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
-                  background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
-                  cursor: 'pointer', whiteSpace: 'nowrap', textDecoration: 'none',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                  <i className="fas fa-folder-open" /> Επιλογή
-                </a>
-              </div>
-            </Field>
-            <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: 4, lineHeight: 1.6 }}>
-              <i className="fas fa-info-circle" style={{ marginRight: 4, color: 'var(--teal)' }} />
-              Κάθε εγκεκριμένη προσφορά δημιουργεί υποφάκελο: <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 4px', borderRadius: 4 }}>[QT-2026-001] Πελάτης - Τίτλος</code>
-              <br />
-              <i className="fas fa-info-circle" style={{ marginRight: 4, color: 'var(--teal)' }} />
-              Αν ο πελάτης έχει φάκελο (στις Εταιρείες), ο υποφάκελος πάει εκεί αντί εδώ.
-              <br />
-              <i className="fas fa-info-circle" style={{ marginRight: 4, color: 'var(--teal)' }} />
-              Όταν η εργασία ολοκληρωθεί, ο φάκελος μετακινείται σε <code style={{ background: 'rgba(255,255,255,0.04)', padding: '1px 4px', borderRadius: 4 }}>_Archive</code>
-            </div>
-          </Section>
-        )}
-
-        {/* Save button for Gmail/Gemini/PressKit/Folders tabs */}
-        {['gmail', 'ai', 'presskit', 'folders'].includes(intTab) && (
+        {/* Save button for Gmail/Gemini tabs */}
+        {['gmail', 'ai'].includes(intTab) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 20 }}>
             <button onClick={handleSave} disabled={saving} style={{
               padding: '10px 28px', borderRadius: 10, border: 'none',

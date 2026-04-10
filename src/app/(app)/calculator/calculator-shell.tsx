@@ -476,6 +476,7 @@ export default function CalculatorShell() {
   const [films, setFilms] = useState<DbFilm[]>([]);
   const [products, setProducts] = useState<DbProduct[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [presskitEnabled, setPresskitEnabled] = useState(false);
 
   // ─── STATE ───
   const [activeMachine, setActiveMachine] = useState(0);
@@ -660,6 +661,7 @@ export default function CalculatorShell() {
         if (data.postpress?.length) setPostpress(data.postpress);
         if (data.films?.length) setFilms(data.films);
         if (data.products?.length) setProducts(data.products);
+        if (data.presskitEnabled != null) setPresskitEnabled(data.presskitEnabled);
         setDataLoaded(true);
       })
       .catch(() => setDataLoaded(true)); // use demo data on failure
@@ -1024,6 +1026,7 @@ export default function CalculatorShell() {
     forceCols: impoForceCols || undefined,
     forceRows: impoForceRows || undefined,
     rotation: impoRotation || (job.rotation ? 90 : 0),
+    duplexOrient: impoDuplexOrient,
     pages: (job.archetype === 'booklet' || impoMode === 'booklet') ? job.pages
       : (job.archetype === 'perfect_bound' || impoMode === 'perfect_bound') ? job.bodyPages
       : undefined,
@@ -1253,18 +1256,18 @@ export default function CalculatorShell() {
 
           {/* ── RIGHT: Linked file (orange) ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
-            <i className="fas fa-paperclip" style={{ color: linkedFile ? '#f58220' : 'var(--text-muted)', fontSize: '0.65rem' }} />
+            <i className="fas fa-paperclip" style={{ color: (linkedFile || pdf) ? '#f58220' : 'var(--text-muted)', fontSize: '0.65rem' }} />
             <span style={{ color: 'var(--text-muted)' }}>Αρχείο:</span>
-            {linkedFile ? (
+            {(linkedFile || pdf) ? (
               <span style={{
                 fontWeight: 600, color: '#f58220',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 minWidth: 0,
-              }}>{linkedFile.name}</span>
+              }}>{linkedFile?.name || pdf?.fileName || 'PDF'}</span>
             ) : (
               <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Κανένα</span>
             )}
-            {linkedFile && (
+            {presskitEnabled && linkedFile && (
               <a
                 href={`presscal-fh://open-folder?path=${encodeURIComponent(linkedFile.path.replace(/[/\\][^/\\]+$/, ''))}${quoteLink?.quoteId ? `&quoteId=${quoteLink.quoteId}` : ''}`}
                 style={{
@@ -1281,7 +1284,9 @@ export default function CalculatorShell() {
             <CalcLinkFileMenu
               quoteId={quoteLink.quoteId}
               itemId={quoteLink.itemId}
-              hasLinkedFile={!!linkedFile}
+              hasLinkedFile={!!linkedFile || !!pdf}
+              presskitEnabled={presskitEnabled}
+              onBrowserUpload={handlePdfFiles}
             />
           </div>
         </div>
@@ -3037,8 +3042,8 @@ export default function CalculatorShell() {
                   <i className="fas fa-info-circle" style={{ marginRight: 3 }} />0-359° ελεύθερη περιστροφή
                 </div>
 
-                {job.sides === 2 && impoMode !== 'workturn' && (<>
-                  <MfLabel>DUPLEX ORIENTATION</MfLabel>
+                {impoMode !== 'workturn' && impoMode !== 'booklet' && impoMode !== 'perfect_bound' && impoMode !== 'stepmulti' && (<>
+                  <MfLabel>ΕΝΑΛΛΑΓΗ ΣΕΙΡΩΝ</MfLabel>
                   <ToggleBar value={impoDuplexOrient} onChange={v => setImpoDuplexOrient(v as 'h2h' | 'h2f')}
                     options={[{ v: 'h2h', l: 'Head-Head' }, { v: 'h2f', l: 'Head-Foot' }]} color="var(--impo)" />
                 </>)}
@@ -3694,30 +3699,33 @@ function MfStepper({ value, onChange, step = 1, min, max, style }: {
 
 // ─── LINK FILE MENU (inside calc banner) ───
 // Small dropdown that lets the user link a file to the quote item
-// from 3 sources: customer folder / quote folder / native Windows dialog.
-// After PressKit writes the linkedFile to the DB, a window-focus listener
-// in the calc re-fetches the item and auto-loads the PDF.
-function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile }: {
+// Two modes based on presskitEnabled:
+// PressKit ON: pick from customer/quote folder or native Windows dialog (presscal-fh:// protocol)
+// PressKit OFF: simple browser <input type="file"> for in-memory PDF loading
+function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, presskitEnabled, onBrowserUpload }: {
   quoteId: string;
   itemId: string;
   hasLinkedFile: boolean;
+  presskitEnabled: boolean;
+  onBrowserUpload: (files: FileList) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [folders, setFolders] = useState<{ customer: string | null; job: string | null }>({ customer: null, job: null });
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-  // Load folders lazily when opening
+  // Load folders lazily when opening (PressKit mode only)
   useEffect(() => {
-    if (!open || folders.customer || folders.job) return;
+    if (!presskitEnabled || !open || folders.customer || folders.job) return;
     fetch(`/api/quotes/${quoteId}/items`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d) setFolders({ customer: d.companyFolderPath || null, job: d.jobFolderPath || null });
       })
       .catch(() => {});
-  }, [open, quoteId, folders]);
+  }, [open, quoteId, folders, presskitEnabled]);
 
   useEffect(() => {
     if (!open) { setPos(null); return; }
@@ -3772,11 +3780,23 @@ function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile }: {
     }
   };
 
+  // Without PressKit: direct browser file picker
+  const handleBrowserClick = () => {
+    fileRef.current?.click();
+  };
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) {
+      onBrowserUpload(e.target.files);
+    }
+    e.target.value = '';
+  };
+
   return (
     <>
+      <input ref={fileRef} type="file" accept=".pdf" onChange={handleFileChange} style={{ display: 'none' }} />
       <button
         ref={btnRef}
-        onClick={() => setOpen(o => !o)}
+        onClick={presskitEnabled ? () => setOpen(o => !o) : handleBrowserClick}
         style={{
           display: 'flex', alignItems: 'center', gap: 4, padding: '3px 10px',
           borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
@@ -3784,12 +3804,18 @@ function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile }: {
           background: 'rgba(59,130,246,0.08)',
           color: 'var(--blue)', cursor: 'pointer', fontFamily: 'inherit',
         }}
-        title={hasLinkedFile ? 'Αλλαγή αρχείου' : 'Σύνδεση αρχείου στο item'}
+        title={presskitEnabled
+          ? (hasLinkedFile ? 'Αλλαγή αρχείου' : 'Σύνδεση αρχείου στο item')
+          : 'Επιλογή PDF για preview'
+        }
       >
-        <i className="fas fa-link" style={{ fontSize: '0.55rem' }} />
-        {hasLinkedFile ? 'Αλλαγή' : 'Σύνδεση αρχείου'}
+        <i className={`fas ${presskitEnabled ? 'fa-link' : 'fa-file-pdf'}`} style={{ fontSize: '0.55rem' }} />
+        {presskitEnabled
+          ? (hasLinkedFile ? 'Αλλαγή' : 'Σύνδεση αρχείου')
+          : (hasLinkedFile ? 'Αλλαγή PDF' : 'Επιλογή PDF')
+        }
       </button>
-      {open && pos && createPortal(
+      {presskitEnabled && open && pos && createPortal(
         <div
           ref={menuRef}
           style={{

@@ -87,6 +87,9 @@ model Org {
   plan         String   @default("free")  // 'free' | 'starter' | 'pro' | 'enterprise'
   planExpiry   DateTime?
 
+  // PressKit desktop integration
+  presskitEnabled Boolean @default(false)
+
   // API Keys (encrypted in production)
   apiElorus    String?  // Elorus API key
   apiGmail     String?  // Gmail App Password or OAuth token
