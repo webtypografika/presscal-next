@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   getItems, createProject, updateProject, deleteProject,
   createItem, updateItem, deleteItem, toggleItem,
+  linkEmailToItem, unlinkEmailFromItem,
 } from './actions';
 
 // ─── TYPES ───
@@ -579,23 +580,26 @@ export default function OfficeShell({ initialProjects, companies, contacts }: {
                       </div>
 
                       {/* Emails */}
-                      {item.linkedEmails.length > 0 && (
-                        <div style={{ gridColumn: '1 / -1' }}>
-                          <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>EMAILS</label>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {item.linkedEmails.map(eid => (
-                              <span key={eid} style={{
-                                padding: '2px 8px', borderRadius: 4, fontSize: '0.6rem',
-                                background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)',
-                                color: 'var(--blue)', display: 'flex', alignItems: 'center', gap: 4,
-                              }}>
-                                <i className="fas fa-envelope" style={{ fontSize: '0.5rem' }} />
-                                {eid.slice(0, 12)}...
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <EmailSection
+                          itemId={item.id}
+                          linkedEmails={item.linkedEmails}
+                          onLink={async (msgId, snippet) => {
+                            await linkEmailToItem(item.id, msgId);
+                            setItems(prev => prev.map(i => i.id === item.id
+                              ? { ...i, linkedEmails: [...i.linkedEmails, msgId] }
+                              : i
+                            ));
+                          }}
+                          onUnlink={async (msgId) => {
+                            await unlinkEmailFromItem(item.id, msgId);
+                            setItems(prev => prev.map(i => i.id === item.id
+                              ? { ...i, linkedEmails: i.linkedEmails.filter(e => e !== msgId) }
+                              : i
+                            ));
+                          }}
+                        />
+                      </div>
 
                       {/* Calendar events */}
                       {item.calendarEvents.length > 0 && (
@@ -631,6 +635,183 @@ export default function OfficeShell({ initialProjects, companies, contacts }: {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── EMAIL SECTION ───
+
+type GmailMsg = { id: string; threadId: string; snippet: string; from: string; subject: string; date: string };
+
+function EmailSection({ itemId, linkedEmails, onLink, onUnlink }: {
+  itemId: string;
+  linkedEmails: string[];
+  onLink: (msgId: string, snippet: string) => void;
+  onUnlink: (msgId: string) => void;
+}) {
+  const [showSearch, setShowSearch] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<GmailMsg[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [emailCache, setEmailCache] = useState<Record<string, GmailMsg>>({});
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Load linked email details
+  useEffect(() => {
+    if (linkedEmails.length === 0) return;
+    const missing = linkedEmails.filter(eid => !emailCache[eid]);
+    if (missing.length === 0) return;
+    // Fetch details for linked emails
+    Promise.all(missing.map(eid =>
+      fetch(`/api/email/messages/${eid}`).then(r => r.ok ? r.json() : null).catch(() => null)
+    )).then(results => {
+      const cache: Record<string, GmailMsg> = {};
+      results.forEach((msg, i) => {
+        if (msg) {
+          const headers = msg.payload?.headers || [];
+          const from = headers.find((h: any) => h.name === 'From')?.value || '';
+          const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
+          const date = headers.find((h: any) => h.name === 'Date')?.value || '';
+          cache[missing[i]] = { id: msg.id, threadId: msg.threadId, snippet: msg.snippet || '', from, subject, date };
+        }
+      });
+      setEmailCache(prev => ({ ...prev, ...cache }));
+    });
+  }, [linkedEmails, emailCache]);
+
+  const handleSearch = async () => {
+    if (!query.trim()) return;
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/email/messages?q=${encodeURIComponent(query)}&maxResults=8`);
+      if (res.ok) {
+        const data = await res.json();
+        setResults((data.messages || []).map((m: any) => {
+          const headers = m.payload?.headers || [];
+          const from = headers.find((h: any) => h.name === 'From')?.value || '';
+          const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
+          const date = headers.find((h: any) => h.name === 'Date')?.value || '';
+          return { id: m.id, threadId: m.threadId, snippet: m.snippet || '', from, subject, date };
+        }));
+      }
+    } catch { /* ignore */ }
+    setSearching(false);
+  };
+
+  useEffect(() => { if (showSearch) inputRef.current?.focus(); }, [showSearch]);
+
+  const formatFrom = (from: string) => {
+    const match = from.match(/^(.+?)\s*</) || from.match(/^(.+)$/);
+    return match?.[1]?.replace(/"/g, '').trim().slice(0, 30) || from.slice(0, 30);
+  };
+
+  const formatDate = (d: string) => {
+    try { return new Date(d).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' }); }
+    catch { return ''; }
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>EMAILS</label>
+        <button onClick={() => setShowSearch(!showSearch)} style={{
+          border: 'none', background: 'transparent', color: 'var(--blue)', cursor: 'pointer',
+          fontSize: '0.58rem', fontWeight: 600, padding: '2px 6px',
+        }}>
+          <i className={`fas ${showSearch ? 'fa-times' : 'fa-plus'}`} style={{ marginRight: 3 }} />
+          {showSearch ? 'Κλείσιμο' : 'Σύνδεση Email'}
+        </button>
+      </div>
+
+      {/* Linked emails */}
+      {linkedEmails.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: showSearch ? 8 : 0 }}>
+          {linkedEmails.map(eid => {
+            const msg = emailCache[eid];
+            return (
+              <div key={eid} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6,
+                background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
+              }}>
+                <i className="fas fa-envelope" style={{ fontSize: '0.55rem', color: 'var(--blue)', flexShrink: 0 }} />
+                {msg ? (
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {msg.subject || '(χωρίς θέμα)'}
+                    </div>
+                    <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
+                      {formatFrom(msg.from)} · {formatDate(msg.date)}
+                    </div>
+                  </div>
+                ) : (
+                  <span style={{ flex: 1, fontSize: '0.65rem', color: '#64748b' }}>{eid.slice(0, 16)}...</span>
+                )}
+                <button onClick={() => onUnlink(eid)} style={{
+                  border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer',
+                  fontSize: '0.55rem', padding: '2px 4px', flexShrink: 0,
+                }} title="Αποσύνδεση"><i className="fas fa-times" /></button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Search */}
+      {showSearch && (
+        <div>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+              placeholder="Αναζήτηση email (from, subject...)"
+              style={{
+                flex: 1, padding: '6px 10px', borderRadius: 6, fontSize: '0.72rem',
+                border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)',
+                color: 'var(--text)', outline: 'none',
+              }}
+            />
+            <button onClick={handleSearch} disabled={searching} style={{
+              padding: '0 12px', borderRadius: 6, border: 'none',
+              background: 'var(--blue)', color: '#fff', fontSize: '0.68rem', fontWeight: 700,
+              cursor: 'pointer', opacity: searching ? 0.5 : 1,
+            }}>
+              {searching ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-search" />}
+            </button>
+          </div>
+
+          {/* Results */}
+          {results.length > 0 && (
+            <div style={{ maxHeight: 200, overflowY: 'auto', borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(0,0,0,0.1)' }}>
+              {results.filter(r => !linkedEmails.includes(r.id)).map(msg => (
+                <button
+                  key={msg.id}
+                  onClick={() => { onLink(msg.id, msg.snippet); setResults(prev => prev.filter(r => r.id !== msg.id)); }}
+                  style={{
+                    width: '100%', padding: '8px 10px', border: 'none', borderBottom: '1px solid var(--border)',
+                    background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                    display: 'flex', flexDirection: 'column', gap: 2,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.06)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {msg.subject || '(χωρίς θέμα)'}
+                    </span>
+                    <span style={{ fontSize: '0.55rem', color: '#64748b', flexShrink: 0 }}>{formatDate(msg.date)}</span>
+                  </div>
+                  <div style={{ fontSize: '0.58rem', color: '#64748b' }}>{formatFrom(msg.from)}</div>
+                  <div style={{ fontSize: '0.55rem', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {msg.snippet.slice(0, 80)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
