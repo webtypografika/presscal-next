@@ -422,47 +422,26 @@ function IntegrationsPanel({ org, inputCls, apiGmail, setApiGmail, apiGemini, se
         {/* ── ON: Configuration ── */}
         {presskitEnabled && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* API Key */}
-            <div>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, display: 'block', letterSpacing: '0.03em' }}>
-                API KEY
-              </span>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input className={inputCls} type="text" value={apiFilehelper} readOnly placeholder="fh_..." style={{ flex: 1, fontFamily: 'monospace', fontSize: '0.72rem' }} />
-                <button
-                  onClick={() => {
-                    const key = 'fh_' + crypto.randomUUID().replace(/-/g, '');
-                    setApiFilehelper(key);
-                  }}
-                  style={{
-                    padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
-                    background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
-                    cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}
-                >
-                  <i className="fas fa-sync-alt" style={{ marginRight: 4 }} />Generate
-                </button>
-                {apiFilehelper && (
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(apiFilehelper); }}
-                    style={{
-                      padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
-                      background: 'var(--surface)', color: 'var(--text-dim)', fontSize: '0.72rem',
-                      cursor: 'pointer', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <i className="fas fa-copy" style={{ marginRight: 4 }} />Copy
-                  </button>
-                )}
-              </div>
-            </div>
 
-            {/* Connect button */}
-            {apiFilehelper && (
+            {/* Connect / Download */}
+            <div style={{ display: 'flex', gap: 8 }}>
               <a
-                href={`presscal-fh://connect?url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}&apiKey=${encodeURIComponent(apiFilehelper)}`}
+                href="#"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  // Auto-generate key if missing, then save + connect
+                  let key = apiFilehelper;
+                  if (!key) {
+                    key = 'fh_' + crypto.randomUUID().replace(/-/g, '');
+                    setApiFilehelper(key);
+                  }
+                  // Save first so PressKit can authenticate immediately
+                  await handleSave();
+                  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                  window.location.href = `presscal-fh://connect?url=${encodeURIComponent(origin)}&apiKey=${encodeURIComponent(key)}`;
+                }}
                 style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flex: 1,
                   padding: '10px 16px', borderRadius: 8,
                   background: '#f58220', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
                   textDecoration: 'none', cursor: 'pointer',
@@ -471,7 +450,26 @@ function IntegrationsPanel({ org, inputCls, apiGmail, setApiGmail, apiGemini, se
                 <i className="fas fa-link" style={{ fontSize: '0.65rem' }} />
                 Σύνδεση PressKit
               </a>
-            )}
+              <a
+                href="https://presscal.app/downloads/presskit"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '10px 16px', borderRadius: 8,
+                  border: '1px solid rgba(245,130,32,0.3)', background: 'rgba(245,130,32,0.06)',
+                  color: '#f58220', fontSize: '0.72rem', fontWeight: 600,
+                  textDecoration: 'none', cursor: 'pointer',
+                }}
+              >
+                <i className="fas fa-download" style={{ fontSize: '0.6rem' }} />
+                Εγκατάσταση
+              </a>
+            </div>
+            <p style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: -8 }}>
+              <i className="fas fa-info-circle" style={{ marginRight: 4 }} />
+              Εγκαταστήστε πρώτα το PressKit, μετά πατήστε "Σύνδεση" για αυτόματη ρύθμιση.
+            </p>
 
             {/* Folders */}
             <div style={{ paddingTop: 12, borderTop: '1px solid var(--border)' }}>
