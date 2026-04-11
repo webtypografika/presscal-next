@@ -521,6 +521,7 @@ export default function EmailClient() {
           {rowLinkEmailId && rowLinkPos && (
             <EmailLinkPopup
               emailId={rowLinkEmailId}
+              emailSubject={emails.find(e => e.id === rowLinkEmailId)?.subject || ''}
               threadId={emails.find(e => e.id === rowLinkEmailId)?.threadId || ''}
               pos={rowLinkPos}
               onClose={() => setRowLinkEmailId(null)}
@@ -912,8 +913,8 @@ function ComposePanel({ data, onSend, onClose }: { data: ComposeData; onSend: (d
 
 // ═══ EMAIL LINK POPUP (NetHunt-style) ═══
 
-function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLinkedToOffice }: {
-  emailId: string; threadId: string;
+function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinkedToQuote, onLinkedToOffice }: {
+  emailId: string; emailSubject: string; threadId: string;
   pos: { top: number; left: number };
   onClose: () => void;
   onLinkedToQuote: (emailId: string, quoteNumber: string, quoteId: string) => void;
@@ -994,7 +995,7 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
         projId = proj.id;
         setOfficeProjects(prev => [...prev, { ...proj, _count: { items: 0 } }]);
       }
-      const item = await createItem(projId, search.trim() || 'Νέο item');
+      const item = await createItem(projId, search.trim() || emailSubject || 'Νέο item');
       await linkEmailToItem(item.id, emailId);
       onLinkedToOffice();
     } catch (e) {
