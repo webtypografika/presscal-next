@@ -1201,61 +1201,39 @@ async function exportCutStack(
   const csNeedsRot = cellPortrait !== pdfPortrait;
   const csUserRot = opts.rotation || 0;
   const csUserSwapped = (csUserRot > 45 && csUserRot < 135) || (csUserRot > 225 && csUserRot < 315);
-  const cScaleFactor = (opts.contentScale || 100) / 100;
 
   const isSinglePage = embeddedPages.length <= 1;
 
-  // Helper: draw embedded page in a C&S cell with trim-based scaling + rotation
-  // pdf-lib transform order: translate(x,y) → rotate → scale
-  // Point (px,py) in XObject → (drawX − py·sy, drawY + px·sx) for 90° CCW
-  // We derive drawX/drawY so the PDF's TrimBox lands exactly on our trim position.
+  // Helper: draw embedded page in a C&S cell with rotation
+  // Same approach as Work & Turn: stretch page to fill cell (pieceW × pieceH)
+  // pdf-lib transform: (px,py) → (drawX − py·sy, drawY + px·sx) for 90° CCW
   const csDrawCell = (
     pg: PDFPage, ep: EmbeddedPageInfo,
-    trimX: number, trimYpos: number, offX: number, offY: number,
+    col: number, row: number, offX: number, offY: number,
   ) => {
     const epPage = ep.page;
-    const epRawW = epPage.width || pieceW;
-    const epRawH = epPage.height || pieceH;
+    const epW = epPage.width || pieceW;
+    const epH = epPage.height || pieceH;
 
     const epSrcRot = (360 - (ep.rotation || 0)) % 360;
     const autoRot = csNeedsRot ? 90 : 0;
     const totalRot = csUserSwapped ? ((epSrcRot + csUserRot) % 360) : ((epSrcRot + autoRot + csUserRot) % 360);
     const needsSwap = (totalRot === 90 || totalRot === 270);
 
-    // Scale PDF TrimBox to fill our trim area
-    const epTW = ep.trimW || epRawW;
-    const epTH = ep.trimH || epRawH;
-    const sx = (needsSwap ? (trimHpt / epTW) : (trimWpt / epTW)) * cScaleFactor;
-    const sy = (needsSwap ? (trimWpt / epTH) : (trimHpt / epTH)) * cScaleFactor;
+    // Scale so rotated page fills cell exactly (same as W&T export)
+    const sx = needsSwap ? (pieceH / epW) : (pieceW / epW);
+    const sy = needsSwap ? (pieceW / epH) : (pieceH / epH);
 
-    // Scaled trim offsets (divide out cScale for position-invariant alignment)
-    const tox = ep.trimOffsetX * sx / cScaleFactor;
-    const toy = ep.trimOffsetY * sy / cScaleFactor;
+    const cellX = cenX + col * csTrimStepW - bleedPt + offX;
+    const cellY = cenY + (impo.rows - 1 - row) * csTrimStepH - bleedPt - offY;
 
-    // Adjusted trim position (with cell offset)
-    const atx = trimX + offX;
-    const aty = trimYpos - offY;
+    // After 90° CCW page covers: X [drawX − epH·sy, drawX], Y [drawY, drawY + epW·sx]
+    // We need: X [cellX, cellX+pieceW], Y [cellY, cellY+pieceH]
+    let drawX = cellX, drawY = cellY;
+    if (totalRot === 90)       { drawX = cellX + pieceW; }
+    else if (totalRot === 270) { drawY = cellY + pieceH; }
+    else if (totalRot === 180) { drawX = cellX + pieceW; drawY = cellY + pieceH; }
 
-    // Derive draw origin per rotation so TrimBox fills [atx, aty, trimWpt, trimHpt]
-    let drawX: number, drawY: number;
-    if (totalRot === 0) {
-      drawX = atx - tox;
-      drawY = aty - toy;
-    } else if (totalRot === 90) {
-      // 90° CCW: right edge of trim → atx + trimWpt, bottom → aty
-      drawX = atx + trimWpt + toy;
-      drawY = aty - tox;
-    } else if (totalRot === 180) {
-      drawX = atx + trimWpt + tox;
-      drawY = aty + trimHpt + toy;
-    } else { // 270
-      drawX = atx - toy;
-      drawY = aty + trimHpt + tox;
-    }
-
-    // Clip to cell bounds, then draw
-    const cellX = trimX - bleedPt + offX;
-    const cellY = trimYpos - bleedPt - offY;
     pg.pushOperators(pushGraphicsState(), rectangle(cellX, cellY, pieceW, pieceH), clip(), endPath());
     const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: sx, yScale: sy };
     if (totalRot) drawOpts.rotate = degrees(totalRot);
@@ -1278,9 +1256,7 @@ async function exportCutStack(
         // Single-page PDF: repeat page 0 for all positions (same design, numbering differentiates)
         const pageIdx = isSinglePage ? 0 : (stackNum * csStack + s) % Math.max(1, embeddedPages.length);
         if (embeddedPages.length > 0) {
-          const trimX = cenX + col * csTrimStepW;
-          const trimYpos = cenY + (impo.rows - 1 - row) * csTrimStepH;
-          csDrawCell(page, embeddedPages[pageIdx], trimX, trimYpos, cOffX, cOffY);
+          csDrawCell(page, embeddedPages[pageIdx], col, row, cOffX, cOffY);
         }
 
         // Numbering overlay (front only) — matches canvas formula: startNum + stackNum
@@ -1358,42 +1334,22 @@ async function exportCutStack(
         const bTotalRot = csUserSwapped ? ((bSrcRot + csUserRot) % 360) : ((bSrcRot + bAutoRot + csUserRot) % 360);
         const bSwap = (bTotalRot === 90 || bTotalRot === 270);
 
-        // Trim-based scaling for back page
-        const bEpTW = bEp.trimW || bEpRawW;
-        const bEpTH = bEp.trimH || bEpRawH;
-        const bSx = (bSwap ? (trimHpt / bEpTW) : (trimWpt / bEpTW)) * cScaleFactor;
-        const bSy = (bSwap ? (trimWpt / bEpTH) : (trimHpt / bEpTH)) * cScaleFactor;
-        const bTox = bEp.trimOffsetX * bSx / cScaleFactor;
-        const bToy = bEp.trimOffsetY * bSy / cScaleFactor;
+        // Simple stretch-to-fill scaling for back page (same as front)
+        const bSx = bSwap ? (pieceH / bEpRawW) : (pieceW / bEpRawW);
+        const bSy = bSwap ? (pieceW / bEpRawH) : (pieceH / bEpRawH);
 
         for (let bRow = 0; bRow < impo.rows; bRow++) {
           for (let bCol = 0; bCol < impo.cols; bCol++) {
-            const frontTrimX = cenX + bCol * csTrimStepW;
-            const fTrimY = cenY + (impo.rows - 1 - bRow) * csTrimStepH;
-            const frontCellX = frontTrimX - bleedPt;
-            const fCellY = fTrimY - bleedPt;
+            const frontCellX = cenX + bCol * csTrimStepW - bleedPt;
+            const fCellY = cenY + (impo.rows - 1 - bRow) * csTrimStepH - bleedPt;
             const bCellX = isH2H ? (paperWpt - frontCellX - pieceW) : frontCellX;
             const bCellY = isH2H ? fCellY : (paperHpt - fCellY - pieceH);
-            const bTrimX = bCellX + bleedPt;
-            const bTrimY = bCellY + bleedPt;
-
-            // Same rotation-aware positioning as front
-            let bDrawX: number, bDrawY: number;
-            if (bTotalRot === 0) {
-              bDrawX = bTrimX - bTox;
-              bDrawY = bTrimY - bToy;
-            } else if (bTotalRot === 90) {
-              bDrawX = bTrimX + trimWpt + bToy;
-              bDrawY = bTrimY - bTox;
-            } else if (bTotalRot === 180) {
-              bDrawX = bTrimX + trimWpt + bTox;
-              bDrawY = bTrimY + trimHpt + bToy;
-            } else { // 270
-              bDrawX = bTrimX - bToy;
-              bDrawY = bTrimY + trimHpt + bTox;
-            }
 
             backPage.pushOperators(pushGraphicsState(), rectangle(bCellX, bCellY, pieceW, pieceH), clip(), endPath());
+            let bDrawX = bCellX, bDrawY = bCellY;
+            if (bTotalRot === 90)       { bDrawX = bCellX + pieceW; }
+            else if (bTotalRot === 270) { bDrawY = bCellY + pieceH; }
+            else if (bTotalRot === 180) { bDrawX = bCellX + pieceW; bDrawY = bCellY + pieceH; }
             const bDrawOpts: Parameters<PDFPage['drawPage']>[1] = { x: bDrawX, y: bDrawY, xScale: bSx, yScale: bSy };
             if (bTotalRot) bDrawOpts.rotate = degrees(bTotalRot);
             backPage.drawPage(bEpPage, bDrawOpts);
