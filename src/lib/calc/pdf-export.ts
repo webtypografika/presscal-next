@@ -1120,6 +1120,16 @@ async function exportCutStack(
 ): Promise<void> {
   const impo = opts.imposition;
 
+  // DEBUG: verify which version is running (remove after confirming)
+  console.log('[CS-EXPORT v6] trimW=%s trimH=%s pieceW=%s pieceH=%s pdfPageSizes=%o epCount=%d',
+    impo.trimW, impo.trimH, impo.pieceW, impo.pieceH,
+    opts.pdfPageSizes?.[0], embeddedPages.length);
+  if (embeddedPages.length > 0) {
+    const ep0 = embeddedPages[0];
+    console.log('[CS-EXPORT v6] ep0: w=%s h=%s trimW=%s trimH=%s trimOffX=%s trimOffY=%s rot=%s',
+      ep0.page.width, ep0.page.height, ep0.trimW, ep0.trimH, ep0.trimOffsetX, ep0.trimOffsetY, ep0.rotation);
+  }
+
   // Embed numbering font
   let numFont = font;
   if (opts.numberingEnabled && opts.numberFont === 'Courier') {
