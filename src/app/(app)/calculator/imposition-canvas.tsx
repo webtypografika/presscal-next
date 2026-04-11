@@ -44,6 +44,7 @@ interface ImpositionCanvasProps {
     fontSize: number;
     font: 'Helvetica' | 'Courier';
     rotation: number;        // degrees
+    extra?: { posX: number; posY: number; fontSize: number; rotation: number }[];
   };
   gangJobPdfs?: (ParsedPDF | undefined)[];  // per-job PDFs for gang run
   gangCellAssign?: Record<number, number>;   // cellIdx → jobIdx (0-based)
@@ -421,6 +422,25 @@ function drawSheet(
             ctx.fillStyle = csNumbering.color === '#cc0000' ? 'rgba(204,0,0,0.9)' : 'rgba(0,0,0,0.8)';
             ctx.fillText(numStr, 0, 0);
             ctx.restore();
+            // Extra numbering positions (same number, different locations)
+            if (csNumbering.extra) {
+              for (const ex of csNumbering.extra) {
+                const exFS = Math.min(ex.fontSize * scale * 0.8, trimW * 0.25, trimH * 0.2);
+                const exX = trimX + ex.posX * trimW;
+                const exY = trimY + (1 - ex.posY) * trimH;
+                ctx.save();
+                ctx.translate(exX, exY);
+                if (ex.rotation) ctx.rotate(ex.rotation * Math.PI / 180);
+                ctx.font = `700 ${exFS}px ${fontFam}`;
+                ctx.textAlign = 'center';
+                const exTw = ctx.measureText(numStr).width;
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.fillRect(-exTw / 2 - 2, -exFS * 0.7, exTw + 4, exFS * 1.1);
+                ctx.fillStyle = csNumbering.color === '#cc0000' ? 'rgba(204,0,0,0.9)' : 'rgba(0,0,0,0.8)';
+                ctx.fillText(numStr, 0, 0);
+                ctx.restore();
+              }
+            }
           } else {
             const overlayNum = isCutStack ? pidx + 1 : (cellPageNum || idx + 1);
             const oFS = Math.min(trimW * 0.22, trimH * 0.22, 16);
@@ -475,6 +495,22 @@ function drawSheet(
             ctx.fillStyle = csNumbering.color === '#cc0000' ? 'rgba(204,0,0,0.9)' : 'rgba(0,0,0,0.8)';
             ctx.fillText(numStr, 0, 0);
             ctx.restore();
+            // Extra numbering positions
+            if (csNumbering.extra) {
+              for (const ex of csNumbering.extra) {
+                const exFS = Math.min(ex.fontSize * scale * 0.8, trimW * 0.25, trimH * 0.2);
+                const exX = trimX + ex.posX * trimW;
+                const exY = trimY + (1 - ex.posY) * trimH;
+                ctx.save();
+                ctx.translate(exX, exY);
+                if (ex.rotation) ctx.rotate(ex.rotation * Math.PI / 180);
+                ctx.font = `700 ${exFS}px ${fontFam}`;
+                ctx.textAlign = 'center';
+                ctx.fillStyle = csNumbering.color === '#cc0000' ? 'rgba(204,0,0,0.9)' : 'rgba(0,0,0,0.8)';
+                ctx.fillText(numStr, 0, 0);
+                ctx.restore();
+              }
+            }
           } else {
             const fontSize = Math.min(trimW * 0.3, trimH * 0.3, 20);
             ctx.font = `600 ${fontSize}px Inter, DM Sans, sans-serif`;

@@ -527,6 +527,7 @@ export default function CalculatorShell() {
   const [csNumPosX, setCsNumPosX] = useState(0.5); // 0-1 normalized
   const [csNumPosY, setCsNumPosY] = useState(0.95);
   const [csNumRotation, setCsNumRotation] = useState(0);
+  const [csExtraNum, setCsExtraNum] = useState<{ posX: number; posY: number; fontSize: number; rotation: number }[]>([]);
   const [csFixedBack, setCsFixedBack] = useState(false);
   // Gang Run
   const [gangJobs, setGangJobs] = useState<{ id: string; label: string; qty: number; pdf?: ParsedPDF }[]>([
@@ -2600,6 +2601,41 @@ export default function CalculatorShell() {
                           <i className="fas fa-info-circle" style={{ marginRight: 3 }} />
                           X/Y: 0=αριστερά/κάτω, 1=δεξιά/πάνω
                         </div>
+
+                        {/* Extra numbering positions */}
+                        {csExtraNum.map((ex, ei) => (
+                          <div key={ei} style={{ marginTop: 8, padding: '8px 8px 6px', borderRadius: 6, border: '1px solid rgba(132,204,22,0.15)', background: 'rgba(132,204,22,0.03)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                              <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--impo)', flex: 1 }}>EXTRA #{ei + 2}</span>
+                              <button onClick={() => setCsExtraNum(prev => prev.filter((_, i) => i !== ei))} style={{
+                                border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.55rem',
+                              }}><i className="fas fa-times" /></button>
+                            </div>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <div style={{ flex: 1 }}>
+                                <MfLabel>X</MfLabel>
+                                <MfStepper value={ex.posX} onChange={v => setCsExtraNum(prev => prev.map((e, i) => i === ei ? { ...e, posX: Math.max(0, Math.min(1, Number(v) || 0.5)) } : e))} step={0.05} min={0} max={1} />
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <MfLabel>Y</MfLabel>
+                                <MfStepper value={ex.posY} onChange={v => setCsExtraNum(prev => prev.map((e, i) => i === ei ? { ...e, posY: Math.max(0, Math.min(1, Number(v) || 0.5)) } : e))} step={0.05} min={0} max={1} />
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <MfLabel>Pt</MfLabel>
+                                <MfStepper value={ex.fontSize} onChange={v => setCsExtraNum(prev => prev.map((e, i) => i === ei ? { ...e, fontSize: Number(v) || 8 } : e))} step={1} min={4} max={72} />
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <MfLabel>Rot</MfLabel>
+                                <MfStepper value={ex.rotation} onChange={v => setCsExtraNum(prev => prev.map((e, i) => i === ei ? { ...e, rotation: Number(v) || 0 } : e))} step={90} min={0} max={270} />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <button onClick={() => setCsExtraNum(prev => [...prev, { posX: 0.5, posY: 0.1, fontSize: csNumFontSize, rotation: 0 }])} style={{
+                          width: '100%', padding: '5px 0', borderRadius: 5, marginTop: 6,
+                          border: '1px dashed rgba(132,204,22,0.3)', background: 'transparent',
+                          color: 'var(--impo)', fontSize: '0.6rem', fontWeight: 600, cursor: 'pointer',
+                        }}><i className="fas fa-plus" style={{ marginRight: 4, fontSize: '0.5rem' }} />Extra αρίθμηση</button>
                       </div>
                     )}
                   </div>
@@ -3211,6 +3247,7 @@ export default function CalculatorShell() {
                   fontSize: csNumFontSize,
                   font: csNumFont,
                   rotation: csNumRotation,
+                  extra: csExtraNum.length > 0 ? csExtraNum : undefined,
                 } : undefined}
                 gangJobPdfs={impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf) : undefined}
                 gangCellAssign={impoMode === 'gangrun' ? gangCellAssign : undefined}
