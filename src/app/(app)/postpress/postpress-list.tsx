@@ -680,7 +680,7 @@ export function PostpressList({ machines }: Props) {
       {/* ── EDIT / CREATE MODAL ── */}
       {editing && createPortal(
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',  }}
           onClick={() => setEditing(null)}
         >
           <div

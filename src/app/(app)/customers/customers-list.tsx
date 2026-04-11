@@ -91,7 +91,6 @@ function ModalBackdrop({ children, onClose }: { children: React.ReactNode; onClo
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
-        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         background: 'rgba(0,0,0,0.25)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         animation: 'fadeIn 0.2s ease',
@@ -310,7 +309,7 @@ export function CustomersList({ customers: initialCustomers, hasElorus }: Props)
 
       {/* ─── CUSTOMER LIST ─── */}
       <div style={{
-        background: 'var(--bg-surface)', backdropFilter: 'blur(24px)',
+        background: 'var(--bg-surface)',
         border: '1px solid var(--glass-border)', borderRadius: 20,
         padding: 24, position: 'relative', overflow: 'hidden',
       }}>
@@ -1386,7 +1385,6 @@ function CustomerCsvImport({ onClose, onDone, toast }: CsvImportProps) {
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
-        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         background: 'rgba(0,0,0,0.25)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         animation: 'fadeIn 0.2s ease',
@@ -1676,7 +1674,6 @@ function GoogleContactsImport({ existingEmails, onClose, onDone, toast }: {
   return createPortal(
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
       background: 'rgba(0,0,0,0.25)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       animation: 'fadeIn 0.2s ease',

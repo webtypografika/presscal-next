@@ -11,7 +11,7 @@ export default function LoginPage() {
     }}>
       <div style={{
         width: 400, padding: 40, borderRadius: 20,
-        background: 'rgba(15,23,42,0.75)', backdropFilter: 'blur(24px)',
+        background: 'rgba(15,23,42,0.75)',
         border: '1px solid rgba(255,255,255,0.08)',
         boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
         textAlign: 'center',

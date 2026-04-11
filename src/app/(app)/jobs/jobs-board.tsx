@@ -144,7 +144,7 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
   }
 
   return createPortal(
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', background: 'rgba(0,0,0,0.3)' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 560, maxHeight: '85vh', overflow: 'auto', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--glass-border)', padding: 28, boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }} className="custom-scrollbar">
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>

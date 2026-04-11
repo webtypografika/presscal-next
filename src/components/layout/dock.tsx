@@ -14,7 +14,7 @@ export function Dock() {
     <nav style={{
       position: 'fixed', bottom: 14, left: '50%', transform: 'translateX(-50%)',
       zIndex: 100, display: 'flex', alignItems: 'center', gap: 4,
-      background: 'rgba(15,23,42,0.82)', backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
+      background: 'rgba(15,23,42,0.82)',
       border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20,
       padding: '8px 12px', boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset',
     }}>

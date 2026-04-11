@@ -1578,7 +1578,7 @@ function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }
   }
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',  }} onClick={onClose}>
       <div style={{ width: 600, maxHeight: '85vh', background: 'rgb(20,30,55)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, boxShadow: '0 32px 80px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column' }}
         onClick={e => e.stopPropagation()}>
 
@@ -2483,7 +2483,6 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
   return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
       background: 'rgba(0,0,0,0.2)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
@@ -3678,7 +3677,6 @@ function ElorusInvoiceModal({ quoteId, quoteNumber, customerName, customerAfm, c
   return createPortal(
     <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
       background: 'rgba(0,0,0,0.2)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
@@ -3894,7 +3892,7 @@ function CourierVoucherModal({ quoteId, company, onClose, onCreated }: {
   }
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',  }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{ background: '#141e37', border: '1px solid var(--border)', borderRadius: 14, width: 420, padding: '20px 24px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>

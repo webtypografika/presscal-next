@@ -66,11 +66,9 @@ body::before {
   100% { transform: translate(-30px, 20px) scale(1.05); }
 }
 
-/* Glass panel base */
+/* Panel base */
 .glass-panel {
   background: var(--bg-surface);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   position: relative;
@@ -102,11 +100,9 @@ input[type="number"] { -moz-appearance: textfield; }
 /* Header button hover */
 .h-btn:hover { color: var(--accent) !important; }
 
-/* Panel glassmorphism */
+/* Panel */
 .panel {
   background: var(--bg-surface);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   padding: 24px;
@@ -120,11 +116,9 @@ input[type="number"] { -moz-appearance: textfield; }
   pointer-events: none;
 }
 
-/* Card base (D-hybrid) */
+/* Card base */
 .card {
   background: var(--bg-surface);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   padding: 24px;

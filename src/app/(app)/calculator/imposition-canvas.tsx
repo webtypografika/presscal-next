@@ -1575,7 +1575,7 @@ export default function ImpositionCanvas({
         <div style={{
           position: 'absolute', bottom: 26, right: 8, zIndex: 3,
           display: 'flex', gap: 3, alignItems: 'center',
-          background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+          background: 'rgba(0,0,0,0.7)',
           borderRadius: 8, padding: '3px 4px',
         }}>
           <button onClick={() => setViewMode('single')} style={pillStyle(viewMode === 'single')} title="Single view">
@@ -1591,7 +1591,7 @@ export default function ImpositionCanvas({
       {zoom > 1.02 && (
         <div style={{
           position: 'absolute', top: 30, right: 8,
-          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+          background: 'rgba(0,0,0,0.7)',
           borderRadius: 6, padding: '3px 8px', fontSize: '0.65rem',
           fontWeight: 600, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6,
         }}>

@@ -168,7 +168,7 @@ function ModalPortal({ open, onClose, children }: { open: boolean; onClose: () =
   if (!open || typeof document === 'undefined') return null;
   return createPortal(
     <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      style={{ position: 'fixed', inset: 0, zIndex: 200, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     >
       {children}
     </div>,
@@ -180,7 +180,7 @@ function ModalBox({ children, small }: { children: React.ReactNode; small?: bool
   return (
     <div style={{
       width: small ? 440 : 640, maxHeight: '80vh',
-      background: 'rgb(20,30,55)', backdropFilter: 'blur(24px)',
+      background: 'rgb(20,30,55)',
       border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16,
       padding: 24, overflowY: 'auto', boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
     }}>
@@ -3243,13 +3243,13 @@ export default function CalculatorShell() {
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px',
                     borderRadius: 5, border: '1px solid color-mix(in srgb, var(--success) 30%, transparent)',
-                    background: 'rgba(16,185,129,0.12)', backdropFilter: 'blur(8px)',
+                    background: 'rgba(16,185,129,0.15)',
                     color: 'var(--success)', fontSize: '0.62rem', fontWeight: 600,
                   }}>
                     <i className={pdfLoading ? 'fas fa-spinner fa-spin' : 'fas fa-file-pdf'} style={{ fontSize: '0.58rem' }} />
                     {pdf.fileName.slice(0, 20)}
                   </div>
-                  <span style={{ fontSize: '0.58rem', color: '#94a3b8', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', padding: '2px 5px', borderRadius: 4 }}>
+                  <span style={{ fontSize: '0.58rem', color: '#94a3b8', background: 'rgba(0,0,0,0.6)', padding: '2px 5px', borderRadius: 4 }}>
                     {pdf.pageCount}pg · {pdf.pageSizes[0]?.trimW}×{pdf.pageSizes[0]?.trimH}
                   </span>
                 </div>
@@ -3260,7 +3260,7 @@ export default function CalculatorShell() {
               }}>
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 2,
-                  background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+                  background: 'rgba(0,0,0,0.7)',
                   borderRadius: 5, padding: '2px 4px',
                 }}>
                   <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#f58220' }}>Gutter</span>
@@ -3277,7 +3277,7 @@ export default function CalculatorShell() {
                 </div>
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 2,
-                  background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)',
+                  background: 'rgba(0,0,0,0.7)',
                   borderRadius: 5, padding: '2px 4px',
                 }}>
                   <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#ef4444' }}>Bleed</span>
@@ -3484,7 +3484,7 @@ function SummaryTag({ icon, iconColor, onClick, children }: { icon: string; icon
 function ImpoChip({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
+      background: 'rgba(0,0,0,0.7)',
       padding: '3px 8px', borderRadius: 5, fontSize: '0.65rem', fontWeight: 600, color: '#94a3b8',
       display: 'flex', alignItems: 'center', gap: 4,
     }}>{children}</div>

@@ -539,7 +539,6 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
   return createPortal(
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
       background: 'rgba(0,0,0,0.2)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 20,
@@ -759,7 +758,6 @@ function NewQuoteFromEmail({ customers, onClose, onCreated, toast }: {
   return createPortal(
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
       background: 'rgba(0,0,0,0.2)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>

@@ -133,8 +133,7 @@ export default function PlateOrderModal({
   return createPortal(
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-      background: 'rgba(0,0,0,0.15)',
+      background: 'rgba(0,0,0,0.5)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div onClick={e => e.stopPropagation()} style={{

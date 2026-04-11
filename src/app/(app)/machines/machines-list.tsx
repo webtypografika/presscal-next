@@ -181,7 +181,7 @@ export function MachinesList({ machines }: Props) {
       {/* Category picker modal */}
       {showCatPicker && createPortal(
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',  }}
           onClick={() => setShowCatPicker(false)}
         >
           <div

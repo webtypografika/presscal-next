@@ -309,7 +309,7 @@ function EventModal({ form, setForm, onSave, onDelete, onClose }: {
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
-        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        background: 'rgba(0,0,0,0.5)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
     >

@@ -88,7 +88,7 @@ function ModalPortal({ open, onClose, children }: { open: boolean; onClose: () =
   if (!open || typeof document === 'undefined') return null;
   return createPortal(
     <div onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      style={{ position: 'fixed', inset: 0, zIndex: 200, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       {children}
     </div>,
     document.body

@@ -25,7 +25,7 @@ export function NavTabs() {
   const pathname = usePathname();
 
   return (
-    <div style={{ width: '100%', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', height: 46, background: 'transparent', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid var(--glass-border)', borderRadius: 14, padding: '0 12px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', marginBottom: 16 }}>
+    <div style={{ width: '100%', maxWidth: 1280, margin: '0 auto', display: 'flex', alignItems: 'center', height: 46, background: 'transparent', border: '1px solid var(--glass-border)', borderRadius: 14, padding: '0 12px', boxShadow: '0 4px 20px rgba(0,0,0,0.2)', marginBottom: 16 }}>
       {/* Main tabs — left */}
       <div style={{ display: 'flex', gap: 2, borderRadius: 10, padding: 3 }}>
         {TABS.map((tab) => {

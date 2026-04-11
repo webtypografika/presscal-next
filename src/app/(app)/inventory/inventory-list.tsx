@@ -520,7 +520,7 @@ function MassEditPopup({ count, onApply, onClose }: {
   const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15";
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ backdropFilter: 'blur(8px)' }} onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{  }} onClick={onClose}>
       <div style={{ width: 440, background: 'rgb(20,30,55)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 24, boxShadow: '0 32px 80px rgba(0,0,0,0.5)' }}
         onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -677,7 +677,7 @@ function OrderPopup({ items, org, toast, onClose }: { items: Material[]; org: Or
   const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15";
 
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ backdropFilter: 'blur(8px)' }} onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{  }} onClick={onClose}>
       <div style={{ width: 600, maxHeight: '85vh', background: 'rgb(20,30,55)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, boxShadow: '0 32px 80px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column' }}
         onClick={e => e.stopPropagation()}>
 
