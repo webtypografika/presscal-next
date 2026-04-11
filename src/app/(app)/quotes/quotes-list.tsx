@@ -262,9 +262,10 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
                   <div style={{ textAlign: 'center', padding: '16px 0', fontSize: '0.92rem', color: 'var(--text-muted)', opacity: 0.4 }}>—</div>
                 )}
                 {colQuotes.map(q => {
-                  const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? (q as any).company?.email ?? q.customer?.email ?? '—';
+                  const emailSender = typeof q.description === 'string' && q.description.startsWith('Email από:') ? q.description.replace('Email από:', '').trim() : null;
+                  const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? (q as any).company?.email ?? q.customer?.email ?? emailSender ?? '—';
                   const items = Array.isArray(q.items) ? q.items as any[] : [];
-                  const desc = q.title || q.description || items.map((i: any) => i.name).filter(Boolean).join(' · ') || '';
+                  const desc = q.title || (q.description && !q.description.startsWith('Email από:') ? q.description : '') || items.map((i: any) => i.name).filter(Boolean).join(' · ') || '';
                   return (
                     <div
                       key={q.id}
@@ -379,7 +380,8 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
               </div>
             )}
             {archivedQuotes.map(q => {
-              const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? '—';
+              const emailSender = typeof q.description === 'string' && q.description.startsWith('Email από:') ? q.description.replace('Email από:', '').trim() : null;
+              const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? emailSender ?? '—';
               return (
                 <div key={q.id} onClick={() => router.push(`/quotes/${q.id}`)}
                   style={{
