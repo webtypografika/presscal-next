@@ -248,14 +248,15 @@ export async function ensureJobFolder(quoteId: string): Promise<{ jobFolderPath:
 // ─── LINK EMAIL ───
 
 export async function linkEmailToQuote(quoteId: string, messageId: string, threadId: string) {
-  const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { linkedEmails: true, threadId: true } });
+  const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { linkedEmails: true, threadId: true, description: true, companyId: true, contactId: true } });
   if (!quote) throw new Error('Quote not found');
 
   let linked = quote.linkedEmails || [];
+  let senderDescription: string | undefined;
 
   // Try to fetch all messages in the thread so the full conversation is linked
   try {
-    const { getGmailToken, getThread } = await import('@/lib/gmail');
+    const { getGmailToken, getThread, getMessage } = await import('@/lib/gmail');
     const { getServerSession } = await import('next-auth');
     const { authOptions } = await import('@/lib/auth');
     const session = await getServerSession(authOptions);
@@ -266,6 +267,14 @@ export async function linkEmailToQuote(quoteId: string, messageId: string, threa
         const threadMsgIds = await getThread(token, threadId);
         for (const id of threadMsgIds) {
           if (!linked.includes(id)) linked.push(id);
+        }
+        // If quote has no company/contact and no description, save sender info
+        if (!quote.companyId && !quote.contactId && !quote.description) {
+          const msg = await getMessage(token, messageId);
+          if (msg?.from) {
+            const senderName = msg.from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
+            senderDescription = `Email από: ${senderName}`;
+          }
         }
       }
     }
@@ -279,7 +288,11 @@ export async function linkEmailToQuote(quoteId: string, messageId: string, threa
 
   await prisma.quote.update({
     where: { id: quoteId },
-    data: { linkedEmails: linked, threadId: quote.threadId || threadId },
+    data: {
+      linkedEmails: linked,
+      threadId: quote.threadId || threadId,
+      ...(senderDescription ? { description: senderDescription } : {}),
+    },
   });
   revalidatePath(`/quotes/${quoteId}`);
   revalidatePath('/quotes');
