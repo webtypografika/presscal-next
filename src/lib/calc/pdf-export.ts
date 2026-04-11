@@ -731,13 +731,25 @@ async function exportNUp(
           const clipW = trimWpt + vcBL + vcBR;
           const clipH = trimHpt + vcBT + vcBB;
 
-          // Adjust draw origin for rotation
-          const rendW = epRawW * scaleX / cScaleFactor;
-          const rendH = epRawH * scaleY / cScaleFactor;
-          let drawX = visX, drawY = visY;
-          if (totalRot === 90) { drawX = visX + rendW; }
-          else if (totalRot === 270) { drawY = visY + rendH; }
-          else if (totalRot === 180) { drawX = visX + rendW; drawY = visY + rendH; }
+          // Derive draw origin per rotation so TrimBox fills the trim area.
+          // pdf-lib: translate → rotate → scale. For each angle we solve
+          // drawX/drawY so the PDF TrimBox maps onto visTrimX/visTrimY.
+          const tox = scaledOffX;
+          const toy = scaledOffY;
+          let drawX: number, drawY: number;
+          if (totalRot === 0) {
+            drawX = visX;
+            drawY = visY;
+          } else if (totalRot === 90) {
+            drawX = visTrimX + trimWpt + toy;
+            drawY = visTrimY - tox;
+          } else if (totalRot === 180) {
+            drawX = visTrimX + trimWpt + tox;
+            drawY = visTrimY + trimHpt + toy;
+          } else { // 270
+            drawX = visTrimX - toy;
+            drawY = visTrimY + trimHpt + tox;
+          }
 
           // Clip to asymmetric cell bounds, then draw
           page.pushOperators(pushGraphicsState(), rectangle(clipX, clipY, clipW, clipH), clip(), endPath());
