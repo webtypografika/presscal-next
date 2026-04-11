@@ -152,7 +152,7 @@ export default function OfficeShell({ initialProjects, initialItems, companies, 
           Γραφείο
         </h1>
         {showNewProject ? (
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <input
               ref={newProjectRef}
               value={newProjectTitle}
@@ -165,6 +165,14 @@ export default function OfficeShell({ initialProjects, initialItems, companies, 
                 color: 'var(--text)', outline: 'none', width: 180,
               }}
             />
+            <button onClick={handleCreateProject} disabled={!newProjectTitle.trim()} style={{
+              padding: '5px 12px', borderRadius: 6, border: 'none',
+              background: newProjectTitle.trim() ? 'var(--blue)' : 'var(--border)',
+              color: '#fff', fontSize: '0.72rem', fontWeight: 700, cursor: newProjectTitle.trim() ? 'pointer' : 'default', fontFamily: 'inherit',
+            }}>Δημιουργία</button>
+            <button onClick={() => { setShowNewProject(false); setNewProjectTitle(''); }} style={{
+              border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.65rem',
+            }}><i className="fas fa-times" /></button>
           </div>
         ) : (
           <button onClick={() => setShowNewProject(true)} style={{
