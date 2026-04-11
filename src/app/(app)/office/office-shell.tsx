@@ -726,36 +726,19 @@ function EmailSection({ itemId, linkedEmails, onLink, onUnlink }: {
         </button>
       </div>
 
-      {/* Linked emails */}
+      {/* Linked emails (expandable) */}
       {linkedEmails.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: showSearch ? 8 : 0 }}>
-          {linkedEmails.map(eid => {
-            const msg = emailCache[eid];
-            return (
-              <div key={eid} style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6,
-                background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
-              }}>
-                <i className="fas fa-envelope" style={{ fontSize: '0.55rem', color: 'var(--blue)', flexShrink: 0 }} />
-                {msg ? (
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {msg.subject || '(χωρίς θέμα)'}
-                    </div>
-                    <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
-                      {formatFrom(msg.from)} · {formatDate(msg.date)}
-                    </div>
-                  </div>
-                ) : (
-                  <span style={{ flex: 1, fontSize: '0.65rem', color: '#64748b' }}>{eid.slice(0, 16)}...</span>
-                )}
-                <button onClick={() => onUnlink(eid)} style={{
-                  border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer',
-                  fontSize: '0.55rem', padding: '2px 4px', flexShrink: 0,
-                }} title="Αποσύνδεση"><i className="fas fa-times" /></button>
-              </div>
-            );
-          })}
+          {linkedEmails.map(eid => (
+            <LinkedEmailCard
+              key={eid}
+              emailId={eid}
+              meta={emailCache[eid] || null}
+              formatFrom={formatFrom}
+              formatDate={formatDate}
+              onUnlink={() => onUnlink(eid)}
+            />
+          ))}
         </div>
       )}
 
@@ -812,6 +795,87 @@ function EmailSection({ itemId, linkedEmails, onLink, onUnlink }: {
                 </button>
               ))}
             </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── LINKED EMAIL CARD (click to expand + read body) ───
+
+function LinkedEmailCard({ emailId, meta, formatFrom, formatDate, onUnlink }: {
+  emailId: string;
+  meta: GmailMsg | null;
+  formatFrom: (f: string) => string;
+  formatDate: (d: string) => string;
+  onUnlink: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [body, setBody] = useState<string | null>(null);
+  const [loadingBody, setLoadingBody] = useState(false);
+
+  const handleExpand = async () => {
+    if (expanded) { setExpanded(false); return; }
+    setExpanded(true);
+    if (body) return;
+    setLoadingBody(true);
+    try {
+      const res = await fetch(`/api/email/messages/${emailId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBody(data.htmlBody || data.textBody || '');
+      }
+    } catch { /* ignore */ }
+    setLoadingBody(false);
+  };
+
+  return (
+    <div style={{
+      borderRadius: 6, overflow: 'hidden',
+      background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
+    }}>
+      <div
+        onClick={handleExpand}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: 'pointer' }}
+      >
+        <i className={`fas ${expanded ? 'fa-envelope-open' : 'fa-envelope'}`} style={{ fontSize: '0.55rem', color: 'var(--blue)', flexShrink: 0 }} />
+        {meta ? (
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {meta.subject || '(χωρίς θέμα)'}
+            </div>
+            <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
+              {formatFrom(meta.from)} · {formatDate(meta.date)}
+            </div>
+          </div>
+        ) : (
+          <span style={{ flex: 1, fontSize: '0.65rem', color: '#64748b' }}>{emailId.slice(0, 16)}...</span>
+        )}
+        <i className={`fas fa-chevron-${expanded ? 'up' : 'down'}`} style={{ fontSize: '0.45rem', color: '#475569', flexShrink: 0 }} />
+        <button onClick={e => { e.stopPropagation(); onUnlink(); }} style={{
+          border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer',
+          fontSize: '0.55rem', padding: '2px 4px', flexShrink: 0,
+        }} title="Αποσύνδεση"><i className="fas fa-times" /></button>
+      </div>
+
+      {expanded && (
+        <div style={{
+          borderTop: '1px solid rgba(59,130,246,0.1)',
+          padding: '10px 12px', maxHeight: 400, overflowY: 'auto',
+          background: 'rgba(255,255,255,0.02)',
+        }}>
+          {loadingBody ? (
+            <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+              <i className="fas fa-spinner fa-spin" /> Φόρτωση...
+            </div>
+          ) : body ? (
+            <div
+              dangerouslySetInnerHTML={{ __html: body }}
+              style={{ fontSize: '0.78rem', lineHeight: 1.7, color: 'var(--text-dim)', wordBreak: 'break-word' }}
+            />
+          ) : (
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Δεν βρέθηκε περιεχόμενο</div>
           )}
         </div>
       )}
