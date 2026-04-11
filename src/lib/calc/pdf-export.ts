@@ -93,6 +93,7 @@ export interface ExportOptions {
   numberRotation?: number;
   numberPositions?: Record<number, { x: number; y: number }>;
   numberGlobalPos?: { x: number; y: number };
+  numberExtra?: { posX: number; posY: number; fontSize: number; rotation: number }[];
   cellOffsets?: Record<number, { x: number; y: number }>;
   csStackSize?: number;
   csGetStackNum?: (posIdx: number, ups: number) => number;
@@ -1193,6 +1194,16 @@ async function exportCutStack(
 
   const defaultStackNumFn = (posIdx: number, ups: number) => posIdx;
 
+  // Auto-rotation detection (match canvas logic)
+  const cellPortrait = trimWpt <= trimHpt;
+  const pdfPgInfo = opts.pdfPageSizes?.[0];
+  const pdfPortrait = pdfPgInfo ? (pdfPgInfo.trimW <= pdfPgInfo.trimH) : true;
+  const csNeedsRot = cellPortrait !== pdfPortrait;
+  const csUserRot = opts.rotation || 0;
+  const csUserSwapped = (csUserRot > 45 && csUserRot < 135) || (csUserRot > 225 && csUserRot < 315);
+
+  const isSinglePage = embeddedPages.length <= 1;
+
   for (let s = 0; s < sheetsNeeded; s++) {
     // FRONT PAGE
     const page = doc.addPage([paperWpt, paperHpt]);
@@ -1205,23 +1216,41 @@ async function exportCutStack(
         const cOffY = mmToPt(cellOff.y);
         const csStack = opts.csStackSize || Math.max(1, embeddedPages.length);
         const stackNum = opts.csGetStackNum ? opts.csGetStackNum(posIdx, impo.ups) : defaultStackNumFn(posIdx, impo.ups);
-        const pageIdx = (stackNum * csStack + s) % Math.max(1, embeddedPages.length);
+        // Single-page PDF: repeat page 0 for all positions (same design, numbering differentiates)
+        const pageIdx = isSinglePage ? 0 : (stackNum * csStack + s) % Math.max(1, embeddedPages.length);
         if (embeddedPages.length > 0) {
           const ep = embeddedPages[pageIdx];
           const epPage = ep.page;
-          // Trim position → cell position (offset by bleed)
           const cellX = cenX + col * csTrimStepW - bleedPt + cOffX;
           const cellY = cenY + (impo.rows - 1 - row) * csTrimStepH - bleedPt - cOffY;
-          const epW = epPage.width || pieceW;
-          const epH = epPage.height || pieceH;
-          page.drawPage(epPage, { x: cellX, y: cellY, xScale: pieceW / epW, yScale: pieceH / epH });
+
+          // Clip to cell bounds
+          page.pushOperators(pushGraphicsState(), rectangle(cellX, cellY, pieceW, pieceH), clip(), endPath());
+
+          // Auto-rotate PDF to match cell orientation (same logic as canvas)
+          const epSrcRot = (360 - (ep.rotation || 0)) % 360;
+          const autoRot = csNeedsRot ? 90 : 0;
+          const totalRot = csUserSwapped ? ((epSrcRot + csUserRot) % 360) : ((epSrcRot + autoRot + csUserRot) % 360);
+          const epRawW = epPage.width || pieceW;
+          const epRawH = epPage.height || pieceH;
+          const needsSwap = (totalRot === 90 || totalRot === 270);
+          const scX = needsSwap ? (pieceH / epRawW) : (pieceW / epRawW);
+          const scY = needsSwap ? (pieceW / epRawH) : (pieceH / epRawH);
+          let drawX = cellX, drawY = cellY;
+          if (totalRot === 90) { drawX = cellX + pieceW; }
+          else if (totalRot === 270) { drawY = cellY + pieceH; }
+          else if (totalRot === 180) { drawX = cellX + pieceW; drawY = cellY + pieceH; }
+          const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: scX, yScale: scY };
+          if (totalRot) drawOpts.rotate = degrees(totalRot);
+          page.drawPage(epPage, drawOpts);
+
+          page.pushOperators(popGraphicsState());
         }
 
-        // Numbering overlay (front only)
+        // Numbering overlay (front only) — matches canvas formula: startNum + stackNum
         if (opts.numberingEnabled) {
           const numPos = opts.numberPositions?.[posIdx] || opts.numberGlobalPos || { x: 0.5, y: 0.5 };
-          const csStack2 = opts.csStackSize || Math.max(1, embeddedPages.length);
-          const seqNumber = startNum + stackNum * csStack2 + s;
+          const seqNumber = startNum + stackNum;
           const numStr = formatNumber(opts.numberPrefix || '', seqNumber, opts.numberDigits || 4);
           const cellXn = cenX + col * csTrimStepW - bleedPt + cOffX;
           const cellYn = cenY + (impo.rows - 1 - row) * csTrimStepH - bleedPt - cOffY;
@@ -1235,6 +1264,22 @@ async function exportCutStack(
           };
           if (opts.numberRotation) drawOpts.rotate = degrees(opts.numberRotation);
           page.drawText(numStr, drawOpts);
+
+          // Extra numbering positions (same number, different locations on the piece)
+          if (opts.numberExtra) {
+            for (const ex of opts.numberExtra) {
+              const exFS = Math.max(6, Math.min(ex.fontSize * pieceW / 150, pieceW * 0.15, pieceH * 0.12));
+              const exXpt = cellXn + ex.posX * pieceW;
+              const exYpt = cellYn + (1 - ex.posY) * pieceH;
+              const exTw = numFont.widthOfTextAtSize(numStr, exFS);
+              const exDrawOpts: Parameters<PDFPage['drawText']>[1] = {
+                x: exXpt - exTw / 2, y: exYpt - exFS * 0.35,
+                size: exFS, font: numFont, color: numPdfColor,
+              };
+              if (ex.rotation) exDrawOpts.rotate = degrees(ex.rotation);
+              page.drawText(numStr, exDrawOpts);
+            }
+          }
         }
       }
     }
@@ -1268,8 +1313,16 @@ async function exportCutStack(
       const bEp = backEmbedded ? (backEmbedded[0] || backEmbedded[fixedBackIdx]) : embeddedPages[fixedBackIdx];
       if (bEp) {
         const bEpPage = bEp.page;
-        const bEpW = bEpPage.width || pieceW;
-        const bEpH = bEpPage.height || pieceH;
+        const bEpRawW = bEpPage.width || pieceW;
+        const bEpRawH = bEpPage.height || pieceH;
+
+        // Back page auto-rotation (same orientation detection as front)
+        const bSrcRot = (360 - (bEp.rotation || 0)) % 360;
+        const bAutoRot = csNeedsRot ? 90 : 0;
+        const bTotalRot = csUserSwapped ? ((bSrcRot + csUserRot) % 360) : ((bSrcRot + bAutoRot + csUserRot) % 360);
+        const bSwap = (bTotalRot === 90 || bTotalRot === 270);
+        const bScX = bSwap ? (pieceH / bEpRawW) : (pieceW / bEpRawW);
+        const bScY = bSwap ? (pieceW / bEpRawH) : (pieceH / bEpRawH);
 
         for (let bRow = 0; bRow < impo.rows; bRow++) {
           for (let bCol = 0; bCol < impo.cols; bCol++) {
@@ -1277,7 +1330,16 @@ async function exportCutStack(
             const fCellY = cenY + (impo.rows - 1 - bRow) * csTrimStepH - bleedPt;
             const bCellX = isH2H ? (paperWpt - frontCellX - pieceW) : frontCellX;
             const bCellY = isH2H ? fCellY : (paperHpt - fCellY - pieceH);
-            backPage.drawPage(bEpPage, { x: bCellX, y: bCellY, xScale: pieceW / bEpW, yScale: pieceH / bEpH });
+
+            backPage.pushOperators(pushGraphicsState(), rectangle(bCellX, bCellY, pieceW, pieceH), clip(), endPath());
+            let bDrawX = bCellX, bDrawY = bCellY;
+            if (bTotalRot === 90) { bDrawX = bCellX + pieceW; }
+            else if (bTotalRot === 270) { bDrawY = bCellY + pieceH; }
+            else if (bTotalRot === 180) { bDrawX = bCellX + pieceW; bDrawY = bCellY + pieceH; }
+            const bDrawOpts: Parameters<PDFPage['drawPage']>[1] = { x: bDrawX, y: bDrawY, xScale: bScX, yScale: bScY };
+            if (bTotalRot) bDrawOpts.rotate = degrees(bTotalRot);
+            backPage.drawPage(bEpPage, bDrawOpts);
+            backPage.pushOperators(popGraphicsState());
           }
         }
       }

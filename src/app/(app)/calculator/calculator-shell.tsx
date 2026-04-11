@@ -1074,6 +1074,7 @@ export default function CalculatorShell() {
     numberFontSize: csNumFontSize, numberColor: csNumColor === 'red' ? '#cc0000' : '#000000',
     numberFont: csNumFont, numberRotation: csNumRotation || undefined,
     numberGlobalPos: { x: csNumPosX, y: csNumPosY },
+    numberExtra: csExtraNum.length > 0 ? csExtraNum : undefined,
     fixedBack: impoMode === 'cutstack' && csFixedBack, fixedBackPdfBytes: csBackPdf?.bytes,
     gangJobPdfBytes: impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf?.bytes) : undefined,
     blocks: impoMode === 'stepmulti' ? impo.blocks : undefined,
