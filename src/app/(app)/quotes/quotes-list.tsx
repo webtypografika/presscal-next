@@ -263,7 +263,8 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
                 )}
                 {colQuotes.map(q => {
                   const emailSender = typeof q.description === 'string' && q.description.startsWith('Email από:') ? q.description.replace('Email από:', '').trim() : null;
-                  const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? (q as any).company?.email ?? q.customer?.email ?? emailSender ?? '—';
+                  const hasLinkedEmail = (q as any).linkedEmails?.length > 0;
+                  const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? (q as any).company?.email ?? q.customer?.email ?? emailSender ?? (hasLinkedEmail ? q.title || 'Email' : '—');
                   const items = Array.isArray(q.items) ? q.items as any[] : [];
                   const desc = q.title || (q.description && !q.description.startsWith('Email από:') ? q.description : '') || items.map((i: any) => i.name).filter(Boolean).join(' · ') || '';
                   return (
@@ -381,7 +382,8 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
             )}
             {archivedQuotes.map(q => {
               const emailSender = typeof q.description === 'string' && q.description.startsWith('Email από:') ? q.description.replace('Email από:', '').trim() : null;
-              const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? emailSender ?? '—';
+              const hasLinkedEmail = (q as any).linkedEmails?.length > 0;
+              const name = (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? emailSender ?? (hasLinkedEmail ? q.title || 'Email' : '—');
               return (
                 <div key={q.id} onClick={() => router.push(`/quotes/${q.id}`)}
                   style={{
