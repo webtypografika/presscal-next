@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { GmailMessageMeta, GmailFullMessage, GmailLabel } from '@/lib/gmail';
 import { parseAddress, getInitials, avatarColor, timeAgo, formatDate, formatSize, attIconClass } from '@/lib/email-utils';
 import { createQuote, updateQuote, linkEmailToQuote, unlinkEmailFromQuote, saveEmailAttachments, getLinkedEmailMap } from '../quotes/actions';
+import { linkEmailToItem } from '../office/actions';
 
 // ─── TYPES ───
 type Folder = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all';
@@ -43,6 +44,9 @@ export default function EmailClient() {
   const [customerLoading, setCustomerLoading] = useState(false);
   const linkBtnRef = useRef<HTMLDivElement>(null);
   const linkPickerRef = useRef<HTMLDivElement>(null);
+  // Inline link popup (per-row)
+  const [rowLinkEmailId, setRowLinkEmailId] = useState<string | null>(null);
+  const [rowLinkPos, setRowLinkPos] = useState<{ top: number; left: number } | null>(null);
 
   // ─── FETCH MESSAGES ───
   const fetchMessages = useCallback(async (f: Folder, q?: string, label?: string | null) => {
@@ -470,6 +474,20 @@ export default function EmailClient() {
                       <i className={email.labelIds.includes('STARRED') ? 'fas fa-star' : 'far fa-star'} />
                     </button>
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setRowLinkEmailId(prev => prev === email.id ? null : email.id);
+                        setRowLinkPos({ top: r.bottom + 4, left: Math.min(r.left - 120, window.innerWidth - 300) });
+                      }}
+                      title="Σύνδεση email σε..."
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontSize: '0.65rem', color: linkedEmailMap[email.id] ? 'var(--accent)' : 'var(--text-muted)', opacity: linkedEmailMap[email.id] ? 0.9 : 0.3, transition: 'all 0.15s' }}
+                      onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.color = 'var(--blue)'; }}
+                      onMouseLeave={e => { if (!linkedEmailMap[email.id]) { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
+                    >
+                      <i className="fas fa-link" />
+                    </button>
+                    <button
                       onClick={(e) => { e.stopPropagation(); handleDismiss(email.id); }}
                       title="Διαγραφή από την εφαρμογή (παραμένει στο Gmail)"
                       style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontSize: '0.65rem', color: 'var(--text-muted)', opacity: 0.3, transition: 'all 0.15s' }}
@@ -490,6 +508,21 @@ export default function EmailClient() {
               width: '100%', padding: 12, border: 'none', background: 'transparent',
               color: 'var(--blue)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
             }}>Φορτωση περισσοτερων...</button>
+          )}
+
+          {/* Row-level link popup */}
+          {rowLinkEmailId && rowLinkPos && (
+            <EmailLinkPopup
+              emailId={rowLinkEmailId}
+              threadId={emails.find(e => e.id === rowLinkEmailId)?.threadId || ''}
+              pos={rowLinkPos}
+              onClose={() => setRowLinkEmailId(null)}
+              onLinkedToQuote={(emailId, quoteNumber, quoteId) => {
+                setLinkedEmailMap(prev => ({ ...prev, [emailId]: { number: quoteNumber, id: quoteId } }));
+                setRowLinkEmailId(null);
+              }}
+              onLinkedToOffice={() => setRowLinkEmailId(null)}
+            />
           )}
         </div>
       </div>
@@ -864,5 +897,207 @@ function ComposePanel({ data, onSend, onClose }: { data: ComposeData; onSend: (d
       </div>
     </div>,
     document.body
+  );
+}
+
+// ═══ EMAIL LINK POPUP (NetHunt-style) ═══
+
+function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLinkedToOffice }: {
+  emailId: string; threadId: string;
+  pos: { top: number; left: number };
+  onClose: () => void;
+  onLinkedToQuote: (emailId: string, quoteNumber: string, quoteId: string) => void;
+  onLinkedToOffice: () => void;
+}) {
+  const [tab, setTab] = useState<'quote' | 'office'>('quote');
+  const [search, setSearch] = useState('');
+  const [quotes, setQuotes] = useState<any[]>([]);
+  const [officeProjects, setOfficeProjects] = useState<any[]>([]);
+  const [officeItems, setOfficeItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Load data on mount
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const [quotesRes, projectsRes] = await Promise.all([
+          import('../quotes/actions').then(m => m.getQuotes()),
+          import('../office/actions').then(m => m.getProjects()),
+        ]);
+        setQuotes(quotesRes.filter(q => q.status !== 'cancelled').slice(0, 50));
+        setOfficeProjects(projectsRes.filter((p: any) => !p.archived));
+      } catch {}
+      setLoading(false);
+    })();
+  }, []);
+
+  // Load items when project selected
+  useEffect(() => {
+    if (!selectedProject) { setOfficeItems([]); return; }
+    import('../office/actions').then(m => m.getItems(selectedProject)).then(items => {
+      setOfficeItems(items as any[]);
+    });
+  }, [selectedProject]);
+
+  // Close on outside click
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [onClose]);
+
+  const handleLinkQuote = async (q: any) => {
+    await linkEmailToQuote(q.id, emailId, threadId);
+    saveEmailAttachments(q.id, [emailId]).catch(() => {});
+    onLinkedToQuote(emailId, q.number, q.id);
+  };
+
+  const handleLinkOfficeItem = async (itemId: string) => {
+    await linkEmailToItem(itemId, emailId);
+    onLinkedToOffice();
+  };
+
+  const filteredQuotes = quotes.filter(q =>
+    !search || q.number?.toLowerCase().includes(search.toLowerCase())
+    || q.title?.toLowerCase().includes(search.toLowerCase())
+    || q.company?.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const filteredItems = officeItems.filter(i =>
+    !search || i.title?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return createPortal(
+    <div ref={ref} style={{
+      position: 'fixed', top: pos.top, left: pos.left, zIndex: 99999,
+      width: 300, background: 'var(--bg-elevated)',
+      border: '1px solid var(--border)', borderRadius: 10,
+      boxShadow: '0 12px 36px rgba(0,0,0,0.5)', overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Σύνδεση email σε...</span>
+        <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>
+          <i className="fas fa-times" />
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)' }}>
+        {([
+          { id: 'quote' as const, label: 'Προσφορά', icon: 'fa-file-invoice', color: 'var(--accent)' },
+          { id: 'office' as const, label: 'Γραφείο', icon: 'fa-briefcase', color: 'var(--blue)' },
+        ]).map(t => (
+          <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }} style={{
+            flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
+            background: tab === t.id ? `${t.color}10` : 'transparent',
+            color: tab === t.id ? t.color : 'var(--text-muted)',
+            fontSize: '0.72rem', fontWeight: 700, fontFamily: 'inherit',
+            borderBottom: tab === t.id ? `2px solid ${t.color}` : '2px solid transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+          }}>
+            <i className={`fas ${t.icon}`} style={{ fontSize: '0.6rem' }} />{t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.15)', borderRadius: 6, padding: '4px 8px' }}>
+          <i className="fas fa-search" style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }} />
+          <input
+            autoFocus
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={tab === 'quote' ? 'Αναζήτηση προσφοράς...' : 'Αναζήτηση item...'}
+            style={{ flex: 1, border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.72rem', outline: 'none', fontFamily: 'inherit' }}
+          />
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+        {loading ? (
+          <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.72rem' }}><i className="fas fa-spinner fa-spin" /></div>
+        ) : tab === 'quote' ? (
+          /* ── Quotes ── */
+          filteredQuotes.length === 0 ? (
+            <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}>Καμία προσφορά</div>
+          ) : filteredQuotes.map(q => (
+            <button key={q.id} onClick={() => handleLinkQuote(q)} style={{
+              width: '100%', padding: '8px 12px', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.03)',
+              background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.06)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent)' }}>{q.number}</div>
+              <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>{q.title || q.company?.name || '---'}</div>
+            </button>
+          ))
+        ) : (
+          /* ── Office (Projects → Items) ── */
+          !selectedProject ? (
+            officeProjects.length === 0 ? (
+              <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}>Κανένα project</div>
+            ) : officeProjects.map((p: any) => (
+              <button key={p.id} onClick={() => setSelectedProject(p.id)} style={{
+                width: '100%', padding: '8px 12px', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.03)',
+                background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.06)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              >
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color || '#64748b', flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text)' }}>{p.title}</div>
+                  <div style={{ fontSize: '0.58rem', color: 'var(--text-muted)' }}>{p._count?.items || 0} items</div>
+                </div>
+                <i className="fas fa-chevron-right" style={{ fontSize: '0.5rem', color: '#475569' }} />
+              </button>
+            ))
+          ) : (
+            <>
+              <button onClick={() => setSelectedProject(null)} style={{
+                width: '100%', padding: '6px 12px', border: 'none', borderBottom: '1px solid var(--border)',
+                background: 'rgba(0,0,0,0.1)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600,
+              }}>
+                <i className="fas fa-arrow-left" style={{ fontSize: '0.5rem' }} />
+                {officeProjects.find((p: any) => p.id === selectedProject)?.title || 'Πίσω'}
+              </button>
+              {filteredItems.length === 0 ? (
+                <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}>Κανένα item</div>
+              ) : filteredItems.map((item: any) => (
+                <button key={item.id} onClick={() => handleLinkOfficeItem(item.id)} style={{
+                  width: '100%', padding: '8px 12px', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.03)',
+                  background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.06)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  <div style={{
+                    width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                    border: `1.5px solid ${item.completed ? 'var(--success)' : 'var(--border)'}`,
+                    background: item.completed ? 'var(--success)' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontSize: '0.45rem',
+                  }}>
+                    {item.completed && <i className="fas fa-check" />}
+                  </div>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</span>
+                </button>
+              ))}
+            </>
+          )
+        )}
+      </div>
+    </div>,
+    document.body,
   );
 }
