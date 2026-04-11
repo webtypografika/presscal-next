@@ -909,16 +909,17 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
   onLinkedToQuote: (emailId: string, quoteNumber: string, quoteId: string) => void;
   onLinkedToOffice: () => void;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<'quote' | 'office'>('quote');
   const [search, setSearch] = useState('');
   const [quotes, setQuotes] = useState<any[]>([]);
   const [officeProjects, setOfficeProjects] = useState<any[]>([]);
   const [officeItems, setOfficeItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Load data on mount
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -934,7 +935,6 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
     })();
   }, []);
 
-  // Load items when project selected
   useEffect(() => {
     if (!selectedProject) { setOfficeItems([]); return; }
     import('../office/actions').then(m => m.getItems(selectedProject)).then(items => {
@@ -942,7 +942,6 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
     });
   }, [selectedProject]);
 
-  // Close on outside click
   useEffect(() => {
     const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
     document.addEventListener('mousedown', h);
@@ -960,6 +959,34 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
     onLinkedToOffice();
   };
 
+  const handleCreateQuote = async () => {
+    setCreating(true);
+    try {
+      const q = await createQuote({ title: '' });
+      if (q?.id) {
+        await linkEmailToQuote(q.id, emailId, threadId);
+        saveEmailAttachments(q.id, [emailId]).catch(() => {});
+        onLinkedToQuote(emailId, q.number || '', q.id);
+        router.push(`/quotes/${q.id}`);
+      }
+    } catch {}
+    setCreating(false);
+  };
+
+  const handleCreateOfficeItem = async () => {
+    if (officeProjects.length === 0) return;
+    const projId = selectedProject || officeProjects[0]?.id;
+    if (!projId) return;
+    setCreating(true);
+    try {
+      const { createItem } = await import('../office/actions');
+      const item = await createItem(projId, search.trim() || 'Νέο item');
+      await linkEmailToItem(item.id, emailId);
+      onLinkedToOffice();
+    } catch {}
+    setCreating(false);
+  };
+
   const filteredQuotes = quotes.filter(q =>
     !search || q.number?.toLowerCase().includes(search.toLowerCase())
     || q.title?.toLowerCase().includes(search.toLowerCase())
@@ -973,9 +1000,9 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
   return createPortal(
     <div ref={ref} style={{
       position: 'fixed', top: pos.top, left: pos.left, zIndex: 99999,
-      width: 300, background: 'var(--bg-elevated)',
+      width: 300, background: 'var(--surface)',
       border: '1px solid var(--border)', borderRadius: 10,
-      boxShadow: '0 12px 36px rgba(0,0,0,0.5)', overflow: 'hidden',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.4)', overflow: 'hidden',
     }}>
       {/* Header */}
       <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -991,9 +1018,9 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
           { id: 'quote' as const, label: 'Προσφορά', icon: 'fa-file-invoice', color: 'var(--accent)' },
           { id: 'office' as const, label: 'Γραφείο', icon: 'fa-briefcase', color: 'var(--blue)' },
         ]).map(t => (
-          <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); }} style={{
+          <button key={t.id} onClick={() => { setTab(t.id); setSearch(''); setSelectedProject(null); }} style={{
             flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
-            background: tab === t.id ? `${t.color}10` : 'transparent',
+            background: tab === t.id ? 'rgba(255,255,255,0.04)' : 'transparent',
             color: tab === t.id ? t.color : 'var(--text-muted)',
             fontSize: '0.72rem', fontWeight: 700, fontFamily: 'inherit',
             borderBottom: tab === t.id ? `2px solid ${t.color}` : '2px solid transparent',
@@ -1006,7 +1033,7 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
 
       {/* Search */}
       <div style={{ padding: '6px 10px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.15)', borderRadius: 6, padding: '4px 8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px' }}>
           <i className="fas fa-search" style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }} />
           <input
             autoFocus
@@ -1019,19 +1046,18 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
       </div>
 
       {/* Content */}
-      <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
         {loading ? (
           <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.72rem' }}><i className="fas fa-spinner fa-spin" /></div>
         ) : tab === 'quote' ? (
-          /* ── Quotes ── */
           filteredQuotes.length === 0 ? (
             <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}>Καμία προσφορά</div>
           ) : filteredQuotes.map(q => (
             <button key={q.id} onClick={() => handleLinkQuote(q)} style={{
-              width: '100%', padding: '8px 12px', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.03)',
+              width: '100%', padding: '8px 12px', border: 'none', borderBottom: '1px solid var(--border)',
               background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
             }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.06)'; }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             >
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent)' }}>{q.number}</div>
@@ -1039,17 +1065,16 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
             </button>
           ))
         ) : (
-          /* ── Office (Projects → Items) ── */
           !selectedProject ? (
             officeProjects.length === 0 ? (
               <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}>Κανένα project</div>
             ) : officeProjects.map((p: any) => (
               <button key={p.id} onClick={() => setSelectedProject(p.id)} style={{
-                width: '100%', padding: '8px 12px', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.03)',
+                width: '100%', padding: '8px 12px', border: 'none', borderBottom: '1px solid var(--border)',
                 background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 display: 'flex', alignItems: 'center', gap: 8,
               }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.06)'; }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
               >
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color || '#64748b', flexShrink: 0 }} />
@@ -1064,7 +1089,7 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
             <>
               <button onClick={() => setSelectedProject(null)} style={{
                 width: '100%', padding: '6px 12px', border: 'none', borderBottom: '1px solid var(--border)',
-                background: 'rgba(0,0,0,0.1)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                background: 'rgba(255,255,255,0.02)', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                 display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600,
               }}>
                 <i className="fas fa-arrow-left" style={{ fontSize: '0.5rem' }} />
@@ -1074,11 +1099,11 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
                 <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.7rem' }}>Κανένα item</div>
               ) : filteredItems.map((item: any) => (
                 <button key={item.id} onClick={() => handleLinkOfficeItem(item.id)} style={{
-                  width: '100%', padding: '8px 12px', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.03)',
+                  width: '100%', padding: '8px 12px', border: 'none', borderBottom: '1px solid var(--border)',
                   background: 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
                   display: 'flex', alignItems: 'center', gap: 8,
                 }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59,130,246,0.06)'; }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
                   onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                 >
                   <div style={{
@@ -1096,6 +1121,26 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
             </>
           )
         )}
+      </div>
+
+      {/* Create new */}
+      <div style={{ borderTop: '1px solid var(--border)', padding: '8px 10px', display: 'flex', gap: 6 }}>
+        <button onClick={handleCreateQuote} disabled={creating} style={{
+          flex: 1, padding: '7px 0', borderRadius: 6, border: 'none',
+          background: 'var(--accent)', color: '#fff', fontSize: '0.65rem', fontWeight: 700,
+          cursor: 'pointer', opacity: creating ? 0.5 : 1, fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+        }}>
+          <i className="fas fa-plus" style={{ fontSize: '0.5rem' }} />Νέα Προσφορά
+        </button>
+        <button onClick={handleCreateOfficeItem} disabled={creating || officeProjects.length === 0} style={{
+          flex: 1, padding: '7px 0', borderRadius: 6, border: 'none',
+          background: 'var(--blue)', color: '#fff', fontSize: '0.65rem', fontWeight: 700,
+          cursor: 'pointer', opacity: (creating || officeProjects.length === 0) ? 0.5 : 1, fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+        }}>
+          <i className="fas fa-plus" style={{ fontSize: '0.5rem' }} />Νέο Γραφείο
+        </button>
       </div>
     </div>,
     document.body,
