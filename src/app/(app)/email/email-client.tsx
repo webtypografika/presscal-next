@@ -47,6 +47,8 @@ export default function EmailClient() {
   // Inline link popup (per-row)
   const [rowLinkEmailId, setRowLinkEmailId] = useState<string | null>(null);
   const [rowLinkPos, setRowLinkPos] = useState<{ top: number; left: number } | null>(null);
+  // Office linked emails tracking
+  const [officeLinkedEmails, setOfficeLinkedEmails] = useState<Set<string>>(new Set());
 
   // ─── FETCH MESSAGES ───
   const fetchMessages = useCallback(async (f: Folder, q?: string, label?: string | null) => {
@@ -462,6 +464,11 @@ export default function EmailClient() {
                           {linkedEmailMap[email.id].number}
                         </span>
                       )}
+                      {officeLinkedEmails.has(email.id) && (
+                        <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--blue)', background: 'color-mix(in srgb, var(--blue) 12%, transparent)', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                          Γραφείο
+                        </span>
+                      )}
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.subject || '(χωρις θεμα)'}</span>
                     </p>
                     <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email.snippet}</p>
@@ -481,9 +488,9 @@ export default function EmailClient() {
                         setRowLinkPos({ top: r.bottom + 4, left: Math.min(r.left - 120, window.innerWidth - 300) });
                       }}
                       title="Σύνδεση email σε..."
-                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontSize: '0.65rem', color: linkedEmailMap[email.id] ? 'var(--accent)' : 'var(--text-muted)', opacity: linkedEmailMap[email.id] ? 0.9 : 0.3, transition: 'all 0.15s' }}
+                      style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontSize: '0.65rem', color: linkedEmailMap[email.id] ? 'var(--accent)' : officeLinkedEmails.has(email.id) ? 'var(--blue)' : 'var(--text-muted)', opacity: (linkedEmailMap[email.id] || officeLinkedEmails.has(email.id)) ? 0.9 : 0.3, transition: 'all 0.15s' }}
                       onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.color = 'var(--blue)'; }}
-                      onMouseLeave={e => { if (!linkedEmailMap[email.id]) { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
+                      onMouseLeave={e => { if (!linkedEmailMap[email.id] && !officeLinkedEmails.has(email.id)) { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
                     >
                       <i className="fas fa-link" />
                     </button>
@@ -521,7 +528,10 @@ export default function EmailClient() {
                 setLinkedEmailMap(prev => ({ ...prev, [emailId]: { number: quoteNumber, id: quoteId } }));
                 setRowLinkEmailId(null);
               }}
-              onLinkedToOffice={() => setRowLinkEmailId(null)}
+              onLinkedToOffice={() => {
+                setOfficeLinkedEmails(prev => new Set([...prev, rowLinkEmailId!]));
+                setRowLinkEmailId(null);
+              }}
             />
           )}
         </div>
@@ -974,16 +984,22 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
   };
 
   const handleCreateOfficeItem = async () => {
-    if (officeProjects.length === 0) return;
-    const projId = selectedProject || officeProjects[0]?.id;
-    if (!projId) return;
     setCreating(true);
     try {
-      const { createItem } = await import('../office/actions');
+      const { createItem, createProject } = await import('../office/actions');
+      let projId = selectedProject || officeProjects[0]?.id;
+      // Auto-create a default project if none exist
+      if (!projId) {
+        const proj = await createProject('Γενικά', '#3b82f6');
+        projId = proj.id;
+        setOfficeProjects(prev => [...prev, { ...proj, _count: { items: 0 } }]);
+      }
       const item = await createItem(projId, search.trim() || 'Νέο item');
       await linkEmailToItem(item.id, emailId);
       onLinkedToOffice();
-    } catch {}
+    } catch (e) {
+      console.error('Failed to create office item:', e);
+    }
     setCreating(false);
   };
 
