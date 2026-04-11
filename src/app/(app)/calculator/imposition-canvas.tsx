@@ -267,8 +267,8 @@ function drawSheet(
       const mode = impo.mode;
       const isGangMultiPdf = mode === 'gangrun' && gangJobPdfs && gangJobPdfs.some(Boolean);
       const pdfCount = pdf?.thumbnails?.length || 0;
-      const isCutStack = mode === 'cutstack' && pdfCount > 1;
-      const isStepRepeat = !isCutStack && (mode === 'nup' || mode === 'cutstack' || (mode === 'gangrun' && !isGangMultiPdf));
+      const isCutStack = mode === 'cutstack';
+      const isStepRepeat = !isCutStack && (mode === 'nup' || (mode === 'gangrun' && !isGangMultiPdf));
       let pidx: number;
       let cellPdf: ParsedPDF | null | undefined = pdf;
       if (isSmMultiPdf) {
@@ -282,12 +282,16 @@ function drawSheet(
         cellPdf = gangJobPdfs![jobIdx] || null;
         pidx = pdfPageIdx; // 0=front, 1=back
       } else if (isCutStack) {
-        // Cut & Stack: each position gets a different page from the PDF
-        // stackNum * sheetsNeeded + sheetIndex → after cut+stack = sequential
-        const sheetsNeeded = Math.ceil(pdfCount / Math.max(impo.ups, 1));
-        const stackNum = impo.stackPositions?.[idx]?.stackNum ?? idx;
-        const sheetIdx = activeSigSheet ?? 0;
-        pidx = stackNum * sheetsNeeded + sheetIdx;
+        // Cut & Stack: multi-page PDF → each position gets a different page
+        // Single-page PDF → all positions show page 0 (same design, different numbering)
+        if (pdfCount <= 1) {
+          pidx = 0; // repeat same page, numbering differentiates
+        } else {
+          const sheetsNeeded = Math.ceil(pdfCount / Math.max(impo.ups, 1));
+          const stackNum = impo.stackPositions?.[idx]?.stackNum ?? idx;
+          const sheetIdx = activeSigSheet ?? 0;
+          pidx = stackNum * sheetsNeeded + sheetIdx;
+        }
       } else if (isStepRepeat) {
         pidx = pdfPageIdx; // controlled by caller (front=0, back=1)
       } else {
@@ -398,8 +402,9 @@ function drawSheet(
         // Overlay: show page/position number on top of thumbnail
         if ((isStepRepeat || isCutStack) && impo.mode !== 'gangrun') {
           if (isCutStack && csNumbering) {
-            // Formatted numbering overlay at specified position
-            const seqNum = csNumbering.startNum + pidx;
+            // Formatted numbering overlay: use stack position index, not PDF page
+            const stackNum = impo.stackPositions?.[idx]?.stackNum ?? idx;
+            const seqNum = csNumbering.startNum + stackNum;
             const numStr = csNumbering.prefix + String(seqNum).padStart(csNumbering.digits, '0');
             const nFS = Math.min(csNumbering.fontSize * scale * 0.8, trimW * 0.25, trimH * 0.2);
             const nx = trimX + csNumbering.posX * trimW;
@@ -453,9 +458,10 @@ function drawSheet(
         }
 
         if (!isGangMultiPdf) {
-          const cellLabel = isCutStack ? pidx + 1 : (cellPageNum || idx + 1);
+          const cellLabel = isCutStack ? (impo.stackPositions?.[idx]?.posLabel ?? idx + 1) : (cellPageNum || idx + 1);
           if (isCutStack && csNumbering) {
-            const seqNum = csNumbering.startNum + pidx;
+            const stackNum2 = impo.stackPositions?.[idx]?.stackNum ?? idx;
+            const seqNum = csNumbering.startNum + stackNum2;
             const numStr = csNumbering.prefix + String(seqNum).padStart(csNumbering.digits, '0');
             const nFS = Math.min(csNumbering.fontSize * scale * 0.8, trimW * 0.25, trimH * 0.2);
             const nx = trimX + csNumbering.posX * trimW;
