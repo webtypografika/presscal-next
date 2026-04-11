@@ -813,6 +813,7 @@ function LinkedEmailCard({ emailId, meta, formatFrom, formatDate, onUnlink }: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const [body, setBody] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<{ id: string; filename: string; mimeType: string; size: number }[]>([]);
   const [loadingBody, setLoadingBody] = useState(false);
 
   const handleExpand = async () => {
@@ -825,9 +826,16 @@ function LinkedEmailCard({ emailId, meta, formatFrom, formatDate, onUnlink }: {
       if (res.ok) {
         const data = await res.json();
         setBody(data.htmlBody || data.textBody || '');
+        if (data.attachments?.length) setAttachments(data.attachments);
       }
     } catch { /* ignore */ }
     setLoadingBody(false);
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / 1048576).toFixed(1)} MB`;
   };
 
   return (
@@ -870,10 +878,38 @@ function LinkedEmailCard({ emailId, meta, formatFrom, formatDate, onUnlink }: {
               <i className="fas fa-spinner fa-spin" /> Φόρτωση...
             </div>
           ) : body ? (
-            <div
-              dangerouslySetInnerHTML={{ __html: body }}
-              style={{ fontSize: '0.78rem', lineHeight: 1.7, color: 'var(--text-dim)', wordBreak: 'break-word' }}
-            />
+            <>
+              <div
+                dangerouslySetInnerHTML={{ __html: body }}
+                style={{ fontSize: '0.78rem', lineHeight: 1.7, color: 'var(--text-dim)', wordBreak: 'break-word' }}
+              />
+              {attachments.length > 0 && (
+                <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(59,130,246,0.1)' }}>
+                  <div style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>
+                    <i className="fas fa-paperclip" style={{ marginRight: 4 }} />ΣΥΝΗΜΜΕΝΑ ({attachments.length})
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {attachments.map(att => (
+                      <a
+                        key={att.id}
+                        href={`/api/email/messages/${emailId}/attachments/${att.id}?filename=${encodeURIComponent(att.filename)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 5,
+                          background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)',
+                          color: 'var(--blue)', fontSize: '0.65rem', fontWeight: 600, textDecoration: 'none',
+                        }}
+                      >
+                        <i className={`fas ${att.mimeType.startsWith('image/') ? 'fa-image' : att.filename.endsWith('.pdf') ? 'fa-file-pdf' : 'fa-file'}`} style={{ fontSize: '0.55rem' }} />
+                        <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.filename}</span>
+                        <span style={{ fontSize: '0.55rem', color: '#64748b' }}>{formatSize(att.size)}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Δεν βρέθηκε περιεχόμενο</div>
           )}
