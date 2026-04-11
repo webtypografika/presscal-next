@@ -661,18 +661,21 @@ function EmailSection({ itemId, linkedEmails, onLink, onUnlink }: {
     if (linkedEmails.length === 0) return;
     const missing = linkedEmails.filter(eid => !emailCache[eid]);
     if (missing.length === 0) return;
-    // Fetch details for linked emails
+    // Fetch details for linked emails (API returns GmailFullMessage: {id, from, subject, date, ...})
     Promise.all(missing.map(eid =>
       fetch(`/api/email/messages/${eid}`).then(r => r.ok ? r.json() : null).catch(() => null)
     )).then(results => {
       const cache: Record<string, GmailMsg> = {};
       results.forEach((msg, i) => {
         if (msg) {
-          const headers = msg.payload?.headers || [];
-          const from = headers.find((h: any) => h.name === 'From')?.value || '';
-          const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
-          const date = headers.find((h: any) => h.name === 'Date')?.value || '';
-          cache[missing[i]] = { id: msg.id, threadId: msg.threadId, snippet: msg.snippet || '', from, subject, date };
+          cache[missing[i]] = {
+            id: msg.id,
+            threadId: msg.threadId || '',
+            snippet: msg.textBody?.slice(0, 100) || '',
+            from: msg.from || '',
+            subject: msg.subject || '',
+            date: msg.date || '',
+          };
         }
       });
       setEmailCache(prev => ({ ...prev, ...cache }));
