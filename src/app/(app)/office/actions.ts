@@ -44,18 +44,6 @@ export async function reorderProjects(ids: string[]) {
 
 // ─── ITEMS ───
 
-export async function getAllItems() {
-  return prisma.orgItem.findMany({
-    where: { orgId: ORG_ID },
-    include: {
-      company: { select: { id: true, name: true } },
-      contact: { select: { id: true, name: true } },
-      calendarEvents: { select: { id: true, title: true, startAt: true, type: true, completed: true }, orderBy: { startAt: 'asc' } },
-    },
-    orderBy: [{ completed: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
-  });
-}
-
 export async function getItems(projectId: string) {
   return prisma.orgItem.findMany({
     where: { projectId, orgId: ORG_ID },
@@ -111,11 +99,6 @@ export async function updateItem(id: string, data: {
 
 export async function deleteItem(id: string) {
   await prisma.orgItem.delete({ where: { id } });
-  reval();
-}
-
-export async function moveItemToProject(itemId: string, projectId: string) {
-  await prisma.orgItem.update({ where: { id: itemId }, data: { projectId } });
   reval();
 }
 

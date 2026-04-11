@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import {
-  createProject, updateProject, deleteProject,
-  createItem, updateItem, deleteItem, toggleItem, moveItemToProject,
+  getItems, createProject, updateProject, deleteProject,
+  createItem, updateItem, deleteItem, toggleItem,
   linkEmailToItem, unlinkEmailFromItem,
 } from './actions';
 
@@ -20,7 +19,7 @@ type ChecklistItem = { text: string; done: boolean };
 
 type ItemData = {
   id: string; title: string; notes: string | null; tags: string[];
-  priority: string; deadline: string | null; projectId: string;
+  priority: string; deadline: string | null;
   completed: boolean; completedAt: string | null;
   checklist: ChecklistItem[] | null;
   companyId: string | null; contactId: string | null;
@@ -43,63 +42,95 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 // ─── COMPONENT ───
 
-export default function OfficeShell({ initialProjects, initialItems, companies, contacts }: {
+export default function OfficeShell({ initialProjects, companies, contacts }: {
   initialProjects: Project[];
-  initialItems: ItemData[];
   companies: PickerOption[];
   contacts: PickerOption[];
 }) {
   const [projects, setProjects] = useState<Project[]>(initialProjects);
-  const [items, setItems] = useState<ItemData[]>(initialItems);
-  const [detailItem, setDetailItem] = useState<string | null>(null);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [newItemProject, setNewItemProject] = useState<string | null>(null);
-  const [newItemTitle, setNewItemTitle] = useState('');
-  const [showNewProject, setShowNewProject] = useState(false);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(initialProjects.find(p => !p.archived)?.id || null);
+  const [items, setItems] = useState<ItemData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [newProjectTitle, setNewProjectTitle] = useState('');
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [newItemTitle, setNewItemTitle] = useState('');
+  const [editingProject, setEditingProject] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
   const newProjectRef = useRef<HTMLInputElement>(null);
   const newItemRef = useRef<HTMLInputElement>(null);
 
-  const activeProjects = projects.filter(p => !p.archived);
+  // Load items when project changes
+  useEffect(() => {
+    if (!activeProjectId) { setItems([]); return; }
+    setLoading(true);
+    getItems(activeProjectId).then((data) => {
+      setItems(data as unknown as ItemData[]);
+      setLoading(false);
+    });
+  }, [activeProjectId]);
 
+  // Focus new project input
   useEffect(() => { if (showNewProject) newProjectRef.current?.focus(); }, [showNewProject]);
-  useEffect(() => { if (newItemProject) newItemRef.current?.focus(); }, [newItemProject]);
 
-  // ─── DRAG & DROP ───
-  const handleDragStart = (e: React.DragEvent, id: string) => { e.dataTransfer.effectAllowed = 'move'; setDragId(id); };
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
-  const handleDrop = async (e: React.DragEvent, projectId: string) => {
-    e.preventDefault();
-    if (!dragId) return;
-    const item = items.find(i => i.id === dragId);
-    if (!item || item.projectId === projectId) { setDragId(null); return; }
-    setItems(prev => prev.map(i => i.id === dragId ? { ...i, projectId } : i));
-    setDragId(null);
-    await moveItemToProject(dragId, projectId);
-  };
+  const activeProject = projects.find(p => p.id === activeProjectId);
+  const activeProjects = projects.filter(p => !p.archived);
+  const archivedProjects = projects.filter(p => p.archived);
 
   // ─── PROJECT ACTIONS ───
+
   const handleCreateProject = async () => {
     if (!newProjectTitle.trim()) return;
     const color = PROJECT_COLORS[projects.length % PROJECT_COLORS.length];
     const proj = await createProject(newProjectTitle.trim(), color);
     setProjects(prev => [...prev, { ...proj, _count: { items: 0 } } as Project]);
-    setNewProjectTitle(''); setShowNewProject(false);
+    setActiveProjectId(proj.id);
+    setNewProjectTitle('');
+    setShowNewProject(false);
+  };
+
+  const handleArchiveProject = async (id: string) => {
+    await updateProject(id, { archived: true });
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, archived: true } : p));
+    if (activeProjectId === id) {
+      const next = projects.find(p => !p.archived && p.id !== id);
+      setActiveProjectId(next?.id || null);
+    }
+  };
+
+  const handleRestoreProject = async (id: string) => {
+    await updateProject(id, { archived: false });
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, archived: false } : p));
+    setActiveProjectId(id);
   };
 
   const handleDeleteProject = async (id: string) => {
     if (!confirm('Διαγραφή project και όλων των items;')) return;
     await deleteProject(id);
     setProjects(prev => prev.filter(p => p.id !== id));
-    setItems(prev => prev.filter(i => i.projectId !== id));
+    if (activeProjectId === id) {
+      const next = projects.find(p => !p.archived && p.id !== id);
+      setActiveProjectId(next?.id || null);
+    }
+  };
+
+  const handleRenameProject = async (id: string) => {
+    if (!editTitle.trim()) { setEditingProject(null); return; }
+    await updateProject(id, { title: editTitle.trim() });
+    setProjects(prev => prev.map(p => p.id === id ? { ...p, title: editTitle.trim() } : p));
+    setEditingProject(null);
   };
 
   // ─── ITEM ACTIONS ───
-  const handleCreateItem = async (projectId: string) => {
-    if (!newItemTitle.trim()) return;
-    const item = await createItem(projectId, newItemTitle.trim());
-    setItems(prev => [{ ...item, projectId, notes: null, tags: [], priority: 'normal', deadline: null, completed: false, completedAt: null, checklist: null, companyId: null, contactId: null, linkedEmails: [], company: null, contact: null, calendarEvents: [], createdAt: item.createdAt.toISOString() } as unknown as ItemData, ...prev]);
-    setNewItemTitle(''); setNewItemProject(null);
+
+  const handleCreateItem = async () => {
+    if (!newItemTitle.trim() || !activeProjectId) return;
+    const item = await createItem(activeProjectId, newItemTitle.trim());
+    setItems(prev => [{ ...item, notes: null, tags: [], priority: 'normal', deadline: null, completed: false, completedAt: null, checklist: null, companyId: null, contactId: null, linkedEmails: [], company: null, contact: null, calendarEvents: [], createdAt: item.createdAt.toISOString() } as unknown as ItemData, ...prev]);
+    setNewItemTitle('');
+    setExpandedItem(item.id);
+    // Update project count
+    setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, _count: { items: p._count.items + 1 } } : p));
   };
 
   const handleToggleItem = async (id: string) => {
@@ -110,7 +141,8 @@ export default function OfficeShell({ initialProjects, initialItems, companies, 
   const handleDeleteItem = async (id: string) => {
     await deleteItem(id);
     setItems(prev => prev.filter(i => i.id !== id));
-    if (detailItem === id) setDetailItem(null);
+    setProjects(prev => prev.map(p => p.id === activeProjectId ? { ...p, _count: { items: Math.max(0, p._count.items - 1) } } : p));
+    if (expandedItem === id) setExpandedItem(null);
   };
 
   const handleUpdateItem = async (id: string, data: Partial<ItemData>) => {
@@ -127,6 +159,8 @@ export default function OfficeShell({ initialProjects, initialItems, companies, 
     setItems(prev => prev.map(i => i.id === id ? { ...i, ...data } : i));
   };
 
+  // ─── CHECKLIST HELPERS ───
+
   const getChecklist = (item: ItemData): ChecklistItem[] => {
     if (!item.checklist) return [];
     if (Array.isArray(item.checklist)) return item.checklist;
@@ -140,347 +174,467 @@ export default function OfficeShell({ initialProjects, initialItems, companies, 
   // ─── RENDER ───
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)', marginTop: -8 }}>
+    <div style={{ display: 'flex', gap: 0, height: 'calc(100vh - 140px)', marginTop: -8 }}>
 
-      {/* Header bar */}
+      {/* ═══ LEFT: Project Sidebar ═══ */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
-        borderBottom: '1px solid var(--border)', flexShrink: 0,
+        width: 220, flexShrink: 0, borderRight: '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.08)',
       }}>
-        <h1 style={{ fontSize: '1rem', fontWeight: 800, flex: 1 }}>
-          <i className="fas fa-briefcase" style={{ marginRight: 8, color: 'var(--blue)', fontSize: '0.85rem' }} />
-          Γραφείο
-        </h1>
-        {showNewProject ? (
-          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {/* Header */}
+        <div style={{ padding: '12px 14px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>PROJECTS</span>
+          <button onClick={() => setShowNewProject(true)} style={{
+            width: 22, height: 22, borderRadius: 5, border: '1px solid var(--border)',
+            background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem',
+          }}><i className="fas fa-plus" /></button>
+        </div>
+
+        {/* New project input */}
+        {showNewProject && (
+          <div style={{ padding: '0 10px 8px' }}>
             <input
               ref={newProjectRef}
               value={newProjectTitle}
               onChange={e => setNewProjectTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(); if (e.key === 'Escape') { setShowNewProject(false); setNewProjectTitle(''); } }}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(); if (e.key === 'Escape') setShowNewProject(false); }}
+              onBlur={() => { if (!newProjectTitle.trim()) setShowNewProject(false); }}
               placeholder="Τίτλος project..."
               style={{
-                padding: '5px 10px', borderRadius: 6, fontSize: '0.75rem',
-                border: '1px solid var(--blue)', background: 'rgba(0,0,0,0.2)',
-                color: 'var(--text)', outline: 'none', width: 180,
+                width: '100%', padding: '6px 10px', borderRadius: 6, fontSize: '0.75rem',
+                border: '1px solid var(--accent)', background: 'rgba(0,0,0,0.2)',
+                color: 'var(--text)', outline: 'none',
               }}
             />
-            <button onClick={handleCreateProject} disabled={!newProjectTitle.trim()} style={{
-              padding: '5px 12px', borderRadius: 6, border: 'none',
-              background: newProjectTitle.trim() ? 'var(--blue)' : 'var(--border)',
-              color: '#fff', fontSize: '0.72rem', fontWeight: 700, cursor: newProjectTitle.trim() ? 'pointer' : 'default', fontFamily: 'inherit',
-            }}>Δημιουργία</button>
-            <button onClick={() => { setShowNewProject(false); setNewProjectTitle(''); }} style={{
-              border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.65rem',
-            }}><i className="fas fa-times" /></button>
-          </div>
-        ) : (
-          <button onClick={() => setShowNewProject(true)} style={{
-            padding: '5px 14px', borderRadius: 6, border: 'none',
-            background: 'var(--blue)', color: '#fff', fontSize: '0.72rem',
-            fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            <i className="fas fa-plus" style={{ fontSize: '0.55rem' }} />Νέο Project
-          </button>
-        )}
-      </div>
-
-      {/* ═══ KANBAN BOARD ═══ */}
-      <div style={{
-        flex: 1, display: 'grid',
-        gridTemplateColumns: `repeat(${activeProjects.length || 1}, minmax(280px, 1fr))`,
-        gap: 10, padding: 12, overflowX: 'auto', overflowY: 'hidden',
-        minHeight: 0,
-      }}>
-        {activeProjects.length === 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', gridColumn: '1 / -1' }}>
-            <div style={{ textAlign: 'center' }}>
-              <i className="fas fa-briefcase" style={{ fontSize: '2rem', marginBottom: 12, opacity: 0.2 }} />
-              <p style={{ fontSize: '0.85rem' }}>Δημιουργήστε ένα project για να ξεκινήσετε</p>
-            </div>
           </div>
         )}
 
-        {activeProjects.map(project => {
-          const projItems = items.filter(i => i.projectId === project.id);
-          const pendingItems = projItems.filter(i => !i.completed);
-          const doneItems = projItems.filter(i => i.completed);
-
-          return (
-            <div
-              key={project.id}
-              onDrop={e => handleDrop(e, project.id)}
-              onDragOver={handleDragOver}
+        {/* Project list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 6px' }}>
+          {activeProjects.map(p => (
+            <button
+              key={p.id}
+              onClick={() => setActiveProjectId(p.id)}
+              onDoubleClick={() => { setEditingProject(p.id); setEditTitle(p.title); }}
               style={{
-                borderRadius: 12, border: '1px solid var(--border)',
-                background: dragId ? 'rgba(255,255,255,0.02)' : 'transparent',
-                display: 'flex', flexDirection: 'column',
-                minWidth: 0, overflow: 'hidden', minHeight: 0,
+                width: '100%', padding: '8px 10px', borderRadius: 7, border: 'none',
+                background: p.id === activeProjectId ? 'rgba(255,255,255,0.06)' : 'transparent',
+                color: p.id === activeProjectId ? 'var(--text)' : 'var(--text-dim)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                fontSize: '0.78rem', fontWeight: 600, fontFamily: 'inherit', textAlign: 'left',
+                marginBottom: 2,
               }}
             >
-              {/* Column header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: project.color || '#64748b', flexShrink: 0 }} />
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: project.color || 'var(--text)', flex: 1 }}>{project.title}</span>
-                <span style={{
-                  fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)',
-                  background: 'rgba(255,255,255,0.06)', padding: '1px 6px', borderRadius: 8,
-                }}>{pendingItems.length}</span>
-                <button onClick={() => { setNewItemProject(project.id); setNewItemTitle(''); }} style={{
-                  width: 22, height: 22, borderRadius: 5, border: '1px solid var(--border)',
-                  background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem',
-                }}><i className="fas fa-plus" /></button>
-                <button onClick={() => handleDeleteProject(project.id)} style={{
-                  width: 22, height: 22, borderRadius: 5, border: 'none',
-                  background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem', opacity: 0.3,
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-                ><i className="fas fa-trash" /></button>
-              </div>
-
-              {/* New item input (inline) */}
-              {newItemProject === project.id && (
-                <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
-                  <input
-                    ref={newItemRef}
-                    value={newItemTitle}
-                    onChange={e => setNewItemTitle(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleCreateItem(project.id); if (e.key === 'Escape') setNewItemProject(null); }}
-                    onBlur={() => { if (!newItemTitle.trim()) setNewItemProject(null); }}
-                    placeholder="Νέο item..."
-                    style={{
-                      width: '100%', padding: '6px 10px', borderRadius: 6, fontSize: '0.75rem',
-                      border: `1px solid ${project.color || 'var(--border)'}`, background: 'rgba(0,0,0,0.2)',
-                      color: 'var(--text)', outline: 'none',
-                    }}
-                  />
-                </div>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color || '#64748b', flexShrink: 0 }} />
+              {editingProject === p.id ? (
+                <input
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleRenameProject(p.id); if (e.key === 'Escape') setEditingProject(null); }}
+                  onBlur={() => handleRenameProject(p.id)}
+                  autoFocus
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    flex: 1, background: 'rgba(0,0,0,0.3)', border: '1px solid var(--accent)',
+                    borderRadius: 4, padding: '2px 6px', fontSize: '0.75rem', color: 'var(--text)', outline: 'none',
+                  }}
+                />
+              ) : (
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</span>
               )}
+              <span style={{ fontSize: '0.6rem', color: '#64748b', flexShrink: 0 }}>{p._count.items}</span>
+            </button>
+          ))}
 
-              {/* Cards */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 5 }} className="custom-scrollbar">
-                {pendingItems.map(item => {
-                  const cl = getChecklist(item);
-                  const clDone = cl.filter(c => c.done).length;
-                  const prioColor = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.normal;
-                  const overdue = item.deadline && new Date(item.deadline) < new Date() && !item.completed;
-
-                  return (
-                    <div
-                      key={item.id}
-                      draggable
-                      onDragStart={e => handleDragStart(e, item.id)}
-                      onClick={() => setDetailItem(item.id)}
-                      style={{
-                        padding: '8px 10px', borderRadius: 8, cursor: 'grab',
-                        border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
-                        borderLeft: `3px solid ${prioColor}`,
-                        background: overdue ? 'rgba(239,68,68,0.04)' : 'rgba(255,255,255,0.02)',
-                        transition: 'background 0.15s',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <button onClick={e => { e.stopPropagation(); handleToggleItem(item.id); }} style={{
-                          width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                          border: '1.5px solid var(--border)', background: 'transparent',
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '0.45rem', color: '#fff',
-                        }} />
-                        <span style={{ fontSize: '0.78rem', fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.title}
-                        </span>
-                      </div>
-                      {/* Badges row */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                        {item.company && (
-                          <span style={{ fontSize: '0.58rem', color: 'var(--teal)' }}>
-                            <i className="fas fa-building" style={{ marginRight: 2 }} />{item.company.name}
-                          </span>
-                        )}
-                        {cl.length > 0 && (
-                          <span style={{ fontSize: '0.55rem', color: clDone === cl.length ? 'var(--success)' : '#64748b' }}>
-                            <i className="fas fa-tasks" style={{ marginRight: 2 }} />{clDone}/{cl.length}
-                          </span>
-                        )}
-                        {item.linkedEmails.length > 0 && (
-                          <span style={{ fontSize: '0.55rem', color: '#64748b' }}>
-                            <i className="fas fa-envelope" style={{ marginRight: 2 }} />{item.linkedEmails.length}
-                          </span>
-                        )}
-                        {item.deadline && (
-                          <span style={{ fontSize: '0.58rem', fontWeight: 600, color: overdue ? '#ef4444' : '#64748b', marginLeft: 'auto' }}>
-                            <i className="fas fa-clock" style={{ marginRight: 2, fontSize: '0.5rem' }} />
-                            {new Date(item.deadline).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' })}
-                          </span>
-                        )}
-                        {item.tags.slice(0, 2).map(t => (
-                          <span key={t} style={{ fontSize: '0.5rem', padding: '0 4px', borderRadius: 3, background: 'rgba(255,255,255,0.06)', color: '#64748b' }}>#{t}</span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Done items (collapsed) */}
-                {doneItems.length > 0 && (
-                  <div style={{ fontSize: '0.6rem', color: 'var(--success)', padding: '6px 4px 2px', fontWeight: 600, opacity: 0.6 }}>
-                    <i className="fas fa-check-circle" style={{ marginRight: 4 }} />{doneItems.length} ολοκληρωμένα
-                  </div>
-                )}
-                {doneItems.map(item => (
-                  <div
-                    key={item.id}
-                    onClick={() => setDetailItem(item.id)}
-                    style={{
-                      padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-                      border: '1px solid rgba(16,185,129,0.15)',
-                      background: 'rgba(16,185,129,0.03)', opacity: 0.6,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button onClick={e => { e.stopPropagation(); handleToggleItem(item.id); }} style={{
-                        width: 14, height: 14, borderRadius: 3, flexShrink: 0,
-                        border: 'none', background: 'var(--success)',
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.4rem', color: '#fff',
-                      }}><i className="fas fa-check" /></button>
-                      <span style={{ fontSize: '0.72rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>{item.title}</span>
-                    </div>
-                  </div>
-                ))}
-
-                {projItems.length === 0 && (
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.72rem', opacity: 0.4, minHeight: 60 }}>
-                    Σύρετε εδώ
-                  </div>
-                )}
+          {/* Archived section */}
+          {archivedProjects.length > 0 && (
+            <>
+              <div style={{ fontSize: '0.6rem', fontWeight: 700, color: '#475569', padding: '12px 10px 4px', letterSpacing: '0.05em' }}>
+                ΑΡΧΕΙΟ
               </div>
-            </div>
-          );
-        })}
+              {archivedProjects.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setActiveProjectId(p.id)}
+                  style={{
+                    width: '100%', padding: '6px 10px', borderRadius: 7, border: 'none',
+                    background: p.id === activeProjectId ? 'rgba(255,255,255,0.04)' : 'transparent',
+                    color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                    fontSize: '0.72rem', fontFamily: 'inherit', textAlign: 'left', opacity: 0.6,
+                    marginBottom: 2,
+                  }}
+                >
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: p.color || '#64748b', flexShrink: 0, opacity: 0.4 }} />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</span>
+                  <span style={{ fontSize: '0.6rem' }}>{p._count.items}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* ═══ DETAIL MODAL ═══ */}
-      {detailItem && (() => {
-        const item = items.find(i => i.id === detailItem);
-        if (!item) return null;
-        const cl = getChecklist(item);
-        return createPortal(
-          <div onClick={() => setDetailItem(null)} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: 560, maxHeight: '85vh', overflow: 'auto', background: 'var(--bg-elevated)', borderRadius: 16, border: '1px solid var(--border)', padding: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }} className="custom-scrollbar">
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                <button onClick={e => { e.stopPropagation(); handleToggleItem(item.id); }} style={{
-                  width: 22, height: 22, borderRadius: 5, flexShrink: 0,
-                  border: `2px solid ${item.completed ? 'var(--success)' : 'var(--border)'}`,
-                  background: item.completed ? 'var(--success)' : 'transparent',
-                  color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.55rem',
-                }}>{item.completed && <i className="fas fa-check" />}</button>
-                <input
-                  value={item.title}
-                  onChange={e => handleUpdateItem(item.id, { title: e.target.value })}
-                  style={{ flex: 1, fontSize: '1.05rem', fontWeight: 700, border: 'none', background: 'transparent', color: 'var(--text)', outline: 'none', fontFamily: 'inherit' }}
-                />
-                <button onClick={() => setDetailItem(null)} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}>&times;</button>
-              </div>
+      {/* ═══ RIGHT: Items ═══ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {/* Notes */}
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΣΗΜΕΙΩΣΕΙΣ</label>
-                  <textarea value={item.notes || ''} onChange={e => handleUpdateItem(item.id, { notes: e.target.value })} placeholder="Σημειώσεις..."
-                    style={{ width: '100%', minHeight: 60, padding: '8px 10px', borderRadius: 8, resize: 'vertical', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)', color: 'var(--text)', fontSize: '0.78rem', outline: 'none' }} />
-                </div>
-                {/* Priority */}
-                <div>
-                  <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΠΡΟΤΕΡΑΙΟΤΗΤΑ</label>
-                  <div style={{ display: 'flex', gap: 3 }}>
-                    {['low', 'normal', 'high', 'urgent'].map(p => (
-                      <button key={p} onClick={() => handleUpdateItem(item.id, { priority: p })} style={{
-                        flex: 1, padding: '4px 0', borderRadius: 5, fontSize: '0.6rem', fontWeight: 600,
-                        border: `1px solid ${item.priority === p ? PRIORITY_COLORS[p] : 'var(--border)'}`,
-                        background: item.priority === p ? `${PRIORITY_COLORS[p]}15` : 'transparent',
-                        color: item.priority === p ? PRIORITY_COLORS[p] : '#64748b', cursor: 'pointer',
-                      }}>{p === 'low' ? 'Low' : p === 'normal' ? 'Mid' : p === 'high' ? 'High' : '!!!'}</button>
-                    ))}
-                  </div>
-                </div>
-                {/* Deadline */}
-                <div>
-                  <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>DEADLINE</label>
-                  <input type="date" value={item.deadline ? item.deadline.slice(0, 10) : ''} onChange={e => handleUpdateItem(item.id, { deadline: e.target.value || null })}
-                    style={{ width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)', color: 'var(--text)', outline: 'none' }} />
-                </div>
-                {/* Tags */}
-                <div>
-                  <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>TAGS</label>
-                  <input value={item.tags.join(', ')} onChange={e => handleUpdateItem(item.id, { tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })} placeholder="tag1, tag2..."
-                    style={{ width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)', color: 'var(--text)', outline: 'none' }} />
-                </div>
-                {/* Company */}
-                <div>
-                  <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΕΤΑΙΡΕΙΑ</label>
-                  <select value={item.companyId || ''} onChange={e => handleUpdateItem(item.id, { companyId: e.target.value || null } as any)}
-                    style={{ width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)', color: 'var(--text)', outline: 'none' }}>
-                    <option value="">--</option>
-                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                {/* Contact */}
-                <div>
-                  <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΕΠΑΦΗ</label>
-                  <select value={item.contactId || ''} onChange={e => handleUpdateItem(item.id, { contactId: e.target.value || null } as any)}
-                    style={{ width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)', color: 'var(--text)', outline: 'none' }}>
-                    <option value="">--</option>
-                    {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                {/* Checklist */}
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>CHECKLIST</label>
-                  {cl.map((c, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <button onClick={() => { const u = [...cl]; u[i] = { ...c, done: !c.done }; updateChecklist(item.id, u); }} style={{
-                        width: 16, height: 16, borderRadius: 3, flexShrink: 0,
-                        border: `1.5px solid ${c.done ? 'var(--success)' : 'var(--border)'}`,
-                        background: c.done ? 'var(--success)' : 'transparent', color: '#fff', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.45rem',
-                      }}>{c.done && <i className="fas fa-check" />}</button>
-                      <input value={c.text} onChange={e => { const u = [...cl]; u[i] = { ...c, text: e.target.value }; updateChecklist(item.id, u); }}
-                        style={{ flex: 1, padding: '3px 6px', borderRadius: 4, fontSize: '0.72rem', border: '1px solid var(--border)', background: 'rgba(0,0,0,0.1)', color: 'var(--text)', outline: 'none', textDecoration: c.done ? 'line-through' : 'none' }} />
-                      <button onClick={() => updateChecklist(item.id, cl.filter((_, j) => j !== i))} style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.6rem', padding: '2px 4px' }}><i className="fas fa-times" /></button>
-                    </div>
-                  ))}
-                  <button onClick={() => updateChecklist(item.id, [...cl, { text: '', done: false }])} style={{
-                    padding: '4px 10px', borderRadius: 5, border: '1px dashed var(--border)',
-                    background: 'transparent', color: 'var(--text-muted)', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 600, width: '100%', marginTop: 2,
-                  }}><i className="fas fa-plus" style={{ marginRight: 4, fontSize: '0.55rem' }} />Sub-task</button>
-                </div>
-                {/* Emails */}
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <EmailSection
-                    itemId={item.id} linkedEmails={item.linkedEmails}
-                    onLink={async (msgId) => { await linkEmailToItem(item.id, msgId); setItems(prev => prev.map(i => i.id === item.id ? { ...i, linkedEmails: [...i.linkedEmails, msgId] } : i)); }}
-                    onUnlink={async (msgId) => { await unlinkEmailFromItem(item.id, msgId); setItems(prev => prev.map(i => i.id === item.id ? { ...i, linkedEmails: i.linkedEmails.filter(e => e !== msgId) } : i)); }}
-                  />
-                </div>
-              </div>
-              {/* Footer */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16, gap: 8 }}>
-                <button onClick={() => handleDeleteItem(item.id)} style={{
-                  padding: '6px 14px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.3)',
-                  background: 'transparent', color: '#ef4444', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer',
-                }}><i className="fas fa-trash" style={{ marginRight: 4 }} />Διαγραφή</button>
-              </div>
+        {/* Project header */}
+        {activeProject && (
+          <div style={{
+            padding: '10px 18px', borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+          }}>
+            <div style={{ width: 10, height: 10, borderRadius: '50%', background: activeProject.color || '#64748b' }} />
+            <h2 style={{ fontSize: '1rem', fontWeight: 800, flex: 1 }}>{activeProject.title}</h2>
+            {activeProject.archived ? (
+              <button onClick={() => handleRestoreProject(activeProject.id)} style={{
+                padding: '4px 12px', borderRadius: 6, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text-muted)', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer',
+              }}><i className="fas fa-undo" style={{ marginRight: 4 }} />Επαναφορά</button>
+            ) : (
+              <button onClick={() => handleArchiveProject(activeProject.id)} style={{
+                padding: '4px 12px', borderRadius: 6, border: '1px solid var(--border)',
+                background: 'transparent', color: 'var(--text-muted)', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer',
+              }}><i className="fas fa-archive" style={{ marginRight: 4 }} />Αρχειοθέτηση</button>
+            )}
+            <button onClick={() => handleDeleteProject(activeProject.id)} style={{
+              width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem',
+            }}><i className="fas fa-trash" /></button>
+          </div>
+        )}
+
+        {/* New item input */}
+        {activeProject && !activeProject.archived && (
+          <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                ref={newItemRef}
+                value={newItemTitle}
+                onChange={e => setNewItemTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreateItem(); }}
+                placeholder="Νέο item..."
+                style={{
+                  flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: '0.82rem',
+                  border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)',
+                  color: 'var(--text)', outline: 'none',
+                }}
+              />
+              <button onClick={handleCreateItem} disabled={!newItemTitle.trim()} style={{
+                padding: '0 16px', borderRadius: 8, border: 'none',
+                background: newItemTitle.trim() ? 'var(--accent)' : 'var(--border)',
+                color: '#fff', fontSize: '0.78rem', fontWeight: 700, cursor: newItemTitle.trim() ? 'pointer' : 'default',
+              }}><i className="fas fa-plus" style={{ marginRight: 4 }} />Προσθήκη</button>
             </div>
-          </div>,
-          document.body,
-        );
-      })()}
+          </div>
+        )}
+
+        {/* Items list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+          {loading && <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.78rem' }}>Φόρτωση...</div>}
+
+          {!loading && !activeProject && (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <i className="fas fa-briefcase" style={{ fontSize: '2rem', marginBottom: 12, opacity: 0.3 }} />
+              <p style={{ fontSize: '0.85rem' }}>Επιλέξτε ή δημιουργήστε ένα project</p>
+            </div>
+          )}
+
+          {!loading && activeProject && items.length === 0 && (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <i className="fas fa-clipboard-list" style={{ fontSize: '2rem', marginBottom: 12, opacity: 0.3 }} />
+              <p style={{ fontSize: '0.85rem' }}>Κανένα item. Προσθέστε ένα παραπάνω.</p>
+            </div>
+          )}
+
+          {items.map(item => {
+            const isExpanded = expandedItem === item.id;
+            const cl = getChecklist(item);
+            const clDone = cl.filter(c => c.done).length;
+            const prioColor = PRIORITY_COLORS[item.priority] || PRIORITY_COLORS.normal;
+
+            return (
+              <div key={item.id} style={{
+                marginBottom: 6, borderRadius: 10,
+                border: `1px solid ${item.completed ? 'rgba(16,185,129,0.2)' : 'var(--border)'}`,
+                background: item.completed ? 'rgba(16,185,129,0.03)' : 'rgba(255,255,255,0.02)',
+                overflow: 'hidden',
+              }}>
+                {/* Item row */}
+                <div
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setExpandedItem(isExpanded ? null : item.id)}
+                >
+                  {/* Checkbox */}
+                  <button onClick={e => { e.stopPropagation(); handleToggleItem(item.id); }} style={{
+                    width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+                    border: `2px solid ${item.completed ? 'var(--success)' : 'var(--border)'}`,
+                    background: item.completed ? 'var(--success)' : 'transparent',
+                    color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.55rem',
+                  }}>
+                    {item.completed && <i className="fas fa-check" />}
+                  </button>
+
+                  {/* Title */}
+                  <span style={{
+                    flex: 1, fontSize: '0.82rem', fontWeight: 600,
+                    textDecoration: item.completed ? 'line-through' : 'none',
+                    color: item.completed ? 'var(--text-muted)' : 'var(--text)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{item.title}</span>
+
+                  {/* Priority dot */}
+                  {item.priority !== 'normal' && (
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: prioColor, flexShrink: 0 }} title={item.priority} />
+                  )}
+
+                  {/* Tags */}
+                  {item.tags.slice(0, 2).map(t => (
+                    <span key={t} style={{
+                      padding: '1px 6px', borderRadius: 4, fontSize: '0.55rem', fontWeight: 600,
+                      background: 'rgba(255,255,255,0.06)', color: '#64748b', flexShrink: 0,
+                    }}>#{t}</span>
+                  ))}
+
+                  {/* Badges */}
+                  {cl.length > 0 && (
+                    <span style={{ fontSize: '0.58rem', color: clDone === cl.length ? 'var(--success)' : '#64748b' }}>
+                      <i className="fas fa-tasks" style={{ marginRight: 2 }} />{clDone}/{cl.length}
+                    </span>
+                  )}
+                  {item.linkedEmails.length > 0 && (
+                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>
+                      <i className="fas fa-envelope" style={{ marginRight: 2 }} />{item.linkedEmails.length}
+                    </span>
+                  )}
+                  {item.calendarEvents.length > 0 && (
+                    <span style={{ fontSize: '0.58rem', color: '#64748b' }}>
+                      <i className="fas fa-calendar" style={{ marginRight: 2 }} />{item.calendarEvents.length}
+                    </span>
+                  )}
+
+                  {/* Deadline */}
+                  {item.deadline && (
+                    <span style={{
+                      fontSize: '0.6rem', fontWeight: 600, flexShrink: 0,
+                      color: new Date(item.deadline) < new Date() && !item.completed ? '#ef4444' : '#64748b',
+                    }}>
+                      {new Date(item.deadline).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' })}
+                    </span>
+                  )}
+
+                  {/* Expand arrow */}
+                  <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'}`} style={{ fontSize: '0.55rem', color: '#475569' }} />
+                </div>
+
+                {/* Expanded details */}
+                {isExpanded && (
+                  <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--border)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+
+                      {/* Notes */}
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΣΗΜΕΙΩΣΕΙΣ</label>
+                        <textarea
+                          value={item.notes || ''}
+                          onChange={e => handleUpdateItem(item.id, { notes: e.target.value })}
+                          placeholder="Σημειώσεις..."
+                          style={{
+                            width: '100%', minHeight: 60, padding: '8px 10px', borderRadius: 8, resize: 'vertical',
+                            border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)',
+                            color: 'var(--text)', fontSize: '0.78rem', outline: 'none',
+                          }}
+                        />
+                      </div>
+
+                      {/* Priority */}
+                      <div>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΠΡΟΤΕΡΑΙΟΤΗΤΑ</label>
+                        <div style={{ display: 'flex', gap: 3 }}>
+                          {['low', 'normal', 'high', 'urgent'].map(p => (
+                            <button key={p} onClick={() => handleUpdateItem(item.id, { priority: p })} style={{
+                              flex: 1, padding: '4px 0', borderRadius: 5, fontSize: '0.6rem', fontWeight: 600,
+                              border: `1px solid ${item.priority === p ? PRIORITY_COLORS[p] : 'var(--border)'}`,
+                              background: item.priority === p ? `${PRIORITY_COLORS[p]}15` : 'transparent',
+                              color: item.priority === p ? PRIORITY_COLORS[p] : '#64748b',
+                              cursor: 'pointer', textTransform: 'capitalize',
+                            }}>{p === 'low' ? 'Low' : p === 'normal' ? 'Mid' : p === 'high' ? 'High' : '!!!'}</button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Deadline */}
+                      <div>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>DEADLINE</label>
+                        <input
+                          type="date"
+                          value={item.deadline ? item.deadline.slice(0, 10) : ''}
+                          onChange={e => handleUpdateItem(item.id, { deadline: e.target.value || null })}
+                          style={{
+                            width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem',
+                            border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)',
+                            color: 'var(--text)', outline: 'none',
+                          }}
+                        />
+                      </div>
+
+                      {/* Tags */}
+                      <div>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>TAGS</label>
+                        <input
+                          value={item.tags.join(', ')}
+                          onChange={e => handleUpdateItem(item.id, { tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
+                          placeholder="tag1, tag2..."
+                          style={{
+                            width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem',
+                            border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)',
+                            color: 'var(--text)', outline: 'none',
+                          }}
+                        />
+                      </div>
+
+                      {/* Company */}
+                      <div>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΕΤΑΙΡΕΙΑ</label>
+                        <select
+                          value={item.companyId || ''}
+                          onChange={e => handleUpdateItem(item.id, { companyId: e.target.value || null } as any)}
+                          style={{
+                            width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem',
+                            border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)',
+                            color: 'var(--text)', outline: 'none',
+                          }}
+                        >
+                          <option value="">--</option>
+                          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Contact */}
+                      <div>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΕΠΑΦΗ</label>
+                        <select
+                          value={item.contactId || ''}
+                          onChange={e => handleUpdateItem(item.id, { contactId: e.target.value || null } as any)}
+                          style={{
+                            width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem',
+                            border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)',
+                            color: 'var(--text)', outline: 'none',
+                          }}
+                        >
+                          <option value="">--</option>
+                          {contacts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Checklist */}
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>CHECKLIST</label>
+                        {cl.map((c, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <button onClick={() => {
+                              const updated = [...cl]; updated[i] = { ...c, done: !c.done };
+                              updateChecklist(item.id, updated);
+                            }} style={{
+                              width: 16, height: 16, borderRadius: 3, flexShrink: 0,
+                              border: `1.5px solid ${c.done ? 'var(--success)' : 'var(--border)'}`,
+                              background: c.done ? 'var(--success)' : 'transparent',
+                              color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.45rem',
+                            }}>
+                              {c.done && <i className="fas fa-check" />}
+                            </button>
+                            <input
+                              value={c.text}
+                              onChange={e => {
+                                const updated = [...cl]; updated[i] = { ...c, text: e.target.value };
+                                updateChecklist(item.id, updated);
+                              }}
+                              style={{
+                                flex: 1, padding: '3px 6px', borderRadius: 4, fontSize: '0.72rem',
+                                border: '1px solid var(--border)', background: 'rgba(0,0,0,0.1)',
+                                color: 'var(--text)', outline: 'none',
+                                textDecoration: c.done ? 'line-through' : 'none',
+                              }}
+                            />
+                            <button onClick={() => {
+                              updateChecklist(item.id, cl.filter((_, j) => j !== i));
+                            }} style={{
+                              border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer',
+                              fontSize: '0.6rem', padding: '2px 4px',
+                            }}><i className="fas fa-times" /></button>
+                          </div>
+                        ))}
+                        <button onClick={() => {
+                          updateChecklist(item.id, [...cl, { text: '', done: false }]);
+                        }} style={{
+                          padding: '4px 10px', borderRadius: 5, border: '1px dashed var(--border)',
+                          background: 'transparent', color: 'var(--text-muted)', fontSize: '0.65rem',
+                          cursor: 'pointer', fontWeight: 600, width: '100%', marginTop: 2,
+                        }}><i className="fas fa-plus" style={{ marginRight: 4, fontSize: '0.55rem' }} />Sub-task</button>
+                      </div>
+
+                      {/* Emails */}
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        <EmailSection
+                          itemId={item.id}
+                          linkedEmails={item.linkedEmails}
+                          onLink={async (msgId, snippet) => {
+                            await linkEmailToItem(item.id, msgId);
+                            setItems(prev => prev.map(i => i.id === item.id
+                              ? { ...i, linkedEmails: [...i.linkedEmails, msgId] }
+                              : i
+                            ));
+                          }}
+                          onUnlink={async (msgId) => {
+                            await unlinkEmailFromItem(item.id, msgId);
+                            setItems(prev => prev.map(i => i.id === item.id
+                              ? { ...i, linkedEmails: i.linkedEmails.filter(e => e !== msgId) }
+                              : i
+                            ));
+                          }}
+                        />
+                      </div>
+
+                      {/* Calendar events */}
+                      {item.calendarEvents.length > 0 && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>EVENTS</label>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {item.calendarEvents.map(ev => (
+                              <span key={ev.id} style={{
+                                padding: '2px 8px', borderRadius: 4, fontSize: '0.6rem',
+                                background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)',
+                                color: 'var(--success)', display: 'flex', alignItems: 'center', gap: 4,
+                              }}>
+                                <i className="fas fa-calendar" style={{ fontSize: '0.5rem' }} />
+                                {ev.title} · {new Date(ev.startAt).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' })}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Delete button */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                      <button onClick={() => handleDeleteItem(item.id)} style={{
+                        padding: '4px 12px', borderRadius: 6, border: '1px solid rgba(239,68,68,0.3)',
+                        background: 'transparent', color: '#ef4444', fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer',
+                      }}><i className="fas fa-trash" style={{ marginRight: 4 }} />Διαγραφή</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -572,16 +726,33 @@ function EmailSection({ itemId, linkedEmails, onLink, onUnlink }: {
       {/* Linked emails */}
       {linkedEmails.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: showSearch ? 8 : 0 }}>
-          {linkedEmails.map(eid => (
-            <LinkedEmailCard
-              key={eid}
-              emailId={eid}
-              meta={emailCache[eid] || null}
-              formatFrom={formatFrom}
-              formatDate={formatDate}
-              onUnlink={() => onUnlink(eid)}
-            />
-          ))}
+          {linkedEmails.map(eid => {
+            const msg = emailCache[eid];
+            return (
+              <div key={eid} style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', borderRadius: 6,
+                background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
+              }}>
+                <i className="fas fa-envelope" style={{ fontSize: '0.55rem', color: 'var(--blue)', flexShrink: 0 }} />
+                {msg ? (
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {msg.subject || '(χωρίς θέμα)'}
+                    </div>
+                    <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
+                      {formatFrom(msg.from)} · {formatDate(msg.date)}
+                    </div>
+                  </div>
+                ) : (
+                  <span style={{ flex: 1, fontSize: '0.65rem', color: '#64748b' }}>{eid.slice(0, 16)}...</span>
+                )}
+                <button onClick={() => onUnlink(eid)} style={{
+                  border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer',
+                  fontSize: '0.55rem', padding: '2px 4px', flexShrink: 0,
+                }} title="Αποσύνδεση"><i className="fas fa-times" /></button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -638,95 +809,6 @@ function EmailSection({ itemId, linkedEmails, onLink, onUnlink }: {
                 </button>
               ))}
             </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── LINKED EMAIL CARD (expandable with body) ───
-
-function LinkedEmailCard({ emailId, meta, formatFrom, formatDate, onUnlink }: {
-  emailId: string;
-  meta: GmailMsg | null;
-  formatFrom: (f: string) => string;
-  formatDate: (d: string) => string;
-  onUnlink: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const [body, setBody] = useState<string | null>(null);
-  const [loadingBody, setLoadingBody] = useState(false);
-
-  const handleExpand = async () => {
-    if (expanded) { setExpanded(false); return; }
-    setExpanded(true);
-    if (body) return; // already loaded
-    setLoadingBody(true);
-    try {
-      const res = await fetch(`/api/email/messages/${emailId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setBody(data.htmlBody || data.textBody || '');
-      }
-    } catch { /* ignore */ }
-    setLoadingBody(false);
-  };
-
-  return (
-    <div style={{
-      borderRadius: 6, overflow: 'hidden',
-      background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
-    }}>
-      {/* Header row */}
-      <div
-        onClick={handleExpand}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px',
-          cursor: 'pointer',
-        }}
-      >
-        <i className={`fas ${expanded ? 'fa-envelope-open' : 'fa-envelope'}`} style={{ fontSize: '0.55rem', color: 'var(--blue)', flexShrink: 0 }} />
-        {meta ? (
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {meta.subject || '(χωρίς θέμα)'}
-            </div>
-            <div style={{ fontSize: '0.58rem', color: '#64748b' }}>
-              {formatFrom(meta.from)} · {formatDate(meta.date)}
-            </div>
-          </div>
-        ) : (
-          <span style={{ flex: 1, fontSize: '0.65rem', color: '#64748b' }}>{emailId.slice(0, 16)}...</span>
-        )}
-        <i className={`fas fa-chevron-${expanded ? 'up' : 'down'}`} style={{ fontSize: '0.45rem', color: '#475569', flexShrink: 0 }} />
-        <button onClick={e => { e.stopPropagation(); onUnlink(); }} style={{
-          border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer',
-          fontSize: '0.55rem', padding: '2px 4px', flexShrink: 0,
-        }} title="Αποσύνδεση"><i className="fas fa-times" /></button>
-      </div>
-
-      {/* Body */}
-      {expanded && (
-        <div style={{
-          borderTop: '1px solid rgba(59,130,246,0.1)',
-          padding: '8px 10px', maxHeight: 300, overflowY: 'auto',
-          background: 'rgba(255,255,255,0.03)',
-        }}>
-          {loadingBody ? (
-            <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-muted)', fontSize: '0.7rem' }}>
-              <i className="fas fa-spinner fa-spin" />
-            </div>
-          ) : body ? (
-            <div
-              dangerouslySetInnerHTML={{ __html: body }}
-              style={{
-                fontSize: '0.75rem', lineHeight: 1.6, color: 'var(--text-dim)',
-                wordBreak: 'break-word',
-              }}
-            />
-          ) : (
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Δεν βρέθηκε περιεχόμενο</div>
           )}
         </div>
       )}
