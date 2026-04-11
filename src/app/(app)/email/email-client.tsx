@@ -1149,10 +1149,10 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
         }}>
           <i className="fas fa-plus" style={{ fontSize: '0.5rem' }} />Νέα Προσφορά
         </button>
-        <button onClick={handleCreateOfficeItem} disabled={creating || officeProjects.length === 0} style={{
+        <button onClick={handleCreateOfficeItem} disabled={creating} style={{
           flex: 1, padding: '7px 0', borderRadius: 6, border: 'none',
           background: 'var(--blue)', color: '#fff', fontSize: '0.65rem', fontWeight: 700,
-          cursor: 'pointer', opacity: (creating || officeProjects.length === 0) ? 0.5 : 1, fontFamily: 'inherit',
+          cursor: 'pointer', opacity: creating ? 0.5 : 1, fontFamily: 'inherit',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
         }}>
           <i className="fas fa-plus" style={{ fontSize: '0.5rem' }} />Νέο Γραφείο
