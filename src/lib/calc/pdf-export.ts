@@ -442,19 +442,47 @@ function drawPDFMarks(
 
     const gL = uV[0], gR = uV[uV.length - 1], gB = uH[0], gT = uH[uH.length - 1];
 
-    // PERIMETER ONLY marks — top & bottom
+    // Perimeter marks — top & bottom
     for (let vmi = 0; vmi < uV.length; vmi++) {
       const vx = uV[vmi];
       page.drawLine({ start: { x: vx, y: gT + cropGap }, end: { x: vx, y: gT + cropGap + markLen }, thickness: 0.5, color: markColor });
       page.drawLine({ start: { x: vx, y: gB - cropGap }, end: { x: vx, y: gB - cropGap - markLen }, thickness: 0.5, color: markColor });
     }
-    // PERIMETER ONLY marks — left & right
+    // Perimeter marks — left & right
     for (let hmi = 0; hmi < uH.length; hmi++) {
       const hy = uH[hmi];
       page.drawLine({ start: { x: gL - cropGap, y: hy }, end: { x: gL - cropGap - markLen, y: hy }, thickness: 0.5, color: markColor });
       page.drawLine({ start: { x: gR + cropGap, y: hy }, end: { x: gR + cropGap + markLen, y: hy }, thickness: 0.5, color: markColor });
     }
-    // NO gutter/internal crop marks — perimeter only
+    // Internal gutter crop marks — between cells
+    // Vertical marks inside row gutters (horizontal strips between rows)
+    if (rows > 1 && gutterRowPt > 0.5) {
+      for (let gr = 0; gr < rows - 1; gr++) {
+        const gutBottom = cenY + (gr + 1) * trimHpt + gr * gutterRowPt;
+        const gutTop = gutBottom + gutterRowPt;
+        const intMarkLen = Math.min(markLen, (gutterRowPt - 2 * cropGap) / 2);
+        if (intMarkLen > 0.5) {
+          for (const vx of uV) {
+            page.drawLine({ start: { x: vx, y: gutBottom + cropGap }, end: { x: vx, y: gutBottom + cropGap + intMarkLen }, thickness: 0.5, color: markColor });
+            page.drawLine({ start: { x: vx, y: gutTop - cropGap }, end: { x: vx, y: gutTop - cropGap - intMarkLen }, thickness: 0.5, color: markColor });
+          }
+        }
+      }
+    }
+    // Horizontal marks inside column gutters (vertical strips between columns)
+    if (cols > 1 && gutterColPt > 0.5) {
+      for (let gc = 0; gc < cols - 1; gc++) {
+        const gutLeft = cenX + (gc + 1) * trimWpt + gc * gutterColPt;
+        const gutRight = gutLeft + gutterColPt;
+        const intMarkLen = Math.min(markLen, (gutterColPt - 2 * cropGap) / 2);
+        if (intMarkLen > 0.5) {
+          for (const hy of uH) {
+            page.drawLine({ start: { x: gutLeft + cropGap, y: hy }, end: { x: gutLeft + cropGap + intMarkLen, y: hy }, thickness: 0.5, color: markColor });
+            page.drawLine({ start: { x: gutRight - cropGap, y: hy }, end: { x: gutRight - cropGap - intMarkLen, y: hy }, thickness: 0.5, color: markColor });
+          }
+        }
+      }
+    }
   }
 
   // Registration crosses — offset only
