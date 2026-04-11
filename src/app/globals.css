@@ -3,8 +3,8 @@
 :root {
   color-scheme: dark;
   --bg: #0f172a;
-  --bg-surface: rgba(15, 23, 42, 0.75);
-  --bg-elevated: rgba(20, 30, 55, 0.8);
+  --bg-surface: #0f172a;
+  --bg-elevated: #141e37;
   --text: #cbd5e1;
   --text-dim: #94a3b8;
   --text-muted: #64748b;

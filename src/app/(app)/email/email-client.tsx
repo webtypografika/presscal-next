@@ -1000,7 +1000,7 @@ function EmailLinkPopup({ emailId, threadId, pos, onClose, onLinkedToQuote, onLi
   return createPortal(
     <div ref={ref} style={{
       position: 'fixed', top: pos.top, left: pos.left, zIndex: 99999,
-      width: 300, background: 'var(--surface)',
+      width: 300, background: 'var(--bg-elevated)',
       border: '1px solid var(--border)', borderRadius: 10,
       boxShadow: '0 8px 24px rgba(0,0,0,0.4)', overflow: 'hidden',
     }}>
