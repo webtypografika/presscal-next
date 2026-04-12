@@ -1753,6 +1753,9 @@ async function exportStepMulti(
   const gutMM = opts.gutter || 0;
   const gutPt = mmToPt(gutMM);
 
+  const smContentScale = (opts.contentScale || 100) / 100;
+  const smIntBleedPt = internalBleed(gutPt, blPt);
+
   // Front side
   const frontPage = doc.addPage([paperWpt, paperHpt]);
   for (let bi = 0; bi < blocks.length; bi++) {
@@ -1761,8 +1764,10 @@ async function exportStepMulti(
     const rot = block.rotation || 0;
     let tw = block.trimW, th = block.trimH;
     if (rot === 90 || rot === 270) { const tmp = tw; tw = th; th = tmp; }
-    const cellWpt = mmToPt(tw + bl * 2);
-    const cellHpt = mmToPt(th + bl * 2);
+    const trimWpt = mmToPt(tw);
+    const trimHpt = mmToPt(th);
+    const cellWpt = trimWpt + 2 * blPt;
+    const cellHpt = trimHpt + 2 * blPt;
 
     const bxPt = mLpt + mmToPt(block.x);
     const byPt = mBpt + printHpt - mmToPt(block.y) - mmToPt(block.blockH);
@@ -1773,27 +1778,15 @@ async function exportStepMulti(
     const pageIdx = hasBlockPdf ? 0 : block.pageNum - 1;
     if (pageIdx < 0 || pageIdx >= blockPages.length) continue;
     const epObj = blockPages[pageIdx];
-    const epPage = epObj.page;
 
     for (let row = 0; row < block.rows; row++) {
       for (let col = 0; col < block.cols; col++) {
         const cx = bxPt + col * (cellWpt + gutPt);
         const cy = byPt + mmToPt(block.blockH) - (row + 1) * cellHpt - row * gutPt;
-        const teX = cx + blPt;
-        const teY = cy + blPt;
-
-        if (rot) {
-          const mcx = cx + cellWpt / 2, mcy = cy + cellHpt / 2;
-          if (rot === 180) {
-            drawEmbeddedPage(frontPage, epObj, mcx + epObj.trimOffsetX, mcy + epObj.trimOffsetY, epPage.width, epPage.height, 180);
-          } else if (rot === 90) {
-            drawEmbeddedPage(frontPage, epObj, teX, teY + (cellHpt - 2 * blPt), epPage.width, epPage.height, 90);
-          } else if (rot === 270) {
-            drawEmbeddedPage(frontPage, epObj, teX + (cellWpt - 2 * blPt), teY, epPage.width, epPage.height, 270);
-          }
-        } else {
-          drawEmbeddedPage(frontPage, epObj, teX - epObj.trimOffsetX, teY - epObj.trimOffsetY, epPage.width, epPage.height);
-        }
+        const trimX = cx + blPt;
+        const trimY = cy + blPt;
+        const bleeds = cellBleed(col, row, block.cols, block.rows, blPt, smIntBleedPt);
+        drawTrimToCell(frontPage, epObj, trimX, trimY, trimWpt, trimHpt, bleeds, rot, smContentScale);
       }
     }
   }
@@ -1877,7 +1870,8 @@ async function exportStepMulti(
       const bpIdx = hasBackBlockPdf ? 1 : bb.backPageNum - 1;
       if (bpIdx < 0 || bpIdx >= backBlockPages.length) continue;
       const bepObj = backBlockPages[bpIdx];
-      const bepPage = bepObj.page;
+      const bTrimWpt = mmToPt(bRot === 90 || bRot === 270 ? bb.trimH : bb.trimW);
+      const bTrimHpt = mmToPt(bRot === 90 || bRot === 270 ? bb.trimW : bb.trimH);
 
       // Mirror X for back side
       for (let brow = 0; brow < bb.rows; brow++) {
@@ -1885,9 +1879,12 @@ async function exportStepMulti(
           const mirCol = bb.cols - 1 - bcol;
           const bcx = bbxPt + mirCol * (bcWpt + gutPt);
           const bcy = bbyPt + mmToPt(bb.blockH) - (brow + 1) * bcHpt - brow * gutPt;
-          const bteX = bcx + blPt;
-          const bteY = bcy + blPt;
-          drawEmbeddedPage(backPage, bepObj, bteX - bepObj.trimOffsetX, bteY - bepObj.trimOffsetY, bepPage.width, bepPage.height);
+          const bTrimX = bcx + blPt;
+          const bTrimY = bcy + blPt;
+          // Back-side mirror: L↔R swap in per-cell bleeds to match mirrored column order.
+          const f = cellBleed(bcol, brow, bb.cols, bb.rows, blPt, smIntBleedPt);
+          const bBleeds = { bL: f.bR, bR: f.bL, bT: f.bT, bB: f.bB };
+          drawTrimToCell(backPage, bepObj, bTrimX, bTrimY, bTrimWpt, bTrimHpt, bBleeds, 0, smContentScale);
         }
       }
     }

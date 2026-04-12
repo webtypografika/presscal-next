@@ -49,3 +49,6 @@ next-env.d.ts
 
 # claude dev snapshots
 /.claude/snapshots/
+
+# Dropbox conflict/temp files
+*.tmp.*
