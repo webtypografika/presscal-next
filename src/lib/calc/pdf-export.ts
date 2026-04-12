@@ -1503,22 +1503,21 @@ async function exportWorkTurn(
     const cenFY = mB + (halfH - totalGridH) / 2;
     const wtBleedPt = mmToPt(opts.bleed || 0);
 
+    // Detect rotation
     const cellPortrait = pieceW <= pieceH;
+    const pdfPgInfo = opts.pdfPageSizes?.[0];
+    const pdfPortrait = pdfPgInfo ? (pdfPgInfo.trimW <= pdfPgInfo.trimH) : true;
+    const wtNeedsRot = cellPortrait !== pdfPortrait;
     const userExtraRot = (opts.rotation === 180 || opts.rotation === 270) ? 180 : 0;
 
-    // Helper: draw page in cell with per-page auto-rotation + clipping
-    // Each PDF page detects its own orientation, so front/back with different
-    // orientations both get rotated correctly.
+    // Helper: draw page in cell with rotation + clipping
     const wtDrawCell = (pg: PDFPage, cx: number, cy: number, epObj: EmbeddedPageInfo, epPg: PDFEmbeddedPage, extraRotArg?: number) => {
       pg.pushOperators(pushGraphicsState(), rectangle(cx, cy, pieceW, pieceH), clip(), endPath());
+      const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
+      const gridRot = wtNeedsRot ? 270 : 0;
+      const totalRot = (epSrcRot + gridRot + userExtraRot + (extraRotArg || 0)) % 360;
       const epRawW = epPg.width || pieceW;
       const epRawH = epPg.height || pieceH;
-      // Per-page orientation: check this page's own dimensions (accounting for /Rotate)
-      const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
-      const visualPortrait = (epSrcRot === 90 || epSrcRot === 270) ? (epRawW > epRawH) : (epRawW <= epRawH);
-      const pageNeedsRot = cellPortrait !== visualPortrait;
-      const gridRot = pageNeedsRot ? 270 : 0;
-      const totalRot = (epSrcRot + gridRot + userExtraRot + (extraRotArg || 0)) % 360;
       const needsSwap = (totalRot === 90 || totalRot === 270);
       const scX = needsSwap ? (pieceH / epRawW) : (pieceW / epRawW);
       const scY = needsSwap ? (pieceW / epRawH) : (pieceH / epRawH);
@@ -1540,22 +1539,18 @@ async function exportWorkTurn(
       }
     }
 
-    // Back half — αντικριστά
+    // Back half — αντικριστά (180°)
     const backHalfX = isTumble ? cenFX : mL + halfW + (halfW - totalGridW) / 2;
     const backHalfY = isTumble ? mB + halfH + (halfH - totalGridH) / 2 : cenFY;
-    // Detect if back needs rotation (same per-page logic as in wtDrawCell)
-    const bEpRawW = epBackPg.width || pieceW;
-    const bEpRawH = epBackPg.height || pieceH;
-    const bEpSrcRot = (360 - (epBack.rotation || 0)) % 360;
-    const bVisualPortrait = (bEpSrcRot === 90 || bEpSrcRot === 270) ? (bEpRawW > bEpRawH) : (bEpRawW <= bEpRawH);
-    const backNeedsRot = cellPortrait !== bVisualPortrait;
     for (let row2 = 0; row2 < hRows; row2++) {
       for (let col2 = 0; col2 < hCols; col2++) {
+        // Same grid positions as front half, shifted to back half area
+        // Content always rotated 180° (αντικριστά)
         const cellX2 = backHalfX + col2 * (pieceW + gutterPt);
         const cellY2 = backHalfY + (hRows - 1 - row2) * (pieceH + gutterPt);
         // When auto-rotated: back gets opposite direction (heads outward)
         // When natural fit: back same as front (physical turn handles it)
-        const backExtraRot = backNeedsRot ? 180 : 0;
+        const backExtraRot = wtNeedsRot ? 180 : 0;
         wtDrawCell(page, cellX2, cellY2, epBack, epBackPg, backExtraRot);
       }
     }
