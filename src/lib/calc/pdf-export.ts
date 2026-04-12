@@ -454,6 +454,36 @@ function drawPDFMarks(
       page.drawLine({ start: { x: gL - cropGap, y: hy }, end: { x: gL - cropGap - markLen, y: hy }, thickness: 0.5, color: markColor });
       page.drawLine({ start: { x: gR + cropGap, y: hy }, end: { x: gR + cropGap + markLen, y: hy }, thickness: 0.5, color: markColor });
     }
+
+    // Internal gutter marks — short ticks extending from each trim edge into the gutter.
+    // Mark length = half the gutter (meets in the middle = continuous cut line).
+    // Skipped if gutter < 2mm (not enough space).
+    const gutterMinPt = mmToPt(2);
+    // Vertical ticks in ROW gutters (between rows), at each trim X
+    if (rows > 1 && gutterRowPt >= gutterMinPt) {
+      const tickLen = Math.min(markLen, gutterRowPt / 2);
+      for (let gr = 0; gr < rows - 1; gr++) {
+        // gutBottom = top of lower row's trim; gutTop = bottom of upper row's trim
+        const gutBottom = cenY + (gr + 1) * trimHpt + gr * gutterRowPt;
+        const gutTop = gutBottom + gutterRowPt;
+        for (const vx of uV) {
+          page.drawLine({ start: { x: vx, y: gutBottom }, end: { x: vx, y: gutBottom + tickLen }, thickness: 0.5, color: markColor });
+          page.drawLine({ start: { x: vx, y: gutTop }, end: { x: vx, y: gutTop - tickLen }, thickness: 0.5, color: markColor });
+        }
+      }
+    }
+    // Horizontal ticks in COLUMN gutters (between columns), at each trim Y
+    if (cols > 1 && gutterColPt >= gutterMinPt) {
+      const tickLen = Math.min(markLen, gutterColPt / 2);
+      for (let gc = 0; gc < cols - 1; gc++) {
+        const gutLeft = cenX + (gc + 1) * trimWpt + gc * gutterColPt;
+        const gutRight = gutLeft + gutterColPt;
+        for (const hy of uH) {
+          page.drawLine({ start: { x: gutLeft, y: hy }, end: { x: gutLeft + tickLen, y: hy }, thickness: 0.5, color: markColor });
+          page.drawLine({ start: { x: gutRight, y: hy }, end: { x: gutRight - tickLen, y: hy }, thickness: 0.5, color: markColor });
+        }
+      }
+    }
   }
 
   // Registration crosses — offset only
