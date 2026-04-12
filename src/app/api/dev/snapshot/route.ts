@@ -57,8 +57,13 @@ export async function POST(req: NextRequest) {
     const pdfFile = form.get('pdf');
     const label = (form.get('label') as string | null) || '';
 
-    const dir = join(process.cwd(), '.claude', 'snapshots');
+    // Save into a per-label subdirectory so each snapshot persists (the latest also
+    // lives at the root for quick access).
+    const rootDir = join(process.cwd(), '.claude', 'snapshots');
+    const safeLabel = (label || 'snapshot').replace(/[^a-zA-Z0-9_\-.]/g, '_');
+    const dir = join(rootDir, safeLabel);
     await mkdir(dir, { recursive: true });
+    await mkdir(rootDir, { recursive: true });
 
     const written: string[] = [];
 
@@ -69,8 +74,10 @@ export async function POST(req: NextRequest) {
         label,
       };
       const out = { meta, ...stateObj };
+      const json = JSON.stringify(out, null, 2);
       const p = join(dir, 'state.json');
-      await writeFile(p, JSON.stringify(out, null, 2), 'utf8');
+      await writeFile(p, json, 'utf8');
+      await writeFile(join(rootDir, 'state.json'), json, 'utf8');
       written.push(p);
     }
 
@@ -80,11 +87,14 @@ export async function POST(req: NextRequest) {
       const bytes = new Uint8Array(ab);
       const pdfPath = join(dir, 'last-export.pdf');
       await writeFile(pdfPath, bytes);
+      await writeFile(join(rootDir, 'last-export.pdf'), bytes);
       written.push(pdfPath);
       try {
         pdfSummary = await summarizePdf(bytes);
+        const summaryJson = JSON.stringify(pdfSummary, null, 2);
         const sp = join(dir, 'pdf-summary.json');
-        await writeFile(sp, JSON.stringify(pdfSummary, null, 2), 'utf8');
+        await writeFile(sp, summaryJson, 'utf8');
+        await writeFile(join(rootDir, 'pdf-summary.json'), summaryJson, 'utf8');
         written.push(sp);
       } catch (e) {
         pdfSummary = { error: 'summary failed: ' + (e as Error).message };

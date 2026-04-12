@@ -26,12 +26,24 @@ import type {
   CutStackPosition,
 } from '@/types/calculator';
 
+import { internalBleed } from './imposition';
+
 // ─── Constants ───
 
 const MM = 72 / 25.4; // mm → PDF points
 
 function mmToPt(mm: number): number {
   return mm * MM;
+}
+
+/** Per-cell bleed for a grid cell: full `outer` on outer grid edges, `inner` on shared edges. */
+function cellBleed(col: number, row: number, cols: number, rows: number, outer: number, inner: number) {
+  return {
+    bL: col === 0 ? outer : inner,
+    bR: col === cols - 1 ? outer : inner,
+    bT: row === 0 ? outer : inner,
+    bB: row === rows - 1 ? outer : inner,
+  };
 }
 
 /** Strip non-WinAnsi characters (Greek etc) for pdf-lib StandardFonts */
@@ -658,7 +670,7 @@ async function exportNUp(
     const page = doc.addPage([paperWpt, paperHpt]);
 
     // Per-cell asymmetric bleed: compute internal bleed for clipping
-    const intBleedPlace = gutterPt <= 0 ? 0 : (gutterPt >= 2 * bleedPt ? bleedPt : gutterPt / 2);
+    const intBleedPlace = internalBleed(gutterPt, bleedPt);
 
     for (let row = 0; row < impo.rows; row++) {
       for (let col = 0; col < impo.cols; col++) {
@@ -673,10 +685,7 @@ async function exportNUp(
           const cellY = trimYpos - bleedPt;
 
           // Per-cell bleed (asymmetric) — front-side perspective
-          const cBL = col === 0 ? bleedPt : intBleedPlace;
-          const cBR = col === impo.cols - 1 ? bleedPt : intBleedPlace;
-          const cBB = row === impo.rows - 1 ? bleedPt : intBleedPlace;
-          const cBT = row === 0 ? bleedPt : intBleedPlace;
+          const { bL: cBL, bR: cBR, bT: cBT, bB: cBB } = cellBleed(col, row, impo.cols, impo.rows, bleedPt, intBleedPlace);
 
           // Unified page placement
           const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
@@ -757,7 +766,7 @@ async function exportNUp(
 
       // Asymmetric gutter masks — mask area between cells where internal bleed is 0 or reduced
       // Progressive internal bleed: gutter=0 → 0, gutter<2*bleed → gutter/2, else full bleed
-      const intBleedPt = gutterPt <= 0 ? 0 : (gutterPt >= 2 * bleedPt ? bleedPt : gutterPt / 2);
+      const intBleedPt = internalBleed(gutterPt, bleedPt);
       if (gutterPt > 0.1) {
         for (let gc = 0; gc < impo.cols - 1; gc++) {
           // Gutter starts after right trim edge
@@ -871,10 +880,7 @@ async function exportBooklet(
 
   // Progressive internal bleed for row gap (inter-spread vertical gap uses the same rule).
   // Columns within a spread share the spine — no bleed there, handled via clip bounds.
-  let bkIntBleedRowPt: number;
-  if (gapHpt <= 0) bkIntBleedRowPt = 0;
-  else if (gapHpt >= 2 * bleedPt) bkIntBleedRowPt = bleedPt;
-  else bkIntBleedRowPt = gapHpt / 2;
+  const bkIntBleedRowPt = internalBleed(gapHpt, bleedPt);
 
   for (let ps = 0; ps < totalPressSheets; ps++) {
     const frontPage = doc.addPage([paperWpt, paperHpt]);
@@ -1023,10 +1029,7 @@ async function exportPerfectBound(
 
     // Progressive internal bleed for rows (between top/bottom half of signature).
     // Columns within a pair share the SPINE (no bleed) — already handled via clipL/clipW.
-    let pbIntBleedPt: number;
-    if (fgHpt <= 0) pbIntBleedPt = 0;
-    else if (fgHpt >= 2 * bleedPt) pbIntBleedPt = bleedPt;
-    else pbIntBleedPt = fgHpt / 2;
+    const pbIntBleedPt = internalBleed(fgHpt, bleedPt);
 
     for (let row = 0; row < sigRows; row++) {
       const rowPages = faceRows[row] || [];
@@ -1224,16 +1227,12 @@ async function exportCutStack(
 
   const isH2H = (opts.duplexOrient || 'h2h') === 'h2h';
 
-  // Progressive internal bleed — matches engine's internalBleed().
-  let csIntBleedPt: number;
-  if (gutterPt <= 0) csIntBleedPt = 0;
-  else if (gutterPt >= 2 * bleedPt) csIntBleedPt = bleedPt;
-  else csIntBleedPt = gutterPt / 2;
+  const csIntBleedPt = internalBleed(gutterPt, bleedPt);
 
   const sheetsNeeded = opts.csStackSize || Math.max(1, embeddedPages.length);
 
   // Helper: draw masking on a page (asymmetric gutter masks)
-  const intBleedCs = gutterPt <= 0 ? 0 : (gutterPt >= 2 * bleedPt ? bleedPt : gutterPt / 2);
+  const intBleedCs = internalBleed(gutterPt, bleedPt);
   const csMask = (pg: PDFPage, mirrored: boolean) => {
     const white = cmyk(0, 0, 0, 0);
     const mCenX = mirrored ? (paperWpt - cenX - trimGridW) : cenX;
@@ -1288,11 +1287,7 @@ async function exportCutStack(
           const toy = ep.trimOffsetY * sy / cScale;
           const trimX = cenX + col * csTrimStepW + cOffX;
           const trimY = cenY + (impo.rows - 1 - row) * csTrimStepH - cOffY;
-          // Per-cell bleed (asymmetric): full on outer grid edges, internal elsewhere.
-          const cBL = col === 0 ? bleedPt : csIntBleedPt;
-          const cBR = col === impo.cols - 1 ? bleedPt : csIntBleedPt;
-          const cBT = row === 0 ? bleedPt : csIntBleedPt;
-          const cBB = row === impo.rows - 1 ? bleedPt : csIntBleedPt;
+          const { bL: cBL, bR: cBR, bT: cBT, bB: cBB } = cellBleed(col, row, impo.cols, impo.rows, bleedPt, csIntBleedPt);
           page.pushOperators(pushGraphicsState(), rectangle(trimX - cBL, trimY - cBB, trimWpt + cBL + cBR, trimHpt + cBT + cBB), clip(), endPath());
           page.drawPage(epPage, { x: trimX - tox, y: trimY - toy, xScale: sx, yScale: sy });
           page.pushOperators(popGraphicsState());
@@ -1367,10 +1362,7 @@ async function exportCutStack(
             const bTrimX = isH2H ? (paperWpt - fTrimX - trimWpt) : fTrimX;
             const bTrimY = isH2H ? fTrimY : (paperHpt - fTrimY - trimHpt);
             // Per-cell bleed — mirror L↔R for H2H back, T↔B for H2F back.
-            const fBL = bCol === 0 ? bleedPt : csIntBleedPt;
-            const fBR = bCol === impo.cols - 1 ? bleedPt : csIntBleedPt;
-            const fBT = bRow === 0 ? bleedPt : csIntBleedPt;
-            const fBB = bRow === impo.rows - 1 ? bleedPt : csIntBleedPt;
+            const { bL: fBL, bR: fBR, bT: fBT, bB: fBB } = cellBleed(bCol, bRow, impo.cols, impo.rows, bleedPt, csIntBleedPt);
             const bBL = isH2H ? fBR : fBL;
             const bBR = isH2H ? fBL : fBR;
             const bBT = isH2H ? fBT : fBB;
@@ -1460,10 +1452,7 @@ async function exportWorkTurn(
 
     // Progressive internal bleed — matches engine's internalBleed() in imposition.ts.
     // gutter=0 → 0 (μονοτομή), gutter<2×bleed → gutter/2, gutter≥2×bleed → full.
-    let intBleedPt: number;
-    if (gutterPt <= 0) intBleedPt = 0;
-    else if (gutterPt >= 2 * wtBleedPt) intBleedPt = wtBleedPt;
-    else intBleedPt = gutterPt / 2;
+    const intBleedPt = internalBleed(gutterPt, wtBleedPt);
 
     // Detect rotation
     const cellPortrait = pieceW <= pieceH;
@@ -1526,10 +1515,7 @@ async function exportWorkTurn(
       for (let col = 0; col < hCols; col++) {
         const trimX = cenFX + wtBleedPt + col * (trimWPt + gutterPt);
         const trimY = cenFY + wtBleedPt + (hRows - 1 - row) * (trimHPt + gutterPt);
-        const bL = col === 0 ? wtBleedPt : intBleedPt;
-        const bR = col === hCols - 1 ? wtBleedPt : intBleedPt;
-        const bT = row === 0 ? wtBleedPt : intBleedPt;
-        const bB = row === hRows - 1 ? wtBleedPt : intBleedPt;
+        const { bL, bR, bT, bB } = cellBleed(col, row, hCols, hRows, wtBleedPt, intBleedPt);
         wtDrawCell(page, trimX, trimY, bL, bR, bT, bB, epFront, epFrontPg, 0);
       }
     }
@@ -1541,10 +1527,7 @@ async function exportWorkTurn(
       for (let col2 = 0; col2 < hCols; col2++) {
         const trimX2 = backHalfX + wtBleedPt + col2 * (trimWPt + gutterPt);
         const trimY2 = backHalfY + wtBleedPt + (hRows - 1 - row2) * (trimHPt + gutterPt);
-        const bL2 = col2 === 0 ? wtBleedPt : intBleedPt;
-        const bR2 = col2 === hCols - 1 ? wtBleedPt : intBleedPt;
-        const bT2 = row2 === 0 ? wtBleedPt : intBleedPt;
-        const bB2 = row2 === hRows - 1 ? wtBleedPt : intBleedPt;
+        const { bL: bL2, bR: bR2, bT: bT2, bB: bB2 } = cellBleed(col2, row2, hCols, hRows, wtBleedPt, intBleedPt);
         // When auto-rotated: back gets opposite direction (heads outward)
         // When natural fit: back same as front (physical turn handles it)
         const backExtraRot = wtNeedsRot ? 180 : 0;
@@ -1683,11 +1666,7 @@ async function exportGangRun(
   const grUserRot = opts.rotation || 0;
   const grBaseRot = (grUserRot === 180 || grUserRot === 270) ? 180 : 0;
 
-  // Progressive internal bleed — matches engine's internalBleed().
-  let grIntBleedPt: number;
-  if (gutterPt <= 0) grIntBleedPt = 0;
-  else if (gutterPt >= 2 * bleedPt) grIntBleedPt = bleedPt;
-  else grIntBleedPt = gutterPt / 2;
+  const grIntBleedPt = internalBleed(gutterPt, bleedPt);
 
   const hasMultiPdf = gangJobEmbedded && gangJobEmbedded.some(arr => arr.length > 0);
 
@@ -1728,11 +1707,7 @@ async function exportGangRun(
         else if (grExtraRot === 90) { drawX = trimX + trimWpt + toy; drawY = trimY - tox; }
         else if (grExtraRot === 180) { drawX = trimX + trimWpt + tox; drawY = trimY + trimHpt + toy; }
         else { drawX = trimX - toy; drawY = trimY + trimHpt + tox; }
-        // Per-cell bleed: full on outer grid edges, progressive internal elsewhere.
-        const cBL = col === 0 ? bleedPt : grIntBleedPt;
-        const cBR = col === impo.cols - 1 ? bleedPt : grIntBleedPt;
-        const cBT = row === 0 ? bleedPt : grIntBleedPt;
-        const cBB = row === impo.rows - 1 ? bleedPt : grIntBleedPt;
+        const { bL: cBL, bR: cBR, bT: cBT, bB: cBB } = cellBleed(col, row, impo.cols, impo.rows, bleedPt, grIntBleedPt);
         const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: sx, yScale: sy };
         if (grExtraRot) drawOpts.rotate = degrees(grExtraRot);
         page.pushOperators(pushGraphicsState(), rectangle(trimX - cBL, trimY - cBB, trimWpt + cBL + cBR, trimHpt + cBT + cBB), clip(), endPath());
@@ -1743,7 +1718,7 @@ async function exportGangRun(
   }
 
   // Asymmetric gutter masks
-  const intBleedGr = gutterPt <= 0 ? 0 : (gutterPt >= 2 * bleedPt ? bleedPt : gutterPt / 2);
+  const intBleedGr = internalBleed(gutterPt, bleedPt);
   const white = cmyk(0, 0, 0, 0);
   if (gutterPt > 0.1) {
     for (let gc = 0; gc < impo.cols - 1; gc++) {

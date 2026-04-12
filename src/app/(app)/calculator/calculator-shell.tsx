@@ -1638,7 +1638,13 @@ export default function CalculatorShell() {
                           id: machine.id, name: machine.name, cat: machine.cat,
                           specs: (machine as any).specs,
                         } : null,
-                        gangJobs,
+                        // Strip binary/PDF fields from gangJobs — they don't round-trip through JSON.
+                        gangJobs: gangJobs.map(g => ({
+                          id: g.id,
+                          label: g.label,
+                          qty: g.qty,
+                          pdf: g.pdf ? { fileName: g.pdf.fileName, pageCount: g.pdf.pageCount, pageSizes: g.pdf.pageSizes } : null,
+                        })),
                         exportOpts: {
                           bleed: pdfExportOpts.bleed,
                           gutter: pdfExportOpts.gutter,
