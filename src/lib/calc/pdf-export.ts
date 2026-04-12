@@ -1516,11 +1516,12 @@ async function exportWorkTurn(
 
     // Helper: draw page in cell with trim-based scaling (PDF trim aligns to cell trim at 1:1).
     // Bleed area stays empty unless the PDF itself has bleed content beyond its TrimBox.
+    // Note: pdf-lib's embedPage already applies /Rotate, so we don't add epSrcRot here
+    // (would cause double rotation). Canvas does the same.
     const wtDrawCell = (pg: PDFPage, cx: number, cy: number, epObj: EmbeddedPageInfo, epPg: PDFEmbeddedPage, extraRotArg?: number) => {
       pg.pushOperators(pushGraphicsState(), rectangle(cx, cy, pieceW, pieceH), clip(), endPath());
-      const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
       const gridRot = wtNeedsRot ? 270 : 0;
-      const totalRot = (epSrcRot + gridRot + userExtraRot + (extraRotArg || 0)) % 360;
+      const totalRot = (gridRot + userExtraRot + (extraRotArg || 0)) % 360;
       const epRawW = epPg.width || pieceW;
       const epRawH = epPg.height || pieceH;
       const needsSwap = (totalRot === 90 || totalRot === 270);
