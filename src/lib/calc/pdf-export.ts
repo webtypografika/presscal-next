@@ -725,84 +725,40 @@ async function exportNUp(
         const pageIdx = s;
         if (pageIdx < embeddedPages.length) {
           const epObj = embeddedPages[pageIdx];
-          const epPage = epObj.page;
-          // Trim position on grid, then offset by bleed for cell placement
           const frontTrimX = cenX + col * trimStepW;
           const trimYpos = cenY + (impo.rows - 1 - row) * trimStepH;
-          const frontCellX = frontTrimX - bleedPt;
-          const cellY = trimYpos - bleedPt;
 
-          // Per-cell bleed (asymmetric) — front-side perspective
-          const { bL: cBL, bR: cBR, bT: cBT, bB: cBB } = cellBleed(col, row, impo.cols, impo.rows, bleedPt, intBleedPlace);
-
-          // Unified page placement
-          const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
+          // Rotation composite — pdf-lib handles source /Rotate automatically,
+          // so we only add grid + user + H2F rotations.
           const gridRot = isRotated ? (isBackSide ? 90 : 270) : 0;
           const userRot = opts.rotation || 0;
-          const extraRot0 = (userRot === 180 || userRot === 270) ? 180 : 0;
-          let extraRot = extraRot0;
-          // H2F: alternate rows flipped 180° on front side
+          let extraRot = (userRot === 180 || userRot === 270) ? 180 : 0;
           if (opts.duplexOrient === 'h2f' && (row % 2 === 1)) extraRot = (extraRot + 180) % 360;
-          // H2F back side: flip 180° so back aligns with flipped front rows
           const h2fRot = (isBackSide && opts.duplexOrient === 'h2f') ? 180 : 0;
-          const totalRot = (epSrcRot + gridRot + extraRot + h2fRot) % 360;
+          const rot = (gridRot + extraRot + h2fRot) % 360;
 
-          const epRawW = epPage.width || pieceW;
-          const epRawH = epPage.height || pieceH;
-
-          // Scale so embedded PDF's TrimBox fills our trim area exactly
-          // TrimBox size in pt = epObj.trimW × epObj.trimH
-          // If no TrimBox info, fall back to full page → trim (same as before)
-          const epTW = epObj.trimW || epRawW;
-          const epTH = epObj.trimH || epRawH;
-          const cScaleFactor = (opts.contentScale || 100) / 100;
-          const needsSwap = (totalRot === 90 || totalRot === 270);
-          const scaleX = (needsSwap ? (trimHpt / epTW) : (trimWpt / epTW)) * cScaleFactor;
-          const scaleY = (needsSwap ? (trimWpt / epTH) : (trimHpt / epTH)) * cScaleFactor;
-
-          // Place PDF so its TrimBox aligns with our trim position
-          // PDF origin is CropBox bottom-left; TrimBox starts at trimOffsetX/Y inside
-          // After scaling, the trim offset in output coords:
-          const scaledOffX = epObj.trimOffsetX * scaleX / cScaleFactor;
-          const scaledOffY = epObj.trimOffsetY * scaleY / cScaleFactor;
-          // visX/visY = where to place PDF origin so TrimBox lands on frontTrimX/trimYpos
-          let visX: number, visY: number;
+          // Trim position on the output page — mirror for duplex back.
+          let trimX: number, trimY: number;
           if (isBackSide && opts.duplexOrient === 'h2f') {
-            visX = frontTrimX - scaledOffX;
-            visY = (paperHpt - trimYpos - trimHpt) - scaledOffY;
+            trimX = frontTrimX;
+            trimY = paperHpt - trimYpos - trimHpt;
+          } else if (isBackSide) {
+            trimX = paperWpt - frontTrimX - trimWpt;
+            trimY = trimYpos;
           } else {
-            const ftx = isBackSide ? (paperWpt - frontTrimX - trimWpt) : frontTrimX;
-            visX = ftx - scaledOffX;
-            visY = trimYpos - scaledOffY;
+            trimX = frontTrimX;
+            trimY = trimYpos;
           }
 
-          // Clip rectangle — based on trim position with asymmetric bleed
-          // For back H2H: L↔R swap. For back H2F: T↔B swap.
-          let vcBL = cBL, vcBR = cBR, vcBT = cBT, vcBB = cBB;
-          if (isBackSide && opts.duplexOrient !== 'h2f') { vcBL = cBR; vcBR = cBL; }
-          if (isBackSide && opts.duplexOrient === 'h2f') { vcBT = cBB; vcBB = cBT; }
-          // visX + scaledOffX = trim position
-          const visTrimX = visX + scaledOffX;
-          const visTrimY = visY + scaledOffY;
-          const clipX = visTrimX - vcBL;
-          const clipY = visTrimY - vcBB;
-          const clipW = trimWpt + vcBL + vcBR;
-          const clipH = trimHpt + vcBT + vcBB;
+          // Per-cell bleed, mirrored for back: H2H flips L↔R, H2F flips T↔B.
+          const f = cellBleed(col, row, impo.cols, impo.rows, bleedPt, intBleedPlace);
+          const bleeds = !isBackSide ? f
+            : opts.duplexOrient === 'h2f'
+              ? { bL: f.bL, bR: f.bR, bT: f.bB, bB: f.bT }
+              : { bL: f.bR, bR: f.bL, bT: f.bT, bB: f.bB };
 
-          // Adjust draw origin for rotation
-          const rendW = epRawW * scaleX / cScaleFactor;
-          const rendH = epRawH * scaleY / cScaleFactor;
-          let drawX = visX, drawY = visY;
-          if (totalRot === 90) { drawX = visX + rendW; }
-          else if (totalRot === 270) { drawY = visY + rendH; }
-          else if (totalRot === 180) { drawX = visX + rendW; drawY = visY + rendH; }
-
-          // Clip to asymmetric cell bounds, then draw
-          page.pushOperators(pushGraphicsState(), rectangle(clipX, clipY, clipW, clipH), clip(), endPath());
-          const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: scaleX, yScale: scaleY };
-          if (totalRot) drawOpts.rotate = degrees(totalRot);
-          page.drawPage(epPage, drawOpts);
-          page.pushOperators(popGraphicsState());
+          const cScaleFactor = (opts.contentScale || 100) / 100;
+          drawTrimToCell(page, epObj, trimX, trimY, trimWpt, trimHpt, bleeds, rot, cScaleFactor);
         }
       }
     }
@@ -950,28 +906,24 @@ async function exportBooklet(
         const spreadX = gridX + sp2 * (spreadWpt + gapVpt);
         const foldX = spreadX + bleedPt + trimWpt;
 
+        // Left page of spread: full bleed on outer left, none on the spine (right).
+        // Right page: none on spine (left), full bleed on outer right.
+        const spreadBleeds = (fp: number, r: number) => ({
+          bL: fp === 0 ? bleedPt : 0,
+          bR: fp === 0 ? 0 : bleedPt,
+          bT: r === 0 ? bleedPt : bkIntBleedRowPt,
+          bB: r === rows - 1 ? bleedPt : bkIntBleedRowPt,
+        });
+
         // Front side
         for (let fp = 0; fp < 2; fp++) {
           const pn = sheet.front[fp];
           if (pn > embeddedPages.length) continue;
           const shiftX = fp === 0 ? creepPt : -creepPt;
           const ep = embeddedPages[pn - 1];
-          const epPage = ep.page;
           const trimXf = spreadX + bleedPt + fp * trimWpt + shiftX;
           const trimYf = rowY + bleedPt;
-          const clipL = fp === 0 ? spreadX : foldX;
-          const clipW = fp === 0 ? (foldX - spreadX) : (spreadX + spreadWpt - foldX);
-          const fcBT = row === 0 ? bleedPt : bkIntBleedRowPt;
-          const fcBB = row === rows - 1 ? bleedPt : bkIntBleedRowPt;
-          frontPage.pushOperators(pushGraphicsState(), rectangle(clipL, trimYf - fcBB, clipW, trimHpt + fcBT + fcBB), clip(), endPath());
-          const headToHead = (impo as any).headToHead;
-          const rot = pageRot + ((headToHead && fp === 1) ? 180 : 0);
-          if (rot % 360 !== 0) {
-            drawEmbeddedPage(frontPage, ep, trimXf + ep.trimOffsetX + ep.trimW, trimYf + ep.trimOffsetY + ep.trimH, epPage.width, epPage.height, rot);
-          } else {
-            drawEmbeddedPage(frontPage, ep, trimXf - ep.trimOffsetX, trimYf - ep.trimOffsetY, epPage.width, epPage.height);
-          }
-          frontPage.pushOperators(popGraphicsState());
+          drawTrimToCell(frontPage, ep, trimXf, trimYf, trimWpt, trimHpt, spreadBleeds(fp, row), pageRot, 1);
         }
 
         // Back side
@@ -980,22 +932,9 @@ async function exportBooklet(
           if (pnb > embeddedPages.length) continue;
           const shiftXb = bp === 0 ? creepPt : -creepPt;
           const epb = embeddedPages[pnb - 1];
-          const epPageB = epb.page;
           const trimXbk = spreadX + bleedPt + bp * trimWpt + shiftXb;
           const trimYbk = rowY + bleedPt;
-          const clipLb = bp === 0 ? spreadX : foldX;
-          const clipWb = bp === 0 ? (foldX - spreadX) : (spreadX + spreadWpt - foldX);
-          const bcBT = row === 0 ? bleedPt : bkIntBleedRowPt;
-          const bcBB = row === rows - 1 ? bleedPt : bkIntBleedRowPt;
-          backPage.pushOperators(pushGraphicsState(), rectangle(clipLb, trimYbk - bcBB, clipWb, trimHpt + bcBT + bcBB), clip(), endPath());
-          const headToHead = (impo as any).headToHead;
-          const rotB = pageRot + ((headToHead && bp === 1) ? 180 : 0);
-          if (rotB % 360 !== 0) {
-            drawEmbeddedPage(backPage, epb, trimXbk + epb.trimOffsetX + epb.trimW, trimYbk + epb.trimOffsetY + epb.trimH, epPageB.width, epPageB.height, rotB);
-          } else {
-            drawEmbeddedPage(backPage, epb, trimXbk - epb.trimOffsetX, trimYbk - epb.trimOffsetY, epPageB.width, epPageB.height);
-          }
-          backPage.pushOperators(popGraphicsState());
+          drawTrimToCell(backPage, epb, trimXbk, trimYbk, trimWpt, trimHpt, spreadBleeds(bp, row), pageRot, 1);
         }
       }
     }
@@ -1090,31 +1029,22 @@ async function exportPerfectBound(
         const globalPN = sigOffset + localPN;
         if (globalPN > 0 && globalPN <= embeddedPages.length && localPN <= sig.actualPages) {
           const ep = embeddedPages[globalPN - 1];
-          const epPage = ep.page;
           const pairIdx = Math.floor(col / 2);
           const colInPair = col % 2;
           const pairX = blockBaseX + pairIdx * pairW + (hasVGap && pairIdx >= 1 ? fgVpt : 0);
-          const foldXLocal = pairX + bleedPt + trimWpt;
           const trimX = pairX + bleedPt + colInPair * trimWpt;
           const trimY = rowY + bleedPt;
 
-          // Spine clip (pair-based, unchanged) + per-row vertical clip:
-          // full bleed on outermost top/bottom, progressive internal between halves.
-          const clipL = (colInPair === 0) ? pairX : foldXLocal;
-          const clipW = (colInPair === 0) ? (foldXLocal - pairX) : (pairX + pairW - foldXLocal);
-          const cBT = row === 0 ? bleedPt : pbIntBleedPt;
-          const cBB = row === sigRows - 1 ? bleedPt : pbIntBleedPt;
-          const clipB = trimY - cBB;
-          const clipH = trimHpt + cBT + cBB;
-          page.pushOperators(pushGraphicsState(), rectangle(clipL, clipB, clipW, clipH), clip(), endPath());
-
-          if (cellRot) {
-            drawEmbeddedPage(page, ep, trimX + ep.trimOffsetX + ep.trimW, trimY + ep.trimOffsetY + ep.trimH, epPage.width, epPage.height, 180);
-          } else {
-            drawEmbeddedPage(page, ep, trimX - ep.trimOffsetX, trimY - ep.trimOffsetY, epPage.width, epPage.height);
-          }
-
-          page.pushOperators(popGraphicsState());
+          // Left page of spread: full bleed on left edge, none on the spine (right).
+          // Right page: none on spine (left), full bleed on right.
+          // Top/bottom follow the per-row progressive rule (shared between top/bottom halves).
+          const bleeds = {
+            bL: colInPair === 0 ? bleedPt : 0,
+            bR: colInPair === 0 ? 0 : bleedPt,
+            bT: row === 0 ? bleedPt : pbIntBleedPt,
+            bB: row === sigRows - 1 ? bleedPt : pbIntBleedPt,
+          };
+          drawTrimToCell(page, ep, trimX, trimY, trimWpt, trimHpt, bleeds, cellRot ? 180 : 0, 1);
         }
       }
     }
