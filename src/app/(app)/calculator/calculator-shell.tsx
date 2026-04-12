@@ -502,7 +502,7 @@ export default function CalculatorShell() {
   const [finish, setFinish] = useState<FinishData>({ guillotineId: '', guillotineName: 'Χωρίς', lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς', lamSides: 1, binding: 'none', bindingMachineId: '' });
 
   // Imposition settings
-  const [impoGutter, setImpoGutter] = useState(3);
+  const [impoGutter, setImpoGutter] = useState(6);
   const [impoBleedOverride, setImpoBleedOverride] = useState<number | null>(null); // null = use job.bleed
   const [impoContentScale, setImpoContentScale] = useState(100); // % content scale (100 = 1:1)
   const [impoCropMarks, setImpoCropMarks] = useState(true);
@@ -618,6 +618,10 @@ export default function CalculatorShell() {
     try {
       const parsed = await parsePDF(pdfFiles[0]);
       setPdf(parsed);
+      // Start at 1-UP on every new PDF — user asks for it as a deliberate default,
+      // then grows the grid manually via the canvas handle.
+      setImpoForceCols(1);
+      setImpoForceRows(1);
       if (parsed.pageSizes.length > 0) {
         const pg = parsed.pageSizes[0];
         setJob(prev => ({
@@ -627,6 +631,8 @@ export default function CalculatorShell() {
           bleed: pg.bleedDetected > 0 ? pg.bleedDetected : prev.bleed,
           ...(parsed.pageCount === 1 ? { sides: 1 as const } : {}),
           ...(impoMode === 'cutstack' && parsed.pageCount > 1 ? { qty: parsed.pageCount } : {}),
+          ...((impoMode === 'booklet' || prev.archetype === 'booklet') && parsed.pageCount >= 4 ? { pages: parsed.pageCount } : {}),
+          ...((impoMode === 'perfect_bound' || prev.archetype === 'perfect_bound') && parsed.pageCount >= 4 ? { bodyPages: parsed.pageCount } : {}),
         }));
       }
       if (parsed.coverage) {
@@ -1004,6 +1010,8 @@ export default function CalculatorShell() {
 
   // ─── CLIENT-SIDE IMPOSITION (instant feedback) ───
   const effectiveBleed = job.bleedOn ? (impoBleedOverride ?? job.bleed) : 0;
+  // No gutter clamp: the engine uses progressive internal bleed (imposition.ts internalBleed)
+  // so gutter=0 with bleed>0 yields μονοτομή (no internal bleed, outer bleed only).
   const engineGutter = impoGutter;
 
   const impoInput: ImpositionInput = {
@@ -1610,6 +1618,53 @@ export default function CalculatorShell() {
                 }} style={pdfMenuItemStyle}>
                   <i className="fas fa-download" style={{ width: 16 }} /> Λήψη (Downloads)
                 </button>
+                {/* Dev snapshot — only useful in local dev. Writes state + PDF to .claude/snapshots/. */}
+                {process.env.NODE_ENV !== 'production' && (
+                  <button onClick={async () => {
+                    setPdfMenuOpen(false);
+                    try {
+                      const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
+                      const bytes = await exportImpositionPDF(pdfExportOpts);
+                      const snapshotState = {
+                        impoMode,
+                        job,
+                        impo,
+                        pdfInfo: pdf ? {
+                          fileName: pdf.fileName,
+                          pageCount: pdf.pageCount,
+                          pageSizes: pdf.pageSizes,
+                        } : null,
+                        machine: machine ? {
+                          id: machine.id, name: machine.name, cat: machine.cat,
+                          specs: (machine as any).specs,
+                        } : null,
+                        gangJobs,
+                        exportOpts: {
+                          bleed: pdfExportOpts.bleed,
+                          gutter: pdfExportOpts.gutter,
+                          rotation: pdfExportOpts.rotation,
+                          duplexOrient: (pdfExportOpts as any).duplexOrient,
+                          contentScale: (pdfExportOpts as any).contentScale,
+                          showCropMarks: (pdfExportOpts as any).showCropMarks,
+                          machineCat: (pdfExportOpts as any).machineCat,
+                        },
+                      };
+                      const fd = new FormData();
+                      fd.append('state', JSON.stringify(snapshotState));
+                      fd.append('pdf', new Blob([bytes as BlobPart], { type: 'application/pdf' }), 'last-export.pdf');
+                      fd.append('label', `${impoMode}-${new Date().toISOString().slice(11,19)}`);
+                      const res = await fetch('/api/dev/snapshot', { method: 'POST', body: fd });
+                      const data = await res.json();
+                      if (!res.ok) {
+                        alert('Snapshot failed: ' + (data?.error || res.status));
+                      } else {
+                        alert('Snapshot saved to .claude/snapshots/\n' + (data.written || []).join('\n'));
+                      }
+                    } catch (e) { alert('Snapshot error: ' + (e as Error).message); }
+                  }} style={pdfMenuItemStyle}>
+                    <i className="fas fa-camera" style={{ width: 16, color: 'var(--lime)' }} /> Snapshot for Claude
+                  </button>
+                )}
                 {/* Save to customer folder */}
                 {/* Save to customer folder — uses linkedFile path OR company.folderPath */}
                 {quoteLink?.quoteId && (
@@ -2142,7 +2197,7 @@ export default function CalculatorShell() {
               {job.archetype === 'perfect_bound' && (
                 <div style={{ marginBottom: 10 }}>
                   <MfLabel>ΣΕΛΙΔΕΣ ΣΩΜΑΤΟΣ</MfLabel>
-                  <MfInput value={job.bodyPages || 64} onChange={(v) => setJob({ ...job, bodyPages: Math.max(4, Number(v) || 4) })} style={{ width: 80, textAlign: 'center' }} />
+                  <MfInput value={job.bodyPages ?? ''} onChange={(v) => setJob({ ...job, bodyPages: Number(v) || undefined })} style={{ width: 80, textAlign: 'center' }} />
                 </div>
               )}
               {job.archetype === 'custom' && (
@@ -3266,13 +3321,15 @@ export default function CalculatorShell() {
                 } : undefined}
                 onRotate={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn') ? () => {
                   setImpoRotation(prev => (prev + 90) % 360);
+                  setImpoForceCols(1);
+                  setImpoForceRows(1);
                 } : undefined}
                 onOffsetChange={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn') ? (x, y) => {
                   setImpoOffsetX(x);
                   setImpoOffsetY(y);
                 } : undefined}
                 contentScale={impoContentScale}
-                onGutterChange={v => setImpoGutter(v)}
+                onGutterChange={v => setImpoGutter(Math.max(0, v))}
                 onBleedChange={v => setImpoBleedOverride(v)}
               />
               {/* PDF info chip (top-left) — shown when a linked PDF is loaded */}

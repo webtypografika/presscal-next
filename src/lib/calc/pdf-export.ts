@@ -400,7 +400,9 @@ function drawPDFMarks(
   const regAll = cmyk(1, 1, 1, 1); // Registration — prints on ALL plates
   const markColor = options?.machineCat === 'offset' ? regAll : cmyk(0, 0, 0, 1);
 
-  const cropGap = markOffset;
+  // Crop marks must start OUTSIDE the bleed, otherwise the first mm of the mark
+  // sits inside the colored bleed area and looks like it's inside the job.
+  const cropGap = Math.max(markOffset, bleedPt + mmToPt(0.5));
 
   // Cap mark length to available margin space (use bleed-extended bounds)
   const spaceAbove = paperHpt - (cenY + trimGridH) - bleedPt;
@@ -867,6 +869,13 @@ async function exportBooklet(
   const canRepeat = sigsPerSheet >= totalSigs;
   const totalPressSheets = canRepeat ? 1 : Math.ceil(totalSigs / sigsPerSheet);
 
+  // Progressive internal bleed for row gap (inter-spread vertical gap uses the same rule).
+  // Columns within a spread share the spine — no bleed there, handled via clip bounds.
+  let bkIntBleedRowPt: number;
+  if (gapHpt <= 0) bkIntBleedRowPt = 0;
+  else if (gapHpt >= 2 * bleedPt) bkIntBleedRowPt = bleedPt;
+  else bkIntBleedRowPt = gapHpt / 2;
+
   for (let ps = 0; ps < totalPressSheets; ps++) {
     const frontPage = doc.addPage([paperWpt, paperHpt]);
     const backPage = doc.addPage([paperWpt, paperHpt]);
@@ -898,7 +907,9 @@ async function exportBooklet(
           const trimYf = rowY + bleedPt;
           const clipL = fp === 0 ? spreadX : foldX;
           const clipW = fp === 0 ? (foldX - spreadX) : (spreadX + spreadWpt - foldX);
-          frontPage.pushOperators(pushGraphicsState(), rectangle(clipL, rowY, clipW, pieceH), clip(), endPath());
+          const fcBT = row === 0 ? bleedPt : bkIntBleedRowPt;
+          const fcBB = row === rows - 1 ? bleedPt : bkIntBleedRowPt;
+          frontPage.pushOperators(pushGraphicsState(), rectangle(clipL, trimYf - fcBB, clipW, trimHpt + fcBT + fcBB), clip(), endPath());
           const headToHead = (impo as any).headToHead;
           const rot = pageRot + ((headToHead && fp === 1) ? 180 : 0);
           if (rot % 360 !== 0) {
@@ -920,7 +931,9 @@ async function exportBooklet(
           const trimYbk = rowY + bleedPt;
           const clipLb = bp === 0 ? spreadX : foldX;
           const clipWb = bp === 0 ? (foldX - spreadX) : (spreadX + spreadWpt - foldX);
-          backPage.pushOperators(pushGraphicsState(), rectangle(clipLb, rowY, clipWb, pieceH), clip(), endPath());
+          const bcBT = row === 0 ? bleedPt : bkIntBleedRowPt;
+          const bcBB = row === rows - 1 ? bleedPt : bkIntBleedRowPt;
+          backPage.pushOperators(pushGraphicsState(), rectangle(clipLb, trimYbk - bcBB, clipWb, trimHpt + bcBT + bcBB), clip(), endPath());
           const headToHead = (impo as any).headToHead;
           const rotB = pageRot + ((headToHead && bp === 1) ? 180 : 0);
           if (rotB % 360 !== 0) {
@@ -1008,6 +1021,13 @@ async function exportPerfectBound(
     const sigOffset = sig.startPage - 1;
     const faceRows = faceName === 'front' ? sigMapLocal.front : sigMapLocal.back;
 
+    // Progressive internal bleed for rows (between top/bottom half of signature).
+    // Columns within a pair share the SPINE (no bleed) — already handled via clipL/clipW.
+    let pbIntBleedPt: number;
+    if (fgHpt <= 0) pbIntBleedPt = 0;
+    else if (fgHpt >= 2 * bleedPt) pbIntBleedPt = bleedPt;
+    else pbIntBleedPt = fgHpt / 2;
+
     for (let row = 0; row < sigRows; row++) {
       const rowPages = faceRows[row] || [];
       const cellRot = pbIsRotated(row, sigRows);
@@ -1027,9 +1047,15 @@ async function exportPerfectBound(
           const trimX = pairX + bleedPt + colInPair * trimWpt;
           const trimY = rowY + bleedPt;
 
+          // Spine clip (pair-based, unchanged) + per-row vertical clip:
+          // full bleed on outermost top/bottom, progressive internal between halves.
           const clipL = (colInPair === 0) ? pairX : foldXLocal;
           const clipW = (colInPair === 0) ? (foldXLocal - pairX) : (pairX + pairW - foldXLocal);
-          page.pushOperators(pushGraphicsState(), rectangle(clipL, rowY, clipW, pieceHpt), clip(), endPath());
+          const cBT = row === 0 ? bleedPt : pbIntBleedPt;
+          const cBB = row === sigRows - 1 ? bleedPt : pbIntBleedPt;
+          const clipB = trimY - cBB;
+          const clipH = trimHpt + cBT + cBB;
+          page.pushOperators(pushGraphicsState(), rectangle(clipL, clipB, clipW, clipH), clip(), endPath());
 
           if (cellRot) {
             drawEmbeddedPage(page, ep, trimX + ep.trimOffsetX + ep.trimW, trimY + ep.trimOffsetY + ep.trimH, epPage.width, epPage.height, 180);
@@ -1067,7 +1093,9 @@ async function exportPerfectBound(
       }
     }
 
-    // Crop marks
+    // Crop marks. Gutter between trim edges = inter-pair gap + 2×bleed, because each
+    // pair absorbs its own bleed on both outer sides before the inter-pair gap.
+    const bleedMm = opts.bleed || 0;
     const pbMarksImpo = {
       marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
       marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
@@ -1075,9 +1103,9 @@ async function exportPerfectBound(
       rows: sigRows * sigsDown,
       pieceW: pairW * 25.4 / 72,
       pieceH: impo.pieceH,
-      gutterMM: (impo as any).gapVmm || 0,
-      gutterRowMM: (impo as any).gapHmm || 0,
-      bleedMM: opts.bleed || 0,
+      gutterMM: ((impo as any).gapVmm || 0) + 2 * bleedMm,
+      gutterRowMM: ((impo as any).gapHmm || 0) + 2 * bleedMm,
+      bleedMM: bleedMm,
       offsetX: impo.offsetX, offsetY: impo.offsetY,
       cropMarks: opts.showCropMarks,
     };
@@ -1091,17 +1119,51 @@ async function exportPerfectBound(
       colorBarOffsetY: opts.colorBarOffsetY,
         colorBarScale: opts.colorBarScale,
     };
-    drawPDFMarks(frontP, paperWpt, paperHpt, pbMarksImpo, { ...marksOpts, jobName: ascii((pressLabel ? pressLabel + ' ' : '') + 'Front (' + sigsAcross + '\u00d7' + sigsDown + ')') });
-    drawPDFMarks(backP, paperWpt, paperHpt, pbMarksImpo, { ...marksOpts, jobName: ascii((pressLabel ? pressLabel + ' ' : '') + 'Back (' + sigsAcross + '\u00d7' + sigsDown + ')') });
-
-    // Mask outer edges
-    const white = cmyk(0, 0, 0, 0);
+    // Mask outer edges FIRST so crop marks (drawn next) don't get covered.
     const gridL = gridOriginX;
     const gridR = gridOriginX + totalGridW;
     const gridB = gridOriginY;
     const gridT = gridOriginY + totalGridH;
     for (const pg of [frontP, backP]) {
       drawMarginalMasks(pg, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
+    }
+
+    drawPDFMarks(frontP, paperWpt, paperHpt, pbMarksImpo, { ...marksOpts, jobName: ascii((pressLabel ? pressLabel + ' ' : '') + 'Front (' + sigsAcross + '\u00d7' + sigsDown + ')') });
+    drawPDFMarks(backP, paperWpt, paperHpt, pbMarksImpo, { ...marksOpts, jobName: ascii((pressLabel ? pressLabel + ' ' : '') + 'Back (' + sigsAcross + '\u00d7' + sigsDown + ')') });
+
+    // Fold ticks at each spine (between the two pages of every spread).
+    // Dashed to distinguish from cut marks — this is a fold line, not a cut.
+    if (opts.showCropMarks) {
+      const tickColor = opts.machineCat === 'offset' ? cmyk(1, 1, 1, 1) : cmyk(0, 0, 0, 1);
+      const tickLen = mmToPt(3);
+      const tickGap = Math.max(mmToPt(1), bleedPt + mmToPt(0.5));
+      const dashArr = [mmToPt(0.7), mmToPt(0.5)];
+      for (let bRow = 0; bRow < sigsDown; bRow++) {
+        for (let bCol = 0; bCol < sigsAcross; bCol++) {
+          const slotIdx = bRow * sigsAcross + bCol;
+          const sigIdx = canRepeat ? (slotIdx % numSigs) : (ps * sigsPerSheet + slotIdx);
+          if (sigIdx >= numSigs) continue;
+          const blockX = gridOriginX + bCol * (blockWpt + blockGapHpt);
+          const blockY = gridOriginY + (sigsDown - 1 - bRow) * (blockHpt + blockGapVpt);
+          const blockTopY = blockY + blockHpt;
+          for (let p = 0; p < numPairs; p++) {
+            const pairX = blockX + p * pairW + (hasVGap && p >= 1 ? fgVpt : 0);
+            const spineX = pairX + bleedPt + trimWpt;
+            for (const pg of [frontP, backP]) {
+              pg.drawLine({
+                start: { x: spineX, y: blockTopY + tickGap },
+                end: { x: spineX, y: blockTopY + tickGap + tickLen },
+                thickness: 0.5, color: tickColor, dashArray: dashArr,
+              });
+              pg.drawLine({
+                start: { x: spineX, y: blockY - tickGap },
+                end: { x: spineX, y: blockY - tickGap - tickLen },
+                thickness: 0.5, color: tickColor, dashArray: dashArr,
+              });
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -1162,6 +1224,12 @@ async function exportCutStack(
 
   const isH2H = (opts.duplexOrient || 'h2h') === 'h2h';
 
+  // Progressive internal bleed — matches engine's internalBleed().
+  let csIntBleedPt: number;
+  if (gutterPt <= 0) csIntBleedPt = 0;
+  else if (gutterPt >= 2 * bleedPt) csIntBleedPt = bleedPt;
+  else csIntBleedPt = gutterPt / 2;
+
   const sheetsNeeded = opts.csStackSize || Math.max(1, embeddedPages.length);
 
   // Helper: draw masking on a page (asymmetric gutter masks)
@@ -1209,12 +1277,25 @@ async function exportCutStack(
         if (embeddedPages.length > 0) {
           const ep = embeddedPages[pageIdx];
           const epPage = ep.page;
-          // Trim position → cell position (offset by bleed)
-          const cellX = cenX + col * csTrimStepW - bleedPt + cOffX;
-          const cellY = cenY + (impo.rows - 1 - row) * csTrimStepH - bleedPt - cOffY;
-          const epW = epPage.width || pieceW;
-          const epH = epPage.height || pieceH;
-          page.drawPage(epPage, { x: cellX, y: cellY, xScale: pieceW / epW, yScale: pieceH / epH });
+          const epRawW = epPage.width || pieceW;
+          const epRawH = epPage.height || pieceH;
+          const epTW = ep.trimW || epRawW;
+          const epTH = ep.trimH || epRawH;
+          const cScale = (opts.contentScale || 100) / 100;
+          const sx = (trimWpt / epTW) * cScale;
+          const sy = (trimHpt / epTH) * cScale;
+          const tox = ep.trimOffsetX * sx / cScale;
+          const toy = ep.trimOffsetY * sy / cScale;
+          const trimX = cenX + col * csTrimStepW + cOffX;
+          const trimY = cenY + (impo.rows - 1 - row) * csTrimStepH - cOffY;
+          // Per-cell bleed (asymmetric): full on outer grid edges, internal elsewhere.
+          const cBL = col === 0 ? bleedPt : csIntBleedPt;
+          const cBR = col === impo.cols - 1 ? bleedPt : csIntBleedPt;
+          const cBT = row === 0 ? bleedPt : csIntBleedPt;
+          const cBB = row === impo.rows - 1 ? bleedPt : csIntBleedPt;
+          page.pushOperators(pushGraphicsState(), rectangle(trimX - cBL, trimY - cBB, trimWpt + cBL + cBR, trimHpt + cBT + cBB), clip(), endPath());
+          page.drawPage(epPage, { x: trimX - tox, y: trimY - toy, xScale: sx, yScale: sy });
+          page.pushOperators(popGraphicsState());
         }
 
         // Numbering overlay (front only)
@@ -1268,16 +1349,35 @@ async function exportCutStack(
       const bEp = backEmbedded ? (backEmbedded[0] || backEmbedded[fixedBackIdx]) : embeddedPages[fixedBackIdx];
       if (bEp) {
         const bEpPage = bEp.page;
-        const bEpW = bEpPage.width || pieceW;
-        const bEpH = bEpPage.height || pieceH;
+        const bEpRawW = bEpPage.width || pieceW;
+        const bEpRawH = bEpPage.height || pieceH;
+        const bEpTW = bEp.trimW || bEpRawW;
+        const bEpTH = bEp.trimH || bEpRawH;
+        const bCScale = (opts.contentScale || 100) / 100;
+        const bSx = (trimWpt / bEpTW) * bCScale;
+        const bSy = (trimHpt / bEpTH) * bCScale;
+        const bTox = bEp.trimOffsetX * bSx / bCScale;
+        const bToy = bEp.trimOffsetY * bSy / bCScale;
 
         for (let bRow = 0; bRow < impo.rows; bRow++) {
           for (let bCol = 0; bCol < impo.cols; bCol++) {
-            const frontCellX = cenX + bCol * csTrimStepW - bleedPt;
-            const fCellY = cenY + (impo.rows - 1 - bRow) * csTrimStepH - bleedPt;
-            const bCellX = isH2H ? (paperWpt - frontCellX - pieceW) : frontCellX;
-            const bCellY = isH2H ? fCellY : (paperHpt - fCellY - pieceH);
-            backPage.drawPage(bEpPage, { x: bCellX, y: bCellY, xScale: pieceW / bEpW, yScale: pieceH / bEpH });
+            const fTrimX = cenX + bCol * csTrimStepW;
+            const fTrimY = cenY + (impo.rows - 1 - bRow) * csTrimStepH;
+            // Mirror the trim rect for duplex back: H2H flips X, H2F flips Y.
+            const bTrimX = isH2H ? (paperWpt - fTrimX - trimWpt) : fTrimX;
+            const bTrimY = isH2H ? fTrimY : (paperHpt - fTrimY - trimHpt);
+            // Per-cell bleed — mirror L↔R for H2H back, T↔B for H2F back.
+            const fBL = bCol === 0 ? bleedPt : csIntBleedPt;
+            const fBR = bCol === impo.cols - 1 ? bleedPt : csIntBleedPt;
+            const fBT = bRow === 0 ? bleedPt : csIntBleedPt;
+            const fBB = bRow === impo.rows - 1 ? bleedPt : csIntBleedPt;
+            const bBL = isH2H ? fBR : fBL;
+            const bBR = isH2H ? fBL : fBR;
+            const bBT = isH2H ? fBT : fBB;
+            const bBB = isH2H ? fBB : fBT;
+            backPage.pushOperators(pushGraphicsState(), rectangle(bTrimX - bBL, bTrimY - bBB, trimWpt + bBL + bBR, trimHpt + bBT + bBB), clip(), endPath());
+            backPage.drawPage(bEpPage, { x: bTrimX - bTox, y: bTrimY - bToy, xScale: bSx, yScale: bSy });
+            backPage.pushOperators(popGraphicsState());
           }
         }
       }
@@ -1322,11 +1422,19 @@ async function exportWorkTurn(
   const halfW = isTumble ? printableW : printableW / 2;
   const halfH = isTumble ? printableH / 2 : printableH;
 
-  // Per-half grid dimensions (not total cols/rows which are doubled for W&T)
+  // Per-half grid dimensions (not total cols/rows which are doubled for W&T).
+  // Grid sizing uses TRIM step (= trim + gutter), same as the engine — not PIECE step.
+  // Bleeds on adjacent cells share edges; pieces overlap when gutter < 2×bleed.
   const hCols = impo.halfCols ?? (isTumble ? impo.cols : Math.ceil(impo.cols / 2));
   const hRows = impo.halfRows ?? (isTumble ? Math.ceil(impo.rows / 2) : impo.rows);
-  const totalGridW = hCols * pieceW + Math.max(0, hCols - 1) * gutterPt;
-  const totalGridH = hRows * pieceH + Math.max(0, hRows - 1) * gutterPt;
+  const trimWPtGrid = mmToPt(impo.trimW);
+  const trimHPtGrid = mmToPt(impo.trimH);
+  const wtBleedPtGrid = mmToPt(opts.bleed || 0);
+  const trimGridW = hCols * trimWPtGrid + Math.max(0, hCols - 1) * gutterPt;
+  const trimGridH = hRows * trimHPtGrid + Math.max(0, hRows - 1) * gutterPt;
+  // Block size including outer bleeds (used for bounds/masks)
+  const totalGridW = trimGridW + 2 * wtBleedPtGrid;
+  const totalGridH = trimGridH + 2 * wtBleedPtGrid;
 
   const pdfPageCount = embeddedPages.length;
   const maxSheets = 50;
@@ -1346,6 +1454,16 @@ async function exportWorkTurn(
     const cenFX = mL + (halfW - totalGridW) / 2;
     const cenFY = mB + (halfH - totalGridH) / 2;
     const wtBleedPt = mmToPt(opts.bleed || 0);
+    const trimWPt = mmToPt(impo.trimW);
+    const trimHPt = mmToPt(impo.trimH);
+    const cScaleFactor = (opts.contentScale || 100) / 100;
+
+    // Progressive internal bleed — matches engine's internalBleed() in imposition.ts.
+    // gutter=0 → 0 (μονοτομή), gutter<2×bleed → gutter/2, gutter≥2×bleed → full.
+    let intBleedPt: number;
+    if (gutterPt <= 0) intBleedPt = 0;
+    else if (gutterPt >= 2 * wtBleedPt) intBleedPt = wtBleedPt;
+    else intBleedPt = gutterPt / 2;
 
     // Detect rotation
     const cellPortrait = pieceW <= pieceH;
@@ -1354,32 +1472,65 @@ async function exportWorkTurn(
     const wtNeedsRot = cellPortrait !== pdfPortrait;
     const userExtraRot = (opts.rotation === 180 || opts.rotation === 270) ? 180 : 0;
 
-    // Helper: draw page in cell with rotation + clipping
-    const wtDrawCell = (pg: PDFPage, cx: number, cy: number, epObj: EmbeddedPageInfo, epPg: PDFEmbeddedPage, extraRotArg?: number) => {
-      pg.pushOperators(pushGraphicsState(), rectangle(cx, cy, pieceW, pieceH), clip(), endPath());
-      const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
+    // Draw one cell with trim-based scaling. Clip uses per-side bleed so adjacent
+    // cells don't overlap into each other's trim when gutter < 2×bleed.
+    // Note: pdf-lib's embedPage already applies /Rotate — we must NOT add epSrcRot on top.
+    const wtDrawCell = (
+      pg: PDFPage, trimX: number, trimY: number,
+      bL: number, bR: number, bT: number, bB: number,
+      epObj: EmbeddedPageInfo, epPg: PDFEmbeddedPage, extraRotArg?: number,
+    ) => {
+      const clipX = trimX - bL;
+      const clipY = trimY - bB;
+      const clipW = trimWPt + bL + bR;
+      const clipH = trimHPt + bT + bB;
+      pg.pushOperators(pushGraphicsState(), rectangle(clipX, clipY, clipW, clipH), clip(), endPath());
       const gridRot = wtNeedsRot ? 270 : 0;
-      const totalRot = (epSrcRot + gridRot + userExtraRot + (extraRotArg || 0)) % 360;
+      const totalRot = (gridRot + userExtraRot + (extraRotArg || 0)) % 360;
       const epRawW = epPg.width || pieceW;
       const epRawH = epPg.height || pieceH;
       const needsSwap = (totalRot === 90 || totalRot === 270);
-      const scX = needsSwap ? (pieceH / epRawW) : (pieceW / epRawW);
-      const scY = needsSwap ? (pieceW / epRawH) : (pieceH / epRawH);
-      let drawX = cx, drawY = cy;
-      if (totalRot === 90) { drawX = cx + pieceW; }
-      else if (totalRot === 270) { drawY = cy + pieceH; }
-      else if (totalRot === 180) { drawX = cx + pieceW; drawY = cy + pieceH; }
-      const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: scX, yScale: scY };
+
+      const epTW = epObj.trimW || epRawW;
+      const epTH = epObj.trimH || epRawH;
+      const sx = (needsSwap ? (trimHPt / epTW) : (trimWPt / epTW)) * cScaleFactor;
+      const sy = (needsSwap ? (trimWPt / epTH) : (trimHPt / epTH)) * cScaleFactor;
+
+      // Trim offsets (position-invariant regardless of content scale).
+      const tox = epObj.trimOffsetX * sx / cScaleFactor;
+      const toy = epObj.trimOffsetY * sy / cScaleFactor;
+
+      let drawX: number, drawY: number;
+      if (totalRot === 0) {
+        drawX = trimX - tox;
+        drawY = trimY - toy;
+      } else if (totalRot === 90) {
+        drawX = trimX + trimWPt + toy;
+        drawY = trimY - tox;
+      } else if (totalRot === 180) {
+        drawX = trimX + trimWPt + tox;
+        drawY = trimY + trimHPt + toy;
+      } else { // 270
+        drawX = trimX - toy;
+        drawY = trimY + trimHPt + tox;
+      }
+
+      const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: sx, yScale: sy };
       if (totalRot) drawOpts.rotate = degrees(totalRot);
       pg.drawPage(epPg, drawOpts);
       pg.pushOperators(popGraphicsState());
     }
 
+    // Per-cell bleed: full on outer edges of the half, internal on shared edges.
     for (let row = 0; row < hRows; row++) {
       for (let col = 0; col < hCols; col++) {
-        const cellX = cenFX + col * (pieceW + gutterPt);
-        const cellY = cenFY + (hRows - 1 - row) * (pieceH + gutterPt);
-        wtDrawCell(page, cellX, cellY, epFront, epFrontPg, 0);
+        const trimX = cenFX + wtBleedPt + col * (trimWPt + gutterPt);
+        const trimY = cenFY + wtBleedPt + (hRows - 1 - row) * (trimHPt + gutterPt);
+        const bL = col === 0 ? wtBleedPt : intBleedPt;
+        const bR = col === hCols - 1 ? wtBleedPt : intBleedPt;
+        const bT = row === 0 ? wtBleedPt : intBleedPt;
+        const bB = row === hRows - 1 ? wtBleedPt : intBleedPt;
+        wtDrawCell(page, trimX, trimY, bL, bR, bT, bB, epFront, epFrontPg, 0);
       }
     }
 
@@ -1388,14 +1539,16 @@ async function exportWorkTurn(
     const backHalfY = isTumble ? mB + halfH + (halfH - totalGridH) / 2 : cenFY;
     for (let row2 = 0; row2 < hRows; row2++) {
       for (let col2 = 0; col2 < hCols; col2++) {
-        // Same grid positions as front half, shifted to back half area
-        // Content always rotated 180° (αντικριστά)
-        const cellX2 = backHalfX + col2 * (pieceW + gutterPt);
-        const cellY2 = backHalfY + (hRows - 1 - row2) * (pieceH + gutterPt);
+        const trimX2 = backHalfX + wtBleedPt + col2 * (trimWPt + gutterPt);
+        const trimY2 = backHalfY + wtBleedPt + (hRows - 1 - row2) * (trimHPt + gutterPt);
+        const bL2 = col2 === 0 ? wtBleedPt : intBleedPt;
+        const bR2 = col2 === hCols - 1 ? wtBleedPt : intBleedPt;
+        const bT2 = row2 === 0 ? wtBleedPt : intBleedPt;
+        const bB2 = row2 === hRows - 1 ? wtBleedPt : intBleedPt;
         // When auto-rotated: back gets opposite direction (heads outward)
         // When natural fit: back same as front (physical turn handles it)
         const backExtraRot = wtNeedsRot ? 180 : 0;
-        wtDrawCell(page, cellX2, cellY2, epBack, epBackPg, backExtraRot);
+        wtDrawCell(page, trimX2, trimY2, bL2, bR2, bT2, bB2, epBack, epBackPg, backExtraRot);
       }
     }
 
@@ -1429,27 +1582,24 @@ async function exportWorkTurn(
       page.drawRectangle({ x: 0, y: fGridT, width: paperWpt, height: bGridB - fGridT, color: white });
     }
 
-    // Gutter masks (per-half grid dimensions, not doubled totals)
+    // Gutter masks — mask the non-bleed strip between adjacent pieces.
+    // With trim step, adjacent pieces may overlap (when gutter < 2×bleed) or leave a gap (when >).
     if (gutterPt > 0.5) {
       for (let gc = 0; gc < hCols - 1; gc++) {
-        const fgx = fGridL + gc * (pieceW + gutterPt) + pieceW;
-        const fgxL = fgx + Math.min(wtBleedPt, gutterPt / 2);
-        const fgxR = fgx + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
-        if (fgxR > fgxL + 0.5) page.drawRectangle({ x: fgxL, y: fGridB, width: fgxR - fgxL, height: totalGridH, color: white });
-        const bgx = bGridL + gc * (pieceW + gutterPt) + pieceW;
-        const bgxL = bgx + Math.min(wtBleedPt, gutterPt / 2);
-        const bgxR = bgx + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
-        if (bgxR > bgxL + 0.5) page.drawRectangle({ x: bgxL, y: bGridB, width: bgxR - bgxL, height: totalGridH, color: white });
+        const fPieceR = fGridL + gc * (trimWPt + gutterPt) + pieceW;
+        const fPieceNextL = fGridL + (gc + 1) * (trimWPt + gutterPt);
+        if (fPieceNextL > fPieceR + 0.5) page.drawRectangle({ x: fPieceR, y: fGridB, width: fPieceNextL - fPieceR, height: totalGridH, color: white });
+        const bPieceR = bGridL + gc * (trimWPt + gutterPt) + pieceW;
+        const bPieceNextL = bGridL + (gc + 1) * (trimWPt + gutterPt);
+        if (bPieceNextL > bPieceR + 0.5) page.drawRectangle({ x: bPieceR, y: bGridB, width: bPieceNextL - bPieceR, height: totalGridH, color: white });
       }
       for (let gr = 0; gr < hRows - 1; gr++) {
-        const fgy = fGridB + gr * (pieceH + gutterPt) + pieceH;
-        const fgyB = fgy + Math.min(wtBleedPt, gutterPt / 2);
-        const fgyT = fgy + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
-        if (fgyT > fgyB + 0.5) page.drawRectangle({ x: fGridL, y: fgyB, width: totalGridW, height: fgyT - fgyB, color: white });
-        const bgy = bGridB + gr * (pieceH + gutterPt) + pieceH;
-        const bgyB = bgy + Math.min(wtBleedPt, gutterPt / 2);
-        const bgyT = bgy + gutterPt - Math.min(wtBleedPt, gutterPt / 2);
-        if (bgyT > bgyB + 0.5) page.drawRectangle({ x: bGridL, y: bgyB, width: totalGridW, height: bgyT - bgyB, color: white });
+        const fPieceT = fGridB + gr * (trimHPt + gutterPt) + pieceH;
+        const fPieceNextB = fGridB + (gr + 1) * (trimHPt + gutterPt);
+        if (fPieceNextB > fPieceT + 0.5) page.drawRectangle({ x: fGridL, y: fPieceT, width: totalGridW, height: fPieceNextB - fPieceT, color: white });
+        const bPieceT = bGridB + gr * (trimHPt + gutterPt) + pieceH;
+        const bPieceNextB = bGridB + (gr + 1) * (trimHPt + gutterPt);
+        if (bPieceNextB > bPieceT + 0.5) page.drawRectangle({ x: bGridL, y: bPieceT, width: totalGridW, height: bPieceNextB - bPieceT, color: white });
       }
     }
 
@@ -1533,6 +1683,12 @@ async function exportGangRun(
   const grUserRot = opts.rotation || 0;
   const grBaseRot = (grUserRot === 180 || grUserRot === 270) ? 180 : 0;
 
+  // Progressive internal bleed — matches engine's internalBleed().
+  let grIntBleedPt: number;
+  if (gutterPt <= 0) grIntBleedPt = 0;
+  else if (gutterPt >= 2 * bleedPt) grIntBleedPt = bleedPt;
+  else grIntBleedPt = gutterPt / 2;
+
   const hasMultiPdf = gangJobEmbedded && gangJobEmbedded.some(arr => arr.length > 0);
 
   for (let row = 0; row < impo.rows; row++) {
@@ -1551,13 +1707,37 @@ async function exportGangRun(
 
       if (epObj) {
         const epPage = epObj.page;
-        // Trim position → offset by bleed for cell placement
-        const cellX = cenX + col * grTrimStepW - bleedPt;
-        const cellY = cenY + (impo.rows - 1 - row) * grTrimStepH - bleedPt;
-        // Use cell rotation (includes H2F row flip from engine)
+        // Trim-based scaling: each job's TrimBox aligns 1:1 with its cell's trim area.
+        // Bleed never affects content scale — only the position of the bleed band.
+        const epRawW = epPage.width || pieceW;
+        const epRawH = epPage.height || pieceH;
+        const epTW = epObj.trimW || epRawW;
+        const epTH = epObj.trimH || epRawH;
+        const grCScale = (opts.contentScale || 100) / 100;
         const cell = impo.cells[posIdx];
         const grExtraRot = cell?.rotation ?? grBaseRot;
-        drawEmbeddedPage(page, epObj, cellX + bleedPt - epObj.trimOffsetX, cellY + bleedPt - epObj.trimOffsetY, epPage.width, epPage.height, grExtraRot);
+        const needsSwap = grExtraRot === 90 || grExtraRot === 270;
+        const sx = (needsSwap ? (trimHpt / epTW) : (trimWpt / epTW)) * grCScale;
+        const sy = (needsSwap ? (trimWpt / epTH) : (trimHpt / epTH)) * grCScale;
+        const tox = epObj.trimOffsetX * sx / grCScale;
+        const toy = epObj.trimOffsetY * sy / grCScale;
+        const trimX = cenX + col * grTrimStepW;
+        const trimY = cenY + (impo.rows - 1 - row) * grTrimStepH;
+        let drawX: number, drawY: number;
+        if (grExtraRot === 0) { drawX = trimX - tox; drawY = trimY - toy; }
+        else if (grExtraRot === 90) { drawX = trimX + trimWpt + toy; drawY = trimY - tox; }
+        else if (grExtraRot === 180) { drawX = trimX + trimWpt + tox; drawY = trimY + trimHpt + toy; }
+        else { drawX = trimX - toy; drawY = trimY + trimHpt + tox; }
+        // Per-cell bleed: full on outer grid edges, progressive internal elsewhere.
+        const cBL = col === 0 ? bleedPt : grIntBleedPt;
+        const cBR = col === impo.cols - 1 ? bleedPt : grIntBleedPt;
+        const cBT = row === 0 ? bleedPt : grIntBleedPt;
+        const cBB = row === impo.rows - 1 ? bleedPt : grIntBleedPt;
+        const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: sx, yScale: sy };
+        if (grExtraRot) drawOpts.rotate = degrees(grExtraRot);
+        page.pushOperators(pushGraphicsState(), rectangle(trimX - cBL, trimY - cBB, trimWpt + cBL + cBR, trimHpt + cBT + cBB), clip(), endPath());
+        page.drawPage(epPage, drawOpts);
+        page.pushOperators(popGraphicsState());
       }
     }
   }

@@ -523,6 +523,36 @@ function drawSheet(
     }
   // end cell loop
 
+  // Perfect Bound: highlight the active spread (2 cells) selected in the navigator.
+  if (activeSigSheet != null && impo.mode === 'perfect_bound' && impo.signatureMap && impo.cells.length) {
+    const sheetsPerSig = impo.signatureMap.sheets.length / (impo.numSigs || 1);
+    const localIdx = activeSigSheet % sheetsPerSig;
+    const numPairs = Math.max(1, Math.ceil(impo.cols / 2));
+    const activeRow = Math.floor(localIdx / numPairs);
+    const activeP = localIdx % numPairs;
+    const activeCols = [activeP * 2, activeP * 2 + 1];
+    ctx.save();
+    ctx.strokeStyle = 'rgba(132,204,22,0.95)';
+    ctx.lineWidth = 2.5;
+    for (const ac of activeCols) {
+      const idx = activeRow * impo.cols + ac;
+      if (idx >= impo.cells.length) continue;
+      const cell = impo.cells[idx];
+      const cBL = (cell.bleedL ?? bleed) * scale;
+      const cBT = (cell.bleedT ?? bleed) * scale;
+      const cBR = (cell.bleedR ?? bleed) * scale;
+      const cBB = (cell.bleedB ?? bleed) * scale;
+      const cellX = offX + cell.x * scale + gridOffsetX * scale;
+      const cellY = offY + cell.y * scale + gridOffsetY * scale;
+      const trimX = cellX + cBL;
+      const trimY = cellY + cBT;
+      const trimW = cell.w * scale - cBL - cBR;
+      const trimH = cell.h * scale - cBT - cBB;
+      ctx.strokeRect(trimX - 1, trimY - 1, trimW + 2, trimH + 2);
+    }
+    ctx.restore();
+  }
+
   // W&T fold/cut line (dashed line at sheet center — where the sheet is cut after printing)
   if (isWT) {
     const isTumble = impo.turnType === 'tumble';
@@ -567,23 +597,26 @@ function drawSheet(
     ctx.strokeStyle = COLORS.cropMark;
     ctx.lineWidth = 0.5;
 
-    // Collect perimeter trim X/Y positions
+    // Derive trim edges directly from cells (handles modes like PB where the grid
+    // is not uniform — pairs share spine with no gap, only between spreads).
     const perimXs: number[] = [];
-    for (let col = 0; col < impo.cols; col++) {
-      perimXs.push(cenX + col * trimStepW);                    // left trim edge
-      perimXs.push(cenX + col * trimStepW + trimWpx);          // right trim edge
+    const perimYs: number[] = [];
+    for (const cc of impo.cells) {
+      const cBLp = (cc.bleedL ?? bleed) * scale;
+      const cBRp = (cc.bleedR ?? bleed) * scale;
+      const cBTp = (cc.bleedT ?? bleed) * scale;
+      const cBBp = (cc.bleedB ?? bleed) * scale;
+      const ccx = offX + cc.x * scale + gridOffsetX * scale;
+      const ccy = offY + cc.y * scale + gridOffsetY * scale;
+      perimXs.push(ccx + cBLp);
+      perimXs.push(ccx + cc.w * scale - cBRp);
+      perimYs.push(ccy + cBTp);
+      perimYs.push(ccy + cc.h * scale - cBBp);
     }
-    // Deduplicate close values
     perimXs.sort((a, b) => a - b);
     const uX = [perimXs[0]];
     for (let i = 1; i < perimXs.length; i++) {
       if (perimXs[i] - uX[uX.length - 1] > 0.3) uX.push(perimXs[i]);
-    }
-
-    const perimYs: number[] = [];
-    for (let row = 0; row < impo.rows; row++) {
-      perimYs.push(cenY + row * trimStepH);                    // top trim edge
-      perimYs.push(cenY + row * trimStepH + trimHpx);          // bottom trim edge
     }
     perimYs.sort((a, b) => a - b);
     const uY = [perimYs[0]];
@@ -595,19 +628,40 @@ function drawSheet(
     const gridL = uX[0], gridR = uX[uX.length - 1];
     const gridT = uY[0], gridB = uY[uY.length - 1];
 
-    // Only perimeter marks — vertical lines at top & bottom edges
+    // Start marks just outside the bleed so they don't sit inside the colored bleed area.
+    const cropGapPx = Math.max(2, bleedPx + 1);
     for (const vx of uX) {
       ctx.beginPath();
-      ctx.moveTo(vx, gridT - markLen); ctx.lineTo(vx, gridT - 2);
-      ctx.moveTo(vx, gridB + 2); ctx.lineTo(vx, gridB + markLen);
+      ctx.moveTo(vx, gridT - markLen); ctx.lineTo(vx, gridT - cropGapPx);
+      ctx.moveTo(vx, gridB + cropGapPx); ctx.lineTo(vx, gridB + markLen);
       ctx.stroke();
     }
-    // Horizontal lines at left & right edges
     for (const hy of uY) {
       ctx.beginPath();
-      ctx.moveTo(gridL - markLen, hy); ctx.lineTo(gridL - 2, hy);
-      ctx.moveTo(gridR + 2, hy); ctx.lineTo(gridR + markLen, hy);
+      ctx.moveTo(gridL - markLen, hy); ctx.lineTo(gridL - cropGapPx, hy);
+      ctx.moveTo(gridR + cropGapPx, hy); ctx.lineTo(gridR + markLen, hy);
       ctx.stroke();
+    }
+
+    // PB: dashed fold ticks at each spine (between the two pages of a spread).
+    if (impo.mode === 'perfect_bound') {
+      ctx.save();
+      ctx.setLineDash([2, 2]);
+      const tickLen = markLen * 0.75;
+      const spineXs = new Set<number>();
+      for (const c of impo.cells) {
+        if (c.col % 2 === 1) {
+          const cellX = offX + c.x * scale + gridOffsetX * scale;
+          spineXs.add(Math.round(cellX * 10) / 10);
+        }
+      }
+      for (const spineX of spineXs) {
+        ctx.beginPath();
+        ctx.moveTo(spineX, gridT - cropGapPx); ctx.lineTo(spineX, gridT - cropGapPx - tickLen);
+        ctx.moveTo(spineX, gridB + cropGapPx); ctx.lineTo(spineX, gridB + cropGapPx + tickLen);
+        ctx.stroke();
+      }
+      ctx.restore();
     }
     // NO gutter/internal crop marks — only perimeter
   }
@@ -1005,9 +1059,16 @@ export default function ImpositionCanvas({
       const sGridY = sPaY + (sPrintH - sTrimGridH) / 2 + (offsetY || 0) * sSc;
 
       if (onGridResize) {
-        // Resize handle — bottom-right of grid
-        const hx = sGridX + sTrimGridW;
-        const hy = sGridY + sTrimGridH;
+        // Resize handle at bottom-right of the actual cells bounding box.
+        // For W&T the uniform-grid formula lands in the middle of the fold gap; using cells[]
+        // gives the correct position for every mode.
+        let cellsRmm = -Infinity, cellsBmm = -Infinity;
+        for (const c of impo.cells) {
+          if (c.x + c.w > cellsRmm) cellsRmm = c.x + c.w;
+          if (c.y + c.h > cellsBmm) cellsBmm = c.y + c.h;
+        }
+        const hx = sOffX + (cellsRmm + (offsetX || 0)) * sSc;
+        const hy = sOffY + (cellsBmm + (offsetY || 0)) * sSc;
         const hs = 6;
         ctx.fillStyle = '#f58220';
         ctx.fillRect(hx - hs, hy - hs, hs * 2, hs * 2);
@@ -1191,23 +1252,25 @@ export default function ImpositionCanvas({
   }, [zoom]);
 
   // ─── N-UP GRID DRAG (resize) ───
-  const gridDragRef = useRef<{ cols: number; rows: number; mode: 'resize' | 'move'; startMmX: number; startMmY: number; origOffX: number; origOffY: number; axis?: 'x' | 'y' | null } | null>(null);
+  const gridDragRef = useRef<{ cols: number; rows: number; startCols: number; startRows: number; mode: 'resize' | 'move'; startMmX: number; startMmY: number; origOffX: number; origOffY: number; axis?: 'x' | 'y' | null } | null>(null);
 
   const findGridHandle = useCallback((mmX: number, mmY: number): boolean => {
     if (!onGridResize || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn')) return false;
-    const pw = sheetW - marginLeft - marginRight;
-    const ph = sheetH - marginTop - marginBottom;
-    const tW = impo.trimW;
-    const tH = impo.trimH;
-    const trimGridWmm = impo.cols * tW + Math.max(0, impo.cols - 1) * gutter;
-    const trimGridHmm = impo.rows * tH + Math.max(0, impo.rows - 1) * gutter;
-    const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
-    const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
-    const right = gridStartX + trimGridWmm;
-    const bottom = gridStartY + trimGridHmm;
+    if (impo.cells.length === 0) return false;
+    // Bounding box of actual cells. cell.x/y are in PAPER coords; mmX/mmY are in PRINTABLE
+    // coords (canvasToMM subtracts marginLeft/marginTop). Convert here.
+    const isOff = machCat === 'offset';
+    const mt = isOff ? marginBottom : marginTop;
+    let right = -Infinity, bottom = -Infinity;
+    for (const c of impo.cells) {
+      if (c.x + c.w > right) right = c.x + c.w;
+      if (c.y + c.h > bottom) bottom = c.y + c.h;
+    }
+    const rightPr = right - marginLeft + (offsetX || 0);
+    const bottomPr = bottom - mt + (offsetY || 0);
     const hitMM = 6;
-    return mmX >= right - hitMM && mmX <= right + hitMM && mmY >= bottom - hitMM && mmY <= bottom + hitMM;
-  }, [impo, onGridResize, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY]);
+    return mmX >= rightPr - hitMM && mmX <= rightPr + hitMM && mmY >= bottomPr - hitMM && mmY <= bottomPr + hitMM;
+  }, [impo, onGridResize, marginLeft, marginTop, marginBottom, machCat, offsetX, offsetY]);
 
   const findRotateBtn = useCallback((mmX: number, mmY: number): boolean => {
     if (!onRotate || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn')) return false;
@@ -1325,12 +1388,15 @@ export default function ImpositionCanvas({
         return;
       }
       if (findGridHandle(mmX, mmY) && onGridResize) {
-        gridDragRef.current = { cols: impo.cols, rows: impo.rows, mode: 'resize', startMmX: mmX, startMmY: mmY, origOffX: offsetX || 0, origOffY: offsetY || 0 };
+        // For W&T, cols/rows are PER-HALF. Store start values so drag math is incremental.
+        const startC = impo.mode === 'workturn' ? (impo.halfCols ?? Math.ceil(impo.cols / 2)) : impo.cols;
+        const startR = impo.mode === 'workturn' ? (impo.halfRows ?? Math.ceil(impo.rows / 2)) : impo.rows;
+        gridDragRef.current = { cols: startC, rows: startR, startCols: startC, startRows: startR, mode: 'resize', startMmX: mmX, startMmY: mmY, origOffX: offsetX || 0, origOffY: offsetY || 0 };
         e.preventDefault();
         return;
       }
       if (findGridBody(mmX, mmY) && onOffsetChange) {
-        gridDragRef.current = { cols: impo.cols, rows: impo.rows, mode: 'move', startMmX: mmX, startMmY: mmY, origOffX: offsetX || 0, origOffY: offsetY || 0 };
+        gridDragRef.current = { cols: impo.cols, rows: impo.rows, startCols: impo.cols, startRows: impo.rows, mode: 'move', startMmX: mmX, startMmY: mmY, origOffX: offsetX || 0, origOffY: offsetY || 0 };
         e.preventDefault();
         return;
       }
@@ -1391,27 +1457,26 @@ export default function ImpositionCanvas({
     if (gridDragRef.current) {
       const { mmX, mmY } = canvasToMM(e.clientX, e.clientY);
       if (gridDragRef.current.mode === 'resize' && onGridResize) {
-        // Use full paper for fitting (margins are advisory)
-        const pw = sheetW;
-        const ph = sheetH;
+        // Incremental drag: increments tied to the centered-grid visual movement.
+        // Adding 1 col/row to a centered grid moves the bottom-right by step/2, so use
+        // step/2 as drag sensitivity — 1 unit of pointer travel yields a visible match.
         const tW = impo.trimW;
         const tH = impo.trimH;
-        const trimGridWmm = impo.cols * tW + Math.max(0, impo.cols - 1) * gutter;
-        const trimGridHmm = impo.rows * tH + Math.max(0, impo.rows - 1) * gutter;
-        const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
-        const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
-        const dragW = mmX - gridStartX;
-        const dragH = mmY - gridStartY;
-        const step = tW + gutter;
-        const stepH = tH + gutter;
-        const newCols = Math.max(1, Math.min(
-          Math.round((dragW + gutter) / step),
-          Math.floor((pw + gutter) / step),
-        ));
-        const newRows = Math.max(1, Math.min(
-          Math.round((dragH + gutter) / stepH),
-          Math.floor((ph + gutter) / stepH),
-        ));
+        const sensX = (tW + gutter) / 2;
+        const sensY = (tH + gutter) / 2;
+        const dragDx = mmX - gridDragRef.current.startMmX;
+        const dragDy = mmY - gridDragRef.current.startMmY;
+        const startC = gridDragRef.current.startCols;
+        const startR = gridDragRef.current.startRows;
+        // Cap to how many fit on the relevant canvas half (W&T) or full sheet.
+        const isWt = impo.mode === 'workturn';
+        const isTumble = isWt && impo.turnType === 'tumble';
+        const capW = isWt ? (isTumble ? sheetW : sheetW / 2) : sheetW;
+        const capH = isWt ? (isTumble ? sheetH / 2 : sheetH) : sheetH;
+        const maxCols = Math.max(1, Math.floor((capW + gutter) / (tW + gutter)));
+        const maxRows = Math.max(1, Math.floor((capH + gutter) / (tH + gutter)));
+        const newCols = Math.max(1, Math.min(startC + Math.round(dragDx / sensX), maxCols));
+        const newRows = Math.max(1, Math.min(startR + Math.round(dragDy / sensY), maxRows));
         if (newCols !== gridDragRef.current.cols || newRows !== gridDragRef.current.rows) {
           gridDragRef.current.cols = newCols;
           gridDragRef.current.rows = newRows;

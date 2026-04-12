@@ -644,19 +644,32 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   // Build cells for canvas preview (first signature, front side)
   const cells: ImpositionCell[] = [];
   if (foldMap) {
+    // Pairs share the spine — no bleed and no gap between the two pages of a pair.
+    // Inter-pair gap (gutter) only between spreads. Vertical gap only once, between
+    // top half and bottom half (octavo head-to-head fold).
+    const interPairGap = numPairs > 1 ? gutter : 0;
+    const halfwayMark = Math.floor(layout.rows / 2);
     for (let r = 0; r < layout.rows; r++) {
       for (let c = 0; c < layout.cols; c++) {
         const localPage = foldMap.front[r]?.[c] ?? 0;
-        const pageNum = localPage; // local page within first signature
-        const rot = (r % 2 === 1) ? 180 : 0;
+        const rowFromBottom = layout.rows - 1 - r;
+        // Gripper row (bottom) heads-up; alternate every row going up.
+        const rot = (rowFromBottom % 2 === 1) ? 180 : 0;
+        const pairIdx = Math.floor(c / 2);
+        const colInPair = c % 2;
+        const pairX = cenOffX + pairIdx * (pairW + interPairGap);
+        const cellX = pairX + colInPair * cellW;
+        const isInBottomHalf = layout.rows > 1 && r >= halfwayMark;
+        const cellY = cenOffY + r * cellH + (isInBottomHalf ? gutter : 0);
         cells.push({
           col: c, row: r,
-          x: cenOffX + c * (cellW + gutter),
-          y: cenOffY + r * (cellH + gutter),
+          x: cellX, y: cellY,
           w: cellW, h: cellH,
-          pageNum,
+          pageNum: localPage,
           rotation: rot,
-          bleedL: bleed, bleedR: bleed, bleedT: bleed, bleedB: bleed,
+          bleedL: colInPair === 0 ? bleed : 0,
+          bleedR: colInPair === 1 ? bleed : 0,
+          bleedT: bleed, bleedB: bleed,
         });
       }
     }
@@ -703,7 +716,7 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
 // ═══════════════════════════════════════════════════════════════
 
 export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
-  const { trimW, trimH, bleed, qty, gutter, area, rotation, turnType = 'turn' } = input;
+  const { trimW, trimH, bleed, qty, gutter, area, rotation, turnType = 'turn', forceCols, forceRows } = input;
 
   const { w: pw, h: ph } = printable(area);
   const rot = ((rotation || 0) % 360 + 360) % 360;
@@ -732,9 +745,12 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const userSwaps = (rot > 45 && rot < 135) || (rot > 225 && rot < 315);
   if (userSwaps) { const tmp = tW; tW = tH; tH = tmp; }
 
-  // Re-compute fit with final trim dimensions
-  const cols = fitCount(halfW, tW, bleed, gutter);
-  const rows = fitCount(halfH, tH, bleed, gutter);
+  // Re-compute fit with final trim dimensions. forceCols/forceRows override the auto-fit
+  // (interpreted as PER-HALF for W&T, since the layout is split between two halves).
+  const autoCols = fitCount(halfW, tW, bleed, gutter);
+  const autoRows = fitCount(halfH, tH, bleed, gutter);
+  const cols = forceCols && forceCols > 0 ? forceCols : autoCols;
+  const rows = forceRows && forceRows > 0 ? forceRows : autoRows;
   const fitsPerHalf = cols * rows;
 
   if (fitsPerHalf === 0) {
