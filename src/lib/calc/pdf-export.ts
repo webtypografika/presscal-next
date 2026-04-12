@@ -442,46 +442,17 @@ function drawPDFMarks(
 
     const gL = uV[0], gR = uV[uV.length - 1], gB = uH[0], gT = uH[uH.length - 1];
 
-    // Perimeter marks — top & bottom
+    // Perimeter marks — top & bottom (at every trim X, including internal)
     for (let vmi = 0; vmi < uV.length; vmi++) {
       const vx = uV[vmi];
       page.drawLine({ start: { x: vx, y: gT + cropGap }, end: { x: vx, y: gT + cropGap + markLen }, thickness: 0.5, color: markColor });
       page.drawLine({ start: { x: vx, y: gB - cropGap }, end: { x: vx, y: gB - cropGap - markLen }, thickness: 0.5, color: markColor });
     }
-    // Perimeter marks — left & right
+    // Perimeter marks — left & right (at every trim Y, including internal)
     for (let hmi = 0; hmi < uH.length; hmi++) {
       const hy = uH[hmi];
       page.drawLine({ start: { x: gL - cropGap, y: hy }, end: { x: gL - cropGap - markLen, y: hy }, thickness: 0.5, color: markColor });
       page.drawLine({ start: { x: gR + cropGap, y: hy }, end: { x: gR + cropGap + markLen, y: hy }, thickness: 0.5, color: markColor });
-    }
-    // Internal gutter crop marks — between cells
-    // Vertical marks inside row gutters (horizontal strips between rows)
-    if (rows > 1 && gutterRowPt > 0.5) {
-      for (let gr = 0; gr < rows - 1; gr++) {
-        const gutBottom = cenY + (gr + 1) * trimHpt + gr * gutterRowPt;
-        const gutTop = gutBottom + gutterRowPt;
-        const intMarkLen = Math.min(markLen, (gutterRowPt - 2 * cropGap) / 2);
-        if (intMarkLen > 0.5) {
-          for (const vx of uV) {
-            page.drawLine({ start: { x: vx, y: gutBottom + cropGap }, end: { x: vx, y: gutBottom + cropGap + intMarkLen }, thickness: 0.5, color: markColor });
-            page.drawLine({ start: { x: vx, y: gutTop - cropGap }, end: { x: vx, y: gutTop - cropGap - intMarkLen }, thickness: 0.5, color: markColor });
-          }
-        }
-      }
-    }
-    // Horizontal marks inside column gutters (vertical strips between columns)
-    if (cols > 1 && gutterColPt > 0.5) {
-      for (let gc = 0; gc < cols - 1; gc++) {
-        const gutLeft = cenX + (gc + 1) * trimWpt + gc * gutterColPt;
-        const gutRight = gutLeft + gutterColPt;
-        const intMarkLen = Math.min(markLen, (gutterColPt - 2 * cropGap) / 2);
-        if (intMarkLen > 0.5) {
-          for (const hy of uH) {
-            page.drawLine({ start: { x: gutLeft + cropGap, y: hy }, end: { x: gutLeft + cropGap + intMarkLen, y: hy }, thickness: 0.5, color: markColor });
-            page.drawLine({ start: { x: gutRight - cropGap, y: hy }, end: { x: gutRight - cropGap - intMarkLen, y: hy }, thickness: 0.5, color: markColor });
-          }
-        }
-      }
     }
   }
 
@@ -1502,21 +1473,22 @@ async function exportWorkTurn(
     const cenFY = mB + (halfH - totalGridH) / 2;
     const wtBleedPt = mmToPt(opts.bleed || 0);
 
-    // Detect rotation
     const cellPortrait = pieceW <= pieceH;
-    const pdfPgInfo = opts.pdfPageSizes?.[0];
-    const pdfPortrait = pdfPgInfo ? (pdfPgInfo.trimW <= pdfPgInfo.trimH) : true;
-    const wtNeedsRot = cellPortrait !== pdfPortrait;
     const userExtraRot = (opts.rotation === 180 || opts.rotation === 270) ? 180 : 0;
 
-    // Helper: draw page in cell with rotation + clipping
+    // Helper: draw page in cell with per-page auto-rotation + clipping
+    // Each PDF page detects its own orientation, so front/back with different
+    // orientations both get rotated correctly.
     const wtDrawCell = (pg: PDFPage, cx: number, cy: number, epObj: EmbeddedPageInfo, epPg: PDFEmbeddedPage, extraRotArg?: number) => {
       pg.pushOperators(pushGraphicsState(), rectangle(cx, cy, pieceW, pieceH), clip(), endPath());
-      const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
-      const gridRot = wtNeedsRot ? 270 : 0;
-      const totalRot = (epSrcRot + gridRot + userExtraRot + (extraRotArg || 0)) % 360;
       const epRawW = epPg.width || pieceW;
       const epRawH = epPg.height || pieceH;
+      // Per-page orientation: check this page's own dimensions (accounting for /Rotate)
+      const epSrcRot = (360 - (epObj.rotation || 0)) % 360;
+      const visualPortrait = (epSrcRot === 90 || epSrcRot === 270) ? (epRawW > epRawH) : (epRawW <= epRawH);
+      const pageNeedsRot = cellPortrait !== visualPortrait;
+      const gridRot = pageNeedsRot ? 270 : 0;
+      const totalRot = (epSrcRot + gridRot + userExtraRot + (extraRotArg || 0)) % 360;
       const needsSwap = (totalRot === 90 || totalRot === 270);
       const scX = needsSwap ? (pieceH / epRawW) : (pieceW / epRawW);
       const scY = needsSwap ? (pieceW / epRawH) : (pieceH / epRawH);
@@ -1538,18 +1510,22 @@ async function exportWorkTurn(
       }
     }
 
-    // Back half — αντικριστά (180°)
+    // Back half — αντικριστά
     const backHalfX = isTumble ? cenFX : mL + halfW + (halfW - totalGridW) / 2;
     const backHalfY = isTumble ? mB + halfH + (halfH - totalGridH) / 2 : cenFY;
+    // Detect if back needs rotation (same per-page logic as in wtDrawCell)
+    const bEpRawW = epBackPg.width || pieceW;
+    const bEpRawH = epBackPg.height || pieceH;
+    const bEpSrcRot = (360 - (epBack.rotation || 0)) % 360;
+    const bVisualPortrait = (bEpSrcRot === 90 || bEpSrcRot === 270) ? (bEpRawW > bEpRawH) : (bEpRawW <= bEpRawH);
+    const backNeedsRot = cellPortrait !== bVisualPortrait;
     for (let row2 = 0; row2 < hRows; row2++) {
       for (let col2 = 0; col2 < hCols; col2++) {
-        // Same grid positions as front half, shifted to back half area
-        // Content always rotated 180° (αντικριστά)
         const cellX2 = backHalfX + col2 * (pieceW + gutterPt);
         const cellY2 = backHalfY + (hRows - 1 - row2) * (pieceH + gutterPt);
         // When auto-rotated: back gets opposite direction (heads outward)
         // When natural fit: back same as front (physical turn handles it)
-        const backExtraRot = wtNeedsRot ? 180 : 0;
+        const backExtraRot = backNeedsRot ? 180 : 0;
         wtDrawCell(page, cellX2, cellY2, epBack, epBackPg, backExtraRot);
       }
     }
