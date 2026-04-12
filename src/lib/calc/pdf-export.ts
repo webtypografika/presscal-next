@@ -46,6 +46,54 @@ function cellBleed(col: number, row: number, cols: number, rows: number, outer: 
   };
 }
 
+/**
+ * Draw embedded PDF page content into a cell, aligning source TrimBox 1:1 with
+ * the target trim area. The asymmetric per-side bleed defines the clip extent
+ * so adjacent cells never overlap into each other's trim.
+ *
+ * pdf-lib's embedPage already accounts for /Rotate on the source page — so
+ * `rotDeg` here is ONLY the imposition-level rotation (cell/grid), never epSrcRot.
+ */
+function drawTrimToCell(
+  page: PDFPage,
+  epObj: EmbeddedPageInfo,
+  trimX: number, trimY: number,
+  trimWpt: number, trimHpt: number,
+  bleeds: { bL: number; bR: number; bT: number; bB: number },
+  rotDeg: number,
+  contentScale: number,
+): void {
+  const rot = ((rotDeg % 360) + 360) % 360;
+  const clipX = trimX - bleeds.bL;
+  const clipY = trimY - bleeds.bB;
+  const clipW = trimWpt + bleeds.bL + bleeds.bR;
+  const clipH = trimHpt + bleeds.bT + bleeds.bB;
+  page.pushOperators(pushGraphicsState(), rectangle(clipX, clipY, clipW, clipH), clip(), endPath());
+
+  const epPg = epObj.page;
+  const epRawW = epPg.width || trimWpt;
+  const epRawH = epPg.height || trimHpt;
+  const epTW = epObj.trimW || epRawW;
+  const epTH = epObj.trimH || epRawH;
+  const needsSwap = rot === 90 || rot === 270;
+  const sx = (needsSwap ? (trimHpt / epTW) : (trimWpt / epTW)) * contentScale;
+  const sy = (needsSwap ? (trimWpt / epTH) : (trimHpt / epTH)) * contentScale;
+  // Trim offsets in output coords, position-invariant across contentScale.
+  const tox = epObj.trimOffsetX * sx / contentScale;
+  const toy = epObj.trimOffsetY * sy / contentScale;
+
+  let drawX: number, drawY: number;
+  if (rot === 0) { drawX = trimX - tox; drawY = trimY - toy; }
+  else if (rot === 90) { drawX = trimX + trimWpt + toy; drawY = trimY - tox; }
+  else if (rot === 180) { drawX = trimX + trimWpt + tox; drawY = trimY + trimHpt + toy; }
+  else { drawX = trimX - toy; drawY = trimY + trimHpt + tox; }
+
+  const opts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: sx, yScale: sy };
+  if (rot) opts.rotate = degrees(rot);
+  page.drawPage(epPg, opts);
+  page.pushOperators(popGraphicsState());
+}
+
 /** Strip non-WinAnsi characters (Greek etc) for pdf-lib StandardFonts */
 function ascii(s: string): string {
   return s.replace(/[^\x20-\x7E\u00A0-\u00FF\u2014]/g, '');
@@ -1275,22 +1323,11 @@ async function exportCutStack(
         const pageIdx = (stackNum * csStack + s) % Math.max(1, embeddedPages.length);
         if (embeddedPages.length > 0) {
           const ep = embeddedPages[pageIdx];
-          const epPage = ep.page;
-          const epRawW = epPage.width || pieceW;
-          const epRawH = epPage.height || pieceH;
-          const epTW = ep.trimW || epRawW;
-          const epTH = ep.trimH || epRawH;
-          const cScale = (opts.contentScale || 100) / 100;
-          const sx = (trimWpt / epTW) * cScale;
-          const sy = (trimHpt / epTH) * cScale;
-          const tox = ep.trimOffsetX * sx / cScale;
-          const toy = ep.trimOffsetY * sy / cScale;
           const trimX = cenX + col * csTrimStepW + cOffX;
           const trimY = cenY + (impo.rows - 1 - row) * csTrimStepH - cOffY;
-          const { bL: cBL, bR: cBR, bT: cBT, bB: cBB } = cellBleed(col, row, impo.cols, impo.rows, bleedPt, csIntBleedPt);
-          page.pushOperators(pushGraphicsState(), rectangle(trimX - cBL, trimY - cBB, trimWpt + cBL + cBR, trimHpt + cBT + cBB), clip(), endPath());
-          page.drawPage(epPage, { x: trimX - tox, y: trimY - toy, xScale: sx, yScale: sy });
-          page.pushOperators(popGraphicsState());
+          const bleeds = cellBleed(col, row, impo.cols, impo.rows, bleedPt, csIntBleedPt);
+          const cScale = (opts.contentScale || 100) / 100;
+          drawTrimToCell(page, ep, trimX, trimY, trimWpt, trimHpt, bleeds, 0, cScale);
         }
 
         // Numbering overlay (front only)
@@ -1343,16 +1380,7 @@ async function exportCutStack(
       const backPage = doc.addPage([paperWpt, paperHpt]);
       const bEp = backEmbedded ? (backEmbedded[0] || backEmbedded[fixedBackIdx]) : embeddedPages[fixedBackIdx];
       if (bEp) {
-        const bEpPage = bEp.page;
-        const bEpRawW = bEpPage.width || pieceW;
-        const bEpRawH = bEpPage.height || pieceH;
-        const bEpTW = bEp.trimW || bEpRawW;
-        const bEpTH = bEp.trimH || bEpRawH;
         const bCScale = (opts.contentScale || 100) / 100;
-        const bSx = (trimWpt / bEpTW) * bCScale;
-        const bSy = (trimHpt / bEpTH) * bCScale;
-        const bTox = bEp.trimOffsetX * bSx / bCScale;
-        const bToy = bEp.trimOffsetY * bSy / bCScale;
 
         for (let bRow = 0; bRow < impo.rows; bRow++) {
           for (let bCol = 0; bCol < impo.cols; bCol++) {
@@ -1362,14 +1390,11 @@ async function exportCutStack(
             const bTrimX = isH2H ? (paperWpt - fTrimX - trimWpt) : fTrimX;
             const bTrimY = isH2H ? fTrimY : (paperHpt - fTrimY - trimHpt);
             // Per-cell bleed — mirror L↔R for H2H back, T↔B for H2F back.
-            const { bL: fBL, bR: fBR, bT: fBT, bB: fBB } = cellBleed(bCol, bRow, impo.cols, impo.rows, bleedPt, csIntBleedPt);
-            const bBL = isH2H ? fBR : fBL;
-            const bBR = isH2H ? fBL : fBR;
-            const bBT = isH2H ? fBT : fBB;
-            const bBB = isH2H ? fBB : fBT;
-            backPage.pushOperators(pushGraphicsState(), rectangle(bTrimX - bBL, bTrimY - bBB, trimWpt + bBL + bBR, trimHpt + bBT + bBB), clip(), endPath());
-            backPage.drawPage(bEpPage, { x: bTrimX - bTox, y: bTrimY - bToy, xScale: bSx, yScale: bSy });
-            backPage.pushOperators(popGraphicsState());
+            const f = cellBleed(bCol, bRow, impo.cols, impo.rows, bleedPt, csIntBleedPt);
+            const b = isH2H
+              ? { bL: f.bR, bR: f.bL, bT: f.bT, bB: f.bB }
+              : { bL: f.bL, bR: f.bR, bT: f.bB, bB: f.bT };
+            drawTrimToCell(backPage, bEp, bTrimX, bTrimY, trimWpt, trimHpt, b, 0, bCScale);
           }
         }
       }
@@ -1461,53 +1486,14 @@ async function exportWorkTurn(
     const wtNeedsRot = cellPortrait !== pdfPortrait;
     const userExtraRot = (opts.rotation === 180 || opts.rotation === 270) ? 180 : 0;
 
-    // Draw one cell with trim-based scaling. Clip uses per-side bleed so adjacent
-    // cells don't overlap into each other's trim when gutter < 2×bleed.
-    // Note: pdf-lib's embedPage already applies /Rotate — we must NOT add epSrcRot on top.
     const wtDrawCell = (
       pg: PDFPage, trimX: number, trimY: number,
       bL: number, bR: number, bT: number, bB: number,
-      epObj: EmbeddedPageInfo, epPg: PDFEmbeddedPage, extraRotArg?: number,
+      epObj: EmbeddedPageInfo, _epPg: PDFEmbeddedPage, extraRotArg?: number,
     ) => {
-      const clipX = trimX - bL;
-      const clipY = trimY - bB;
-      const clipW = trimWPt + bL + bR;
-      const clipH = trimHPt + bT + bB;
-      pg.pushOperators(pushGraphicsState(), rectangle(clipX, clipY, clipW, clipH), clip(), endPath());
       const gridRot = wtNeedsRot ? 270 : 0;
-      const totalRot = (gridRot + userExtraRot + (extraRotArg || 0)) % 360;
-      const epRawW = epPg.width || pieceW;
-      const epRawH = epPg.height || pieceH;
-      const needsSwap = (totalRot === 90 || totalRot === 270);
-
-      const epTW = epObj.trimW || epRawW;
-      const epTH = epObj.trimH || epRawH;
-      const sx = (needsSwap ? (trimHPt / epTW) : (trimWPt / epTW)) * cScaleFactor;
-      const sy = (needsSwap ? (trimWPt / epTH) : (trimHPt / epTH)) * cScaleFactor;
-
-      // Trim offsets (position-invariant regardless of content scale).
-      const tox = epObj.trimOffsetX * sx / cScaleFactor;
-      const toy = epObj.trimOffsetY * sy / cScaleFactor;
-
-      let drawX: number, drawY: number;
-      if (totalRot === 0) {
-        drawX = trimX - tox;
-        drawY = trimY - toy;
-      } else if (totalRot === 90) {
-        drawX = trimX + trimWPt + toy;
-        drawY = trimY - tox;
-      } else if (totalRot === 180) {
-        drawX = trimX + trimWPt + tox;
-        drawY = trimY + trimHPt + toy;
-      } else { // 270
-        drawX = trimX - toy;
-        drawY = trimY + trimHPt + tox;
-      }
-
-      const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: sx, yScale: sy };
-      if (totalRot) drawOpts.rotate = degrees(totalRot);
-      pg.drawPage(epPg, drawOpts);
-      pg.pushOperators(popGraphicsState());
+      const rot = (gridRot + userExtraRot + (extraRotArg || 0)) % 360;
+      drawTrimToCell(pg, epObj, trimX, trimY, trimWPt, trimHPt, { bL, bR, bT, bB }, rot, cScaleFactor);
     }
 
     // Per-cell bleed: full on outer edges of the half, internal on shared edges.
@@ -1685,34 +1671,13 @@ async function exportGangRun(
       }
 
       if (epObj) {
-        const epPage = epObj.page;
-        // Trim-based scaling: each job's TrimBox aligns 1:1 with its cell's trim area.
-        // Bleed never affects content scale — only the position of the bleed band.
-        const epRawW = epPage.width || pieceW;
-        const epRawH = epPage.height || pieceH;
-        const epTW = epObj.trimW || epRawW;
-        const epTH = epObj.trimH || epRawH;
         const grCScale = (opts.contentScale || 100) / 100;
         const cell = impo.cells[posIdx];
         const grExtraRot = cell?.rotation ?? grBaseRot;
-        const needsSwap = grExtraRot === 90 || grExtraRot === 270;
-        const sx = (needsSwap ? (trimHpt / epTW) : (trimWpt / epTW)) * grCScale;
-        const sy = (needsSwap ? (trimWpt / epTH) : (trimHpt / epTH)) * grCScale;
-        const tox = epObj.trimOffsetX * sx / grCScale;
-        const toy = epObj.trimOffsetY * sy / grCScale;
         const trimX = cenX + col * grTrimStepW;
         const trimY = cenY + (impo.rows - 1 - row) * grTrimStepH;
-        let drawX: number, drawY: number;
-        if (grExtraRot === 0) { drawX = trimX - tox; drawY = trimY - toy; }
-        else if (grExtraRot === 90) { drawX = trimX + trimWpt + toy; drawY = trimY - tox; }
-        else if (grExtraRot === 180) { drawX = trimX + trimWpt + tox; drawY = trimY + trimHpt + toy; }
-        else { drawX = trimX - toy; drawY = trimY + trimHpt + tox; }
-        const { bL: cBL, bR: cBR, bT: cBT, bB: cBB } = cellBleed(col, row, impo.cols, impo.rows, bleedPt, grIntBleedPt);
-        const drawOpts: Parameters<PDFPage['drawPage']>[1] = { x: drawX, y: drawY, xScale: sx, yScale: sy };
-        if (grExtraRot) drawOpts.rotate = degrees(grExtraRot);
-        page.pushOperators(pushGraphicsState(), rectangle(trimX - cBL, trimY - cBB, trimWpt + cBL + cBR, trimHpt + cBT + cBB), clip(), endPath());
-        page.drawPage(epPage, drawOpts);
-        page.pushOperators(popGraphicsState());
+        const bleeds = cellBleed(col, row, impo.cols, impo.rows, bleedPt, grIntBleedPt);
+        drawTrimToCell(page, epObj, trimX, trimY, trimWpt, trimHpt, bleeds, grExtraRot, grCScale);
       }
     }
   }
