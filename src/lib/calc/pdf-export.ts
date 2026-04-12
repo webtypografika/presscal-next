@@ -47,6 +47,35 @@ function cellBleed(col: number, row: number, cols: number, rows: number, outer: 
 }
 
 /**
+ * White-mask the non-bleed strip inside each internal gutter of a uniform grid.
+ * `originX/Y` is the trim origin of the first cell. Masks span full paper.
+ */
+function drawUniformGutterMasks(
+  page: PDFPage,
+  originX: number, originY: number,
+  cols: number, rows: number,
+  trimWpt: number, trimHpt: number,
+  gutterPt: number, bleedPt: number,
+  paperWpt: number, paperHpt: number,
+): void {
+  if (gutterPt <= 0.1) return;
+  const white = cmyk(0, 0, 0, 0);
+  const intB = internalBleed(gutterPt, bleedPt);
+  for (let gc = 0; gc < cols - 1; gc++) {
+    const gx = originX + (gc + 1) * trimWpt + gc * gutterPt;
+    const gutL = gx + intB;
+    const gutR = gx + gutterPt - intB;
+    if (gutR > gutL + 0.5) page.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
+  }
+  for (let gr = 0; gr < rows - 1; gr++) {
+    const gy = originY + (gr + 1) * trimHpt + gr * gutterPt;
+    const gutB = gy + intB;
+    const gutT = gy + gutterPt - intB;
+    if (gutT > gutB + 0.5) page.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
+  }
+}
+
+/**
  * Draw embedded PDF page content into a cell, aligning source TrimBox 1:1 with
  * the target trim area. The asymmetric per-side bleed defines the clip extent
  * so adjacent cells never overlap into each other's trim.
@@ -768,25 +797,7 @@ async function exportNUp(
       const white = cmyk(0, 0, 0, 0);
       const maskCenX = isBackSide ? (paperWpt - cenX - trimGridW) : cenX;
 
-      // Asymmetric gutter masks — mask area between cells where internal bleed is 0 or reduced
-      // Progressive internal bleed: gutter=0 → 0, gutter<2*bleed → gutter/2, else full bleed
-      const intBleedPt = internalBleed(gutterPt, bleedPt);
-      if (gutterPt > 0.1) {
-        for (let gc = 0; gc < impo.cols - 1; gc++) {
-          // Gutter starts after right trim edge
-          const gx = maskCenX + (gc + 1) * trimWpt + gc * gutterPt;
-          const gutL = gx + intBleedPt;
-          const gutR = gx + gutterPt - intBleedPt;
-          if (gutR > gutL + 0.5) page.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
-        }
-        for (let gr = 0; gr < impo.rows - 1; gr++) {
-          const gy = cenY + (gr + 1) * trimHpt + gr * gutterPt;
-          const gutB = gy + intBleedPt;
-          const gutT = gy + gutterPt - intBleedPt;
-          if (gutT > gutB + 0.5) page.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
-        }
-      }
-      // Gutter=0 (μονοτομή): no masking — bleeds overlap naturally at cut line
+      drawUniformGutterMasks(page, maskCenX, cenY, impo.cols, impo.rows, trimWpt, trimHpt, gutterPt, bleedPt, paperWpt, paperHpt);
 
       // Margin masks — extend to cover bleed on external sides
       const gridL = maskCenX - bleedPt;
@@ -1209,26 +1220,9 @@ async function exportCutStack(
 
   const sheetsNeeded = opts.csStackSize || Math.max(1, embeddedPages.length);
 
-  // Helper: draw masking on a page (asymmetric gutter masks)
-  const intBleedCs = internalBleed(gutterPt, bleedPt);
   const csMask = (pg: PDFPage, mirrored: boolean) => {
-    const white = cmyk(0, 0, 0, 0);
     const mCenX = mirrored ? (paperWpt - cenX - trimGridW) : cenX;
-    if (gutterPt > 0.1) {
-      for (let gc = 0; gc < impo.cols - 1; gc++) {
-        const gx = mCenX + (gc + 1) * trimWpt + gc * gutterPt;
-        const gutL = gx + intBleedCs;
-        const gutR = gx + gutterPt - intBleedCs;
-        if (gutR > gutL + 0.5) pg.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
-      }
-      for (let gr = 0; gr < impo.rows - 1; gr++) {
-        const gy = cenY + (gr + 1) * trimHpt + gr * gutterPt;
-        const gutB = gy + intBleedCs;
-        const gutT = gy + gutterPt - intBleedCs;
-        if (gutT > gutB + 0.5) pg.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
-      }
-    }
-    // Gutter=0 (μονοτομή): no masking — bleeds overlap naturally at cut line
+    drawUniformGutterMasks(pg, mCenX, cenY, impo.cols, impo.rows, trimWpt, trimHpt, gutterPt, bleedPt, paperWpt, paperHpt);
     const gridL = mCenX - bleedPt;
     const gridB = cenY - bleedPt;
     const gridR = mCenX + trimGridW + bleedPt;
@@ -1612,24 +1606,7 @@ async function exportGangRun(
     }
   }
 
-  // Asymmetric gutter masks
-  const intBleedGr = internalBleed(gutterPt, bleedPt);
-  const white = cmyk(0, 0, 0, 0);
-  if (gutterPt > 0.1) {
-    for (let gc = 0; gc < impo.cols - 1; gc++) {
-      const gx = cenX + (gc + 1) * trimWpt + gc * gutterPt;
-      const gutL = gx + intBleedGr;
-      const gutR = gx + gutterPt - intBleedGr;
-      if (gutR > gutL + 0.5) page.drawRectangle({ x: gutL, y: 0, width: gutR - gutL, height: paperHpt, color: white });
-    }
-    for (let gr = 0; gr < impo.rows - 1; gr++) {
-      const gy = cenY + (gr + 1) * trimHpt + gr * gutterPt;
-      const gutB = gy + intBleedGr;
-      const gutT = gy + gutterPt - intBleedGr;
-      if (gutT > gutB + 0.5) page.drawRectangle({ x: 0, y: gutB, width: paperWpt, height: gutT - gutB, color: white });
-    }
-  }
-  // Gutter=0 (μονοτομή): no masking — bleeds overlap naturally at cut line
+  drawUniformGutterMasks(page, cenX, cenY, impo.cols, impo.rows, trimWpt, trimHpt, gutterPt, bleedPt, paperWpt, paperHpt);
 
   const gridL = cenX - bleedPt, gridB = cenY - bleedPt;
   const gridR = cenX + trimGridW + bleedPt, gridT = cenY + trimGridH + bleedPt;
