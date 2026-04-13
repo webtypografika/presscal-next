@@ -58,6 +58,13 @@ export interface CalculatorInput {
   lamSides?: 1 | 2;
   bindingType?: '' | 'staple' | 'glue' | 'spiral';
   bindingMachineId?: UUID;
+  creaseMachineId?: UUID;
+  creaseCount?: number;         // creases per sheet (per-crease charge mode)
+  foldMachineId?: UUID;
+  foldType?: string;            // fold type key (half | cz | gate | ...)
+  gatherMachineId?: UUID;
+  gatherSignatures?: number;    // signatures per book (per-signature charge mode)
+  customMachineIds?: UUID[];    // multiple custom postpress machines selected
 
   // Per-job overrides
   overrides?: {
@@ -91,12 +98,21 @@ export interface CalculatorResult {
   costGuillotine: number;
   costLamination: number;
   costBinding: number;
+  costCrease: number;
+  costFold: number;
+  costGather: number;
+  costCustom: number;
   totalCost: number;
 
   // Revenue
   chargeFinishing: number;
   chargeLamination: number;
   chargeGuillotine: number;
+  chargeCrease: number;
+  chargeFold: number;
+  chargeGather: number;
+  chargeCustom: number;
+  customBreakdown?: Array<{ id: string; name: string; charge: number }>;
   extraCharges: number;
   profitAmount: number;
   sellPrice: number;

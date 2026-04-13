@@ -102,6 +102,13 @@ function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: s
     if (cd.lamSides) p.set('lamSides', String(cd.lamSides));
     if (cd.bindingType) p.set('bindingType', cd.bindingType as string);
     if (cd.bindingMachineId) p.set('bindingMachineId', cd.bindingMachineId as string);
+    if (cd.creaseMachineId) p.set('creaseMachineId', cd.creaseMachineId as string);
+    if (cd.creaseCount) p.set('creaseCount', String(cd.creaseCount));
+    if (cd.foldMachineId) p.set('foldMachineId', cd.foldMachineId as string);
+    if (cd.foldType) p.set('foldType', cd.foldType as string);
+    if (cd.gatherMachineId) p.set('gatherMachineId', cd.gatherMachineId as string);
+    if (cd.gatherSignatures) p.set('gatherSignatures', String(cd.gatherSignatures));
+    if (Array.isArray(cd.customMachineIds) && cd.customMachineIds.length) p.set('customMachineIds', (cd.customMachineIds as string[]).join(','));
     if (cd.overrides && Object.values(cd.overrides as Record<string, unknown>).some(v => v != null && v !== 0)) {
       p.set('overrides', JSON.stringify(cd.overrides));
     }
@@ -612,6 +619,13 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             lamSides: cd.lamSides,
             bindingType: cd.bindingType,
             bindingMachineId: cd.bindingMachineId,
+            creaseMachineId: cd.creaseMachineId,
+            creaseCount: cd.creaseCount,
+            foldMachineId: cd.foldMachineId,
+            foldType: cd.foldType,
+            gatherMachineId: cd.gatherMachineId,
+            gatherSignatures: cd.gatherSignatures,
+            customMachineIds: cd.customMachineIds,
           }),
         });
         const data = await res.json();

@@ -12,6 +12,7 @@ import { parsePDF } from '@/lib/calc/pdf-utils';
 import type { ParsedPDF } from '@/lib/calc/pdf-utils';
 import { downloadImpositionPDF } from '@/lib/calc/pdf-export';
 import PlateOrderModal from './plate-order-modal';
+import { FOLD_TYPES } from '@/lib/postpress/fold-types';
 
 /* ═══════════════════════════════════════════════════
    PressCal Calculator — Draft H (Live Engine)
@@ -56,6 +57,13 @@ interface FinishData {
   lamSides: 1 | 2;
   binding: string;
   bindingMachineId: string;
+  creaseMachineId: string;
+  creaseCount: number;
+  foldMachineId: string;
+  foldType: string;
+  gatherMachineId: string;
+  gatherSignatures: number;
+  customMachineIds: string[];
 }
 interface DbMachine {
   id: string;
@@ -499,7 +507,16 @@ export default function CalculatorShell() {
     pmsFront: 0, pmsBack: 0,
     varnish: 'none', varnishTiming: 'inline', perfecting: false, printMethod: 'sheetwise',
   });
-  const [finish, setFinish] = useState<FinishData>({ guillotineId: '', guillotineName: 'Χωρίς', lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς', lamSides: 1, binding: 'none', bindingMachineId: '' });
+  const [finish, setFinish] = useState<FinishData>({ guillotineId: '', guillotineName: 'Χωρίς', lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς', lamSides: 1, binding: 'none', bindingMachineId: '', creaseMachineId: '', creaseCount: 1, foldMachineId: '', foldType: '', gatherMachineId: '', gatherSignatures: 1, customMachineIds: [] });
+  const [devPanelHidden, setDevPanelHidden] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('calc-dev-panel-hidden') === '1';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('calc-dev-panel-hidden', devPanelHidden ? '1' : '0');
+    }
+  }, [devPanelHidden]);
 
   // Imposition settings
   const [impoGutter, setImpoGutter] = useState(6);
@@ -793,7 +810,14 @@ export default function CalculatorShell() {
     const lamSd = searchParams.get('lamSides');
     const bindType = searchParams.get('bindingType');
     const bindMachId = searchParams.get('bindingMachineId');
-    if (guillId || lamMachId || lamFlmId || bindType) {
+    const creaseId = searchParams.get('creaseMachineId');
+    const creaseCnt = searchParams.get('creaseCount');
+    const foldId = searchParams.get('foldMachineId');
+    const foldTp = searchParams.get('foldType');
+    const gatherId = searchParams.get('gatherMachineId');
+    const gatherSigs = searchParams.get('gatherSignatures');
+    const customIds = searchParams.get('customMachineIds');
+    if (guillId || lamMachId || lamFlmId || bindType || creaseId || foldId || gatherId || customIds) {
       setFinish(prev => ({
         ...prev,
         guillotineId: guillId || prev.guillotineId,
@@ -802,6 +826,13 @@ export default function CalculatorShell() {
         lamSides: lamSd ? parseInt(lamSd) as 1 | 2 : prev.lamSides,
         binding: (bindType || prev.binding) as FinishData['binding'],
         bindingMachineId: bindMachId || prev.bindingMachineId,
+        creaseMachineId: creaseId || prev.creaseMachineId,
+        creaseCount: creaseCnt ? parseInt(creaseCnt) || prev.creaseCount : prev.creaseCount,
+        foldMachineId: foldId || prev.foldMachineId,
+        foldType: foldTp || prev.foldType,
+        gatherMachineId: gatherId || prev.gatherMachineId,
+        gatherSignatures: gatherSigs ? parseInt(gatherSigs) || prev.gatherSignatures : prev.gatherSignatures,
+        customMachineIds: customIds ? customIds.split(',').filter(Boolean) : prev.customMachineIds,
       }));
     }
 
@@ -992,6 +1023,10 @@ export default function CalculatorShell() {
   const guillotines = postpress.filter(p => p.subtype === 'guillotine');
   const laminators = postpress.filter(p => p.subtype === 'laminator' || p.subtype === 'lam_roll' || p.subtype === 'lam_sheet');
   const binders = postpress.filter(p => ['spiral', 'glue_bind', 'staple'].includes(p.subtype));
+  const creasers = postpress.filter(p => p.subtype === 'crease');
+  const folders = postpress.filter(p => p.subtype === 'fold');
+  const gatherers = postpress.filter(p => p.subtype === 'gathering');
+  const customMachines = postpress.filter(p => p.subtype === 'custom');
 
   // Unique suppliers — filtered by current category
   const suppliersForCat = paperCat
@@ -1152,6 +1187,7 @@ export default function CalculatorShell() {
           impoGutter: impoGutter,
           pages: (impoMode === 'booklet' || job.archetype === 'booklet') ? job.pages
             : (impoMode === 'perfect_bound' || job.archetype === 'perfect_bound') ? job.bodyPages
+            : finish.binding === 'spiral' ? (job.bodyPages || job.pages)
             : undefined,
           paperThickness: pbPaperThickness || undefined,
           impoBleed: effectiveBleed,
@@ -1174,6 +1210,13 @@ export default function CalculatorShell() {
           lamSides: finish.lamSides,
           bindingType: finish.binding !== 'none' ? finish.binding : '',
           bindingMachineId: finish.bindingMachineId || undefined,
+          creaseMachineId: finish.creaseMachineId || undefined,
+          creaseCount: finish.creaseCount || undefined,
+          foldMachineId: finish.foldMachineId || undefined,
+          foldType: finish.foldType || undefined,
+          gatherMachineId: finish.gatherMachineId || undefined,
+          gatherSignatures: finish.gatherSignatures || undefined,
+          customMachineIds: finish.customMachineIds.length ? finish.customMachineIds : undefined,
           // Overrides
           overrides: hasOverrides ? overrides : undefined,
         }),
@@ -1461,6 +1504,10 @@ export default function CalculatorShell() {
                 ...(chGuill > 0 ? [{ label: 'Γκιλοτίνα', value: chGuill }] : []),
                 ...(pLam !== 0 ? [{ label: 'Πλαστικοποίηση', value: pLam }] : []),
                 ...(pBind !== 0 ? [{ label: 'Βιβλιοδεσία', value: pBind }] : []),
+                ...((r?.chargeCrease ?? 0) > 0 ? [{ label: 'Πύκμανση', value: r!.chargeCrease }] : []),
+                ...((r?.chargeFold ?? 0) > 0 ? [{ label: 'Διπλωτική', value: r!.chargeFold }] : []),
+                ...((r?.chargeGather ?? 0) > 0 ? [{ label: 'Συνθετική', value: r!.chargeGather }] : []),
+                ...((r?.chargeCustom ?? 0) > 0 ? [{ label: 'Άλλη μετεκτύπωση', value: r!.chargeCustom }] : []),
               ]}
               total={profitAmount} totalLabel="Σύνολο" title="ΚΕΡΔΟΣ"
             />;
@@ -1526,6 +1573,13 @@ export default function CalculatorShell() {
                 lamSides: finish.lamSides,
                 bindingType: finish.binding !== 'none' ? finish.binding : '',
                 bindingMachineId: finish.bindingMachineId || undefined,
+                creaseMachineId: finish.creaseMachineId || undefined,
+                creaseCount: finish.creaseCount || undefined,
+                foldMachineId: finish.foldMachineId || undefined,
+                foldType: finish.foldType || undefined,
+                gatherMachineId: finish.gatherMachineId || undefined,
+                gatherSignatures: finish.gatherSignatures || undefined,
+                customMachineIds: finish.customMachineIds.length ? finish.customMachineIds : undefined,
                 overrides: hasOverrides ? overrides : undefined,
               };
               // NOTE: linkedFile is NOT set here. It is owned by the quote item
@@ -2494,6 +2548,257 @@ export default function CalculatorShell() {
                   <div style={{ height: 10 }} />
                 </>);
               })()}
+              {creasers.length > 0 && (<>
+                <MfLabel>ΠΥΚΜΑΝΣΗ</MfLabel>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+                  <Pill active={!finish.creaseMachineId} onClick={() => setFinish({ ...finish, creaseMachineId: '' })} color="#0ea5e9">Χωρίς</Pill>
+                  {creasers.map((c) => (
+                    <Pill key={c.id} active={finish.creaseMachineId === c.id} onClick={() => setFinish({ ...finish, creaseMachineId: c.id, creaseCount: finish.creaseCount || 1 })} color="#0ea5e9">{c.name}</Pill>
+                  ))}
+                </div>
+                {finish.creaseMachineId && (() => {
+                  const selectedCrease = creasers.find(x => x.id === finish.creaseMachineId);
+                  const cSpecs = (selectedCrease?.specs as Record<string, unknown>) || {};
+                  const mode = (cSpecs.crease_charge_mode as string) || 'per_crease';
+                  const maxCreases = Number(cSpecs.max_creases) || 0;
+                  // gsm validation
+                  const minGsm = Number(cSpecs.min_gsm) || 0;
+                  const maxGsm = Number(cSpecs.max_gsm) || 0;
+                  const paperGsm = paper?.thickness || 0;
+                  const gsmWarning = (minGsm > 0 && paperGsm > 0 && paperGsm < minGsm)
+                    ? `Χαρτί ${paperGsm}gsm — κάτω από το ελάχιστο (${minGsm}gsm)`
+                    : (maxGsm > 0 && paperGsm > maxGsm)
+                    ? `Χαρτί ${paperGsm}gsm — πάνω από το μέγιστο (${maxGsm}gsm)`
+                    : null;
+                  const warnBanner = gsmWarning ? (
+                    <div style={{
+                      padding: '6px 10px', borderRadius: 6, marginBottom: 10,
+                      background: 'rgba(251,146,60,0.10)',
+                      border: '1px solid rgba(251,146,60,0.35)',
+                      color: '#fdba74', fontSize: '0.7rem',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      <i className="fas fa-triangle-exclamation" style={{ color: '#fb923c' }} />
+                      {gsmWarning}
+                    </div>
+                  ) : null;
+                  if (mode === 'per_sheet') {
+                    return (<>
+                      {warnBanner}
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 14, padding: '6px 10px', borderRadius: 6, background: 'rgba(14,165,233,0.08)' }}>
+                        <i className="fas fa-file" style={{ marginRight: 6, color: '#0ea5e9' }} />
+                        Χρέωση ανά φύλλο, ανεξαρτήτου πυκμάνσεων
+                      </div>
+                    </>);
+                  }
+                  return (<>
+                    {warnBanner}
+                    <MfLabel>ΠΥΚΜΩΣΕΙΣ ΑΝΑ ΦΥΛΛΟ</MfLabel>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                      <button
+                        onClick={() => setFinish({ ...finish, creaseCount: Math.max(1, finish.creaseCount - 1) })}
+                        style={{
+                          width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)',
+                          background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)',
+                          cursor: 'pointer', fontSize: '0.75rem',
+                        }}
+                      ><i className="fas fa-minus" /></button>
+                      <input
+                        type="number" min="1" max={maxCreases || undefined}
+                        value={finish.creaseCount}
+                        onChange={(e) => {
+                          const n = Math.max(1, parseInt(e.target.value) || 1);
+                          setFinish({ ...finish, creaseCount: maxCreases ? Math.min(n, maxCreases) : n });
+                        }}
+                        style={{
+                          width: 54, padding: '5px 8px', borderRadius: 6, textAlign: 'center',
+                          border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)',
+                          color: 'var(--text)', fontSize: '0.8rem', fontWeight: 700,
+                        }}
+                      />
+                      <button
+                        onClick={() => setFinish({ ...finish, creaseCount: maxCreases ? Math.min(maxCreases, finish.creaseCount + 1) : finish.creaseCount + 1 })}
+                        style={{
+                          width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)',
+                          background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)',
+                          cursor: 'pointer', fontSize: '0.75rem',
+                        }}
+                      ><i className="fas fa-plus" /></button>
+                      {maxCreases > 0 && (
+                        <span style={{ fontSize: '0.65rem', color: '#64748b' }}>max {maxCreases}/πέρασμα</span>
+                      )}
+                    </div>
+                  </>);
+                })()}
+              </>)}
+              {folders.length > 0 && (<>
+                <MfLabel>ΔΙΠΛΩΤΙΚΗ</MfLabel>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+                  <Pill active={!finish.foldMachineId} onClick={() => setFinish({ ...finish, foldMachineId: '', foldType: '' })} color="var(--blue)">Χωρίς</Pill>
+                  {folders.map((f) => (
+                    <Pill key={f.id} active={finish.foldMachineId === f.id} onClick={() => {
+                      const fSpecs = (f.specs as Record<string, unknown>) || {};
+                      const mode = (fSpecs.fold_charge_mode === 'per_sheet' ? 'per_sheet' : 'per_type');
+                      if (mode === 'per_sheet') {
+                        setFinish({ ...finish, foldMachineId: f.id, foldType: '' });
+                      } else {
+                        const hasRA = fSpecs.right_angle === '1' || fSpecs.right_angle === 1;
+                        const isBookSig = impoMode === 'booklet' || impoMode === 'perfect_bound';
+                        const totalPages = impoMode === 'perfect_bound'
+                          ? Number(job.bodyPages) || 0
+                          : Number(job.pages) || 0;
+                        // Pick cross16 if 16+ pages, cross8 if 8-15, else first parallel
+                        let preferred: string | undefined;
+                        if (isBookSig && hasRA) {
+                          if (totalPages >= 16 && Number(fSpecs['fold_price_cross16']) > 0) preferred = 'cross16';
+                          else if (totalPages >= 8 && Number(fSpecs['fold_price_cross8']) > 0) preferred = 'cross8';
+                        }
+                        const firstPriced = preferred ?? FOLD_TYPES.find(ft =>
+                          Number(fSpecs[`fold_price_${ft.key}`]) > 0
+                          && (ft.passes <= 1 || (hasRA && isBookSig))
+                        )?.key;
+                        setFinish({ ...finish, foldMachineId: f.id, foldType: firstPriced || 'half' });
+                      }
+                    }} color="var(--blue)">{f.name}</Pill>
+                  ))}
+                </div>
+                {finish.foldMachineId && (() => {
+                  const selectedFold = folders.find(x => x.id === finish.foldMachineId);
+                  const fSpecs = (selectedFold?.specs as Record<string, unknown>) || {};
+                  const mode = (fSpecs.fold_charge_mode === 'per_sheet' ? 'per_sheet' : 'per_type');
+                  // gsm validation
+                  const minGsm = Number(fSpecs.min_gsm) || 0;
+                  const maxGsm = Number(fSpecs.max_gsm) || 0;
+                  const paperGsm = paper?.thickness || 0;
+                  const gsmWarning = (minGsm > 0 && paperGsm > 0 && paperGsm < minGsm)
+                    ? `Χαρτί ${paperGsm}gsm — κάτω από το ελάχιστο (${minGsm}gsm)`
+                    : (maxGsm > 0 && paperGsm > maxGsm)
+                    ? `Χαρτί ${paperGsm}gsm — πάνω από το μέγιστο (${maxGsm}gsm)`
+                    : null;
+                  const warnBanner = gsmWarning ? (
+                    <div style={{
+                      padding: '6px 10px', borderRadius: 6, marginBottom: 10,
+                      background: 'rgba(251,146,60,0.10)',
+                      border: '1px solid rgba(251,146,60,0.35)',
+                      color: '#fdba74', fontSize: '0.7rem',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      <i className="fas fa-triangle-exclamation" style={{ color: '#fb923c' }} />
+                      {gsmWarning}
+                    </div>
+                  ) : null;
+                  if (mode === 'per_sheet') {
+                    const price = Number(fSpecs.fold_price_flat) || 0;
+                    return (<>
+                      {warnBanner}
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 14, padding: '6px 10px', borderRadius: 6, background: 'rgba(59,130,246,0.08)' }}>
+                        <i className="fas fa-file" style={{ marginRight: 6, color: 'var(--blue)' }} />
+                        {price > 0
+                          ? `Χρέωση ανά φύλλο: €${price.toFixed(3)}, ανεξαρτήτου τύπου δίπλωσης`
+                          : 'Δεν έχει οριστεί τιμή ανά φύλλο — ενημέρωσε το μηχάνημα στη Μετεκτύπωση.'}
+                      </div>
+                    </>);
+                  }
+                  const hasRA = fSpecs.right_angle === '1' || fSpecs.right_angle === 1;
+                  const isBookSig = impoMode === 'booklet' || impoMode === 'perfect_bound';
+                  const availableTypes = FOLD_TYPES.filter(ft =>
+                    Number(fSpecs[`fold_price_${ft.key}`]) > 0
+                    && (ft.passes <= 1 || (hasRA && isBookSig))
+                  );
+                  if (!availableTypes.length) {
+                    return (<>
+                      {warnBanner}
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 14, padding: '6px 10px', borderRadius: 6, background: 'rgba(59,130,246,0.08)' }}>
+                        <i className="fas fa-info-circle" style={{ marginRight: 6, color: 'var(--blue)' }} />
+                        Δεν έχει οριστεί τιμή σε κανέναν τύπο — ενημέρωσε το μηχάνημα στη Μετεκτύπωση.
+                      </div>
+                    </>);
+                  }
+                  return (<>
+                    {warnBanner}
+                    <MfLabel>ΤΥΠΟΣ ΔΙΠΛΩΣΗΣ</MfLabel>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
+                      {availableTypes.map(ft => (
+                        <Pill key={ft.key} active={finish.foldType === ft.key} onClick={() => setFinish({ ...finish, foldType: ft.key })} color="var(--blue)">
+                          {ft.label}
+                        </Pill>
+                      ))}
+                    </div>
+                  </>);
+                })()}
+              </>)}
+              {gatherers.length > 0 && (() => {
+                // Filter machines by impo mode capability
+                const isBooklet = impoMode === 'booklet';
+                const isPB = impoMode === 'perfect_bound';
+                const compatibleGatherers = (isBooklet || isPB)
+                  ? gatherers.filter(g => {
+                      const gSpecs = (g.specs as Record<string, unknown>) || {};
+                      const cap = String(gSpecs.gather_mode || 'both');
+                      if (cap === 'both') return true;
+                      if (isBooklet && cap === 'saddle') return true;
+                      if (isPB && cap === 'flat') return true;
+                      return false;
+                    })
+                  : [];
+                if (!compatibleGatherers.length) return null;
+                return (<>
+                  <MfLabel>ΣΥΝΘΕΤΙΚΗ</MfLabel>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+                    <Pill active={!finish.gatherMachineId} onClick={() => setFinish({ ...finish, gatherMachineId: '' })} color="#a855f7">Χωρίς</Pill>
+                    {compatibleGatherers.map((g) => (
+                      <Pill key={g.id} active={finish.gatherMachineId === g.id} onClick={() => {
+                        // Auto-suggest signatures from page count
+                        const totalPages = isPB ? (Number(job.bodyPages) || 0) : (Number(job.pages) || 0);
+                        const sigs = totalPages >= 16 ? Math.ceil(totalPages / 16) : (totalPages >= 8 ? Math.ceil(totalPages / 8) : 1);
+                        setFinish({ ...finish, gatherMachineId: g.id, gatherSignatures: finish.gatherSignatures > 1 ? finish.gatherSignatures : sigs });
+                      }} color="#a855f7">{g.name}</Pill>
+                    ))}
+                  </div>
+                  {finish.gatherMachineId && (() => {
+                    const selectedGather = gatherers.find(x => x.id === finish.gatherMachineId);
+                    const gSpecs = (selectedGather?.specs as Record<string, unknown>) || {};
+                    const mode = (gSpecs.gather_charge_mode === 'per_signature' ? 'per_signature' : 'per_book');
+                    const stations = Number(gSpecs.stations) || 0;
+                    if (mode === 'per_book') {
+                      const price = Number(gSpecs.gather_price_per_book) || 0;
+                      return (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 14, padding: '6px 10px', borderRadius: 6, background: 'rgba(168,85,247,0.08)' }}>
+                          <i className="fas fa-book" style={{ marginRight: 6, color: '#a855f7' }} />
+                          {price > 0
+                            ? `Χρέωση ανά βιβλίο: €${price.toFixed(3)}, ανεξαρτήτου signatures`
+                            : 'Δεν έχει οριστεί τιμή — ενημέρωσε το μηχάνημα.'}
+                        </div>
+                      );
+                    }
+                    return (<>
+                      <MfLabel>SIGNATURES ΑΝΑ ΒΙΒΛΙΟ</MfLabel>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                        <button
+                          onClick={() => setFinish({ ...finish, gatherSignatures: Math.max(1, finish.gatherSignatures - 1) })}
+                          style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}
+                        ><i className="fas fa-minus" /></button>
+                        <input
+                          type="number" min="1" max={stations || undefined}
+                          value={finish.gatherSignatures}
+                          onChange={(e) => {
+                            const n = Math.max(1, parseInt(e.target.value) || 1);
+                            setFinish({ ...finish, gatherSignatures: stations ? Math.min(n, stations) : n });
+                          }}
+                          style={{ width: 54, padding: '5px 8px', borderRadius: 6, textAlign: 'center', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'var(--text)', fontSize: '0.8rem', fontWeight: 700 }}
+                        />
+                        <button
+                          onClick={() => setFinish({ ...finish, gatherSignatures: stations ? Math.min(stations, finish.gatherSignatures + 1) : finish.gatherSignatures + 1 })}
+                          style={{ width: 28, height: 28, borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}
+                        ><i className="fas fa-plus" /></button>
+                        {stations > 0 && (
+                          <span style={{ fontSize: '0.65rem', color: '#64748b' }}>max {stations} pockets</span>
+                        )}
+                      </div>
+                    </>);
+                  })()}
+                </>);
+              })()}
               <MfLabel>ΒΙΒΛΙΟΔΕΣΙΑ</MfLabel>
               <ToggleBar value={finish.binding} onChange={(v) => {
                 const subtype = v === 'glue' ? 'glue_bind' : v;
@@ -2501,15 +2806,102 @@ export default function CalculatorShell() {
                 setFinish({ ...finish, binding: v, bindingMachineId: firstMatch?.id || '' });
               }}
                 options={[{ v: 'none', l: 'Καμία' }, { v: 'staple', l: 'Συρραφή' }, { v: 'glue', l: 'Κόλλα' }, { v: 'spiral', l: 'Σπιράλ' }]}
+                color="var(--amber)"
               />
               {finish.binding !== 'none' && binders.length > 0 && (<>
                 <div style={{ height: 10 }} />
                 <MfLabel>ΜΗΧΑΝΗΜΑ ΒΙΒΛΙΟΔΕΣΙΑΣ</MfLabel>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
-                  {binders.filter(b => b.subtype === (finish.binding === 'glue' ? 'glue_bind' : finish.binding)).map((b) => (
-                    <Pill key={b.id} active={finish.bindingMachineId === b.id} onClick={() => setFinish({ ...finish, bindingMachineId: b.id })} color="var(--violet)">{b.name}</Pill>
-                  ))}
+                  {binders
+                    .filter(b => b.subtype === (finish.binding === 'glue' ? 'glue_bind' : finish.binding))
+                    .filter(b => {
+                      // For staple machines, filter by staple_mode (saddle/flat/both) vs job context
+                      if (b.subtype !== 'staple') return true;
+                      const sSpecs = (b.specs as Record<string, unknown>) || {};
+                      const sMode = String(sSpecs.staple_mode || 'both');
+                      if (sMode === 'both') return true;
+                      const isBooklet = impoMode === 'booklet';
+                      if (isBooklet && sMode === 'saddle') return true;
+                      if (!isBooklet && sMode === 'flat') return true;
+                      return false;
+                    })
+                    .map((b) => (
+                      <Pill key={b.id} active={finish.bindingMachineId === b.id} onClick={() => setFinish({ ...finish, bindingMachineId: b.id })} color="var(--amber)">{b.name}</Pill>
+                    ))}
                 </div>
+                {/* Staple/glue thickness warning */}
+                {finish.binding !== 'none' && finish.bindingMachineId && (() => {
+                  const selected = binders.find(b => b.id === finish.bindingMachineId);
+                  if (!selected) return null;
+                  const bSpecs = (selected.specs as Record<string, unknown>) || {};
+                  const isBooklet = impoMode === 'booklet';
+                  const pages = isBooklet ? (Number(job.pages) || 0) : (Number(job.bodyPages) || 0);
+                  const sheetsPerPad = Number(job.sheetsPerPad) || 0;
+                  const thicknessMm = pbPaperThickness || 0;
+                  let warnMsg: string | null = null;
+                  if (selected.subtype === 'staple') {
+                    const mode = String(bSpecs.staple_mode || 'both');
+                    if ((mode === 'saddle' || mode === 'both') && isBooklet) {
+                      const spine = (pages / 4) * thicknessMm;
+                      const maxSpine = Number(bSpecs.max_spine_mm) || 0;
+                      if (maxSpine > 0 && spine > maxSpine) {
+                        warnMsg = `Εκτιμώμενη ράχη ${spine.toFixed(1)}mm — πάνω από το max (${maxSpine}mm)`;
+                      }
+                    }
+                    if (!warnMsg && (mode === 'flat' || mode === 'both') && !isBooklet && sheetsPerPad > 0) {
+                      const stack = sheetsPerPad * thicknessMm;
+                      const maxStack = Number(bSpecs.max_stack_mm) || 0;
+                      if (maxStack > 0 && stack > maxStack) {
+                        warnMsg = `Εκτιμώμενη στοίβα ${stack.toFixed(1)}mm — πάνω από το max (${maxStack}mm)`;
+                      }
+                    }
+                  } else if (selected.subtype === 'glue_bind') {
+                    const spine = (pages / 2) * thicknessMm;
+                    const maxSpine = Number(bSpecs.max_spine) || 0;
+                    if (maxSpine > 0 && spine > maxSpine) {
+                      warnMsg = `Εκτιμώμενη ράχη ${spine.toFixed(1)}mm — πάνω από το max (${maxSpine}mm)`;
+                    }
+                  }
+                  if (!warnMsg) return null;
+                  return (
+                    <div style={{
+                      padding: '6px 10px', borderRadius: 6, marginBottom: 10,
+                      background: 'rgba(251,146,60,0.10)',
+                      border: '1px solid rgba(251,146,60,0.35)',
+                      color: '#fdba74', fontSize: '0.7rem',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      <i className="fas fa-triangle-exclamation" style={{ color: '#fb923c' }} />
+                      {warnMsg}
+                    </div>
+                  );
+                })()}
+              </>)}
+              {customMachines.length > 0 && (<>
+                <MfLabel>ΑΛΛΗ ΜΕΤΕΚΤΥΠΩΣΗ</MfLabel>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 14 }}>
+                  {customMachines.map((cm) => {
+                    const isSelected = finish.customMachineIds.includes(cm.id);
+                    return (
+                      <Pill
+                        key={cm.id}
+                        active={isSelected}
+                        onClick={() => {
+                          const next = isSelected
+                            ? finish.customMachineIds.filter(id => id !== cm.id)
+                            : [...finish.customMachineIds, cm.id];
+                          setFinish({ ...finish, customMachineIds: next });
+                        }}
+                        color="#64748b"
+                      >
+                        {cm.name}
+                      </Pill>
+                    );
+                  })}
+                </div>
+                <p style={{ fontSize: '0.62rem', color: 'var(--text-muted)', marginTop: -8, marginBottom: 14 }}>
+                  Πολλαπλή επιλογή — οι χρεώσεις αθροίζονται.
+                </p>
               </>)}
             </>)}
 
@@ -3395,7 +3787,29 @@ export default function CalculatorShell() {
       </div>
 
       {/* ═══ DEV PANELS (portalled outside app, fixed right sidebar) ═══ */}
-      {calcResult && (() => {
+      {/* Floating toggle button — always visible when calc result exists */}
+      {calcResult && createPortal(
+        <button
+          onClick={() => setDevPanelHidden(h => !h)}
+          title={devPanelHidden ? 'Εμφάνιση κοστολόγησης' : 'Απόκρυψη κοστολόγησης'}
+          style={{
+            position: 'fixed', top: 12,
+            right: devPanelHidden ? 12 : 290,
+            width: 34, height: 34, borderRadius: 8,
+            background: devPanelHidden ? 'var(--accent)' : 'rgba(12,18,36,0.95)',
+            border: '1px solid var(--border)',
+            color: devPanelHidden ? '#fff' : 'var(--text-muted)',
+            cursor: 'pointer', fontSize: '0.85rem', zIndex: 10000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: devPanelHidden ? '0 4px 12px rgba(245,130,32,0.35)' : '0 2px 8px rgba(0,0,0,0.4)',
+            transition: 'right 0.2s ease, background 0.2s ease',
+          }}
+        >
+          <i className={`fas ${devPanelHidden ? 'fa-coins' : 'fa-times'}`} />
+        </button>,
+        document.body
+      )}
+      {calcResult && !devPanelHidden && (() => {
             const bd = (calcResult.printDetail?.costBreakdown ?? {}) as Record<string, unknown>;
             const chargePaper = Number(bd.chargePaper) || 0;
             const chargePrint = Number(bd.chargePrint) || 0;
@@ -3472,6 +3886,17 @@ export default function CalculatorShell() {
                 {calcResult.chargeGuillotine > 0 && <DevRow label="Γκιλοτίνα" value={calcResult.chargeGuillotine} />}
                 {lamProfit !== 0 && <DevRow label="Πλαστικοποίηση" value={lamProfit} />}
                 {bindProfit !== 0 && <DevRow label="Βιβλιοδεσία" value={bindProfit} />}
+                {calcResult.chargeCrease > 0 && <DevRow label="Πύκμανση" value={calcResult.chargeCrease} />}
+                {calcResult.chargeFold > 0 && <DevRow label="Διπλωτική" value={calcResult.chargeFold} />}
+                {calcResult.chargeGather > 0 && <DevRow label="Συνθετική" value={calcResult.chargeGather} />}
+                {calcResult.chargeCustom > 0 && (
+                  <>
+                    <DevRow label="Άλλη μετεκτύπωση" value={calcResult.chargeCustom} />
+                    {(calcResult.customBreakdown || []).map(b => (
+                      <DevRow key={b.id} label={b.name} value={b.charge} indent />
+                    ))}
+                  </>
+                )}
                 <DevDivider />
                 <DevRow label="Κέρδος" value={calcResult.profitAmount} bold color="var(--accent)" />
                 <DevRow label="Τιμή Πώλησης" value={calcResult.sellPrice} bold color="var(--success)" />

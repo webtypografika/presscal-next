@@ -235,23 +235,137 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    let gatherData: CostInput['gather'] | undefined;
+    if (body.gatherMachineId) {
+      const gatherMachine = await prisma.postpressMachine.findFirst({
+        where: { id: body.gatherMachineId, orgId: ORG_ID, deletedAt: null },
+      });
+      if (gatherMachine) {
+        const gSpecs = (gatherMachine.specs as Record<string, number | string>) || {};
+        const mode = (gSpecs.gather_charge_mode === 'per_signature' ? 'per_signature' : 'per_book') as 'per_book' | 'per_signature';
+        gatherData = {
+          mode,
+          pricePerBook: Number(gSpecs.gather_price_per_book) || 0,
+          pricePerSignature: Number(gSpecs.gather_price_per_signature) || 0,
+          signatures: Math.max(1, body.gatherSignatures || 1),
+          books: body.qty,
+          setupCost: gatherMachine.setupCost || 0,
+          minCharge: gatherMachine.minCharge || 0,
+          discountStep: Number(gSpecs.discount_step) || 0,
+          discountPct: Number(gSpecs.discount_pct) || 0,
+          discountMax: Number(gSpecs.discount_max) || 0,
+        };
+      }
+    }
+
+    let customData: CostInput['custom'] | undefined;
+    if (body.customMachineIds && body.customMachineIds.length > 0) {
+      const customMachines = await prisma.postpressMachine.findMany({
+        where: { id: { in: body.customMachineIds }, orgId: ORG_ID, deletedAt: null, subtype: 'custom' },
+      });
+      customData = customMachines.map(cm => {
+        const cSpecs = (cm.specs as Record<string, unknown>) || {};
+        const mode = cSpecs.custom_mode === 'advanced' ? 'advanced' : 'simple';
+        return {
+          id: cm.id,
+          name: cm.name,
+          mode: mode as 'simple' | 'advanced',
+          components: Array.isArray(cSpecs.custom_components)
+            ? (cSpecs.custom_components as Array<{ id: string; type: string; price: number; label?: string }>).map(c => ({
+                id: c.id, type: c.type as 'setup' | 'per_piece' | 'per_sheet' | 'per_face' | 'per_m2' | 'per_kg' | 'per_minute',
+                price: Number(c.price) || 0, label: c.label,
+              }))
+            : undefined,
+          formulaBuilder: cSpecs.formula_builder as import('@/lib/postpress/formula-eval').FormulaBuilderData | undefined,
+          speed: Number(cm.speed) || 0,
+          setupCost: Number(cm.setupCost) || 0,
+          minCharge: Number(cm.minCharge) || 0,
+          discountStep: Number(cSpecs.discount_step) || 0,
+          discountPct: Number(cSpecs.discount_pct) || 0,
+          discountMax: Number(cSpecs.discount_max) || 0,
+        };
+      });
+    }
+
+    let foldData: CostInput['fold'] | undefined;
+    if (body.foldMachineId) {
+      const foldMachine = await prisma.postpressMachine.findFirst({
+        where: { id: body.foldMachineId, orgId: ORG_ID, deletedAt: null },
+      });
+      if (foldMachine) {
+        const fSpecs = (foldMachine.specs as Record<string, number | string>) || {};
+        const mode = (fSpecs.fold_charge_mode === 'per_sheet' ? 'per_sheet' : 'per_type') as 'per_sheet' | 'per_type';
+        const pricePerSheet = mode === 'per_sheet'
+          ? Number(fSpecs.fold_price_flat) || 0
+          : (body.foldType ? Number(fSpecs[`fold_price_${body.foldType}`]) || 0 : 0);
+        if (mode === 'per_sheet' || body.foldType) {
+          foldData = {
+            foldType: mode === 'per_sheet' ? 'flat' : (body.foldType || ''),
+            pricePerSheet,
+            setupCost: foldMachine.setupCost || 0,
+            minCharge: foldMachine.minCharge || 0,
+            discountStep: Number(fSpecs.discount_step) || 0,
+            discountPct: Number(fSpecs.discount_pct) || 0,
+            discountMax: Number(fSpecs.discount_max) || 0,
+          };
+        }
+      }
+    }
+
+    let creaseData: CostInput['crease'] | undefined;
+    if (body.creaseMachineId) {
+      const creaseMachine = await prisma.postpressMachine.findFirst({
+        where: { id: body.creaseMachineId, orgId: ORG_ID, deletedAt: null },
+      });
+      if (creaseMachine) {
+        const cSpecs = (creaseMachine.specs as Record<string, number | string>) || {};
+        const mode = (cSpecs.crease_charge_mode === 'per_sheet' ? 'per_sheet' : 'per_crease') as 'per_crease' | 'per_sheet';
+        creaseData = {
+          mode,
+          ratePerCrease: Number(cSpecs.rate_per_crease) || 0,
+          ratePerSheet: Number(cSpecs.rate_per_sheet) || 0,
+          creasesPerSheet: Math.max(1, body.creaseCount || 1),
+          setupCost: creaseMachine.setupCost || 0,
+          minCharge: creaseMachine.minCharge || 0,
+          discountStep: Number(cSpecs.discount_step) || 0,
+          discountPct: Number(cSpecs.discount_pct) || 0,
+          discountMax: Number(cSpecs.discount_max) || 0,
+        };
+      }
+    }
+
     let bindData: CostInput['binding'] | undefined;
     if (body.bindingType && body.bindingMachineId) {
       const bindMachine = await prisma.postpressMachine.findFirst({
         where: { id: body.bindingMachineId, orgId: ORG_ID, deletedAt: null },
       });
       if (bindMachine) {
-        const bSpecs = (bindMachine.specs as Record<string, number>) || {};
-        // staple has price_booklet / price_pad; glue_bind & spiral have price_per_unit
+        const bSpecs = (bindMachine.specs as Record<string, unknown>) || {};
+        // staple has price_booklet / price_pad; glue_bind has price_per_unit; spiral has tier table
         const isBookletMode = body.impositionMode === 'booklet';
-        const pricePerUnit = bSpecs.price_booklet && isBookletMode
-          ? bSpecs.price_booklet
-          : bSpecs.price_pad || bSpecs.price_per_unit || bSpecs.costPerUnit || 0;
+        let pricePerUnit: number;
+        if (bindMachine.subtype === 'spiral') {
+          // Pick price from spiral_tiers based on job pages
+          const tiers = Array.isArray(bSpecs.spiral_tiers)
+            ? (bSpecs.spiral_tiers as Array<{ upTo: number; price: number }>)
+            : [];
+          const pages = body.pages || 0;
+          // Find first tier where pages <= upTo; if none match, use the largest tier
+          const sorted = [...tiers].sort((a, b) => (a.upTo || 0) - (b.upTo || 0));
+          const match = sorted.find(t => pages <= (t.upTo || 0)) || sorted[sorted.length - 1];
+          pricePerUnit = Number(match?.price) || 0;
+        } else {
+          pricePerUnit = Number(bSpecs.price_booklet) && isBookletMode
+            ? Number(bSpecs.price_booklet)
+            : Number(bSpecs.price_pad) || Number(bSpecs.price_per_unit) || Number(bSpecs.costPerUnit) || 0;
+        }
         // Discount logic (same pattern as guillotine)
         let discount = 0;
-        if (bSpecs.discount_step && bSpecs.discount_pct && body.qty > bSpecs.discount_step) {
-          const steps = Math.floor(body.qty / bSpecs.discount_step);
-          discount = Math.min(steps * bSpecs.discount_pct, bSpecs.discount_max || 100);
+        const dStep = Number(bSpecs.discount_step);
+        const dPct = Number(bSpecs.discount_pct);
+        if (dStep && dPct && body.qty > dStep) {
+          const steps = Math.floor(body.qty / dStep);
+          discount = Math.min(steps * dPct, Number(bSpecs.discount_max) || 100);
         }
         const effectivePrice = pricePerUnit * (1 - discount / 100);
         bindData = {
@@ -454,6 +568,10 @@ export async function POST(req: NextRequest) {
       guillotine: guillotineData,
       lamination: lamData,
       binding: bindData,
+      crease: creaseData,
+      fold: foldData,
+      gather: gatherData,
+      custom: customData,
 
       paperMarkup: paper.markup ?? 0,       // from material (αποθήκη)
       printMarkup: 0,                       // pricing via products only

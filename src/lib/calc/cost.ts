@@ -6,6 +6,7 @@ import type { CalculatorResult } from '@/types/calculator';
 import type { DigitalSpecs, OffsetSpecs } from '@/types/machine';
 import type { ImpositionResult } from '@/types/calculator';
 import { cutsPerStockSheet } from './imposition';
+import { sumComponents, evalFormulaBuilder, type PricingComponent, type FormulaBuilderData } from '@/lib/postpress/formula-eval';
 
 // ─── INPUT TYPES ───
 
@@ -85,6 +86,54 @@ export interface CostInput {
     setupCost: number;
     minCharge: number;
   };
+  crease?: {
+    mode: 'per_crease' | 'per_sheet';
+    ratePerCrease?: number;     // €/πύκμ./φύλλο (when mode=per_crease)
+    ratePerSheet?: number;      // €/φύλλο (when mode=per_sheet)
+    creasesPerSheet: number;    // how many creases per sheet (from UI)
+    setupCost: number;
+    minCharge: number;
+    // Quantity discount
+    discountStep?: number;
+    discountPct?: number;
+    discountMax?: number;
+  };
+  fold?: {
+    foldType: string;           // key from FOLD_TYPES (half | cz | gate | ...)
+    pricePerSheet: number;      // € per sheet for the selected fold type
+    setupCost: number;
+    minCharge: number;
+    // Quantity discount
+    discountStep?: number;
+    discountPct?: number;
+    discountMax?: number;
+  };
+  gather?: {
+    mode: 'per_book' | 'per_signature';
+    pricePerBook?: number;          // € per book (when mode=per_book)
+    pricePerSignature?: number;     // € per signature × book (when mode=per_signature)
+    signatures: number;             // signatures per book (from UI)
+    books: number;                  // total books (qty)
+    setupCost: number;
+    minCharge: number;
+    // Quantity discount
+    discountStep?: number;
+    discountPct?: number;
+    discountMax?: number;
+  };
+  custom?: Array<{
+    id: string;
+    name: string;
+    mode: 'simple' | 'advanced';
+    components?: PricingComponent[];
+    formulaBuilder?: FormulaBuilderData;
+    speed: number;                  // for per_minute (machine sheets/hour)
+    setupCost: number;              // already covered by 'setup' component in simple, but adds to advanced
+    minCharge: number;
+    discountStep?: number;
+    discountPct?: number;
+    discountMax?: number;
+  }>;
 
   // Profile markups
   paperMarkup: number;       // %
@@ -131,6 +180,10 @@ export interface CostInput {
     guillotineDiscount?: number;    // % discount on guillotine charge
     lamDiscount?: number;           // % discount on lamination charge
     bindingDiscount?: number;       // % discount on binding charge
+    creaseDiscount?: number;        // % discount on crease charge
+    foldDiscount?: number;          // % discount on fold charge
+    gatherDiscount?: number;        // % discount on gather charge
+    customDiscount?: number;        // % discount on custom machines charge (aggregate)
     extraPerPiece?: number;         // € extra per piece
     extraPerSheet?: number;         // € extra per sheet
     extraPerFace?: number;          // € extra per face
@@ -872,6 +925,96 @@ function calcBindingCharge(input: CostInput): number {
   return Math.max(raw, b.minCharge);
 }
 
+function calcGatherCharge(input: CostInput): number {
+  if (!input.gather) return 0;
+  const g = input.gather;
+  const books = Math.max(1, g.books);
+  let charge = g.setupCost;
+  if (g.mode === 'per_book') {
+    charge += (g.pricePerBook ?? 0) * books;
+  } else {
+    charge += (g.pricePerSignature ?? 0) * Math.max(1, g.signatures) * books;
+  }
+  if (g.discountStep && g.discountPct && books > g.discountStep) {
+    const steps = Math.floor(books / g.discountStep) - 1;
+    const discountPct = Math.min(steps * g.discountPct, g.discountMax || 50);
+    charge *= (1 - discountPct / 100);
+  }
+  if ((g.minCharge ?? 0) > 0 && charge < g.minCharge) charge = g.minCharge;
+  return charge;
+}
+
+function calcCustomCharges(input: CostInput, totalSheets: number): { total: number; breakdown: Array<{ id: string; name: string; charge: number }> } {
+  if (!input.custom || input.custom.length === 0) return { total: 0, breakdown: [] };
+  // Build job vars from input
+  const pieceArea_m2 = (input.imposition.pieceW * input.imposition.pieceH) / 1_000_000;
+  const jobVars = {
+    qty: input.qty,
+    sheets: totalSheets,
+    sides: input.sides,
+    area_m2: pieceArea_m2,
+    gsm: input.paperGsm,
+    speed: 0, // overridden per-machine
+    copies: input.qty,
+    weight_kg: pieceArea_m2 * input.paperGsm * input.qty / 1000,
+  };
+  const breakdown: Array<{ id: string; name: string; charge: number }> = [];
+  let total = 0;
+  for (const m of input.custom) {
+    let charge = 0;
+    if (m.mode === 'advanced' && m.formulaBuilder) {
+      charge = evalFormulaBuilder(m.formulaBuilder, { ...jobVars, speed: m.speed });
+      charge += m.setupCost || 0; // setupCost is additive in advanced (formulas don't know about it)
+    } else if (m.components) {
+      charge = sumComponents(m.components, { ...jobVars, speed: m.speed });
+      // setupCost is additional only if not already expressed as a 'setup' component
+      if (!m.components.some(c => c.type === 'setup')) charge += m.setupCost || 0;
+    }
+    // Quantity discount
+    if (m.discountStep && m.discountPct && input.qty > m.discountStep) {
+      const steps = Math.floor(input.qty / m.discountStep) - 1;
+      const discountPct = Math.min(steps * m.discountPct, m.discountMax || 50);
+      charge *= (1 - discountPct / 100);
+    }
+    if ((m.minCharge ?? 0) > 0 && charge < m.minCharge) charge = m.minCharge;
+    breakdown.push({ id: m.id, name: m.name, charge });
+    total += charge;
+  }
+  return { total, breakdown };
+}
+
+function calcFoldCharge(input: CostInput, totalSheets: number): number {
+  if (!input.fold) return 0;
+  const f = input.fold;
+  let charge = f.setupCost + (f.pricePerSheet || 0) * totalSheets;
+  if (f.discountStep && f.discountPct && totalSheets > f.discountStep) {
+    const steps = Math.floor(totalSheets / f.discountStep) - 1;
+    const discountPct = Math.min(steps * f.discountPct, f.discountMax || 50);
+    charge *= (1 - discountPct / 100);
+  }
+  if ((f.minCharge ?? 0) > 0 && charge < f.minCharge) charge = f.minCharge;
+  return charge;
+}
+
+function calcCreaseCharge(input: CostInput, totalSheets: number): number {
+  if (!input.crease) return 0;
+  const c = input.crease;
+  let charge = c.setupCost;
+  if (c.mode === 'per_crease') {
+    charge += (c.ratePerCrease ?? 0) * Math.max(1, c.creasesPerSheet) * totalSheets;
+  } else {
+    charge += (c.ratePerSheet ?? 0) * totalSheets;
+  }
+  // Quantity discount
+  if (c.discountStep && c.discountPct && totalSheets > c.discountStep) {
+    const steps = Math.floor(totalSheets / c.discountStep) - 1;
+    const discountPct = Math.min(steps * c.discountPct, c.discountMax || 50);
+    charge *= (1 - discountPct / 100);
+  }
+  if ((c.minCharge ?? 0) > 0 && charge < c.minCharge) charge = c.minCharge;
+  return charge;
+}
+
 // ─── WASTE ───
 
 function calcWasteSheets(wasteFixed: number): number {
@@ -912,7 +1055,11 @@ export function calculateCost(input: CostInput): CalculatorResult {
   const costGuillotine = calcGuillotineCost(input, totalMachineSheets);
   const costLamination = calcLaminationCost(input, totalMachineSheets);
   const costBinding = 0; // binding has sell price, not material cost
-  const costFinishing = costLamination + costBinding;
+  const costCrease = 0;  // crease has sell price, not material cost
+  const costFold = 0;    // fold has sell price, not material cost
+  const costGather = 0;  // gather has sell price, not material cost
+  const costCustom = 0;  // custom has sell price, not material cost
+  const costFinishing = costLamination + costBinding + costCrease + costFold + costGather + costCustom;
 
   // Total cost (guillotine has no material cost — charge goes straight to profit)
   const totalCost = paper.cost + costPrint + costFinishing;
@@ -943,7 +1090,16 @@ export function calculateCost(input: CostInput): CalculatorResult {
   })();
   // Binding: pricePerUnit is already the sell price — no markup needed
   const chargeBinding = calcBindingCharge(input);
-  const chargeFinishing = chargeGuillotine + chargeLamination + chargeBinding;
+  // Crease: rate is already sell price — no markup needed
+  const chargeCrease = calcCreaseCharge(input, totalMachineSheets);
+  // Fold: rate is already sell price — no markup needed
+  const chargeFold = calcFoldCharge(input, totalMachineSheets);
+  // Gather: rate is already sell price — no markup needed
+  const chargeGather = calcGatherCharge(input);
+  // Custom (multiple): rate is already sell price — no markup needed
+  const customResult = calcCustomCharges(input, totalMachineSheets);
+  const chargeCustom = customResult.total;
+  const chargeFinishing = chargeGuillotine + chargeLamination + chargeBinding + chargeCrease + chargeFold + chargeGather + chargeCustom;
 
   const chargePaper = paper.cost * (1 + input.paperMarkup / 100);
 
@@ -1037,6 +1193,10 @@ export function calculateCost(input: CostInput): CalculatorResult {
   let adjChargeGuillotine = chargeGuillotine;
   let adjChargeLamination = chargeLamination;
   let adjChargeBinding = chargeBinding;
+  let adjChargeCrease = chargeCrease;
+  let adjChargeFold = chargeFold;
+  let adjChargeGather = chargeGather;
+  let adjChargeCustom = chargeCustom;
   let extraCharges = 0;
 
   if (ov) {
@@ -1049,6 +1209,10 @@ export function calculateCost(input: CostInput): CalculatorResult {
     if (ov.guillotineDiscount) adjChargeGuillotine *= (1 - ov.guillotineDiscount / 100);
     if (ov.lamDiscount) adjChargeLamination *= (1 - ov.lamDiscount / 100);
     if (ov.bindingDiscount) adjChargeBinding *= (1 - ov.bindingDiscount / 100);
+    if (ov.creaseDiscount) adjChargeCrease *= (1 - ov.creaseDiscount / 100);
+    if (ov.foldDiscount) adjChargeFold *= (1 - ov.foldDiscount / 100);
+    if (ov.gatherDiscount) adjChargeGather *= (1 - ov.gatherDiscount / 100);
+    if (ov.customDiscount) adjChargeCustom *= (1 - ov.customDiscount / 100);
     if (ov.extraPerPiece) extraCharges += ov.extraPerPiece * input.qty;
     if (ov.extraPerSheet) extraCharges += ov.extraPerSheet * totalMachineSheets;
     if (ov.extraPerFace) {
@@ -1058,7 +1222,7 @@ export function calculateCost(input: CostInput): CalculatorResult {
     if (ov.extraFixed) extraCharges += ov.extraFixed;
   }
 
-  const adjChargeFinishing = adjChargeGuillotine + adjChargeLamination + adjChargeBinding;
+  const adjChargeFinishing = adjChargeGuillotine + adjChargeLamination + adjChargeBinding + adjChargeCrease + adjChargeFold + adjChargeGather + adjChargeCustom;
   const sellPrice = chargePaper + chargePrint + adjChargeFinishing + extraCharges;
   const profitAmount = sellPrice - totalCost;
   const pricePerPiece = input.qty > 0 ? sellPrice / input.qty : 0;
@@ -1083,10 +1247,19 @@ export function calculateCost(input: CostInput): CalculatorResult {
     costGuillotine,
     costLamination,
     costBinding,
+    costCrease,
+    costFold,
+    costGather,
+    costCustom,
     totalCost,
     chargeFinishing: adjChargeFinishing,
     chargeLamination: adjChargeLamination,
     chargeGuillotine: adjChargeGuillotine,
+    chargeCrease: adjChargeCrease,
+    chargeFold: adjChargeFold,
+    chargeGather: adjChargeGather,
+    chargeCustom: adjChargeCustom,
+    customBreakdown: customResult.breakdown,
     extraCharges,
     profitAmount,
     sellPrice,
