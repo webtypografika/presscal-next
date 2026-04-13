@@ -1100,12 +1100,13 @@ export default function ImpositionCanvas({
         ctx.beginPath();
         ctx.arc(rotBtnX, rotBtnY, 4.5, -Math.PI * 0.7, Math.PI * 0.5);
         ctx.stroke();
+        // Arrow at the arc end (bottom) but pointing LEFT.
         const ax = rotBtnX + 4.5 * Math.cos(Math.PI * 0.5);
         const ay = rotBtnY + 4.5 * Math.sin(Math.PI * 0.5);
         ctx.beginPath();
-        ctx.moveTo(ax - 2.5, ay - 1.5);
-        ctx.lineTo(ax, ay + 2);
-        ctx.lineTo(ax + 2.5, ay - 1.5);
+        ctx.moveTo(ax + 2, ay - 1.5);
+        ctx.lineTo(ax - 1.5, ay);
+        ctx.lineTo(ax + 2, ay + 1.5);
         ctx.stroke();
       }
 
@@ -1199,7 +1200,6 @@ export default function ImpositionCanvas({
     if (impo.ups) parts.push(impo.ups + ' UP');
     parts.push(Math.round(sheetW) + '×' + Math.round(sheetH) + ' mm');
     parts.push(Math.round(impo.trimW) + '×' + Math.round(impo.trimH) + ' mm/τεμ.');
-    if (impo.wastePercent > 0) parts.push(impo.wastePercent.toFixed(1) + '% waste');
 
     ctx.font = '600 9px Inter, DM Sans, sans-serif';
     ctx.fillStyle = COLORS.info;

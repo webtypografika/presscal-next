@@ -957,6 +957,9 @@ export default function CalculatorShell() {
   // Reset signature navigator when mode or page count changes
   useEffect(() => { setActiveSigSheet(0); setSigShowBack(false); }, [impoMode, job.pages, job.bodyPages]);
 
+  // ×ΣΕΙΡΕΣ only applies to Cut & Stack — reset to 1 when switching to any other mode.
+  useEffect(() => { if (impoMode !== 'cutstack') setProdMultiplier(1); }, [impoMode]);
+
   // ─── DERIVED ───
   const machine = machines[activeMachine] || machines[0];
   const paper = papers.find(p => p.id === activePaperId) || papers[0];
@@ -1139,7 +1142,7 @@ export default function CalculatorShell() {
           productId: job.productId || undefined,
           jobW: job.width,
           jobH: job.height,
-          qty: job.qty,
+          qty: job.qty * prodMultiplier,
           sides: job.sides,
           colorMode: color.model === 'cmyk' ? 'color' : 'bw',
           bleed: effectiveBleed,
@@ -1186,7 +1189,7 @@ export default function CalculatorShell() {
         .finally(() => setCalculating(false));
     }, 300);
     return () => { if (calcTimer.current) clearTimeout(calcTimer.current); };
-  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, feedEdge, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage, overrides]);
+  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, feedEdge, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage, overrides, prodMultiplier]);
 
   // ─── DISPLAY VALUES ───
   const r = calcResult;
@@ -1846,9 +1849,9 @@ export default function CalculatorShell() {
           {/* Panel tabs */}
           <div style={{ display: 'flex', flexShrink: 0, borderBottom: '1px solid var(--border)' }}>
             {([
+              { key: 'job' as const, icon: 'fas fa-ruler-combined', color: 'var(--accent)', label: 'Εργασία' },
               { key: 'machine' as const, icon: 'fas fa-print', color: 'var(--blue)', label: 'Μηχανή' },
               { key: 'paper' as const, icon: 'fas fa-scroll', color: 'var(--teal)', label: 'Χαρτί' },
-              { key: 'job' as const, icon: 'fas fa-ruler-combined', color: 'var(--accent)', label: 'Εργασία' },
               { key: 'color' as const, icon: 'fas fa-palette', color: 'var(--blue)', label: 'Χρώμα' },
               { key: 'finish' as const, icon: 'fas fa-scissors', color: 'var(--violet)', label: 'Φινίρισμα' },
             ]).map(t => {
@@ -2128,31 +2131,18 @@ export default function CalculatorShell() {
                 </button>
               </div>
 
-              {/* Qty + Multiplier + Bleed row */}
+              {/* Qty + Multiplier row (bleed now lives in the canvas controls) */}
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                <div style={{ flex: 2 }}>
+                <div style={{ flex: impoMode === 'cutstack' ? 2 : 1 }}>
                   <MfLabel>ΠΟΣΟΤΗΤΑ</MfLabel>
                   <MfInput value={job.qty} onChange={(v) => setJob({ ...job, qty: Number(v) || 0 })} style={{ width: '100%', textAlign: 'center', fontWeight: 600 }} />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <MfLabel>×ΠΑΡΑΓ.</MfLabel>
-                  <MfInput value={prodMultiplier} onChange={v => setProdMultiplier(Math.max(1, Math.round(Number(v) || 1)))} style={{ width: '100%', textAlign: 'center', fontWeight: 600, color: prodMultiplier > 1 ? 'var(--accent)' : undefined }} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                    <MfLabel>BLEED</MfLabel>
-                    <button onClick={() => setJob({ ...job, bleedOn: !job.bleedOn })} style={{
-                      padding: '1px 6px', borderRadius: 4, border: 'none', fontSize: '0.55rem', fontWeight: 600,
-                      background: job.bleedOn ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)',
-                      color: job.bleedOn ? 'var(--success)' : '#475569',
-                      cursor: 'pointer', marginLeft: 'auto',
-                    }}>{job.bleedOn ? 'ON' : 'OFF'}</button>
+                {impoMode === 'cutstack' && (
+                  <div style={{ flex: 1 }}>
+                    <MfLabel>×ΣΕΙΡΕΣ</MfLabel>
+                    <MfInput value={prodMultiplier} onChange={v => setProdMultiplier(Math.max(1, Math.round(Number(v) || 1)))} style={{ width: '100%', textAlign: 'center', fontWeight: 600, color: prodMultiplier > 1 ? 'var(--accent)' : undefined }} />
                   </div>
-                  <MfInput value={job.bleed} onChange={(v) => setJob({ ...job, bleed: Number(v) || 0 })} style={{
-                    width: '100%', textAlign: 'center',
-                    opacity: job.bleedOn ? 1 : 0.4,
-                  }} />
-                </div>
+                )}
               </div>
 
               {/* Sides */}
