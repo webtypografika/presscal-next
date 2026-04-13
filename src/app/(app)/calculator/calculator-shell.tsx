@@ -3286,7 +3286,7 @@ export default function CalculatorShell() {
                 showPlateSlug={impoPlateSlug}
                 plateSlugEdge={impoPlateSlugEdge}
                 pdf={pdf}
-                feedEdge={machine?.cat === 'offset' ? undefined : feedEdge}
+                feedEdge={machine?.cat === 'offset' ? 'lef' : feedEdge}
                 activeSigSheet={(pdf || impo.signatureMap) ? activeSigSheet : undefined}
                 sigShowBack={job.sides === 2 ? sigShowBack : undefined}
                 csNumbering={impoMode === 'cutstack' && csNumbering ? {

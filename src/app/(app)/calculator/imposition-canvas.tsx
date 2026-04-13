@@ -830,7 +830,8 @@ export default function ImpositionCanvas({
     const cW = LOGICAL_W;
     const cH = LOGICAL_H;
     const reserveTop = 20;
-    const reserveBot = 22;
+    // Extra room below the sheet for offset feed arrow + MACHINE FEED SIDE label.
+    const reserveBot = feedEdge && machCat === 'offset' ? 40 : 22;
     const markLen = cropMarks ? 8 : 0;
 
     if (isDuplex && viewMode === 'dual') {
@@ -864,12 +865,15 @@ export default function ImpositionCanvas({
         machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale);
     } else {
       // ═══ SINGLE VIEW: one sheet, pagination ═══
-      const scaleX = (cW - 24 - markLen * 2) / sheetW;
+      // Extra 24px on the left for the MACHINE FEED SIDE label (digital only —
+      // offset shows its feed arrow on the bottom next to the existing GRIPPER label).
+      const leftExtra = feedEdge && machCat !== 'offset' ? 24 : 0;
+      const scaleX = (cW - 24 - leftExtra - markLen * 2) / sheetW;
       const scaleY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;
       const scale = Math.min(scaleX, scaleY);
       const drawW = sheetW * scale;
       const drawH = sheetH * scale;
-      const offX = (cW - drawW) / 2;
+      const offX = leftExtra + (cW - leftExtra - drawW) / 2;
       const offY = reserveTop + markLen + (cH - reserveTop - reserveBot - markLen * 2 - drawH) / 2;
 
       // External navigator controls front/back
@@ -995,39 +999,59 @@ export default function ImpositionCanvas({
       }
     }
 
-    // Feed direction indicator — LEFT edge = paper entry side
+    // Feed direction indicator — digital: left edge; offset: bottom (gripper).
     if (feedEdge) {
-      const scX = (cW - 24) / sheetW;
-      const scY = (cH - reserveTop - reserveBot) / sheetH;
+      const leftExtra = machCat !== 'offset' ? 24 : 0;
+      const scX = (cW - 24 - leftExtra - markLen * 2) / sheetW;
+      const scY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;
       const sc = Math.min(scX, scY);
       const dW = sheetW * sc;
       const dH = sheetH * sc;
-      const sx = (cW - dW) / 2;
-      const sy = reserveTop + (cH - reserveTop - reserveBot - dH) / 2;
+      const sx = leftExtra + (cW - leftExtra - dW) / 2;
+      const sy = reserveTop + markLen + (cH - reserveTop - reserveBot - markLen * 2 - dH) / 2;
 
       ctx.save();
       ctx.fillStyle = 'rgba(245,130,32,0.7)';
-
-      // Large triangle arrow (no tail) pointing right at sheet left edge
-      const ax = sx - 2;
-      const ay = sy + dH / 2;
       const triW = 12;
       const triH = 8;
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(ax - triW, ay - triH);
-      ctx.lineTo(ax - triW, ay + triH);
-      ctx.closePath();
-      ctx.fill();
 
-      // Label: "MACHINE FEED SIDE" — left of the arrow, never overlapping
-      ctx.save();
-      ctx.font = '700 8px Inter, DM Sans, sans-serif';
-      ctx.translate(ax - triW - 6, sy + dH / 2);
-      ctx.rotate(-Math.PI / 2);
-      ctx.textAlign = 'center';
-      ctx.fillText('MACHINE FEED SIDE', 0, 0);
-      ctx.restore();
+      if (machCat === 'offset') {
+        // Triangle at the bottom pointing UP (towards the gripper edge).
+        const ax = sx + dW / 2;
+        const ay = sy + dH + 2;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - triH, ay + triW);
+        ctx.lineTo(ax + triH, ay + triW);
+        ctx.closePath();
+        ctx.fill();
+
+        // Label below the arrow.
+        ctx.fillStyle = 'rgba(245,130,32,0.95)';
+        ctx.font = '700 9px Inter, DM Sans, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('MACHINE FEED SIDE', ax, ay + triW + 10);
+      } else {
+        // Triangle on the left pointing RIGHT (paper entry side for digital).
+        const ax = sx - 2;
+        const ay = sy + dH / 2;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - triW, ay - triH);
+        ctx.lineTo(ax - triW, ay + triH);
+        ctx.closePath();
+        ctx.fill();
+
+        // Label to the LEFT of the arrow, outside the sheet.
+        ctx.save();
+        ctx.fillStyle = 'rgba(245,130,32,0.95)';
+        ctx.font = '700 9px Inter, DM Sans, sans-serif';
+        ctx.translate(ax - triW - 8, sy + dH / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.fillText('MACHINE FEED SIDE', 0, 0);
+        ctx.restore();
+      }
 
       ctx.restore();
     }
@@ -1035,13 +1059,15 @@ export default function ImpositionCanvas({
     // ─── N-UP GRID RESIZE HANDLE + ROTATE BUTTON (drawn in main draw, not drawSheet) ───
     const isNUpLikeMode = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun' || impo.mode === 'workturn';
     if (isNUpLikeMode && impo.cols > 0 && impo.rows > 0) {
-      // Compute grid position in canvas pixels (replicate single-view sheet positioning)
-      const sScX = (cW - 24 - markLen * 2) / sheetW;
+      // Compute grid position in canvas pixels (replicate single-view sheet positioning,
+      // incl. the leftExtra padding reserved for the feed indicator label — digital only).
+      const sLeftExtra = feedEdge && machCat !== 'offset' ? 24 : 0;
+      const sScX = (cW - 24 - sLeftExtra - markLen * 2) / sheetW;
       const sScY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;
       const sSc = Math.min(sScX, sScY);
       const sDW = sheetW * sSc;
       const sDH = sheetH * sSc;
-      const sOffX = (cW - sDW) / 2;
+      const sOffX = sLeftExtra + (cW - sLeftExtra - sDW) / 2;
       const sOffY = reserveTop + markLen + (cH - reserveTop - reserveBot - markLen * 2 - sDH) / 2;
       const isOff = machCat === 'offset';
       const smT = (isOff ? marginBottom : marginTop) * sSc;
@@ -1333,22 +1359,24 @@ export default function ImpositionCanvas({
     }
     const lx = (clientX - rect.left - contentX) / contentW * LOGICAL_W;
     const ly = (clientY - rect.top - contentY) / contentH * LOGICAL_H;
-    // Replicate the sheet positioning from draw()
+    // Replicate the sheet positioning from draw() — incl. the paddings reserved
+    // for the feed indicator (leftExtra for digital, reserveBot for offset).
     const markLen = cropMarks ? 8 : 0;
     const reserveTop = 20;
-    const reserveBot = 22;
-    const scaleX = (LOGICAL_W - 24 - markLen * 2) / sheetW;
+    const reserveBot = feedEdge && machCat === 'offset' ? 40 : 22;
+    const leftExtra = feedEdge && machCat !== 'offset' ? 24 : 0;
+    const scaleX = (LOGICAL_W - 24 - leftExtra - markLen * 2) / sheetW;
     const scaleY = (LOGICAL_H - reserveTop - reserveBot - markLen * 2) / sheetH;
     const s = Math.min(scaleX, scaleY);
     const drawW = sheetW * s;
     const drawH = sheetH * s;
-    const sheetOffX = (LOGICAL_W - drawW) / 2;
+    const sheetOffX = leftExtra + (LOGICAL_W - leftExtra - drawW) / 2;
     const sheetOffY = reserveTop + markLen + (LOGICAL_H - reserveTop - reserveBot - markLen * 2 - drawH) / 2;
     // Convert to mm relative to printable area origin
     const isOff = machCat === 'offset';
     const mt = isOff ? marginBottom : marginTop;
     return { mmX: (lx - sheetOffX) / s - marginLeft, mmY: (ly - sheetOffY) / s - mt };
-  }, [sheetW, sheetH, marginLeft, marginTop, marginBottom, machCat, cropMarks]);
+  }, [sheetW, sheetH, marginLeft, marginTop, marginBottom, machCat, cropMarks, feedEdge]);
 
   const findSmHandle = useCallback((mmX: number, mmY: number): number => {
     if (!smBlocks || impo.mode !== 'stepmulti') return -1;
