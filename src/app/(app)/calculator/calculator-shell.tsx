@@ -1616,7 +1616,23 @@ export default function CalculatorShell() {
                   } else {
                     items.push(itemPayload);
                   }
-                  await updateQuote(quoteLink.quoteId, { items });
+                  // Recalculate totals so the quote page doesn't see stale values
+                  const subtotal = items.reduce((s: number, i: any) => s + (i.finalPrice || 0), 0);
+                  const vatRate = 24;
+                  const vatAmount = Math.round(subtotal * vatRate / 100 * 100) / 100;
+                  const grandTotal = Math.round((subtotal + vatAmount) * 100) / 100;
+                  const totalCost = items.reduce((s: number, i: any) => s + (i.cost || 0), 0);
+                  const totalProfit = Math.round((subtotal - totalCost) * 100) / 100;
+                  await updateQuote(quoteLink.quoteId, { items, subtotal, vatRate, vatAmount, grandTotal, totalCost, totalProfit });
+                  // Verify save succeeded
+                  const verify = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
+                  if (verify.ok) {
+                    const vData = await verify.json();
+                    const saved = (vData.items as any[])?.find((i: any) => i.id === (quoteLink.itemId || itemPayload.id));
+                    if (!saved?.calcData?.impositionMode) {
+                      console.warn('Save verification: calcData missing after save', saved);
+                    }
+                  }
                   window.location.href = `/quotes/${quoteLink.quoteId}`;
                 } else {
                   // Create new quote with this item

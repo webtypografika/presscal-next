@@ -998,6 +998,12 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                   {item.calcData.archetype && (
                     <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{item.calcData.archetype}</span>
                   )}
+                  {item.calcData.impositionMode && (
+                    <span style={{ fontSize: '0.62rem', padding: '1px 5px', borderRadius: 4, background: 'rgba(245,130,32,0.12)', color: '#f58220', fontWeight: 600 }}>
+                      {({ nup: 'N-Up', cut_and_stack: 'C&S', booklet: 'Booklet', perfectbind: 'PB', workturn: 'W&T', gangrun: 'Gang', stepmulti: 'Step' } as Record<string, string>)[item.calcData.impositionMode as string] || item.calcData.impositionMode}
+                      {item.calcData.ups ? ` ×${item.calcData.ups}` : ''}
+                    </span>
+                  )}
                   {items.some(i => i.id !== item.id && !i.calcData?.machineId) && (
                     <button
                       onClick={() => applyCalcToOthers(item)}
