@@ -456,11 +456,19 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
           const ext = att.filename.split('.').pop()?.toLowerCase() || '';
           const baseName = att.filename.replace(/\.[^.]+$/, '');
 
-          // Disambiguate duplicate filenames: add sender/date suffix
+          // Disambiguate duplicate filenames: add sender/date + counter
           let fileName = att.filename;
           if (existingNames.has(fileName)) {
-            const suffix = [senderName, msgDate].filter(Boolean).join(' ') || msgId.slice(0, 6);
-            fileName = `${baseName} (${suffix}).${ext}`;
+            const suffix = [senderName, msgDate].filter(Boolean).join(' ') || '';
+            const candidate = suffix ? `${baseName} (${suffix}).${ext}` : fileName;
+            if (!existingNames.has(candidate)) {
+              fileName = candidate;
+            } else {
+              // Counter fallback for multiple same-name files in same email
+              let n = 2;
+              while (existingNames.has(`${baseName} (${suffix ? suffix + ' ' : ''}${n}).${ext}`)) n++;
+              fileName = `${baseName} (${suffix ? suffix + ' ' : ''}${n}).${ext}`;
+            }
           }
           existingNames.add(fileName);
 
