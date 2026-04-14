@@ -618,6 +618,7 @@ export default function CalculatorShell() {
   const [quoteLink, setQuoteLink] = useState<{ quoteId: string; itemId: string; desc: string; quoteNumber: string } | null>(null);
   const [linkedFile, setLinkedFile] = useState<{ path: string; name: string } | null>(null);
   const [savingToQuote, setSavingToQuote] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const firstPdfLoad = useRef(true); // true until first PDF is loaded
 
   const togglePanel = useCallback((key: 'machine' | 'paper' | 'job' | 'color' | 'finish' | 'mode-settings') => {
@@ -1660,9 +1661,12 @@ export default function CalculatorShell() {
                       return;
                     }
                   }
-                  window.location.href = `/quotes/${quoteLink.quoteId}`;
+                  // Stay in calculator — user came from quote, no need to redirect back
+                  setSavingToQuote(false);
+                  setSaveSuccess(true);
+                  setTimeout(() => setSaveSuccess(false), 2000);
                 } else {
-                  // Create new quote with this item
+                  // Create new quote with this item → redirect to the new quote
                   const q = await createQuote({
                     title: `${job.width}×${job.height} ${job.archetype}`,
                     items: [itemPayload],
@@ -1684,14 +1688,14 @@ export default function CalculatorShell() {
             title={quoteLink ? 'Αποθήκευση προδιαγραφών στο item της προσφοράς' : 'Δημιουργία νέας προσφοράς με αυτό το είδος'}
             style={{
               padding: '7px 14px', borderRadius: 7,
-              background: savingToQuote ? 'rgba(245,130,32,0.5)' : 'var(--accent)', color: '#fff', border: 'none',
+              background: saveSuccess ? '#16a34a' : savingToQuote ? 'rgba(245,130,32,0.5)' : 'var(--accent)', color: '#fff', border: 'none',
               fontSize: '0.72rem', fontWeight: 600, cursor: savingToQuote ? 'wait' : 'pointer',
               display: 'flex', alignItems: 'center', gap: 5,
               boxShadow: '0 2px 12px rgba(245,130,32,0.3)', transition: 'all 0.2s', flexShrink: 0,
               opacity: savingToQuote ? 0.7 : 1,
             }}
           >
-            <i className={savingToQuote ? 'fas fa-spinner fa-spin' : 'fas fa-save'} /> {savingToQuote ? 'Αποθήκευση...' : 'Αποθήκευση'}
+            <i className={savingToQuote ? 'fas fa-spinner fa-spin' : saveSuccess ? 'fas fa-check' : 'fas fa-save'} /> {savingToQuote ? 'Αποθήκευση...' : saveSuccess ? 'Αποθηκεύτηκε ✓' : 'Αποθήκευση'}
           </button>
           {/* PDF Export dropdown */}
           <div style={{ position: 'relative', flexShrink: 0 }} ref={pdfBtnRef}>
