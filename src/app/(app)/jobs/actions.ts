@@ -18,7 +18,7 @@ export async function getJobs() {
         { jobStage: { not: null } },
       ],
     },
-    include: { customer: true, company: true },
+    include: { customer: true, company: true, contact: true },
     orderBy: [{ deadline: 'asc' }, { createdAt: 'desc' }],
   });
 }

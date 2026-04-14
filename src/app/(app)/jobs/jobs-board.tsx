@@ -55,7 +55,7 @@ function JobCard({ job, onDragStart, onDetail }: { job: JobQuote; onDragStart: (
   const overdue = isOverdue(job.deadline);
   const priority = job.jobPriority || 'normal';
 
-  const name = (job as any).company?.name || job.customer?.name || '—';
+  const name = (job as any).company?.name ?? (job as any).contact?.name ?? job.customer?.name ?? (job as any).contact?.email ?? (job as any).company?.email ?? job.customer?.email ?? '—';
   const title = job.title || desc || '';
   const hasInvoice = !!(job as any).elorusInvoiceUrl;
   const hasVoucher = !!(job as any).courierVoucherId;
