@@ -1285,11 +1285,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 
                 const markAsSaved = async () => {
                   try {
-                    await fetch('/api/filehelper/files', {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ quoteId: quote.id }),
-                    });
+                    const { markFilesSaved } = await import('../../quotes/actions');
+                    await markFilesSaved(quote.id);
                     // Update local state
                     setQuote(prev => ({
                       ...prev,

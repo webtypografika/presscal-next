@@ -426,16 +426,23 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
     // Check for existing fileLinks to avoid duplicates
     const existing = await prisma.fileLink.findMany({
       where: { quoteId, source: 'email' },
-      select: { filePath: true },
+      select: { filePath: true, fileName: true },
     });
     const existingPaths = new Set(existing.map(f => f.filePath));
 
     let saved = 0;
+    // Track used filenames to differentiate duplicates (e.g., multiple "image0.gif")
+    const existingNames = new Set(existing.map(f => f.fileName || ''));
 
     for (const msgId of messageIds) {
       try {
         const msg = await getMessage(token, msgId);
         if (!msg.attachments?.length) continue;
+
+        // Extract sender name for filename disambiguation
+        const senderMatch = (msg.from || '').match(/^([^<]+)/);
+        const senderName = senderMatch ? senderMatch[1].replace(/"/g, '').trim().split(/\s+/)[0] : '';
+        const msgDate = msg.date ? new Date(msg.date).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' }) : '';
 
         for (const att of msg.attachments) {
           if (!att.filename || !att.id) continue;
@@ -443,10 +450,19 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
           // Store email ref as filePath — PressKit uses /api/filehelper/emails/... with Bearer auth
           const downloadPath = `/api/filehelper/emails/${msgId}/attachments/${att.id}?filename=${encodeURIComponent(att.filename)}&mime=${encodeURIComponent(att.mimeType || 'application/octet-stream')}`;
 
-          // Skip duplicates
+          // Skip duplicates (same attachment ID)
           if (existingPaths.has(downloadPath)) continue;
 
           const ext = att.filename.split('.').pop()?.toLowerCase() || '';
+          const baseName = att.filename.replace(/\.[^.]+$/, '');
+
+          // Disambiguate duplicate filenames: add sender/date suffix
+          let fileName = att.filename;
+          if (existingNames.has(fileName)) {
+            const suffix = [senderName, msgDate].filter(Boolean).join(' ') || msgId.slice(0, 6);
+            fileName = `${baseName} (${suffix}).${ext}`;
+          }
+          existingNames.add(fileName);
 
           // For images, fetch and create base64 thumbnail
           let thumbnail: string | null = null;
@@ -463,7 +479,7 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
           await prisma.fileLink.create({
             data: {
               orgId: ORG_ID,
-              fileName: att.filename,
+              fileName,
               filePath: downloadPath,
               fileType: ext,
               fileSize: att.size || 0,
@@ -484,6 +500,17 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
     console.error('[saveEmailAttachments] fatal error:', (e as Error).message);
     return { saved: 0 };
   }
+}
+
+// ─── MARK FILES AS SAVED TO FOLDER ───
+
+export async function markFilesSaved(quoteId: string) {
+  const result = await prisma.fileLink.updateMany({
+    where: { quoteId, savedToFolder: null },
+    data: { savedToFolder: new Date() },
+  });
+  revalidatePath(`/quotes/${quoteId}`);
+  return result.count;
 }
 
 // ─── UPDATE FILELINK THUMBNAIL ───
