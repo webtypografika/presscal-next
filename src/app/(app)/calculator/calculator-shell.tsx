@@ -1623,14 +1623,34 @@ export default function CalculatorShell() {
                   const grandTotal = Math.round((subtotal + vatAmount) * 100) / 100;
                   const totalCost = items.reduce((s: number, i: any) => s + (i.cost || 0), 0);
                   const totalProfit = Math.round((subtotal - totalCost) * 100) / 100;
+                  console.log('[CALC SAVE] Writing calcData:', {
+                    impositionMode: calcDataPayload.impositionMode,
+                    impoRotation: calcDataPayload.impoRotation,
+                    impoGutter: calcDataPayload.impoGutter,
+                    impoForceUps: calcDataPayload.impoForceUps,
+                    impoForceCols: calcDataPayload.impoForceCols,
+                    impoForceRows: calcDataPayload.impoForceRows,
+                    ups: calcDataPayload.ups,
+                    machineId: calcDataPayload.machineId,
+                    paperId: calcDataPayload.paperId,
+                  });
                   await updateQuote(quoteLink.quoteId, { items, subtotal, vatRate, vatAmount, grandTotal, totalCost, totalProfit });
                   // Verify save succeeded
                   const verify = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
                   if (verify.ok) {
                     const vData = await verify.json();
                     const saved = (vData.items as any[])?.find((i: any) => i.id === (quoteLink.itemId || itemPayload.id));
+                    console.log('[CALC SAVE] Verified from DB:', {
+                      impositionMode: saved?.calcData?.impositionMode,
+                      impoRotation: saved?.calcData?.impoRotation,
+                      impoGutter: saved?.calcData?.impoGutter,
+                      ups: saved?.calcData?.ups,
+                      machineId: saved?.calcData?.machineId,
+                    });
                     if (!saved?.calcData?.impositionMode) {
-                      console.warn('Save verification: calcData missing after save', saved);
+                      alert('Προσοχή: Τα δεδομένα μοντάζ δεν αποθηκεύτηκαν σωστά. Δοκίμασε ξανά.');
+                      setSavingToQuote(false);
+                      return;
                     }
                   }
                   window.location.href = `/quotes/${quoteLink.quoteId}`;
