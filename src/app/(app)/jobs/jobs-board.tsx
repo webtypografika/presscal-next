@@ -55,57 +55,97 @@ function JobCard({ job, onDragStart, onDetail }: { job: JobQuote; onDragStart: (
   const overdue = isOverdue(job.deadline);
   const priority = job.jobPriority || 'normal';
 
+  const name = (job as any).company?.name || job.customer?.name || '—';
+  const title = job.title || desc || '';
+  const hasInvoice = !!(job as any).elorusInvoiceUrl;
+  const hasVoucher = !!(job as any).courierVoucherId;
+
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, job.id)}
       onClick={() => onDetail(job)}
+      className="quote-card-hover"
       style={{
-        padding: '10px 12px', borderRadius: 8,
+        padding: '8px 10px', borderRadius: 8,
         border: `1px solid ${overdue ? 'rgba(239,68,68,0.3)' : 'var(--border)'}`,
-        background: overdue ? 'rgba(239,68,68,0.04)' : 'rgba(255,255,255,0.02)',
+        background: overdue ? 'rgba(239,68,68,0.04)' : 'transparent',
         cursor: 'grab', transition: 'all 0.15s',
         borderLeft: `3px solid ${PRIORITY_COLORS[priority] || 'var(--text-muted)'}`,
+        marginBottom: 5,
       }}
+      onMouseEnter={e => { if (!overdue) e.currentTarget.style.background = 'rgba(255,255,255,0.025)'; }}
+      onMouseLeave={e => { if (!overdue) e.currentTarget.style.background = 'transparent'; }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent)' }}>{job.number}</span>
-        <span style={{ fontSize: '0.82rem', fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {(job as any).company?.name || job.customer?.name || '—'}
-        </span>
-        {priority === 'rush' && <i className="fas fa-bolt" style={{ color: 'var(--danger)', fontSize: '0.65rem' }} />}
-        {priority === 'urgent' && <i className="fas fa-exclamation-triangle" style={{ color: '#fb923c', fontSize: '0.6rem' }} />}
-      </div>
-
-      {desc && (
-        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {desc}{itemCount > 2 ? ` +${itemCount - 2}` : ''}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-        {job.jobFolderPath && (
-          <a
-            href={`presscal-fh://open-folder?path=${encodeURIComponent(job.jobFolderPath)}&quoteId=${job.id}`}
-            onClick={e => e.stopPropagation()}
-            title={job.jobFolderPath}
-            style={{ color: 'var(--teal)', fontSize: '0.6rem', opacity: 0.7 }}
-          >
-            <i className="fas fa-folder-open" />
-          </a>
-        )}
-        {job.deadline && (
-          <span style={{
-            fontSize: '0.65rem', fontWeight: 600,
-            color: overdue ? 'var(--danger)' : 'var(--text-muted)',
-            display: 'flex', alignItems: 'center', gap: 3,
-          }}>
-            <i className="fas fa-clock" style={{ fontSize: '0.55rem' }} />
-            {formatDate(job.deadline)}
+      {/* Row 1: quote number + badges + date/actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent)', opacity: 0.8 }}>{job.number}</span>
+        {priority === 'rush' && <i className="fas fa-bolt" style={{ color: 'var(--danger)', fontSize: '0.6rem' }} />}
+        {priority === 'urgent' && <i className="fas fa-exclamation-triangle" style={{ color: '#fb923c', fontSize: '0.55rem' }} />}
+        {hasInvoice && (
+          <span style={{ fontSize: '0.55rem', padding: '1px 5px', borderRadius: 4, background: 'rgba(74,222,128,0.15)', color: '#4ade80', fontWeight: 700 }}>
+            <i className="fas fa-file-invoice-dollar" style={{ fontSize: '0.5rem', marginRight: 2 }} />ΤΙΜ
           </span>
         )}
-        <span style={{ fontSize: '0.72rem', fontWeight: 700, marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>
-          {new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(job.grandTotal)}
+        {hasVoucher && (
+          <span style={{ fontSize: '0.55rem', padding: '1px 5px', borderRadius: 4, background: 'rgba(96,165,250,0.15)', color: '#60a5fa', fontWeight: 700 }}>
+            <i className="fas fa-truck" style={{ fontSize: '0.5rem', marginRight: 2 }} />VCH
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
+        <span className="card-date" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          {job.deadline ? formatDate(job.deadline) : ''}
+        </span>
+        <div className="card-actions" style={{ display: 'flex', gap: 2 }}>
+          {job.jobFolderPath && (
+            <a
+              href={`presscal-fh://open-folder?path=${encodeURIComponent(job.jobFolderPath)}&quoteId=${job.id}`}
+              onClick={e => e.stopPropagation()}
+              title={job.jobFolderPath}
+              style={{
+                width: 24, height: 20, borderRadius: 4,
+                border: 'none', background: 'transparent',
+                color: 'var(--teal)', cursor: 'pointer',
+                fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(100,116,139,0.2)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <i className="fas fa-folder-open" />
+            </a>
+          )}
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (!confirm('Ολοκλήρωση εργασίας;')) return;
+              await updateJobStage(job.id, 'completed');
+              window.location.reload();
+            }}
+            style={{
+              width: 24, height: 20, borderRadius: 4,
+              border: 'none', background: 'transparent',
+              color: '#64748b', cursor: 'pointer',
+              fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#4ade80'; e.currentTarget.style.background = 'rgba(74,222,128,0.1)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = 'transparent'; }}
+            title="Ολοκλήρωση"
+          >
+            <i className="fas fa-check" />
+          </button>
+        </div>
+      </div>
+      {/* Row 2: customer */}
+      <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+      {/* Row 3: title/description + amount */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        {title ? (
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+            {title}{itemCount > 2 ? ` +${itemCount - 2}` : ''}
+          </div>
+        ) : <span style={{ flex: 1 }} />}
+        <span style={{ fontSize: '0.85rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+          {job.grandTotal > 0 ? new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(job.grandTotal) : ''}
         </span>
       </div>
     </div>
