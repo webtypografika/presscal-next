@@ -1196,7 +1196,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               )}
 
               {/* File grid with thumbnails */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
                 {((quote as any).fileLinks as any[] || []).map((fl: any) => {
                   const isImage = /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/i.test(fl.fileName);
                   // For email-sourced files: parse messageId/attId for PressKit deep link
@@ -1210,11 +1210,14 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                     : fl.filePath;
                   return (
                     <div key={fl.id} style={{
-                      borderRadius: 8, border: '1px solid var(--border)', overflow: 'hidden',
-                      background: 'rgba(255,255,255,0.02)',
-                    }}>
+                      borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden',
+                      background: 'rgba(255,255,255,0.02)', transition: 'border-color 0.15s',
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                    >
                       {/* Thumbnail / icon */}
-                      <a href={pressKitHref} style={{ display: 'block', height: 80, background: 'rgba(0,0,0,0.15)', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
+                      <a href={pressKitHref} style={{ display: 'block', height: 100, background: 'rgba(0,0,0,0.12)', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
                         {fl.thumbnail ? (
                           <img src={fl.thumbnail} alt={fl.fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : isImage && fl.filePath.startsWith('/storage/') ? (
@@ -1228,28 +1231,34 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                           }} />
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                            <i className={`fas ${attIcon(fl.fileName)}`} style={{ fontSize: '1.5rem', color: '#f58220', opacity: 0.6 }} />
+                            <i className={`fas ${attIcon(fl.fileName)}`} style={{ fontSize: '1.8rem', color: '#f58220', opacity: 0.5 }} />
                           </div>
                         )}
                       </a>
                       {/* Name + actions */}
-                      <div style={{ padding: '5px 6px' }}>
-                        <div style={{ fontSize: '0.65rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-dim)', marginBottom: 4 }}>
+                      <div style={{ padding: '6px 8px' }}>
+                        <div title={fl.fileName} style={{ fontSize: '0.72rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-dim)', marginBottom: 5 }}>
                           {fl.fileName}
                         </div>
                         <div style={{ display: 'flex', gap: 4 }}>
                           <a href={webDownloadHref} download={fl.fileName} title="Download" style={{
-                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            padding: '3px', borderRadius: 4, border: '1px solid var(--border)',
-                            color: 'var(--text-muted)', fontSize: '0.6rem', textDecoration: 'none',
-                          }}>
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            padding: '4px', borderRadius: 5, border: '1px solid var(--border)',
+                            color: 'var(--text-muted)', fontSize: '0.65rem', textDecoration: 'none',
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                          >
                             <i className="fas fa-download" />
                           </a>
-                          <a href={pressKitHref} title="PressKit" style={{
-                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            padding: '3px', borderRadius: 4, border: '1px solid var(--border)',
-                            color: '#f58220', fontSize: '0.6rem', textDecoration: 'none',
-                          }}>
+                          <a href={pressKitHref} title="Άνοιγμα στο PressKit" style={{
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                            padding: '4px', borderRadius: 5, border: '1px solid rgba(245,130,32,0.3)',
+                            color: '#f58220', fontSize: '0.65rem', textDecoration: 'none',
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.08)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                          >
                             <i className="fas fa-external-link-alt" />
                           </a>
                         </div>
@@ -1259,32 +1268,37 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 })}
               </div>
 
-              {/* Bulk Helper button */}
+              {/* Bulk Helper buttons */}
               {(quote as any).fileLinks?.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
                   <a
                     href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=global`}
                     style={{
-                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                      padding: '8px', borderRadius: 8,
-                      background: '#f58220', color: '#fff', fontSize: '0.72rem', fontWeight: 700,
-                      textDecoration: 'none',
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '9px', borderRadius: 8,
+                      border: '1px solid rgba(245,130,32,0.4)', background: 'rgba(245,130,32,0.08)',
+                      color: '#f58220', fontSize: '0.75rem', fontWeight: 600,
+                      textDecoration: 'none', transition: 'all 0.15s',
                     }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.15)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.08)'; }}
                   >
-                    <i className="fas fa-folder-open" style={{ fontSize: '0.6rem' }} /> Φάκελος Εργασιών
+                    <i className="fas fa-folder-open" style={{ fontSize: '0.65rem' }} /> Φάκελος Εργασιών
                   </a>
                   {(selectedCompany as any)?.folderPath && (
                     <a
                       href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer`}
                       style={{
-                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                        padding: '8px', borderRadius: 8,
-                        border: '1px solid #f58220', background: 'transparent',
-                        color: '#f58220', fontSize: '0.72rem', fontWeight: 700,
-                        textDecoration: 'none',
+                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                        padding: '9px', borderRadius: 8,
+                        border: '1px solid var(--border)', background: 'transparent',
+                        color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600,
+                        textDecoration: 'none', transition: 'all 0.15s',
                       }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                     >
-                      <i className="fas fa-user" style={{ fontSize: '0.6rem' }} /> Φάκελος Πελάτη
+                      <i className="fas fa-user" style={{ fontSize: '0.65rem' }} /> Φάκελος Πελάτη
                     </a>
                   )}
                 </div>
