@@ -496,13 +496,25 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       if (!res.ok) return
       const data = await res.json()
       if (!data.items) return
-      setItems(prev => prev.map(item => {
-        const remote = (data.items as any[]).find((r: any) => r.id === item.id)
-        if (remote?.linkedFile && JSON.stringify(remote.linkedFile) !== JSON.stringify(item.linkedFile)) {
-          return { ...item, linkedFile: remote.linkedFile }
-        }
-        return item
-      }))
+      setItems(prev => {
+        let changed = false;
+        const updated = prev.map(item => {
+          const remote = (data.items as any[]).find((r: any) => r.id === item.id)
+          if (!remote) return item;
+          const linkedChanged = remote.linkedFile && JSON.stringify(remote.linkedFile) !== JSON.stringify(item.linkedFile);
+          const calcChanged = remote.calcData?.machineId && JSON.stringify(remote.calcData) !== JSON.stringify(item.calcData);
+          if (linkedChanged || calcChanged) {
+            changed = true;
+            return {
+              ...item,
+              ...(linkedChanged ? { linkedFile: remote.linkedFile } : {}),
+              ...(calcChanged ? { calcData: remote.calcData, cost: remote.cost, unitPrice: remote.unitPrice, finalPrice: remote.finalPrice, profit: remote.profit } : {}),
+            };
+          }
+          return item;
+        });
+        return changed ? updated : prev;
+      })
     } catch {}
   }, [quote.id])
 
@@ -514,20 +526,25 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       // Clean URL
       window.history.replaceState({}, '', `/quotes/${quote.id}`)
     }
-  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+    // Poll for linkedFile changes every 5s (PressKit writes directly to DB)
+    const poll = setInterval(refreshLinkedFiles, 5000);
+    return () => clearInterval(poll);
+  }, [refreshLinkedFiles])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-fetch quote on tab focus (picks up jobFolderPath, linkedFiles from FileHelper)
+  // Re-fetch quote + items on tab focus (picks up jobFolderPath, linkedFiles, calcData from FileHelper/Calculator)
   useEffect(() => {
     const onFocus = async () => {
       try {
         const { getQuote } = await import('../actions');
         const fresh = await getQuote(quote.id);
         if (fresh) setQuote(fresh as any);
+        // Also refresh items to pick up linkedFiles written by PressKit
+        await refreshLinkedFiles();
       } catch {}
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [quote.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [quote.id, refreshLinkedFiles]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!mountedRef.current) return;
