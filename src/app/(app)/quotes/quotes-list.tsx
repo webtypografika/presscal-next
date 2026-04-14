@@ -548,7 +548,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
       padding: 20,
     }}>
       <div onClick={e => e.stopPropagation()} style={{
-        width: showNewCust ? 560 : 400,
+        width: showNewCust ? 620 : 520,
         maxHeight: 'calc(100vh - 40px)',
         display: 'flex', flexDirection: 'column',
         background: 'var(--bg-elevated)', border: '1px solid var(--border)',
