@@ -617,6 +617,7 @@ export default function CalculatorShell() {
   // saving to the wrong quote if the user navigates via sidebar)
   const [quoteLink, setQuoteLink] = useState<{ quoteId: string; itemId: string; desc: string; quoteNumber: string } | null>(null);
   const [linkedFile, setLinkedFile] = useState<{ path: string; name: string } | null>(null);
+  const [savingToQuote, setSavingToQuote] = useState(false);
 
   const togglePanel = useCallback((key: 'machine' | 'paper' | 'job' | 'color' | 'finish' | 'mode-settings') => {
     setActivePanel(key);
@@ -1525,7 +1526,9 @@ export default function CalculatorShell() {
             <div style={{ fontSize: '0.6rem', color: '#94a3b8' }}>€{fmt(pricePerUnit)}/τεμ · κέρδος €{fmt(profitAmount)}</div>
           </div>
           <button
+            disabled={savingToQuote}
             onClick={async () => {
+              setSavingToQuote(true);
               const calcDataPayload = {
                 archetype: job.archetype,
                 width: job.width,
@@ -1631,19 +1634,21 @@ export default function CalculatorShell() {
                 }
               } catch (e) {
                 console.error('Save to quote error:', e);
+                setSavingToQuote(false);
                 alert('Σφάλμα αποθήκευσης: ' + (e as Error).message);
               }
             }}
             title={quoteLink ? 'Αποθήκευση προδιαγραφών στο item της προσφοράς' : 'Δημιουργία νέας προσφοράς με αυτό το είδος'}
             style={{
               padding: '7px 14px', borderRadius: 7,
-              background: 'var(--accent)', color: '#fff', border: 'none',
-              fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+              background: savingToQuote ? 'rgba(245,130,32,0.5)' : 'var(--accent)', color: '#fff', border: 'none',
+              fontSize: '0.72rem', fontWeight: 600, cursor: savingToQuote ? 'wait' : 'pointer',
               display: 'flex', alignItems: 'center', gap: 5,
               boxShadow: '0 2px 12px rgba(245,130,32,0.3)', transition: 'all 0.2s', flexShrink: 0,
+              opacity: savingToQuote ? 0.7 : 1,
             }}
           >
-            <i className="fas fa-save" /> Αποθήκευση
+            <i className={savingToQuote ? 'fas fa-spinner fa-spin' : 'fas fa-save'} /> {savingToQuote ? 'Αποθήκευση...' : 'Αποθήκευση'}
           </button>
           {/* PDF Export dropdown */}
           <div style={{ position: 'relative', flexShrink: 0 }} ref={pdfBtnRef}>
