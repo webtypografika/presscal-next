@@ -618,6 +618,7 @@ export default function CalculatorShell() {
   const [quoteLink, setQuoteLink] = useState<{ quoteId: string; itemId: string; desc: string; quoteNumber: string } | null>(null);
   const [linkedFile, setLinkedFile] = useState<{ path: string; name: string } | null>(null);
   const [savingToQuote, setSavingToQuote] = useState(false);
+  const firstPdfLoad = useRef(true); // true until first PDF is loaded
 
   const togglePanel = useCallback((key: 'machine' | 'paper' | 'job' | 'color' | 'finish' | 'mode-settings') => {
     setActivePanel(key);
@@ -638,8 +639,14 @@ export default function CalculatorShell() {
       setPdf(parsed);
       // Start at 1-UP on every new PDF — user asks for it as a deliberate default,
       // then grows the grid manually via the canvas handle.
-      setImpoForceCols(1);
-      setImpoForceRows(1);
+      // BUT: skip reset on first PDF load when restoring from a quote
+      // (prefill already set the correct cols/rows from calcData).
+      const isRestore = firstPdfLoad.current && prefillDone.current;
+      firstPdfLoad.current = false;
+      if (!isRestore) {
+        setImpoForceCols(1);
+        setImpoForceRows(1);
+      }
       if (parsed.pageSizes.length > 0) {
         const pg = parsed.pageSizes[0];
         setJob(prev => ({
