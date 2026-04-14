@@ -17,7 +17,7 @@ export default function LoginPage() {
         textAlign: 'center',
       }}>
         {/* Logo */}
-        <img src="/logo-presscal.png" alt="PressCal" style={{ height: 56, marginBottom: 24 }} />
+        <img src="/logo-presscal.png" alt="PressCal" style={{ height: 56, marginBottom: 24, display: 'block', margin: '0 auto 24px' }} />
 
         <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f1f5f9', marginBottom: 8 }}>
           Καλώς ήρθατε
