@@ -922,6 +922,7 @@ function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinke
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<'quote' | 'office'>('quote');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'sent' | 'approved'>('all');
   const [search, setSearch] = useState('');
   const [quotes, setQuotes] = useState<any[]>([]);
   const [officeProjects, setOfficeProjects] = useState<any[]>([]);
@@ -939,7 +940,7 @@ function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinke
           import('../quotes/actions').then(m => m.getQuotes()),
           import('../office/actions').then(m => m.getProjects()),
         ]);
-        setQuotes(quotesRes.filter(q => q.status !== 'cancelled').slice(0, 50));
+        setQuotes(quotesRes.filter(q => ['draft', 'new', 'editing', 'sent', 'approved', 'partial'].includes(q.status)));
         setOfficeProjects(projectsRes.filter((p: any) => !p.archived));
       } catch {}
       setLoading(false);
@@ -1004,11 +1005,19 @@ function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinke
     setCreating(false);
   };
 
-  const filteredQuotes = quotes.filter(q =>
-    !search || q.number?.toLowerCase().includes(search.toLowerCase())
-    || q.title?.toLowerCase().includes(search.toLowerCase())
-    || q.company?.name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const STATUS_GROUPS: Record<string, string[]> = {
+    all: ['draft', 'new', 'editing', 'sent', 'approved', 'partial'],
+    active: ['draft', 'new', 'editing'],
+    sent: ['sent'],
+    approved: ['approved', 'partial'],
+  };
+  const filteredQuotes = quotes.filter(q => {
+    if (!STATUS_GROUPS[statusFilter].includes(q.status)) return false;
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return q.number?.toLowerCase().includes(s) || q.title?.toLowerCase().includes(s)
+      || q.company?.name?.toLowerCase().includes(s) || q.contact?.name?.toLowerCase().includes(s);
+  });
 
   const filteredItems = officeItems.filter(i =>
     !search || i.title?.toLowerCase().includes(search.toLowerCase())
@@ -1017,13 +1026,13 @@ function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinke
   return createPortal(
     <div ref={ref} style={{
       position: 'fixed', top: pos.top, left: pos.left, zIndex: 99999,
-      width: 300, background: 'var(--bg-elevated)',
+      width: 420, background: 'var(--bg-elevated)',
       border: '1px solid var(--border)', borderRadius: 10,
       boxShadow: '0 8px 24px rgba(0,0,0,0.4)', overflow: 'hidden',
     }}>
       {/* Header */}
       <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '0.78rem', fontWeight: 700 }}>Σύνδεση email σε...</span>
+        <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Σύνδεση email σε...</span>
         <button onClick={onClose} style={{ border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.7rem' }}>
           <i className="fas fa-times" />
         </button>
@@ -1039,11 +1048,11 @@ function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinke
             flex: 1, padding: '8px 0', border: 'none', cursor: 'pointer',
             background: tab === t.id ? 'rgba(255,255,255,0.04)' : 'transparent',
             color: tab === t.id ? t.color : 'var(--text-muted)',
-            fontSize: '0.72rem', fontWeight: 700, fontFamily: 'inherit',
+            fontSize: '0.8rem', fontWeight: 700, fontFamily: 'inherit',
             borderBottom: tab === t.id ? `2px solid ${t.color}` : '2px solid transparent',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
           }}>
-            <i className={`fas ${t.icon}`} style={{ fontSize: '0.6rem' }} />{t.label}
+            <i className={`fas ${t.icon}`} style={{ fontSize: '0.65rem' }} />{t.label}
           </button>
         ))}
       </div>
@@ -1057,13 +1066,35 @@ function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinke
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={tab === 'quote' ? 'Αναζήτηση προσφοράς...' : 'Αναζήτηση item...'}
-            style={{ flex: 1, border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.72rem', outline: 'none', fontFamily: 'inherit' }}
+            style={{ flex: 1, border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.8rem', outline: 'none', fontFamily: 'inherit' }}
           />
         </div>
       </div>
 
+      {/* Status filter tabs (quote tab only) */}
+      {tab === 'quote' && (
+        <div style={{ display: 'flex', gap: 0, padding: '4px 10px', borderBottom: '1px solid var(--border)' }}>
+          {([
+            { id: 'all' as const, label: 'Όλες' },
+            { id: 'active' as const, label: 'Ενεργές' },
+            { id: 'sent' as const, label: 'Εστάλησαν' },
+            { id: 'approved' as const, label: 'Εγκρίθηκαν' },
+          ]).map(f => (
+            <button key={f.id} onClick={() => setStatusFilter(f.id)} style={{
+              flex: 1, padding: '4px 0', border: 'none', cursor: 'pointer',
+              background: statusFilter === f.id ? 'rgba(255,255,255,0.06)' : 'transparent',
+              color: statusFilter === f.id ? 'var(--text)' : 'var(--text-muted)',
+              fontSize: '0.7rem', fontWeight: 600, fontFamily: 'inherit',
+              borderRadius: 4,
+            }}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Content */}
-      <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+      <div style={{ maxHeight: 300, overflowY: 'auto' }}>
         {loading ? (
           <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.72rem' }}><i className="fas fa-spinner fa-spin" /></div>
         ) : tab === 'quote' ? (
@@ -1077,8 +1108,14 @@ function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinke
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             >
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--accent)' }}>{q.number}</div>
-              <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>{q.title || q.company?.name || '---'}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent)' }}>{q.number}</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text)' }}>{q.company?.name || q.contact?.name || ''}</span>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>
+                {q.title || (Array.isArray(q.items) ? (q.items as any[]).map((i: any) => i.name).filter(Boolean).join(' · ') : '') || '—'}
+                {q.grandTotal > 0 ? ` — ${q.grandTotal.toLocaleString('el-GR', { style: 'currency', currency: 'EUR' })}` : ''}
+              </div>
             </button>
           ))
         ) : (
@@ -1144,19 +1181,19 @@ function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinke
       <div style={{ borderTop: '1px solid var(--border)', padding: '8px 10px', display: 'flex', gap: 6 }}>
         <button onClick={handleCreateQuote} disabled={creating} style={{
           flex: 1, padding: '7px 0', borderRadius: 6, border: 'none',
-          background: 'var(--accent)', color: '#fff', fontSize: '0.65rem', fontWeight: 700,
+          background: 'var(--accent)', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
           cursor: 'pointer', opacity: creating ? 0.5 : 1, fontFamily: 'inherit',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
         }}>
-          <i className="fas fa-plus" style={{ fontSize: '0.5rem' }} />Νέα Προσφορά
+          <i className="fas fa-plus" style={{ fontSize: '0.55rem' }} />Νέα Προσφορά
         </button>
         <button onClick={handleCreateOfficeItem} disabled={creating} style={{
-          flex: 1, padding: '7px 0', borderRadius: 6, border: 'none',
-          background: 'var(--blue)', color: '#fff', fontSize: '0.65rem', fontWeight: 700,
+          flex: 1, padding: '8px 0', borderRadius: 6, border: 'none',
+          background: 'var(--blue)', color: '#fff', fontSize: '0.75rem', fontWeight: 700,
           cursor: 'pointer', opacity: creating ? 0.5 : 1, fontFamily: 'inherit',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
         }}>
-          <i className="fas fa-plus" style={{ fontSize: '0.5rem' }} />Νέο Γραφείο
+          <i className="fas fa-plus" style={{ fontSize: '0.55rem' }} />Νέο Γραφείο
         </button>
       </div>
     </div>,
