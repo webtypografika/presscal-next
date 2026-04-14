@@ -678,9 +678,10 @@ model FileLink {
   customer   Customer? @relation("CustomerFileLinks", fields: [customerId], references: [id])
 
   // Metadata
-  thumbnail       String?  // base64 thumbnail data
-  preflightStatus String?  // 'pass' | 'warning' | 'error'
+  thumbnail       String?    // base64 thumbnail data
+  preflightStatus String?    // 'pass' | 'warning' | 'error'
   notes           String?
+  savedToFolder   DateTime?  // when file was downloaded to job folder
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

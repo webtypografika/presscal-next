@@ -43,7 +43,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ files: links, folderPath })
+    // onlyNew=1 → return only files not yet saved to folder
+    const onlyNew = params.get('onlyNew')
+    const filtered = onlyNew ? links.filter((f: any) => !f.savedToFolder) : links
+
+    return NextResponse.json({ files: filtered, folderPath, totalCount: links.length, newCount: links.filter((f: any) => !f.savedToFolder).length })
   } catch (e) {
     console.error('filehelper files error:', e)
     return NextResponse.json({ error: (e as Error).message, stack: (e as Error).stack }, { status: 500 })
@@ -79,6 +83,31 @@ export async function POST(req: NextRequest) {
   })
 
   return NextResponse.json(link)
+}
+
+// PATCH /api/filehelper/files — Mark files as saved to folder
+export async function PATCH(req: NextRequest) {
+  const auth = await authenticateFilehelper(req)
+  if ('error' in auth) return auth.error
+
+  const { quoteId, fileIds } = await req.json()
+  if (!quoteId && !fileIds?.length) {
+    return NextResponse.json({ error: 'quoteId or fileIds required' }, { status: 400 })
+  }
+
+  const where: any = { orgId: auth.org.id, savedToFolder: null }
+  if (fileIds?.length) {
+    where.id = { in: fileIds }
+  } else if (quoteId) {
+    where.quoteId = quoteId
+  }
+
+  const result = await (prisma as any).fileLink.updateMany({
+    where,
+    data: { savedToFolder: new Date() },
+  })
+
+  return NextResponse.json({ marked: result.count })
 }
 
 // DELETE /api/filehelper/files — Delete a file link (by id in query)

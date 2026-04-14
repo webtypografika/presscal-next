@@ -1218,6 +1218,14 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                     >
                       {/* Thumbnail / icon */}
                       <a href={pressKitHref} style={{ display: 'block', height: 100, background: 'rgba(0,0,0,0.12)', position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
+                        {/* Saved/New indicator */}
+                        {fl.savedToFolder ? (
+                          <span title="Στο φάκελο εργασιών" style={{ position: 'absolute', top: 4, right: 4, zIndex: 2, width: 18, height: 18, borderRadius: '50%', background: 'rgba(22,163,106,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <i className="fas fa-check" style={{ fontSize: '0.5rem', color: '#fff' }} />
+                          </span>
+                        ) : (
+                          <span title="Νέο — δεν έχει μπει στο φάκελο" style={{ position: 'absolute', top: 4, right: 4, zIndex: 2, padding: '1px 5px', borderRadius: 4, background: 'rgba(245,130,32,0.9)', fontSize: '0.5rem', fontWeight: 700, color: '#fff' }}>ΝΕΟ</span>
+                        )}
                         {fl.thumbnail ? (
                           <img src={fl.thumbnail} alt={fl.fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : isImage && fl.filePath.startsWith('/storage/') ? (
@@ -1269,40 +1277,67 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               </div>
 
               {/* Bulk Helper buttons */}
-              {(quote as any).fileLinks?.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
-                  <a
-                    href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=global`}
-                    style={{
-                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      padding: '9px', borderRadius: 8,
-                      border: '1px solid rgba(245,130,32,0.4)', background: 'rgba(245,130,32,0.08)',
-                      color: '#f58220', fontSize: '0.75rem', fontWeight: 600,
-                      textDecoration: 'none', transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.15)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.08)'; }}
-                  >
-                    <i className="fas fa-folder-open" style={{ fontSize: '0.65rem' }} /> Φάκελος Εργασιών
-                  </a>
-                  {(selectedCompany as any)?.folderPath && (
+              {(() => {
+                const allFiles = (quote as any).fileLinks as any[] || [];
+                const newFiles = allFiles.filter((f: any) => !f.savedToFolder);
+                const newCount = newFiles.length;
+                if (allFiles.length === 0) return null;
+
+                const markAsSaved = async () => {
+                  try {
+                    await fetch('/api/filehelper/files', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ quoteId: quote.id }),
+                    });
+                    // Update local state
+                    setQuote(prev => ({
+                      ...prev,
+                      fileLinks: ((prev as any).fileLinks || []).map((f: any) => ({ ...f, savedToFolder: f.savedToFolder || new Date().toISOString() })),
+                    } as any));
+                  } catch {}
+                };
+
+                return (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
                     <a
-                      href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer`}
+                      href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${newCount > 0 && newCount < allFiles.length ? '&onlyNew=1' : ''}`}
+                      onClick={() => { setTimeout(markAsSaved, 2000); }}
                       style={{
                         flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         padding: '9px', borderRadius: 8,
-                        border: '1px solid var(--border)', background: 'transparent',
-                        color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600,
+                        border: `1px solid ${newCount > 0 ? 'rgba(245,130,32,0.5)' : 'var(--border)'}`,
+                        background: newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent',
+                        color: newCount > 0 ? '#f58220' : 'var(--text-muted)',
+                        fontSize: '0.75rem', fontWeight: 600,
                         textDecoration: 'none', transition: 'all 0.15s',
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                      onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
                     >
-                      <i className="fas fa-user" style={{ fontSize: '0.65rem' }} /> Φάκελος Πελάτη
+                      <i className="fas fa-folder-open" style={{ fontSize: '0.65rem' }} />
+                      {newCount > 0 ? `Φάκελος Εργασιών (${newCount} νέα)` : 'Φάκελος Εργασιών'}
                     </a>
-                  )}
-                </div>
-              )}
+                    {(selectedCompany as any)?.folderPath && (
+                      <a
+                        href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer${newCount > 0 && newCount < allFiles.length ? '&onlyNew=1' : ''}`}
+                        onClick={() => { setTimeout(markAsSaved, 2000); }}
+                        style={{
+                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          padding: '9px', borderRadius: 8,
+                          border: '1px solid var(--border)', background: 'transparent',
+                          color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600,
+                          textDecoration: 'none', transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                      >
+                        <i className="fas fa-user" style={{ fontSize: '0.65rem' }} /> Φάκελος Πελάτη
+                      </a>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Empty state */}
               {!((quote as any).fileLinks?.length > 0) && !(quote.linkedEmails as string[] || []).length && (
