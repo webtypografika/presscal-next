@@ -103,6 +103,8 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastSearchRef = useRef(search);
 
   // Re-fetch when search changes from parent
@@ -133,10 +135,16 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
   }, [companies.length, search]);
 
   // Debounced company save
+  const showSaved = useCallback((id: string) => {
+    setSavedId(id);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSavedId(null), 2000);
+  }, []);
+
   const debouncedSaveCompany = useCallback((id: string, data: Partial<CompanyData>) => {
     if (saveTimers.current[id]) clearTimeout(saveTimers.current[id]);
-    saveTimers.current[id] = setTimeout(() => { updateCompany(id, data as any); }, 1000);
-  }, []);
+    saveTimers.current[id] = setTimeout(() => { updateCompany(id, data as any).then(() => showSaved(id)); }, 1000);
+  }, [showSaved]);
 
   const updateCompanyField = useCallback((id: string, field: string, value: string) => {
     setCompanies(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
@@ -144,17 +152,17 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
   }, [debouncedSaveCompany]);
 
   // Debounced contact save
-  const debouncedSaveContact = useCallback((contactId: string, data: Partial<ContactData>) => {
+  const debouncedSaveContact = useCallback((contactId: string, companyId: string, data: Partial<ContactData>) => {
     const key = `c_${contactId}`;
     if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
-    saveTimers.current[key] = setTimeout(() => { updateContact(contactId, data as any); }, 1000);
-  }, []);
+    saveTimers.current[key] = setTimeout(() => { updateContact(contactId, data as any).then(() => showSaved(companyId)); }, 1000);
+  }, [showSaved]);
 
   const updateContactField = useCallback((companyId: string, contactId: string, data: Partial<ContactData>) => {
     setCompanies(prev => prev.map(c => c.id === companyId ? {
       ...c, companyContacts: c.companyContacts.map(cc => cc.contact.id === contactId ? { ...cc, contact: { ...cc.contact, ...data }, role: data.role || cc.role } : cc)
     } : c));
-    debouncedSaveContact(contactId, data);
+    debouncedSaveContact(contactId, companyId, data);
   }, [debouncedSaveContact]);
 
   const handleAddContact = useCallback(async (companyId: string) => {
@@ -200,6 +208,15 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                   style={{ ...inp, width: '100%', fontWeight: 600, fontSize: '0.95rem', padding: '5px 8px' }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                {savedId === company.id && (
+                  <span style={{
+                    fontSize: '0.68rem', color: 'var(--teal)', fontWeight: 600,
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    animation: 'fadeIn 0.2s ease',
+                  }}>
+                    <i className="fas fa-check" style={{ fontSize: '0.55rem' }} />Αποθηκεύτηκε
+                  </span>
+                )}
                 {company.folderPath ? (
                   <a href={`presscal-fh://open-folder?path=${encodeURIComponent(company.folderPath)}`} title={company.folderPath}
                     style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>

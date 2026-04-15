@@ -44,11 +44,12 @@ const roleLabels: Record<string, string> = {
   broker: 'Μεσάζων', contact: 'Επαφή', owner: 'Ιδιοκτήτης',
 };
 
-function ContactCard({ contact, allCompanies, onUpdate, onDelete }: {
+function ContactCard({ contact, allCompanies, onUpdate, onDelete, saved }: {
   contact: ContactData;
   allCompanies: { id: string; name: string }[];
   onUpdate: (id: string, data: Partial<ContactData>) => void;
   onDelete: (id: string) => void;
+  saved?: boolean;
 }) {
   const [linking, setLinking] = useState(false);
   const [linkSearch, setLinkSearch] = useState('');
@@ -87,6 +88,11 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete }: {
           style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.03)', color: '#94a3b8', fontSize: '0.72rem', cursor: 'pointer', outline: 'none' }}>
           {Object.entries(roleLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
+        {saved && (
+          <span style={{ fontSize: '0.68rem', color: 'var(--teal)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, animation: 'fadeIn 0.2s ease' }}>
+            <i className="fas fa-check" style={{ fontSize: '0.55rem' }} />Αποθηκεύτηκε
+          </span>
+        )}
         <button onClick={() => onDelete(contact.id)} title="Διαγραφή"
           style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--glass-border)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.75rem', transition: 'color 0.15s' }}
           onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
@@ -178,7 +184,15 @@ export function PeopleTab({ initialContacts, initialTotal, initialHasMore, searc
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>();
   const lastSearchRef = useRef(search);
+
+  const showSaved = useCallback((id: string) => {
+    setSavedId(id);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSavedId(null), 2000);
+  }, []);
 
   // Re-fetch when search changes from parent
   useEffect(() => {
@@ -211,8 +225,8 @@ export function PeopleTab({ initialContacts, initialTotal, initialHasMore, searc
   const debouncedSave = useCallback((id: string, data: Partial<ContactData>) => {
     const key = `c_${id}`;
     if (saveTimers.current[key]) clearTimeout(saveTimers.current[key]);
-    saveTimers.current[key] = setTimeout(() => { updateContact(id, data as any); }, 1000);
-  }, []);
+    saveTimers.current[key] = setTimeout(() => { updateContact(id, data as any).then(() => showSaved(id)); }, 1000);
+  }, [showSaved]);
 
   const handleUpdate = useCallback((id: string, data: Partial<ContactData>) => {
     setContacts(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
@@ -244,6 +258,7 @@ export function PeopleTab({ initialContacts, initialTotal, initialHasMore, searc
             allCompanies={allCompanies}
             onUpdate={handleUpdate}
             onDelete={handleDelete}
+            saved={savedId === contact.id}
           />
         ))}
       </div>
