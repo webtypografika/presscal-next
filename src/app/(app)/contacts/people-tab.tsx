@@ -130,16 +130,18 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, sa
           Προμηθευτής
         </button>
 
-        {/* Folder path */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <i className="fas fa-folder" style={{ fontSize: '0.55rem', color: contact.folderPath ? 'var(--accent)' : '#475569', flexShrink: 0 }} />
-          <input
-            value={contact.folderPath || ''}
-            onChange={v => onUpdate(contact.id, { folderPath: v.target.value } as any)}
-            placeholder="Φάκελος..."
-            style={{ ...inp, width: 160, fontSize: '0.65rem', padding: '4px 8px', borderColor: 'transparent', background: 'transparent', color: contact.folderPath ? 'var(--accent)' : '#475569' }}
-          />
-        </div>
+        {/* Folder */}
+        {contact.folderPath ? (
+          <a href={`presscal-fh://open-folder?path=${encodeURIComponent(contact.folderPath)}`} title={contact.folderPath}
+            style={{ padding: '4px 10px', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.65rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} />Φάκελος
+          </a>
+        ) : (
+          <a href={`presscal-fh://pick-folder?contactId=${contact.id}`} title="Επιλογή φακέλου"
+            style={{ padding: '4px 10px', borderRadius: 12, border: '1px dashed var(--glass-border)', background: 'transparent', color: '#475569', fontSize: '0.65rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.15s' }}>
+            <i className="fas fa-folder-plus" style={{ fontSize: '0.55rem' }} />Φάκελος
+          </a>
+        )}
 
         {/* Separator */}
         <div style={{ width: 1, height: 16, background: 'var(--glass-border)', margin: '0 2px' }} />
