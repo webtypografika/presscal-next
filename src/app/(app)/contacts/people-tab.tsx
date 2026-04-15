@@ -130,22 +130,20 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, sa
           Προμηθευτής
         </button>
 
-        {/* Folder — click to edit path */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          <i className={`fas fa-${contact.folderPath ? 'folder-open' : 'folder'}`} style={{ fontSize: '0.55rem', color: contact.folderPath ? 'var(--accent)' : '#475569', flexShrink: 0 }} />
-          <input
-            value={contact.folderPath || ''}
-            onChange={e => onUpdate(contact.id, { folderPath: e.target.value } as any)}
-            placeholder="Φάκελος πελάτη..."
-            title={contact.folderPath || ''}
-            style={{
-              background: 'transparent', border: 'none', outline: 'none',
-              color: contact.folderPath ? 'var(--accent)' : '#475569',
-              fontSize: '0.65rem', fontWeight: contact.folderPath ? 600 : 400,
-              width: 120, padding: '4px 4px', fontFamily: 'inherit',
-            }}
-          />
-        </div>
+        {/* Folder — via FileHelper */}
+        {contact.folderPath ? (
+          <a href={`presscal-fh://open-folder?path=${encodeURIComponent(contact.folderPath)}`} title={contact.folderPath}
+            style={{ padding: '4px 10px', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.65rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} />Φάκελος
+          </a>
+        ) : (
+          <a href={`presscal-fh://pick-folder?customerId=${contact.id}`} title="Επιλογή φακέλου"
+            style={{ padding: '4px 10px', borderRadius: 12, border: '1px dashed var(--glass-border)', background: 'transparent', color: '#64748b', fontSize: '0.65rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.15s', whiteSpace: 'nowrap' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--glass-border)'; e.currentTarget.style.color = '#64748b'; }}>
+            <i className="fas fa-folder-plus" style={{ fontSize: '0.55rem' }} />Φάκελος
+          </a>
+        )}
 
         {/* Separator */}
         <div style={{ width: 1, height: 16, background: 'var(--glass-border)', margin: '0 2px' }} />
