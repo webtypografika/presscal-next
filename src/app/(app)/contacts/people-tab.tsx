@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { createContact, updateContact, deleteContact, linkContactToCompany, unlinkContactFromCompany } from '../companies/actions';
+import { createQuote } from '../quotes/actions';
 import { inp, inpFocus, lbl, SectionTitle } from './shared-styles';
 
 interface CompanyLink { id: string; company: { id: string; name: string } }
@@ -44,11 +46,12 @@ const roleLabels: Record<string, string> = {
   broker: 'Μεσάζων', contact: 'Επαφή', owner: 'Ιδιοκτήτης',
 };
 
-function ContactCard({ contact, allCompanies, onUpdate, onDelete, saved }: {
+function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, saved }: {
   contact: ContactData;
   allCompanies: { id: string; name: string }[];
   onUpdate: (id: string, data: Partial<ContactData>) => void;
   onDelete: (id: string) => void;
+  onNewQuote: (contactId: string, companyId?: string) => void;
   saved?: boolean;
 }) {
   const [linking, setLinking] = useState(false);
@@ -170,7 +173,13 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, saved }: {
             <i className="fas fa-link" style={{ fontSize: '0.55rem' }} /> Link
           </button>
         )}
-        <span style={{ marginLeft: 'auto', padding: '2px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>
+        <button onClick={() => onNewQuote(contact.id, contact.companyContacts[0]?.company.id)} title="Νέα προσφορά"
+          style={{ marginLeft: 'auto', padding: '2px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit', transition: 'all 0.15s' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.12)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.06)'; }}>
+          <i className="fas fa-plus" style={{ fontSize: '0.5rem' }} />Προσφορά
+        </button>
+        <span style={{ padding: '2px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>
           {contact._count.quotes} προσφ.
         </span>
       </div>
@@ -179,6 +188,7 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, saved }: {
 }
 
 export function PeopleTab({ initialContacts, initialTotal, initialHasMore, search, allCompanies }: Props) {
+  const router = useRouter();
   const [contacts, setContacts] = useState(initialContacts);
   const [total, setTotal] = useState(initialTotal);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -247,6 +257,11 @@ export function PeopleTab({ initialContacts, initialTotal, initialHasMore, searc
     setTotal(prev => prev + 1);
   }, []);
 
+  const handleNewQuote = useCallback(async (contactId: string, companyId?: string) => {
+    const q = await createQuote({ contactId, companyId, items: [{ name: '', qty: 1, unitPrice: 0, finalPrice: 0 }] });
+    router.push(`/quotes/${q.id}`);
+  }, [router]);
+
   return (
     <>
       {/* Create button is handled by parent — this just shows items */}
@@ -258,6 +273,7 @@ export function PeopleTab({ initialContacts, initialTotal, initialHasMore, searc
             allCompanies={allCompanies}
             onUpdate={handleUpdate}
             onDelete={handleDelete}
+            onNewQuote={handleNewQuote}
             saved={savedId === contact.id}
           />
         ))}
