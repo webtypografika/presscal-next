@@ -35,6 +35,19 @@ function Field({ label, value, onChange, placeholder, type, style: extraStyle }:
   );
 }
 
+function InfoField({ label, value, style: extraStyle }: { label: string; value: string; style?: React.CSSProperties }) {
+  return (
+    <div style={extraStyle}>
+      <label style={lbl}>{label}</label>
+      <div style={{
+        padding: '9px 12px', borderRadius: 8, fontSize: '0.92rem', color: value ? '#cbd5e1' : '#374151',
+        background: 'rgba(255,255,255,0.02)', border: '1px solid transparent',
+        fontStyle: value ? 'normal' : 'italic', minHeight: 36, display: 'flex', alignItems: 'center',
+      }}>{value || '—'}</div>
+    </div>
+  );
+}
+
 const roleLabels: Record<string, string> = { employee: 'Υπάλληλος', designer: 'Γραφίστας', freelancer: 'Freelancer', broker: 'Μεσάζων', contact: 'Επαφή', owner: 'Ιδιοκτήτης' };
 
 function ContactRow({ cc, companyId, onUpdate, onRemove, onSetPrimary }: {
@@ -225,42 +238,51 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
               </div>
               <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.015)', border: '1px solid var(--glass-border)' }}>
                 <SectionTitle text="Φορολογικά" color="var(--violet)" />
-                <Field label="ΕΠΩΝΥΜΙΑ" value={company.legalName || ''} onChange={v => updateCompanyField(company.id, 'legalName', v)} placeholder="Φορολογική επωνυμία" style={{ marginBottom: 6 }} />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                  <Field label="ΑΦΜ" value={company.afm || ''} onChange={v => updateCompanyField(company.id, 'afm', v)} placeholder="—" />
-                  <Field label="ΔΟΥ" value={company.doy || ''} onChange={v => updateCompanyField(company.id, 'doy', v)} placeholder="—" />
-                  <Field label="ΔΙΕΥΘΥΝΣΗ" value={company.fiscalAddress || ''} onChange={v => updateCompanyField(company.id, 'fiscalAddress', v)} placeholder="—" />
-                  <Field label="ΠΟΛΗ" value={company.fiscalCity || ''} onChange={v => updateCompanyField(company.id, 'fiscalCity', v)} placeholder="—" />
-                  <Field label="ΤΚ" value={company.fiscalZip || ''} onChange={v => updateCompanyField(company.id, 'fiscalZip', v)} placeholder="—" />
-                </div>
-                {hasElorus && (
-                  <div style={{ marginTop: 8 }}>
-                    <ElorusAfmLookup
-                      currentAfm={company.afm || ''}
-                      currentValues={{ afm: company.afm || '', doy: company.doy || '', address: company.fiscalAddress || '', city: company.fiscalCity || '', zip: company.fiscalZip || '' }}
-                      onApply={(data: ElorusLookupResult) => {
-                        const changes: Record<string, string | null> = {};
-                        // Διακριτικός τίτλος: μόνο αν δεν υπάρχει ήδη
-                        if (data.name && !company.name) changes.name = data.name;
-                        // Φορολογική επωνυμία: πάντα
-                        if (data.name) changes.legalName = data.name;
-                        if (data.afm) changes.afm = data.afm;
-                        if (data.doy) changes.doy = data.doy;
-                        // Φορολογική διεύθυνση: πάντα
-                        if (data.address) changes.fiscalAddress = data.address;
-                        if (data.city) changes.fiscalCity = data.city;
-                        if (data.zip) changes.fiscalZip = data.zip;
-                        // Επικοινωνία: μόνο αν είναι κενά
-                        if (data.address && !company.address) changes.address = data.address;
-                        if (data.city && !company.city) changes.city = data.city;
-                        if (data.zip && !company.zip) changes.zip = data.zip;
-                        if (data.email && !company.email) changes.email = data.email;
-                        setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, ...changes } : c));
-                        updateCompany(company.id, changes as any);
-                      }}
-                      toast={() => {}}
-                    />
-                  </div>
+                {hasElorus ? (
+                  <>
+                    <InfoField label="ΕΠΩΝΥΜΙΑ" value={company.legalName || ''} style={{ marginBottom: 6 }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      <InfoField label="ΑΦΜ" value={company.afm || ''} />
+                      <InfoField label="ΔΟΥ" value={company.doy || ''} />
+                      <InfoField label="ΔΙΕΥΘΥΝΣΗ" value={company.fiscalAddress || ''} />
+                      <InfoField label="ΠΟΛΗ" value={company.fiscalCity || ''} />
+                      <InfoField label="ΤΚ" value={company.fiscalZip || ''} />
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <ElorusAfmLookup
+                        currentAfm={company.afm || ''}
+                        currentValues={{ afm: company.afm || '', doy: company.doy || '', address: company.fiscalAddress || '', city: company.fiscalCity || '', zip: company.fiscalZip || '' }}
+                        onApply={(data: ElorusLookupResult) => {
+                          const changes: Record<string, string | null> = {};
+                          if (data.name && !company.name) changes.name = data.name;
+                          if (data.name) changes.legalName = data.name;
+                          if (data.afm) changes.afm = data.afm;
+                          if (data.doy) changes.doy = data.doy;
+                          if (data.address) changes.fiscalAddress = data.address;
+                          if (data.city) changes.fiscalCity = data.city;
+                          if (data.zip) changes.fiscalZip = data.zip;
+                          if (data.address && !company.address) changes.address = data.address;
+                          if (data.city && !company.city) changes.city = data.city;
+                          if (data.zip && !company.zip) changes.zip = data.zip;
+                          if (data.email && !company.email) changes.email = data.email;
+                          setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, ...changes } : c));
+                          updateCompany(company.id, changes as any);
+                        }}
+                        toast={() => {}}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Field label="ΕΠΩΝΥΜΙΑ" value={company.legalName || ''} onChange={v => updateCompanyField(company.id, 'legalName', v)} placeholder="Φορολογική επωνυμία" style={{ marginBottom: 6 }} />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      <Field label="ΑΦΜ" value={company.afm || ''} onChange={v => updateCompanyField(company.id, 'afm', v)} placeholder="—" />
+                      <Field label="ΔΟΥ" value={company.doy || ''} onChange={v => updateCompanyField(company.id, 'doy', v)} placeholder="—" />
+                      <Field label="ΔΙΕΥΘΥΝΣΗ" value={company.fiscalAddress || ''} onChange={v => updateCompanyField(company.id, 'fiscalAddress', v)} placeholder="—" />
+                      <Field label="ΠΟΛΗ" value={company.fiscalCity || ''} onChange={v => updateCompanyField(company.id, 'fiscalCity', v)} placeholder="—" />
+                      <Field label="ΤΚ" value={company.fiscalZip || ''} onChange={v => updateCompanyField(company.id, 'fiscalZip', v)} placeholder="—" />
+                    </div>
+                  </>
                 )}
               </div>
             </div>
