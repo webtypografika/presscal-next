@@ -40,6 +40,10 @@ export async function POST() {
         const data = await res.json();
         const match = (data.results || []).find((c: any) => c.tin === company.afm);
 
+        // Debug: log what we find
+        const allTins = (data.results || []).map((c: any) => ({ tin: c.tin, company: c.company, id: c.id }));
+        if (!match) { errors.push(`${company.afm} (${company.name}): no TIN match in ${JSON.stringify(allTins)}`); }
+
         if (match && match.company && !match.company.startsWith('ΑΦΜ ')) {
           const changes: Record<string, string> = { legalName: match.company };
 
