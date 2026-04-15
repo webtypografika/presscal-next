@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { getGmailToken } from '@/lib/gmail'
 import { authenticateFilehelper } from '../auth'
 
 // POST /api/filehelper/email/send — Send email via Gmail
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
     include: {
       accounts: {
         where: { provider: 'google' },
-        select: { access_token: true, refresh_token: true, expires_at: true }
+        select: { id: true }
       }
     }
   })
@@ -29,7 +30,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No Gmail account configured' }, { status: 400 })
   }
 
-  const account = user.accounts[0]
+  // Get a valid access token (auto-refreshes if expired)
+  const accessToken = await getGmailToken(user.id)
+  if (!accessToken) {
+    return NextResponse.json({ error: 'Gmail token expired and could not be refreshed. Please re-login to PressCal.' }, { status: 401 })
+  }
 
   // Build MIME message
   const boundary = `boundary_${Date.now()}`
@@ -67,7 +72,7 @@ export async function POST(req: NextRequest) {
   const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${account.access_token}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ raw })
