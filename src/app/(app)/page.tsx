@@ -68,19 +68,20 @@ async function fetchPendingQuotes(): Promise<QuoteItem[]> {
 
     const quotes = await prisma.quote.findMany({
       where: { orgId, deletedAt: null, status: { in: ['draft', 'sent', 'partial'] } },
-      include: { customer: { select: { name: true, email: true } }, company: { select: { name: true, email: true } } },
+      include: { customer: { select: { name: true, email: true } }, company: { select: { name: true, email: true } }, contact: { select: { name: true, email: true } } },
       orderBy: { createdAt: 'desc' },
       take: 6,
     });
 
     return quotes.map(q => {
       const sp = STATUS_PILL[q.status] || STATUS_PILL.draft;
+      const emailSender = typeof q.description === 'string' && q.description.startsWith('Email από:') ? q.description.replace('Email από:', '').trim() : null;
       return {
         id: q.id,
         num: q.number,
-        customer: (q as any).company?.name || q.customer?.name || (q as any).company?.email || q.customer?.email || '—',
+        customer: (q as any).company?.name ?? (q as any).contact?.name ?? q.customer?.name ?? (q as any).contact?.email ?? (q as any).company?.email ?? q.customer?.email ?? emailSender ?? '—',
         amount: `€${q.grandTotal.toLocaleString('el-GR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
-        desc: q.title || q.description || '-',
+        desc: q.title || (q.description && !q.description.startsWith('Email από:') ? q.description : '') || '-',
         pill: sp.pill,
         pillClass: sp.cls,
         age: daysAgo(q.createdAt),
