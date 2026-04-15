@@ -504,6 +504,7 @@ model Contact {
   org       Org      @relation(fields: [orgId], references: [id])
 
   name      String
+  isSupplier Boolean @default(false)  // Προμηθευτής / Συνεργάτης
   email     String?
   phone     String?
   mobile    String?

@@ -8,7 +8,7 @@ import { inp, inpFocus, lbl, SectionTitle } from './shared-styles';
 
 interface CompanyLink { id: string; company: { id: string; name: string } }
 interface ContactData {
-  id: string; name: string; email: string | null; phone: string | null;
+  id: string; name: string; isSupplier: boolean; email: string | null; phone: string | null;
   mobile: string | null; role: string; notes: string; folderPath: string | null;
   companyContacts: CompanyLink[];
   _count: { quotes: number };
@@ -111,33 +111,54 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, sa
         <Field label="ΚΙΝΗΤΟ" value={contact.mobile || ''} onChange={v => onUpdate(contact.id, { mobile: v })} />
       </div>
 
-      {/* Row 3: Folder — always visible. For contacts linked to a company,
-           the company folder takes precedence during quote costing. */}
-      <div style={{ marginBottom: 10 }}>
-        <Field
-          label="ΦΑΚΕΛΟΣ ΠΕΛΑΤΗ"
-          value={contact.folderPath || ''}
-          onChange={v => onUpdate(contact.id, { folderPath: v } as any)}
-          placeholder={contact.companyContacts.length > 0
-            ? 'Προαιρετικό — υπερισχύει ο φάκελος της εταιρείας'
-            : 'π.χ. D:\\Πελάτες\\Παπαδόπουλος'}
-        />
-      </div>
+      {/* Row 3: Toolbar — supplier, folder, companies, quote */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--glass-border)' }}>
+        {/* Supplier toggle */}
+        <button
+          onClick={() => onUpdate(contact.id, { isSupplier: !contact.isSupplier } as any)}
+          title={contact.isSupplier ? 'Προμηθευτής ✓' : 'Σήμανση ως προμηθευτής'}
+          style={{
+            padding: '4px 10px', borderRadius: 12,
+            border: `1px solid ${contact.isSupplier ? 'color-mix(in srgb, var(--teal) 40%, transparent)' : 'var(--glass-border)'}`,
+            background: contact.isSupplier ? 'color-mix(in srgb, var(--teal) 10%, transparent)' : 'transparent',
+            color: contact.isSupplier ? 'var(--teal)' : '#475569',
+            fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.2s', whiteSpace: 'nowrap',
+          }}
+        >
+          <i className={`fas fa-${contact.isSupplier ? 'check-circle' : 'truck'}`} style={{ fontSize: '0.55rem' }} />
+          Προμηθευτής
+        </button>
 
-      {/* Row 4: Linked companies + quote count */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.62rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.04em', textTransform: 'uppercase' as const }}>Εταιρείες:</span>
+        {/* Folder link */}
+        {contact.folderPath ? (
+          <a href={`presscal-fh://open-folder?path=${encodeURIComponent(contact.folderPath)}`} title={contact.folderPath}
+            style={{ padding: '4px 10px', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.65rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} />Φάκελος
+          </a>
+        ) : (
+          <a href={`presscal-fh://pick-folder?contactId=${contact.id}`} title="Επιλογή φακέλου"
+            style={{ padding: '4px 10px', borderRadius: 12, border: '1px dashed var(--glass-border)', background: 'transparent', color: '#475569', fontSize: '0.65rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.15s' }}>
+            <i className="fas fa-folder-plus" style={{ fontSize: '0.55rem' }} />Φάκελος
+          </a>
+        )}
+
+        {/* Separator */}
+        <div style={{ width: 1, height: 16, background: 'var(--glass-border)', margin: '0 2px' }} />
+
+        {/* Linked companies */}
         {contact.companyContacts.map(cc => (
           <span key={cc.id} style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
-            padding: '2px 8px', borderRadius: 12,
+            padding: '4px 10px', borderRadius: 12,
             background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
             border: '1px solid color-mix(in srgb, var(--blue) 20%, transparent)',
-            fontSize: '0.72rem', color: 'var(--blue)', fontWeight: 600,
+            fontSize: '0.65rem', color: 'var(--blue)', fontWeight: 600,
           }}>
+            <i className="fas fa-building" style={{ fontSize: '0.5rem' }} />
             {cc.company.name}
             <button onClick={() => handleUnlink(cc.company.id)} title="Αποσύνδεση"
-              style={{ border: 'none', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.6rem', padding: '0 2px', opacity: 0.6 }}>
+              style={{ border: 'none', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', fontSize: '0.55rem', padding: '0 2px', opacity: 0.6 }}>
               <i className="fas fa-times" />
             </button>
           </span>
@@ -146,7 +167,7 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, sa
           <div style={{ position: 'relative' }}>
             <input value={linkSearch} onChange={e => setLinkSearch(e.target.value)} autoFocus
               placeholder="Εταιρεία..."
-              style={{ ...inp, width: 160, fontSize: '0.75rem', padding: '3px 8px' }}
+              style={{ ...inp, width: 160, fontSize: '0.72rem', padding: '4px 8px' }}
               onKeyDown={e => { if (e.key === 'Escape') { setLinking(false); setLinkSearch(''); } }}
             />
             {linkSearch && filteredCompanies.length > 0 && (
@@ -169,19 +190,23 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, sa
           </div>
         ) : (
           <button onClick={() => setLinking(true)}
-            style={{ padding: '2px 8px', borderRadius: 12, border: '1px dashed color-mix(in srgb, var(--blue) 30%, transparent)', background: 'transparent', color: '#64748b', fontSize: '0.68rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <i className="fas fa-link" style={{ fontSize: '0.55rem' }} /> Link
+            style={{ padding: '4px 10px', borderRadius: 12, border: '1px dashed color-mix(in srgb, var(--blue) 30%, transparent)', background: 'transparent', color: '#64748b', fontSize: '0.65rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit' }}>
+            <i className="fas fa-link" style={{ fontSize: '0.5rem' }} />Εταιρεία
           </button>
         )}
-        <button onClick={() => onNewQuote(contact.id, contact.companyContacts[0]?.company.id)} title="Νέα προσφορά"
-          style={{ marginLeft: 'auto', padding: '2px 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit', transition: 'all 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.12)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.06)'; }}>
-          <i className="fas fa-plus" style={{ fontSize: '0.5rem' }} />Προσφορά
-        </button>
-        <span style={{ padding: '2px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>
-          {contact._count.quotes} προσφ.
-        </span>
+
+        {/* Right side: quote button + count */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={() => onNewQuote(contact.id, contact.companyContacts[0]?.company.id)} title="Νέα προσφορά"
+            style={{ padding: '4px 12px', borderRadius: 12, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit', transition: 'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.06)'; }}>
+            <i className="fas fa-plus" style={{ fontSize: '0.5rem' }} />Προσφορά
+          </button>
+          <span style={{ padding: '4px 10px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600 }}>
+            {contact._count.quotes} προσφ.
+          </span>
+        </div>
       </div>
     </div>
   );
