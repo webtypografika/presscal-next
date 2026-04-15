@@ -259,7 +259,7 @@ export async function linkEmailToQuote(quoteId: string, messageId: string, threa
   let linked = quote.linkedEmails || [];
   let senderDescription: string | undefined;
 
-  // Try to fetch all messages in the thread so the full conversation is linked
+  // Try to fetch related messages in the thread (same participants only)
   try {
     const { getGmailToken, getThread, getMessage } = await import('@/lib/gmail');
     const { getServerSession } = await import('next-auth');
@@ -269,17 +269,39 @@ export async function linkEmailToQuote(quoteId: string, messageId: string, threa
     if (userId) {
       const token = await getGmailToken(userId);
       if (token) {
+        // Get the clicked message to extract its participants
+        const clickedMsg = await getMessage(token, messageId);
+        const extractEmail = (s: string) => {
+          const m = s.match(/<([^>]+)>/);
+          return (m ? m[1] : s).toLowerCase().trim();
+        };
+        const clickedParticipants = new Set<string>();
+        if (clickedMsg?.from) clickedParticipants.add(extractEmail(clickedMsg.from));
+        for (const to of (clickedMsg?.to || '').split(',')) {
+          const e = extractEmail(to);
+          if (e && e.includes('@')) clickedParticipants.add(e);
+        }
+
+        // Only link thread messages that share at least one external participant
         const threadMsgIds = await getThread(token, threadId);
         for (const id of threadMsgIds) {
-          if (!linked.includes(id)) linked.push(id);
+          if (linked.includes(id)) continue;
+          if (id === messageId) { linked.push(id); continue; }
+          try {
+            const tmsg = await getMessage(token, id);
+            const msgFrom = tmsg?.from ? extractEmail(tmsg.from) : '';
+            const msgTo = (tmsg?.to || '').split(',').map((t: string) => extractEmail(t));
+            const allAddrs = [msgFrom, ...msgTo].filter(Boolean);
+            // Check if any participant overlaps with the clicked email's participants
+            const hasOverlap = allAddrs.some(a => clickedParticipants.has(a));
+            if (hasOverlap) linked.push(id);
+          } catch { /* skip individual message errors */ }
         }
-        // If quote has no company/contact and no description, save sender info
-        if (!quote.companyId && !quote.contactId && !quote.description) {
-          const msg = await getMessage(token, messageId);
-          if (msg?.from) {
-            const senderName = msg.from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
-            senderDescription = `Email από: ${senderName}`;
-          }
+
+        // Save sender info if quote has no company/contact
+        if (!quote.companyId && !quote.contactId && !quote.description && clickedMsg?.from) {
+          const senderName = clickedMsg.from.replace(/<[^>]+>/, '').replace(/"/g, '').trim();
+          senderDescription = `Email από: ${senderName}`;
         }
       }
     }
