@@ -26,53 +26,63 @@ export async function POST() {
 
     let updated = 0;
     let notFound = 0;
-    const errors: string[] = [];
+    const details: string[] = [];
 
     for (const company of companies) {
       if (!company.afm) continue;
       try {
+        // Search Elorus by AFM
         const res = await fetch(
           `${ELORUS_BASE}/v1.2/contacts/?search=${company.afm}&page_size=5&is_client=true`,
           { headers: hdrs },
         );
-        if (!res.ok) { errors.push(`${company.afm}: HTTP ${res.status}`); continue; }
+        if (!res.ok) { details.push(`${company.afm}: HTTP ${res.status}`); continue; }
 
         const data = await res.json();
-        const match = (data.results || []).find((c: any) => c.tin === company.afm);
+        const results = data.results || [];
 
-        // Debug: log what we find
-        const allTins = (data.results || []).map((c: any) => ({ tin: c.tin, company: c.company, id: c.id }));
-        if (!match) { errors.push(`${company.afm} (${company.name}): no TIN match in ${JSON.stringify(allTins)}`); }
+        // Try exact TIN match first, then take single result if only one
+        let match = results.find((c: any) => c.tin === company.afm);
+        if (!match && results.length === 1) {
+          match = results[0]; // AFM search returned exactly 1 result — use it
+        }
 
         if (match && match.company && !match.company.startsWith('ΑΦΜ ')) {
-          const changes: Record<string, string> = { legalName: match.company };
+          // Fetch full contact detail to get addresses
+          const detailRes = await fetch(
+            `${ELORUS_BASE}/v1.2/contacts/${match.id}/`,
+            { headers: hdrs },
+          );
+          const full = detailRes.ok ? await detailRes.json() : match;
 
-          // Also fill fiscal address from Elorus if available
-          const addr = Array.isArray(match.addresses) ? match.addresses[0] : null;
+          const changes: Record<string, string> = { legalName: full.company || match.company };
+
+          // Fill fiscal address from detail
+          const addr = Array.isArray(full.addresses) && full.addresses.length > 0 ? full.addresses[0] : null;
           if (addr) {
             if (addr.address) changes.fiscalAddress = addr.address;
             if (addr.city) changes.fiscalCity = addr.city;
             if (addr.zip) changes.fiscalZip = addr.zip;
           }
 
-          // Store elorusContactId if not already stored
           await prisma.company.update({
             where: { id: company.id },
             data: { ...changes, elorusContactId: match.id },
           });
+          details.push(`✓ ${company.afm} → ${changes.legalName}${addr ? ` (${addr.address}, ${addr.city})` : ''}`);
           updated++;
         } else {
+          details.push(`✗ ${company.afm} (${company.name}): not found in Elorus`);
           notFound++;
         }
 
-        // Small delay to avoid rate limiting
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 250));
       } catch (e) {
-        errors.push(`${company.afm}: ${(e as Error).message}`);
+        details.push(`✗ ${company.afm}: ${(e as Error).message}`);
       }
     }
 
-    return NextResponse.json({ total: companies.length, updated, notFound, errors });
+    return NextResponse.json({ total: companies.length, updated, notFound, details });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
