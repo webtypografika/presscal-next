@@ -458,12 +458,16 @@ model Company {
   orgId     String
   org       Org      @relation(fields: [orgId], references: [id])
 
-  name      String            // Επωνυμία
+  name      String            // Διακριτικός τίτλος
+  legalName String?           // Φορολογική επωνυμία (από TaxisNet)
   afm       String?           // ΑΦΜ
   doy       String?           // ΔΟΥ
-  address   String?
+  address   String?           // Διεύθυνση αποστολής / επικοινωνίας
   city      String?
   zip       String?
+  fiscalAddress String?       // Φορολογική διεύθυνση (από TaxisNet)
+  fiscalCity    String?
+  fiscalZip     String?
   phone     String?           // Company phone
   email     String?           // Company general email
   website   String?

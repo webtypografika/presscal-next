@@ -8,9 +8,10 @@ import { inp, inpFocus, lbl, SectionTitle } from './shared-styles';
 interface ContactData { id: string; name: string; email: string | null; phone: string | null; mobile: string | null; role: string }
 interface CCData { id: string; role: string; isPrimary: boolean; contact: ContactData }
 interface CompanyData {
-  id: string; name: string; afm: string | null; doy: string | null; email: string | null; phone: string | null;
-  website: string | null; address: string | null; city: string | null; zip: string | null; notes: string;
-  folderPath: string | null; tags: string[]; companyContacts: CCData[]; _count: { quotes: number };
+  id: string; name: string; legalName: string | null; afm: string | null; doy: string | null; email: string | null; phone: string | null;
+  website: string | null; address: string | null; city: string | null; zip: string | null;
+  fiscalAddress: string | null; fiscalCity: string | null; fiscalZip: string | null;
+  notes: string; folderPath: string | null; tags: string[]; companyContacts: CCData[]; _count: { quotes: number };
 }
 
 interface Props { initialCompanies: CompanyData[]; initialTotal: number; initialHasMore: boolean; hasElorus?: boolean; search: string }
@@ -180,8 +181,11 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: 'var(--blue)', fontSize: '0.8rem', fontWeight: 700,
               }}>{company.name.charAt(0).toUpperCase()}</div>
-              <input value={company.name} onChange={e => updateCompanyField(company.id, 'name', e.target.value)}
-                style={{ ...inp, flex: 1, fontWeight: 600, fontSize: '0.95rem', padding: '5px 8px' }} />
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: '0.58rem', fontWeight: 600, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' as const, marginBottom: 2, display: 'block' }}>Διακριτικός Τίτλος</label>
+                <input value={company.name} onChange={e => updateCompanyField(company.id, 'name', e.target.value)}
+                  style={{ ...inp, width: '100%', fontWeight: 600, fontSize: '0.95rem', padding: '5px 8px' }} />
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                 {company.folderPath ? (
                   <a href={`presscal-fh://open-folder?path=${encodeURIComponent(company.folderPath)}`} title={company.folderPath}
@@ -215,29 +219,41 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                   <Field label="ΤΗΛΕΦΩΝΟ" value={company.phone || ''} onChange={v => updateCompanyField(company.id, 'phone', v)} placeholder="—" />
                   <Field label="ΔΙΕΥΘΥΝΣΗ" value={company.address || ''} onChange={v => updateCompanyField(company.id, 'address', v)} placeholder="—" />
                   <Field label="ΠΟΛΗ" value={company.city || ''} onChange={v => updateCompanyField(company.id, 'city', v)} placeholder="—" />
+                  <Field label="ΤΚ" value={company.zip || ''} onChange={v => updateCompanyField(company.id, 'zip', v)} placeholder="—" />
+                  <Field label="WEBSITE" value={company.website || ''} onChange={v => updateCompanyField(company.id, 'website', v)} placeholder="—" />
                 </div>
               </div>
               <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.015)', border: '1px solid var(--glass-border)' }}>
                 <SectionTitle text="Φορολογικά" color="var(--violet)" />
+                <Field label="ΕΠΩΝΥΜΙΑ" value={company.legalName || ''} onChange={v => updateCompanyField(company.id, 'legalName', v)} placeholder="Φορολογική επωνυμία" style={{ marginBottom: 6 }} />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   <Field label="ΑΦΜ" value={company.afm || ''} onChange={v => updateCompanyField(company.id, 'afm', v)} placeholder="—" />
                   <Field label="ΔΟΥ" value={company.doy || ''} onChange={v => updateCompanyField(company.id, 'doy', v)} placeholder="—" />
-                  <Field label="WEBSITE" value={company.website || ''} onChange={v => updateCompanyField(company.id, 'website', v)} placeholder="—" />
-                  <Field label="ΤΚ" value={company.zip || ''} onChange={v => updateCompanyField(company.id, 'zip', v)} placeholder="—" />
+                  <Field label="ΔΙΕΥΘΥΝΣΗ" value={company.fiscalAddress || ''} onChange={v => updateCompanyField(company.id, 'fiscalAddress', v)} placeholder="—" />
+                  <Field label="ΠΟΛΗ" value={company.fiscalCity || ''} onChange={v => updateCompanyField(company.id, 'fiscalCity', v)} placeholder="—" />
+                  <Field label="ΤΚ" value={company.fiscalZip || ''} onChange={v => updateCompanyField(company.id, 'fiscalZip', v)} placeholder="—" />
                 </div>
                 {hasElorus && (
                   <div style={{ marginTop: 8 }}>
                     <ElorusAfmLookup
                       currentAfm={company.afm || ''}
-                      currentValues={{ afm: company.afm || '', doy: company.doy || '', address: company.address || '', city: company.city || '', zip: company.zip || '' }}
+                      currentValues={{ afm: company.afm || '', doy: company.doy || '', address: company.fiscalAddress || '', city: company.fiscalCity || '', zip: company.fiscalZip || '' }}
                       onApply={(data: ElorusLookupResult) => {
                         const changes: Record<string, string | null> = {};
+                        // Διακριτικός τίτλος: μόνο αν δεν υπάρχει ήδη
                         if (data.name && !company.name) changes.name = data.name;
+                        // Φορολογική επωνυμία: πάντα
+                        if (data.name) changes.legalName = data.name;
                         if (data.afm) changes.afm = data.afm;
                         if (data.doy) changes.doy = data.doy;
-                        if (data.address) changes.address = data.address;
-                        if (data.city) changes.city = data.city;
-                        if (data.zip) changes.zip = data.zip;
+                        // Φορολογική διεύθυνση: πάντα
+                        if (data.address) changes.fiscalAddress = data.address;
+                        if (data.city) changes.fiscalCity = data.city;
+                        if (data.zip) changes.fiscalZip = data.zip;
+                        // Επικοινωνία: μόνο αν είναι κενά
+                        if (data.address && !company.address) changes.address = data.address;
+                        if (data.city && !company.city) changes.city = data.city;
+                        if (data.zip && !company.zip) changes.zip = data.zip;
                         if (data.email && !company.email) changes.email = data.email;
                         setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, ...changes } : c));
                         updateCompany(company.id, changes as any);
