@@ -626,19 +626,25 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
                   >
                     <div style={{
                       width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                      background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                      background: 'color-mix(in srgb, var(--blue) 12%, transparent)',
+                      border: '1.5px solid color-mix(in srgb, var(--blue) 25%, transparent)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'var(--accent)', fontSize: '0.65rem', fontWeight: 700,
+                      color: 'var(--blue)', fontSize: '0.65rem', fontWeight: 700,
                     }}>
                       {c.name.charAt(0).toUpperCase()}
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{c.name}</div>
                       {(c.email || c.afm || c.companyContacts?.length > 0) && (
-                        <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name}
-                          {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name && c.email ? ' · ' : ''}{c.email}
-                          {c.afm ? ` · ΑΦΜ ${c.afm}` : ''}
+                        <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name && (
+                            <span style={{ color: 'var(--teal)' }}>
+                              <i className="fas fa-user" style={{ fontSize: '0.45rem', marginRight: 2 }} />
+                              {c.companyContacts.find((cc: any) => cc.isPrimary).contact.name}
+                            </span>
+                          )}
+                          {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name && c.email ? <span>·</span> : null}{c.email && <span>{c.email}</span>}
+                          {c.afm ? <span>· ΑΦΜ {c.afm}</span> : null}
                         </div>
                       )}
                     </div>

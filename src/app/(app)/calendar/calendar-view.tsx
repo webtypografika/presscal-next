@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { getEvents, createEvent, updateEvent, deleteEvent, searchCompaniesForCalendar, searchQuotesForCalendar } from './actions';
+import { getEvents, createEvent, updateEvent, deleteEvent, searchCompaniesForCalendar, searchQuotesForCalendar, searchContactsForCalendar } from './actions';
 
 // ─── TYPES ───
 
@@ -418,6 +418,16 @@ function EventModal({ form, setForm, onSave, onDelete, onClose }: {
                 displayValue={form.companyName}
                 onSearch={searchCompaniesForCalendar}
                 onSelect={(item) => setForm({ ...form, companyId: item?.id || null, companyName: item?.name || '' })}
+                renderItem={(item) => item.name}
+              />
+
+              {/* Contact search */}
+              <SearchDropdown
+                label="Επαφή"
+                value={form.contactId}
+                displayValue={form.contactName}
+                onSearch={searchContactsForCalendar}
+                onSelect={(item) => setForm({ ...form, contactId: item?.id || null, contactName: item?.name || '' })}
                 renderItem={(item) => item.name}
               />
 

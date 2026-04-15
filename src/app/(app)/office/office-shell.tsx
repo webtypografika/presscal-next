@@ -500,13 +500,16 @@ export default function OfficeShell({ initialProjects, companies, contacts }: {
 
                       {/* Company */}
                       <div>
-                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΕΤΑΙΡΕΙΑ</label>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--blue)', display: 'block', marginBottom: 4 }}>
+                          <i className="fas fa-building" style={{ fontSize: '0.5rem', marginRight: 3 }} />ΕΤΑΙΡΕΙΑ
+                        </label>
                         <select
                           value={item.companyId || ''}
                           onChange={e => handleUpdateItem(item.id, { companyId: e.target.value || null } as any)}
                           style={{
                             width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem',
-                            border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)',
+                            border: `1px solid ${item.companyId ? 'color-mix(in srgb, var(--blue) 30%, transparent)' : 'var(--border)'}`,
+                            background: item.companyId ? 'color-mix(in srgb, var(--blue) 5%, transparent)' : 'rgba(0,0,0,0.15)',
                             color: 'var(--text)', outline: 'none',
                           }}
                         >
@@ -517,13 +520,16 @@ export default function OfficeShell({ initialProjects, companies, contacts }: {
 
                       {/* Contact */}
                       <div>
-                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΕΠΑΦΗ</label>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--teal)', display: 'block', marginBottom: 4 }}>
+                          <i className="fas fa-user" style={{ fontSize: '0.5rem', marginRight: 3 }} />ΕΠΑΦΗ
+                        </label>
                         <select
                           value={item.contactId || ''}
                           onChange={e => handleUpdateItem(item.id, { contactId: e.target.value || null } as any)}
                           style={{
                             width: '100%', padding: '5px 8px', borderRadius: 6, fontSize: '0.72rem',
-                            border: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)',
+                            border: `1px solid ${item.contactId ? 'color-mix(in srgb, var(--teal) 30%, transparent)' : 'var(--border)'}`,
+                            background: item.contactId ? 'color-mix(in srgb, var(--teal) 5%, transparent)' : 'rgba(0,0,0,0.15)',
                             color: 'var(--text)', outline: 'none',
                           }}
                         >

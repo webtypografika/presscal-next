@@ -102,6 +102,20 @@ export async function searchQuotesForCalendar(q: string) {
   });
 }
 
+export async function searchContactsForCalendar(q: string) {
+  if (!q.trim()) return [];
+  return prisma.contact.findMany({
+    where: {
+      orgId: ORG_ID,
+      deletedAt: null,
+      name: { contains: q.trim(), mode: 'insensitive' },
+    },
+    select: { id: true, name: true },
+    take: 15,
+    orderBy: { name: 'asc' },
+  });
+}
+
 // ─── CREATE ───
 
 export async function createEvent(data: {

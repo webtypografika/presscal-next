@@ -841,16 +841,22 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             onClick={() => { setShowContactPicker(!showContactPicker); if (!showContactPicker) setShowCustomerPicker(false); }}
-            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, color: contactId ? 'var(--text)' : '#475569' }}
+            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, color: contactId ? 'var(--text)' : '#475569' }}
             onMouseEnter={e => (e.currentTarget.style.color = 'var(--teal)')}
             onMouseLeave={e => (e.currentTarget.style.color = contactId ? 'var(--text)' : '#475569')}
           >
-            <i className="fas fa-user" style={{ fontSize: '0.5rem', color: showContactPicker ? 'var(--teal)' : '#475569' }} />
+            <div style={{
+              width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+              background: contactId ? 'color-mix(in srgb, var(--teal) 12%, transparent)' : 'rgba(255,255,255,0.04)',
+              border: `1.5px solid ${contactId ? 'color-mix(in srgb, var(--teal) 25%, transparent)' : 'var(--glass-border)'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: contactId ? 'var(--teal)' : '#475569', fontSize: '0.55rem', fontWeight: 700,
+            }}>{selectedContact?.name?.charAt(0).toUpperCase() || <i className="fas fa-user" style={{ fontSize: '0.45rem' }} />}</div>
             <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{selectedContact?.name || '— Επαφή —'}</span>
             <i className={`fas fa-${showContactPicker ? 'chevron-up' : (contactId ? 'pen' : 'plus')}`} style={{ fontSize: '0.42rem', opacity: showContactPicker ? 0.8 : 0.3 }} />
           </div>
           {selectedContact && (
-            <div style={{ display: 'flex', gap: 10, color: '#64748b', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 10, color: '#64748b', flexWrap: 'wrap', marginLeft: 32 }}>
               {selectedContact.email && <span>{selectedContact.email}</span>}
               {selectedContact.phone && <span>{selectedContact.phone}</span>}
               {selectedContact.mobile && <span>{selectedContact.mobile}</span>}
@@ -2631,16 +2637,23 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
                     setCc(prev => prev ? `${prev}, ${contact.email}` : contact.email);
                   }}
                   style={{
-                    padding: '3px 10px', borderRadius: 12, border: '1px solid var(--glass-border)',
+                    padding: '3px 10px', borderRadius: 12,
+                    border: `1px solid ${alreadyInCc ? 'color-mix(in srgb, var(--teal) 40%, transparent)' : 'var(--glass-border)'}`,
                     background: alreadyInCc ? 'color-mix(in srgb, var(--teal) 12%, transparent)' : 'transparent',
                     color: alreadyInCc ? 'var(--teal)' : '#94a3b8',
                     fontSize: '0.72rem', cursor: alreadyInCc ? 'default' : 'pointer', fontFamily: 'inherit',
-                    display: 'flex', alignItems: 'center', gap: 4,
+                    display: 'flex', alignItems: 'center', gap: 5,
                     transition: 'all 0.15s',
                   }}
                 >
-                  <i className={`fas ${alreadyInCc ? 'fa-check' : 'fa-plus'}`} style={{ fontSize: '0.55rem' }} />
+                  <span style={{
+                    width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                    background: alreadyInCc ? 'color-mix(in srgb, var(--teal) 20%, transparent)' : 'rgba(255,255,255,0.06)',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    color: alreadyInCc ? 'var(--teal)' : '#64748b', fontSize: '0.45rem', fontWeight: 700,
+                  }}>{contact.name?.charAt(0).toUpperCase()}</span>
                   {contact.name} · {contact.email}
+                  <i className={`fas ${alreadyInCc ? 'fa-check' : 'fa-plus'}`} style={{ fontSize: '0.55rem' }} />
                 </button>
               );
             })}
@@ -3408,30 +3421,41 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
       {mode === 'current' && currentContact ? (
         /* Current contact quick-view */
         <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{currentContact.name}</div>
-            {currentContact.role && currentContact.role !== 'contact' && (
-              <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 1 }}>{roleLabels[currentContact.role] || currentContact.role}</div>
-            )}
-            {currentContact.email && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 1 }}>{currentContact.email}</div>}
-            {currentContact.phone && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 1 }}>{currentContact.phone}</div>}
-            {currentContact.mobile && <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: 1 }}>{currentContact.mobile}</div>}
-            {/* Linked companies */}
-            {currentContact.companyContacts?.length > 0 && (
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
-                {currentContact.companyContacts.map((cc: any) => (
-                  <span key={cc.company?.id || cc.id} style={{
-                    padding: '2px 8px', borderRadius: 12, fontSize: '0.72rem', fontWeight: 600,
-                    background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
-                    border: '1px solid color-mix(in srgb, var(--blue) 20%, transparent)',
-                    color: 'var(--blue)',
-                  }}>
-                    <i className="fas fa-building" style={{ fontSize: '0.5rem', marginRight: 3 }} />
-                    {cc.company?.name || '—'}
-                  </span>
-                ))}
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+              background: 'color-mix(in srgb, var(--teal) 12%, transparent)',
+              border: '2px solid color-mix(in srgb, var(--teal) 25%, transparent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'var(--teal)', fontSize: '0.75rem', fontWeight: 700,
+            }}>{currentContact.name?.charAt(0).toUpperCase() || '?'}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>{currentContact.name}</div>
+              {currentContact.role && currentContact.role !== 'contact' && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--teal)', fontWeight: 600, marginTop: 1 }}>{roleLabels[currentContact.role] || currentContact.role}</div>
+              )}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 3, color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                {currentContact.email && <span><i className="fas fa-envelope" style={{ fontSize: '0.5rem', marginRight: 4, color: '#475569' }} />{currentContact.email}</span>}
+                {currentContact.phone && <span><i className="fas fa-phone" style={{ fontSize: '0.5rem', marginRight: 4, color: '#475569' }} />{currentContact.phone}</span>}
+                {currentContact.mobile && <span><i className="fas fa-mobile-alt" style={{ fontSize: '0.5rem', marginRight: 4, color: '#475569' }} />{currentContact.mobile}</span>}
               </div>
-            )}
+              {/* Linked companies */}
+              {currentContact.companyContacts?.length > 0 && (
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                  {currentContact.companyContacts.map((cc: any) => (
+                    <span key={cc.company?.id || cc.id} style={{
+                      padding: '2px 8px', borderRadius: 12, fontSize: '0.72rem', fontWeight: 600,
+                      background: 'color-mix(in srgb, var(--blue) 10%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--blue) 20%, transparent)',
+                      color: 'var(--blue)',
+                    }}>
+                      <i className="fas fa-building" style={{ fontSize: '0.5rem', marginRight: 3 }} />
+                      {cc.company?.name || '—'}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => openEdit(currentContact)} style={{
