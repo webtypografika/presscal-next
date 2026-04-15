@@ -1302,18 +1302,15 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 };
 
                 const jobFolder = (quote as any).jobFolderPath;
-                // If no new files and folder exists, just open it; otherwise trigger download
-                const globalHref = newCount > 0
-                  ? `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${newCount < allFiles.length ? '&onlyNew=1' : ''}`
-                  : jobFolder
-                    ? `presscal-fh://open-folder?path=${encodeURIComponent(jobFolder)}&quoteId=${quote.id}`
-                    : `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global`;
+                // Always use download-to-folder — FileHelper checks if folder exists on disk
+                // (web app can't know if local folder was deleted)
+                const globalHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${newCount > 0 && newCount < allFiles.length ? '&onlyNew=1' : ''}`;
 
                 return (
                   <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
                     <a
                       href={globalHref}
-                      onClick={newCount > 0 ? () => { setTimeout(markAsSaved, 2000); } : undefined}
+                      onClick={() => { if (newCount > 0) setTimeout(markAsSaved, 2000); }}
                       style={{
                         flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         padding: '9px', borderRadius: 8,
