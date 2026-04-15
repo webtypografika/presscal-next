@@ -556,10 +556,10 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
         transition: 'width 0.2s',
         overflow: 'hidden',
       }}>
-        <h2 style={{ fontSize: '0.95rem', fontWeight: 600, padding: '18px 22px 10px', margin: 0, flexShrink: 0 }}>Νέα Προσφορά</h2>
-        <div style={{ padding: '0 22px 18px', overflowY: 'auto', flex: 1 }}>
+        <h2 style={{ fontSize: '1.05rem', fontWeight: 600, padding: '22px 26px 14px', margin: 0, flexShrink: 0 }}>Νέα Προσφορά</h2>
+        <div style={{ padding: '0 26px 22px', overflowY: 'auto', flex: 1 }}>
 
-        <label style={lbl}>Πελάτης</label>
+        <label style={{ ...lbl, fontSize: '0.72rem', marginBottom: 6 }}>Πελάτης</label>
         <div ref={custRef} style={{ position: 'relative', marginBottom: 12 }}>
           <div style={{ display: 'flex', gap: 6 }}>
             <div
@@ -659,20 +659,20 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
           />
         )}
 
-        <label style={{ ...lbl, marginTop: 4 }}>Τίτλος (προαιρετικό)</label>
-        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="π.χ. Φυλλάδια A4 4χρ." style={{ ...inp }} />
+        <label style={{ ...lbl, marginTop: 10, fontSize: '0.72rem', marginBottom: 6 }}>Τίτλος (προαιρετικό)</label>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="π.χ. Φυλλάδια A4 4χρ." style={{ ...inp, padding: '10px 14px', fontSize: '0.88rem' }} />
         </div>
 
         <div style={{
-          display: 'flex', justifyContent: 'flex-end', gap: 8,
-          padding: '12px 22px', borderTop: '1px solid var(--border)',
+          display: 'flex', justifyContent: 'flex-end', gap: 10,
+          padding: '16px 26px', borderTop: '1px solid var(--border)',
           background: 'rgba(0,0,0,0.15)', flexShrink: 0,
         }}>
-          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.92rem', cursor: 'pointer', fontFamily: 'inherit' }}>Ακύρωση</button>
+          <button onClick={onClose} style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit' }}>Ακύρωση</button>
           {!showNewCust && (
             <button onClick={create} disabled={saving} style={{
-              padding: '8px 20px', borderRadius: 8, border: 'none',
-              background: 'var(--accent)', color: '#fff', fontSize: '0.92rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              padding: '10px 24px', borderRadius: 8, border: 'none',
+              background: 'var(--accent)', color: '#fff', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
               opacity: saving ? 0.6 : 1,
             }}>
               {saving ? 'Δημιουργία...' : 'Δημιουργία'}
