@@ -42,7 +42,7 @@ export async function GET(
     return new NextResponse(buffer, {
       headers: {
         'Content-Type': mime,
-        'Content-Disposition': `inline; filename="${encodeURIComponent(filename)}"`,
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
         'Content-Length': String(buffer.length)
       }
     })

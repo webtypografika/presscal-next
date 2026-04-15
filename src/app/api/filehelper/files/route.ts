@@ -28,18 +28,39 @@ export async function GET(req: NextRequest) {
     if (quoteId) {
       const quote = await prisma.quote.findUnique({
         where: { id: quoteId },
-        select: { number: true, title: true, company: { select: { name: true, folderPath: true } } },
+        select: { number: true, title: true, jobFolderPath: true, company: { select: { name: true, folderPath: true } } },
       })
       if (quote) {
-        const { buildJobFolderPath } = await import('@/lib/job-folder')
         const useCustomerFolder = target === 'customer' && quote.company?.folderPath
-        folderPath = buildJobFolderPath({
-          globalRoot: auth.org.jobFolderRoot || null,
-          companyFolderPath: useCustomerFolder ? quote.company!.folderPath : null,
-          companyName: quote.company?.name || 'Πελάτης',
-          quoteNumber: quote.number,
-          quoteTitle: quote.title,
-        })
+
+        // For customer-target, always compute from company folder
+        // For global-target, reuse saved jobFolderPath if available
+        if (useCustomerFolder) {
+          const { buildJobFolderPath } = await import('@/lib/job-folder')
+          folderPath = buildJobFolderPath({
+            globalRoot: auth.org.jobFolderRoot || null,
+            companyFolderPath: quote.company!.folderPath,
+            companyName: quote.company?.name || 'Πελάτης',
+            quoteNumber: quote.number,
+            quoteTitle: quote.title,
+          })
+        } else if (quote.jobFolderPath) {
+          // Reuse the already-saved path — prevents duplicate folders
+          folderPath = quote.jobFolderPath
+        } else {
+          // Compute and persist so subsequent calls use the same path
+          const { buildJobFolderPath } = await import('@/lib/job-folder')
+          folderPath = buildJobFolderPath({
+            globalRoot: auth.org.jobFolderRoot || null,
+            companyFolderPath: null,
+            companyName: quote.company?.name || 'Πελάτης',
+            quoteNumber: quote.number,
+            quoteTitle: quote.title,
+          })
+          if (folderPath) {
+            await prisma.quote.update({ where: { id: quoteId }, data: { jobFolderPath: folderPath } })
+          }
+        }
       }
     }
 
