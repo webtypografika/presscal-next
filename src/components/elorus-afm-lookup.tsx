@@ -88,22 +88,35 @@ export function ElorusAfmLookup({ currentAfm, currentValues, onApply, toast }: P
     fontSize: '0.92rem', width: '100%', outline: 'none', fontFamily: 'inherit',
   };
 
+  const hasAfm = !!(currentAfm && currentAfm.trim());
+
   if (!open) {
     return (
       <button
         onClick={() => setOpen(true)}
         style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          padding: '8px 14px', borderRadius: 8,
-          border: '1px solid color-mix(in srgb, var(--teal) 30%, transparent)',
-          background: 'color-mix(in srgb, var(--teal) 6%, transparent)',
-          color: 'var(--teal)', fontSize: '0.78rem', fontWeight: 600,
+          padding: hasAfm ? '6px 14px' : '8px 14px', borderRadius: 8,
+          border: `1px solid color-mix(in srgb, var(--teal) ${hasAfm ? '15%' : '30%'}, transparent)`,
+          background: hasAfm ? 'color-mix(in srgb, var(--teal) 3%, transparent)' : 'color-mix(in srgb, var(--teal) 6%, transparent)',
+          color: hasAfm ? 'color-mix(in srgb, var(--teal) 70%, #64748b)' : 'var(--teal)',
+          fontSize: hasAfm ? '0.72rem' : '0.78rem', fontWeight: hasAfm ? 500 : 600,
           cursor: 'pointer', fontFamily: 'inherit', width: '100%',
           justifyContent: 'center', transition: 'all 0.2s',
         }}
       >
-        <i className="fas fa-search" style={{ fontSize: '0.65rem' }} />
-        Σύνδεση με Elorus / TaxisNet
+        {hasAfm ? (
+          <>
+            <i className="fas fa-check-circle" style={{ fontSize: '0.65rem', color: 'var(--teal)' }} />
+            Φορολογικά ενημερωμένα
+            <span style={{ opacity: 0.5, marginLeft: 4, fontSize: '0.65rem' }}>· Ανανέωση</span>
+          </>
+        ) : (
+          <>
+            <i className="fas fa-search" style={{ fontSize: '0.65rem' }} />
+            Αναζήτηση ΑΦΜ στο TaxisNet
+          </>
+        )}
       </button>
     );
   }
