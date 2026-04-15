@@ -1365,7 +1365,13 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 
         {/* Quick Reply */}
         <ReplyPanel
-          customerEmail={quote.customer?.email ?? ''}
+          customerEmail={
+            (quote as any).company?.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.email
+            ?? (quote as any).contact?.email
+            ?? (quote as any).company?.email
+            ?? quote.customer?.email
+            ?? ''
+          }
           threadId={quote.threadId}
           quoteNumber={quote.number}
           toast={toast}
