@@ -324,6 +324,9 @@ model PlateOrder {
   orgId     String
   org       Org      @relation(fields: [orgId], references: [id])
 
+  quoteId   String?
+  quote     Quote?   @relation(fields: [quoteId], references: [id])
+
   orderType String   // 'platemaker_service' | 'plate_material'
   status    String   @default("sent") // 'draft' | 'sent' | 'received' | 'cancelled'
 
@@ -351,6 +354,7 @@ model PlateOrder {
   @@index([orgId, status])
   @@index([orgId, orderType])
   @@index([orgId, deletedAt])
+  @@index([quoteId])
 }
 
 // ─── SALES PROFILES (Markups & Charges) ───
@@ -618,6 +622,9 @@ model Quote {
   elorusInvoiceUrl String?
   elorusContactId  String?
 
+  // Paper & plate orders
+  paperOrderSentAt  DateTime?
+
   // Courier
   courierVoucherId  String?
   courierProvider   String?   // 'nexday'
@@ -639,6 +646,7 @@ model Quote {
   fileLinks       FileLink[]
   quoteRecipients QuoteRecipient[]
   calendarEvents  CalendarEvent[]
+  plateOrders     PlateOrder[]
 
   @@index([orgId, status])
   @@index([orgId, companyId])

@@ -20,6 +20,7 @@ interface OrderPayload {
   items: OrderItem[];
   delivery: 'pickup' | 'deliver';
   notes: string;
+  quoteId?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -130,6 +131,13 @@ export async function POST(req: NextRequest) {
     const result = await sendGmail(accessToken, fromEmail, body.to, subject, html);
 
     if (result.ok) {
+      // Log paper order in quote activity
+      if (body.quoteId) {
+        await prisma.quote.update({
+          where: { id: body.quoteId },
+          data: { paperOrderSentAt: new Date() },
+        }).catch(() => {});
+      }
       return NextResponse.json({ ok: true });
     } else {
       return NextResponse.json({ error: result.error }, { status: 500 });

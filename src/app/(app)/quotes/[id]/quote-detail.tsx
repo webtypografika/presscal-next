@@ -1410,8 +1410,15 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 // Calc data (imposition done)
                 const calcCount = items.filter((i: any) => i.calcData?.machineId).length;
                 if (calcCount > 0) events.push({ date: quote.updatedAt || quote.createdAt, icon: 'fas fa-calculator', color: '#f58220', text: `Κοστολόγηση ${calcCount} προϊόντ${calcCount === 1 ? 'ος' : 'ων'}` });
+                // Paper order
+                if ((quote as any).paperOrderSentAt) events.push({ date: (quote as any).paperOrderSentAt, icon: 'fas fa-scroll', color: '#a78bfa', text: 'Παραγγελία χαρτιού' });
+                // Plate orders
+                const plateOrders = (quote as any).plateOrders || [];
+                for (const po of plateOrders) {
+                  events.push({ date: po.sentAt || po.createdAt, icon: 'fas fa-layer-group', color: '#f472b6', text: `Παραγγελία τσίγκου → ${po.supplierName}` });
+                }
                 // Sent
-                if (quote.sentAt) events.push({ date: quote.sentAt, icon: 'fas fa-paper-plane', color: '#14b8a6', text: 'Αποστολή email' });
+                if (quote.sentAt) events.push({ date: quote.sentAt, icon: 'fas fa-paper-plane', color: '#14b8a6', text: 'Αποστολή στον πελάτη' });
                 // Linked emails
                 const emailCount = (quote.linkedEmails as string[])?.length || 0;
                 if (emailCount > 0) events.push({ date: quote.sentAt || quote.createdAt, icon: 'fas fa-envelope', color: '#64748b', text: `${emailCount} email${emailCount > 1 ? 's' : ''} συνδεδεμέν${emailCount === 1 ? 'ο' : 'α'}` });
@@ -1531,6 +1538,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           items={items}
           materials={materials}
           org={org}
+          quoteId={quote.id}
           quoteNumber={quote.number}
           toast={toast}
           onClose={() => setShowOrderModal(false)}
@@ -1545,9 +1553,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 // ═══════════════════════════════════════════════════════
 // ORDER PAPERS MODAL
 // ═══════════════════════════════════════════════════════
-function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }: {
+function OrderPapersModal({ items, materials, org, quoteId, quoteNumber, toast, onClose }: {
   items: any[];
   materials: Material[];
+  quoteId: string;
   org?: Pick<Org, 'legalName' | 'afm' | 'doy' | 'address' | 'city' | 'postalCode' | 'phone' | 'email'> | null;
   quoteNumber: string;
   toast: (msg: string, type?: ToastType) => void;
@@ -1811,7 +1820,7 @@ function OrderPapersModal({ items, materials, org, quoteNumber, toast, onClose }
                     const res = await fetch('/api/send-order', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ to: targetEmail, supplier: group.supplier, items: orderItems, delivery, notes }),
+                      body: JSON.stringify({ to: targetEmail, supplier: group.supplier, items: orderItems, delivery, notes, quoteId }),
                     });
                     const data = await res.json();
                     if (data.ok) {

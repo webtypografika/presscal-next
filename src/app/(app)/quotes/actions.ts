@@ -49,6 +49,11 @@ export async function getQuote(id: string) {
       fileLinks: {
         orderBy: { createdAt: 'desc' },
       },
+      plateOrders: {
+        where: { deletedAt: null },
+        select: { id: true, supplierName: true, status: true, sentAt: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      },
     },
   });
 }
