@@ -1301,11 +1301,19 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                   } catch {}
                 };
 
+                const jobFolder = (quote as any).jobFolderPath;
+                // If no new files and folder exists, just open it; otherwise trigger download
+                const globalHref = newCount > 0
+                  ? `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${newCount < allFiles.length ? '&onlyNew=1' : ''}`
+                  : jobFolder
+                    ? `presscal-fh://open-folder?path=${encodeURIComponent(jobFolder)}&quoteId=${quote.id}`
+                    : `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global`;
+
                 return (
                   <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
                     <a
-                      href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${newCount > 0 && newCount < allFiles.length ? '&onlyNew=1' : ''}`}
-                      onClick={() => { setTimeout(markAsSaved, 2000); }}
+                      href={globalHref}
+                      onClick={newCount > 0 ? () => { setTimeout(markAsSaved, 2000); } : undefined}
                       style={{
                         flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         padding: '9px', borderRadius: 8,
@@ -1318,7 +1326,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                       onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
                     >
-                      <i className="fas fa-folder-open" style={{ fontSize: '0.65rem' }} />
+                      <i className={`fas fa-${newCount > 0 ? 'download' : 'folder-open'}`} style={{ fontSize: '0.65rem' }} />
                       {newCount > 0 ? `Φάκελος Εργασιών (${newCount} νέα)` : 'Φάκελος Εργασιών'}
                     </a>
                     {(selectedCompany as any)?.folderPath && (
