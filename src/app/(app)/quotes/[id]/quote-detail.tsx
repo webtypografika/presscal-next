@@ -1326,8 +1326,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                       onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
                     >
-                      <i className={`fas fa-${newCount > 0 ? 'download' : 'folder-open'}`} style={{ fontSize: '0.65rem' }} />
-                      {newCount > 0 ? `Φάκελος Εργασιών (${newCount} νέα)` : 'Φάκελος Εργασιών'}
+                      <i className={`fas fa-${newCount > 0 ? 'download' : jobFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
+                      {newCount > 0 ? `Λήψη αρχείων (${newCount} νέα)` : jobFolder ? 'Άνοιγμα φακέλου' : 'Δημιουργία φακέλου'}
                     </a>
                     {(selectedCompany as any)?.folderPath && (
                       <a
