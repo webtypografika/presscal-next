@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { CompaniesTab } from './companies-tab';
 import { PeopleTab } from './people-tab';
 import { createCompany, createContact } from '../companies/actions';
@@ -24,7 +24,14 @@ export function ContactsPage({
   initialContacts, initialContactsTotal, initialContactsHasMore,
   hasElorus, allCompanies,
 }: Props) {
-  const [tab, setTab] = useState<Tab>('companies');
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const t = params.get('tab');
+      if (t === 'people') return 'people';
+    }
+    return 'companies';
+  });
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [creating, setCreating] = useState(false);
@@ -44,7 +51,10 @@ export function ContactsPage({
       } else {
         await createContact({ name: '' });
       }
-      window.location.reload();
+      // Preserve current tab across reload
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.location.href = url.toString();
     } finally {
       setCreating(false);
     }
