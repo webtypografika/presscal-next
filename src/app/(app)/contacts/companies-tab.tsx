@@ -104,7 +104,7 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
   const [loading, setLoading] = useState(false);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const [savedId, setSavedId] = useState<string | null>(null);
-  const savedTimer = useRef<ReturnType<typeof setTimeout>>();
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lastSearchRef = useRef(search);
 
   // Re-fetch when search changes from parent
