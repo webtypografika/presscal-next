@@ -10,7 +10,7 @@ import { inp, inpFocus, lbl, SectionTitle } from './shared-styles';
 interface ContactData { id: string; name: string; email: string | null; phone: string | null; mobile: string | null; role: string }
 interface CCData { id: string; role: string; isPrimary: boolean; contact: ContactData }
 interface CompanyData {
-  id: string; name: string; legalName: string | null; afm: string | null; doy: string | null; email: string | null; phone: string | null;
+  id: string; name: string; isSupplier: boolean; legalName: string | null; afm: string | null; doy: string | null; email: string | null; phone: string | null;
   website: string | null; address: string | null; city: string | null; zip: string | null;
   fiscalAddress: string | null; fiscalCity: string | null; fiscalZip: string | null;
   notes: string; folderPath: string | null; tags: string[]; companyContacts: CCData[]; _count: { quotes: number };
@@ -216,6 +216,24 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                   style={{ ...inp, width: '100%', fontWeight: 600, fontSize: '0.95rem', padding: '5px 8px' }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <button
+                  onClick={() => {
+                    const val = !company.isSupplier;
+                    setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, isSupplier: val } : c));
+                    updateCompany(company.id, { isSupplier: val } as any);
+                  }}
+                  title={company.isSupplier ? 'Προμηθευτής ✓' : 'Σήμανση ως προμηθευτής'}
+                  style={{
+                    padding: '4px 10px', borderRadius: 12, border: `1px solid ${company.isSupplier ? 'color-mix(in srgb, var(--teal) 40%, transparent)' : 'var(--glass-border)'}`,
+                    background: company.isSupplier ? 'color-mix(in srgb, var(--teal) 10%, transparent)' : 'transparent',
+                    color: company.isSupplier ? 'var(--teal)' : '#475569',
+                    fontSize: '0.65rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.2s', whiteSpace: 'nowrap',
+                  }}
+                >
+                  <i className={`fas fa-${company.isSupplier ? 'check-circle' : 'truck'}`} style={{ fontSize: '0.55rem' }} />
+                  Προμηθευτής
+                </button>
                 {savedId === company.id && (
                   <span style={{
                     fontSize: '0.68rem', color: 'var(--teal)', fontWeight: 600,

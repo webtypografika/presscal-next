@@ -463,6 +463,7 @@ model Company {
   org       Org      @relation(fields: [orgId], references: [id])
 
   name      String            // Διακριτικός τίτλος
+  isSupplier Boolean @default(false)  // Προμηθευτής / Συνεργάτης
   legalName String?           // Φορολογική επωνυμία (από TaxisNet)
   afm       String?           // ΑΦΜ
   doy       String?           // ΔΟΥ
