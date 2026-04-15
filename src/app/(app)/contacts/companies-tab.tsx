@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { createCompany, updateCompany, deleteCompany, createContact, updateContact, unlinkContactFromCompany, setPrimaryContact } from '../companies/actions';
+import { createQuote } from '../quotes/actions';
 import { ElorusAfmLookup, type ElorusLookupResult } from '@/components/elorus-afm-lookup';
 import { inp, inpFocus, lbl, SectionTitle } from './shared-styles';
 
@@ -98,6 +100,7 @@ function ContactRow({ cc, companyId, onUpdate, onRemove, onSetPrimary }: {
 }
 
 export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, hasElorus, search }: Props) {
+  const router = useRouter();
   const [companies, setCompanies] = useState(initialCompanies);
   const [total, setTotal] = useState(initialTotal);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -187,6 +190,11 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
     setTotal(prev => prev - 1);
   }, []);
 
+  const handleNewQuote = useCallback(async (companyId: string) => {
+    const q = await createQuote({ companyId, items: [{ name: '', qty: 1, unitPrice: 0, finalPrice: 0 }] });
+    router.push(`/quotes/${q.id}`);
+  }, [router]);
+
   return (
     <>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -230,6 +238,12 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                     <i className="fas fa-folder-plus" style={{ fontSize: '0.7rem' }} />Φάκελος
                   </a>
                 )}
+                <button onClick={() => handleNewQuote(company.id)} title="Νέα προσφορά"
+                  style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.12)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(245,130,32,0.06)'; }}>
+                  <i className="fas fa-plus" style={{ fontSize: '0.55rem' }} />Προσφορά
+                </button>
                 <span style={{ padding: '6px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>{company._count.quotes} προσφ.</span>
                 <button onClick={() => handleDelete(company.id)} title="Διαγραφή"
                   style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--glass-border)', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.75rem', transition: 'color 0.15s' }}
