@@ -3906,12 +3906,17 @@ export default function CalculatorShell() {
                   setImpoForceCols(cols);
                   setImpoForceRows(rows);
                 } : undefined}
-                onRotate={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn') ? () => {
-                  setImpoRotation(prev => (prev + 90) % 360);
-                  setImpoForceCols(1);
-                  setImpoForceRows(1);
+                onRotate={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn' || impoMode === 'perfect_bound') ? () => {
+                  if (impoMode === 'perfect_bound') {
+                    // PB block: toggle 0 ↔ 90 (spine vertical ↔ horizontal)
+                    setImpoRotation(prev => (prev === 0 || prev === 180) ? 90 : 0);
+                  } else {
+                    setImpoRotation(prev => (prev + 90) % 360);
+                    setImpoForceCols(1);
+                    setImpoForceRows(1);
+                  }
                 } : undefined}
-                onOffsetChange={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn') ? (x, y) => {
+                onOffsetChange={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn' || impoMode === 'perfect_bound') ? (x, y) => {
                   setImpoOffsetX(x);
                   setImpoOffsetY(y);
                 } : undefined}

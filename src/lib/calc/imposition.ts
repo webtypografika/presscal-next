@@ -552,24 +552,31 @@ const PB_PAGE_MAP: Record<number, { front: number[][]; back: number[][] }> = {
 };
 
 export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
-  const { trimW, trimH, bleed, qty, gutter, area, pages: rawPages, paperThickness = 0.1 } = input;
+  const { trimW, trimH, bleed, qty, gutter, area, pages: rawPages, paperThickness = 0.1, rotation } = input;
 
   const pages = rawPages || 16;
   const spineWidth = (pages / 2) * paperThickness;
 
+  // Block rotation: 0 = spine vertical (natural), 90 = spine horizontal
+  const rot = ((rotation || 0) % 360 + 360) % 360;
+  const blockRotated = (rot >= 45 && rot < 135) || (rot >= 225 && rot < 315);
+
   const { w: pw, h: ph } = printable(area);
   const sigSizes = [32, 16, 8, 4];
 
-  // Find largest signature size that fits on the sheet
+  // Find largest signature size that fits, honouring the chosen block orientation
   let bestSigSize = 4;
   for (const sig of sigSizes) {
-    const layout = PB_LAYOUTS[sig];
-    if (!layout) continue;
-    const cellW = trimW + bleed; // spine edge = no bleed
-    const cellH = trimH + bleed * 2;
-    const neededW = layout.cols * cellW + (layout.cols - 1) * gutter;
-    const neededH = layout.rows * cellH + (layout.rows - 1) * gutter;
-    if (neededW <= pw && neededH <= ph) {
+    const lay = PB_LAYOUTS[sig];
+    if (!lay) continue;
+    const cW = trimW + bleed; // spine edge = no bleed
+    const cH = trimH + bleed * 2;
+    const nP = Math.ceil(lay.cols / 2);
+    const bW0 = nP * 2 * cW + (nP > 1 ? gutter : 0);
+    const bH0 = lay.rows * cH + (lay.rows > 1 ? gutter : 0);
+    const checkW = blockRotated ? bH0 : bW0;
+    const checkH = blockRotated ? bW0 : bH0;
+    if (checkW <= pw && checkH <= ph) {
       bestSigSize = sig;
       break;
     }
@@ -581,11 +588,14 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   const cellW = trimW + bleed;
   const cellH = trimH + bleed * 2;
 
-  // One signature block dimensions
+  // Natural (unrotated) block dimensions
   const numPairs = Math.ceil(layout.cols / 2);
   const pairW = 2 * cellW;
-  const blockW = numPairs * pairW + (numPairs > 1 ? gutter : 0);
-  const blockH = layout.rows * cellH + (layout.rows > 1 ? gutter : 0);
+  const blockWnat = numPairs * pairW + (numPairs > 1 ? gutter : 0);
+  const blockHnat = layout.rows * cellH + (layout.rows > 1 ? gutter : 0);
+  // Effective block dimensions on sheet (after rotation)
+  const blockW = blockRotated ? blockHnat : blockWnat;
+  const blockH = blockRotated ? blockWnat : blockHnat;
 
   // How many signature blocks fit on the press sheet
   const blockGapH = 3; // mm between sig blocks horizontal
@@ -598,11 +608,11 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   const totalPressSheets = canRepeat ? 1 : Math.ceil(totalSigs / sigsPerSheet);
   const totalSheets = totalPressSheets * qty;
 
-  // Grid dimensions for canvas (one block)
-  const usedW = blockW;
-  const usedH = blockH;
-  const cenOffX = area.marginLeft + (pw - usedW) / 2;
-  const cenOffY = area.marginTop + (ph - usedH) / 2;
+  // Overall grid footprint (all blocks + inter-block gaps)
+  const totalGridW = sigsAcross * blockW + Math.max(0, sigsAcross - 1) * blockGapH;
+  const totalGridH = sigsDown * blockH + Math.max(0, sigsDown - 1) * blockGapV;
+  const gridStartX = area.marginLeft + (pw - totalGridW) / 2;
+  const gridStartY = area.marginTop + (ph - totalGridH) / 2;
 
   // ─── Build structured signatures using standard octavo fold pattern ───
   const foldMap = PB_PAGE_MAP[bestSigSize];
@@ -642,53 +652,87 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
     totalSheets: navSheets.length,
   };
 
-  // Build cells for canvas preview (first signature, front side)
+  // Build cells for ALL blocks on the press sheet (sigsAcross × sigsDown).
+  // Each block shows the fold pattern (canvas uses the active signature for actual page numbers).
   const cells: ImpositionCell[] = [];
   if (foldMap) {
-    // Pairs share the spine — no bleed and no gap between the two pages of a pair.
-    // Inter-pair gap (gutter) only between spreads. Vertical gap only once, between
-    // top half and bottom half (octavo head-to-head fold).
     const interPairGap = numPairs > 1 ? gutter : 0;
     const halfwayMark = Math.floor(layout.rows / 2);
-    for (let r = 0; r < layout.rows; r++) {
-      for (let c = 0; c < layout.cols; c++) {
-        const localPage = foldMap.front[r]?.[c] ?? 0;
-        const rowFromBottom = layout.rows - 1 - r;
-        // Gripper row (bottom) heads-up; alternate every row going up.
-        const rot = (rowFromBottom % 2 === 1) ? 180 : 0;
-        const pairIdx = Math.floor(c / 2);
-        const colInPair = c % 2;
-        const pairX = cenOffX + pairIdx * (pairW + interPairGap);
-        const cellX = pairX + colInPair * cellW;
-        const isInBottomHalf = layout.rows > 1 && r >= halfwayMark;
-        const cellY = cenOffY + r * cellH + (isInBottomHalf ? gutter : 0);
-        cells.push({
-          col: c, row: r,
-          x: cellX, y: cellY,
-          w: cellW, h: cellH,
-          pageNum: localPage,
-          rotation: rot,
-          bleedL: colInPair === 0 ? bleed : 0,
-          bleedR: colInPair === 1 ? bleed : 0,
-          bleedT: bleed, bleedB: bleed,
-        });
+
+    for (let by = 0; by < sigsDown; by++) {
+      for (let bx = 0; bx < sigsAcross; bx++) {
+        const blockOrigX = gridStartX + bx * (blockW + blockGapH);
+        const blockOrigY = gridStartY + by * (blockH + blockGapV);
+
+        for (let r = 0; r < layout.rows; r++) {
+          for (let c = 0; c < layout.cols; c++) {
+            const localPage = foldMap.front[r]?.[c] ?? 0;
+            const rowFromBottom = layout.rows - 1 - r;
+            // Gripper row (bottom) heads-up; alternate every row going up.
+            const natRot = (rowFromBottom % 2 === 1) ? 180 : 0;
+            const pairIdx = Math.floor(c / 2);
+            const colInPair = c % 2;
+            // Cell position/size in NATURAL (unrotated) block frame (origin = block top-left)
+            const natX = pairIdx * (pairW + interPairGap) + colInPair * cellW;
+            const isInBottomHalf = layout.rows > 1 && r >= halfwayMark;
+            const natY = r * cellH + (isInBottomHalf ? gutter : 0);
+            const bL0 = colInPair === 0 ? bleed : 0;
+            const bR0 = colInPair === 1 ? bleed : 0;
+            const bT0 = bleed;
+            const bB0 = bleed;
+
+            let finalX: number, finalY: number, finalW: number, finalH: number;
+            let finalRot: number;
+            let bL: number, bR: number, bT: number, bB: number;
+
+            if (blockRotated) {
+              // Rotate 90° CW inside a (blockWnat × blockHnat) → (blockHnat × blockWnat) frame:
+              // rect (x, y, w, h) → new top-left (y, blockWnat - x - w), new size (h, w)
+              finalX = blockOrigX + natY;
+              finalY = blockOrigY + (blockWnat - natX - cellW);
+              finalW = cellH;
+              finalH = cellW;
+              finalRot = (natRot + 90) % 360;
+              // Bleeds rotate CW: T→R, R→B, B→L, L→T
+              bL = bB0; bR = bT0; bT = bL0; bB = bR0;
+            } else {
+              finalX = blockOrigX + natX;
+              finalY = blockOrigY + natY;
+              finalW = cellW;
+              finalH = cellH;
+              finalRot = natRot;
+              bL = bL0; bR = bR0; bT = bT0; bB = bB0;
+            }
+
+            cells.push({
+              col: c, row: r,
+              x: finalX, y: finalY,
+              w: finalW, h: finalH,
+              pageNum: localPage,
+              rotation: finalRot,
+              bleedL: bL, bleedR: bR,
+              bleedT: bT, bleedB: bB,
+            });
+          }
+        }
       }
     }
   }
 
   return {
     mode: 'perfect_bound',
-    ups: layout.cols * layout.rows,
+    ups: layout.cols * layout.rows * sigsPerSheet,
     cols: layout.cols,
     rows: layout.rows,
     paperW: area.paperW,
     paperH: area.paperH,
-    pieceW: cellW,
-    pieceH: cellH,
+    pieceW: blockRotated ? cellH : cellW,
+    pieceH: blockRotated ? cellW : cellH,
     trimW,
     trimH,
-    rotated: false,
-    wastePercent: wastePercent(area.paperW, area.paperH, usedW, usedH),
+    rotated: blockRotated,
+    pageRotation: rot,
+    wastePercent: wastePercent(area.paperW, area.paperH, totalGridW, totalGridH),
     cells,
     totalSheets,
     signatures: totalSigs,

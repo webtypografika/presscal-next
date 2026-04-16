@@ -1215,6 +1215,43 @@ export default function ImpositionCanvas({
       }
     }
 
+    // ─── PERFECT BOUND: rotate button on the block grid centre ───
+    if (impo.mode === 'perfect_bound' && onRotate && impo.cells.length > 0) {
+      const sLeftExtra = feedEdge && machCat !== 'offset' ? 24 : 0;
+      const sScX = (cW - 24 - sLeftExtra - markLen * 2) / sheetW;
+      const sScY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;
+      const sSc = Math.min(sScX, sScY);
+      const sDW = sheetW * sSc;
+      const sDH = sheetH * sSc;
+      const sOffX = sLeftExtra + (cW - sLeftExtra - sDW) / 2;
+      const sOffY = reserveTop + markLen + (cH - reserveTop - reserveBot - markLen * 2 - sDH) / 2;
+      let bL = Infinity, bT = Infinity, bR = -Infinity, bB = -Infinity;
+      for (const c of impo.cells) {
+        if (c.x < bL) bL = c.x;
+        if (c.y < bT) bT = c.y;
+        if (c.x + c.w > bR) bR = c.x + c.w;
+        if (c.y + c.h > bB) bB = c.y + c.h;
+      }
+      const rotBtnX = sOffX + ((bL + bR) / 2 + (offsetX || 0)) * sSc;
+      const rotBtnY = sOffY + ((bT + bB) / 2 + (offsetY || 0)) * sSc;
+      ctx.fillStyle = 'rgba(245,130,32,0.85)';
+      ctx.beginPath();
+      ctx.arc(rotBtnX, rotBtnY, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(rotBtnX, rotBtnY, 4.5, -Math.PI * 0.7, Math.PI * 0.5);
+      ctx.stroke();
+      const ax = rotBtnX + 4.5 * Math.cos(Math.PI * 0.5);
+      const ay = rotBtnY + 4.5 * Math.sin(Math.PI * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(ax + 2, ay - 1.5);
+      ctx.lineTo(ax - 1.5, ay);
+      ctx.lineTo(ax + 2, ay + 1.5);
+      ctx.stroke();
+    }
+
     // Bottom info strip
     const modeLabels: Record<string, string> = {
       nup: 'N-Up', booklet: 'Booklet', perfect_bound: 'Perfect Bound',
@@ -1280,6 +1317,19 @@ export default function ImpositionCanvas({
   // ─── N-UP GRID DRAG (resize) ───
   const gridDragRef = useRef<{ cols: number; rows: number; startCols: number; startRows: number; mode: 'resize' | 'move'; startMmX: number; startMmY: number; origOffX: number; origOffY: number; axis?: 'x' | 'y' | null } | null>(null);
 
+  // Cell bounding box in PAPER mm (used by PB and others that don't follow the cols×trimW grid shape)
+  const cellBBox = useCallback(() => {
+    if (impo.cells.length === 0) return null;
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const c of impo.cells) {
+      if (c.x < left) left = c.x;
+      if (c.y < top) top = c.y;
+      if (c.x + c.w > right) right = c.x + c.w;
+      if (c.y + c.h > bottom) bottom = c.y + c.h;
+    }
+    return { left, top, right, bottom };
+  }, [impo.cells]);
+
   const findGridHandle = useCallback((mmX: number, mmY: number): boolean => {
     if (!onGridResize || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn')) return false;
     if (impo.cells.length === 0) return false;
@@ -1299,16 +1349,26 @@ export default function ImpositionCanvas({
   }, [impo, onGridResize, marginLeft, marginTop, marginBottom, machCat, offsetX, offsetY]);
 
   const findRotateBtn = useCallback((mmX: number, mmY: number): boolean => {
-    if (!onRotate || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn')) return false;
-    const pw = sheetW - marginLeft - marginRight;
-    const ph = sheetH - marginTop - marginBottom;
-    const trimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
-    const trimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
-    const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
-    const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
-    const cx = gridStartX + trimGridWmm / 2;
-    // Center of grid
-    const cy = gridStartY + trimGridHmm / 2;
+    if (!onRotate || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn' && impo.mode !== 'perfect_bound')) return false;
+    let cx: number, cy: number;
+    if (impo.mode === 'perfect_bound') {
+      const bb = cellBBox();
+      if (!bb) return false;
+      // mmX/mmY are in PRINTABLE coords; convert bbox from paper to printable
+      const isOff = machCat === 'offset';
+      const mt = isOff ? marginBottom : marginTop;
+      cx = (bb.left + bb.right) / 2 - marginLeft + (offsetX || 0);
+      cy = (bb.top + bb.bottom) / 2 - mt + (offsetY || 0);
+    } else {
+      const pw = sheetW - marginLeft - marginRight;
+      const ph = sheetH - marginTop - marginBottom;
+      const trimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
+      const trimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+      const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
+      const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
+      cx = gridStartX + trimGridWmm / 2;
+      cy = gridStartY + trimGridHmm / 2;
+    }
     const markLen = cropMarks ? 8 : 0;
     const scX = (750 - 24 - markLen * 2) / sheetW;
     const scY = (625 - 20 - 22 - markLen * 2) / sheetH;
@@ -1316,10 +1376,21 @@ export default function ImpositionCanvas({
     const hitR = 9 / sc;
     const dist = Math.sqrt((mmX - cx) ** 2 + (mmY - cy) ** 2);
     return dist < hitR;
-  }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY, cropMarks]);
+  }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, machCat, gutter, offsetX, offsetY, cropMarks, cellBBox]);
 
   const findGridBody = useCallback((mmX: number, mmY: number): boolean => {
-    if (!onOffsetChange || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn')) return false;
+    if (!onOffsetChange || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn' && impo.mode !== 'perfect_bound')) return false;
+    if (impo.mode === 'perfect_bound') {
+      const bb = cellBBox();
+      if (!bb) return false;
+      const isOff = machCat === 'offset';
+      const mt = isOff ? marginBottom : marginTop;
+      const l = bb.left - marginLeft + (offsetX || 0);
+      const t = bb.top - mt + (offsetY || 0);
+      const r = bb.right - marginLeft + (offsetX || 0);
+      const b = bb.bottom - mt + (offsetY || 0);
+      return mmX >= l && mmX <= r && mmY >= t && mmY <= b;
+    }
     const pw = sheetW - marginLeft - marginRight;
     const ph = sheetH - marginTop - marginBottom;
     const trimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
@@ -1328,7 +1399,7 @@ export default function ImpositionCanvas({
     const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
     return mmX >= gridStartX && mmX <= gridStartX + trimGridWmm &&
            mmY >= gridStartY && mmY <= gridStartY + trimGridHmm;
-  }, [impo, onOffsetChange, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, gutter, offsetX, offsetY]);
+  }, [impo, onOffsetChange, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, machCat, gutter, offsetX, offsetY, cellBBox]);
 
   // ─── STEP MULTI DRAG ───
   const smDragRef = useRef<{
