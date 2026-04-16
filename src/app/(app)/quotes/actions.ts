@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
-import { normalize, normalizeGreeklish } from '@/lib/search';
+import { fuzzySearchIds, orderByIds } from '@/lib/search';
 
 const ORG_ID = 'default-org';
 
@@ -359,32 +359,48 @@ export async function createCompanyFromElorus(data: {
 }
 
 export async function getCompaniesForQuotes(search?: string) {
-  const where: any = { orgId: ORG_ID, deletedAt: null };
-  if (search?.trim()) {
-    const norm = normalize(search.trim());
-    const greeklish = normalizeGreeklish(search.trim());
-    const variants = [search.trim(), norm, greeklish].filter((v, i, a) => a.indexOf(v) === i);
-    where.OR = variants.flatMap(s => [
-      { name: { contains: s, mode: 'insensitive' } },
-      { email: { contains: s, mode: 'insensitive' } },
-      { afm: { contains: s } },
-      { companyContacts: { some: { contact: { OR: [
-        { name: { contains: s, mode: 'insensitive' } },
-        { email: { contains: s, mode: 'insensitive' } },
-      ] } } } },
-    ]);
+  if (!search?.trim()) {
+    return prisma.company.findMany({
+      where: { orgId: ORG_ID, deletedAt: null },
+      include: {
+        companyContacts: {
+          include: { contact: true },
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        },
+      },
+      orderBy: { name: 'asc' },
+      take: 30,
+    });
   }
-  return prisma.company.findMany({
-    where,
+  // Fuzzy: match company directly OR via linked contacts (name/email)
+  const [companyIds, contactIds] = await Promise.all([
+    fuzzySearchIds('Company', ORG_ID, search, 30),
+    fuzzySearchIds('Contact', ORG_ID, search, 30),
+  ]);
+  let viaContact: string[] = [];
+  if (contactIds.length > 0) {
+    const links = await prisma.companyContact.findMany({
+      where: { contactId: { in: contactIds } },
+      select: { companyId: true },
+    });
+    viaContact = links.map(l => l.companyId);
+  }
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const id of [...companyIds, ...viaContact]) {
+    if (!seen.has(id)) { seen.add(id); ids.push(id); }
+  }
+  if (ids.length === 0) return [];
+  const rows = await prisma.company.findMany({
+    where: { id: { in: ids.slice(0, 30) }, deletedAt: null },
     include: {
       companyContacts: {
         include: { contact: true },
         orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
       },
     },
-    orderBy: { name: 'asc' },
-    take: 30,
   });
+  return orderByIds(rows, ids.slice(0, 30));
 }
 
 // ─── QUOTE RECIPIENTS ───

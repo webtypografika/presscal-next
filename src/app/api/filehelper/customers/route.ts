@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { fuzzySearchIds, orderByIds } from '@/lib/search'
 import { authenticateFilehelper } from '../auth'
 
 // GET /api/filehelper/customers — List companies (backward-compatible response shape)
@@ -9,44 +10,45 @@ export async function GET(req: NextRequest) {
 
   const search = req.nextUrl.searchParams.get('search')
 
-  const where: any = {
-    orgId: auth.org.id,
-    deletedAt: null
-  }
-
-  if (search) {
-    where.OR = [
-      { name: { contains: search, mode: 'insensitive' } },
-      { email: { contains: search, mode: 'insensitive' } },
-      { afm: { contains: search } },
-      {
-        companyContacts: {
-          some: {
-            contact: {
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } },
-              ]
-            }
-          }
-        }
-      }
-    ]
-  }
-
-  const companies = await prisma.company.findMany({
-    where,
-    include: {
-      companyContacts: {
-        where: { isPrimary: true },
-        include: { contact: true },
-        take: 1,
+  let companies: any[]
+  if (search?.trim()) {
+    // Fuzzy search across company + linked contacts
+    const [companyIds, contactIds] = await Promise.all([
+      fuzzySearchIds('Company', auth.org.id, search, 50),
+      fuzzySearchIds('Contact', auth.org.id, search, 50),
+    ])
+    let viaContact: string[] = []
+    if (contactIds.length > 0) {
+      const links = await prisma.companyContact.findMany({
+        where: { contactId: { in: contactIds } },
+        select: { companyId: true },
+      })
+      viaContact = links.map(l => l.companyId)
+    }
+    const seen = new Set<string>()
+    const ids: string[] = []
+    for (const id of [...companyIds, ...viaContact]) {
+      if (!seen.has(id)) { seen.add(id); ids.push(id) }
+    }
+    const rows = ids.length === 0 ? [] : await prisma.company.findMany({
+      where: { id: { in: ids.slice(0, 50) }, deletedAt: null },
+      include: {
+        companyContacts: { where: { isPrimary: true }, include: { contact: true }, take: 1 },
+        _count: { select: { quotes: true } },
       },
-      _count: { select: { quotes: true } }
-    },
-    orderBy: { name: 'asc' },
-    take: 50
-  })
+    })
+    companies = orderByIds(rows, ids.slice(0, 50))
+  } else {
+    companies = await prisma.company.findMany({
+      where: { orgId: auth.org.id, deletedAt: null },
+      include: {
+        companyContacts: { where: { isPrimary: true }, include: { contact: true }, take: 1 },
+        _count: { select: { quotes: true } },
+      },
+      orderBy: { name: 'asc' },
+      take: 50,
+    })
+  }
 
   // Return backward-compatible shape for FileHelper desktop app
   return NextResponse.json(companies.map((c: any) => {

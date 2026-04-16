@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
-import { normalize, normalizeGreeklish } from '@/lib/search';
+import { fuzzySearchIds, orderByIds } from '@/lib/search';
 
 const ORG_ID = 'default-org';
 
@@ -13,27 +13,28 @@ export async function getCompanies(opts?: { search?: string; skip?: number; take
   const skip = opts?.skip ?? 0;
   const search = opts?.search?.trim();
 
-  const where: any = { orgId: ORG_ID, deletedAt: null };
+  // Fuzzy-search path: fetch ranked IDs (accents, case, greeklish, typos), then include relations.
+  // Pagination is applied after the fuzzy ranking.
   if (search) {
-    // Use both original and normalized (accent-stripped) for matching
-    const norm = normalize(search);
-    const greeklish = normalizeGreeklish(search);
-    const variants = [search, norm, greeklish].filter((v, i, a) => a.indexOf(v) === i);
-
-    where.OR = variants.flatMap(s => [
-      { name: { contains: s, mode: 'insensitive' } },
-      { email: { contains: s, mode: 'insensitive' } },
-      { afm: { contains: s } },
-      { phone: { contains: s } },
-      { companyContacts: { some: { contact: { OR: [
-        { name: { contains: s, mode: 'insensitive' } },
-        { email: { contains: s, mode: 'insensitive' } },
-        { phone: { contains: s } },
-        { mobile: { contains: s } },
-      ] } } } },
-    ]);
+    const ids = await fuzzySearchIds('Company', ORG_ID, search, 500);
+    const total = ids.length;
+    const pageIds = ids.slice(skip, skip + take);
+    if (pageIds.length === 0) return { companies: [], total, hasMore: false };
+    const rows = await prisma.company.findMany({
+      where: { id: { in: pageIds } },
+      include: {
+        companyContacts: {
+          include: { contact: true },
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        },
+        _count: { select: { quotes: true } },
+      },
+    });
+    return { companies: orderByIds(rows, pageIds), total, hasMore: skip + take < total };
   }
 
+  // Default listing (no search): alphabetical, paginated.
+  const where = { orgId: ORG_ID, deletedAt: null };
   const [companies, total] = await Promise.all([
     prisma.company.findMany({
       where,
@@ -261,22 +262,10 @@ export async function setPrimaryContact(companyId: string, contactId: string) {
 // ─── SEARCH (for dropdowns) ───
 
 export async function searchCompanies(q: string) {
-  if (!q.trim()) return [];
-  const term = q.trim();
-  const norm = normalize(term);
-  const greeklish = normalizeGreeklish(term);
-  const variants = [term, norm, greeklish].filter((v, i, a) => a.indexOf(v) === i);
-  return prisma.company.findMany({
-    where: {
-      orgId: ORG_ID,
-      deletedAt: null,
-      OR: variants.flatMap(s => [
-        { name: { contains: s, mode: 'insensitive' as const } },
-        { email: { contains: s, mode: 'insensitive' as const } },
-        { afm: { contains: s } },
-        { phone: { contains: s } },
-      ]),
-    },
+  const ids = await fuzzySearchIds('Company', ORG_ID, q, 20);
+  if (ids.length === 0) return [];
+  const rows = await prisma.company.findMany({
+    where: { id: { in: ids } },
     include: {
       companyContacts: {
         where: { isPrimary: true },
@@ -284,9 +273,8 @@ export async function searchCompanies(q: string) {
         take: 1,
       },
     },
-    take: 20,
-    orderBy: { name: 'asc' },
   });
+  return orderByIds(rows, ids);
 }
 
 // ─── CONTACTS WITH COMPANIES (for People tab) ───
@@ -296,28 +284,51 @@ export async function getContactsWithCompanies(opts?: { search?: string; skip?: 
   const skip = opts?.skip ?? 0;
   const search = opts?.search?.trim();
 
-  const where: any = { orgId: ORG_ID, deletedAt: null };
+  // Fuzzy path: search matches contact OR their company name (via companyContacts).
   if (search) {
-    const norm = normalize(search);
-    const greeklish = normalizeGreeklish(search);
-    const variants = [search, norm, greeklish].filter((v, i, a) => a.indexOf(v) === i);
-
-    where.OR = variants.flatMap(s => [
-      { name: { contains: s, mode: 'insensitive' } },
-      { email: { contains: s, mode: 'insensitive' } },
-      { phone: { contains: s } },
-      { mobile: { contains: s } },
-      { companyContacts: { some: { company: { name: { contains: s, mode: 'insensitive' } } } } },
+    const [contactIds, companyIds] = await Promise.all([
+      fuzzySearchIds('Contact', ORG_ID, search, 500),
+      fuzzySearchIds('Company', ORG_ID, search, 500),
     ]);
+
+    // Contacts linked to any matching company
+    let viaCompany: string[] = [];
+    if (companyIds.length > 0) {
+      const links = await prisma.companyContact.findMany({
+        where: { companyId: { in: companyIds } },
+        select: { contactId: true },
+      });
+      viaCompany = links.map(l => l.contactId);
+    }
+
+    // Dedupe preserving contact-match order first (better relevance)
+    const seen = new Set<string>();
+    const mergedIds: string[] = [];
+    for (const id of [...contactIds, ...viaCompany]) {
+      if (!seen.has(id)) { seen.add(id); mergedIds.push(id); }
+    }
+
+    const total = mergedIds.length;
+    const pageIds = mergedIds.slice(skip, skip + take);
+    if (pageIds.length === 0) return { contacts: [], total, hasMore: false };
+
+    const rows = await prisma.contact.findMany({
+      where: { id: { in: pageIds }, deletedAt: null },
+      include: {
+        companyContacts: { include: { company: { select: { id: true, name: true } } } },
+        _count: { select: { quotes: true } },
+      },
+    });
+    return { contacts: orderByIds(rows, pageIds), total, hasMore: skip + take < total };
   }
 
+  // Default listing
+  const where = { orgId: ORG_ID, deletedAt: null };
   const [contacts, total] = await Promise.all([
     prisma.contact.findMany({
       where,
       include: {
-        companyContacts: {
-          include: { company: { select: { id: true, name: true } } },
-        },
+        companyContacts: { include: { company: { select: { id: true, name: true } } } },
         _count: { select: { quotes: true } },
       },
       orderBy: { name: 'asc' },
@@ -333,30 +344,21 @@ export async function getContactsWithCompanies(opts?: { search?: string; skip?: 
 // ─── SEARCH CONTACTS (greeklish-aware, for dropdowns) ───
 
 export async function searchContacts(search?: string) {
-  const where: any = { orgId: ORG_ID, deletedAt: null };
-  if (search?.trim()) {
-    const s = search.trim();
-    const norm = normalize(s);
-    const greeklish = normalizeGreeklish(s);
-    const variants = [s, norm, greeklish].filter((v, i, a) => a.indexOf(v) === i);
-    where.OR = variants.flatMap(v => [
-      { name: { contains: v, mode: 'insensitive' } },
-      { email: { contains: v, mode: 'insensitive' } },
-      { phone: { contains: v } },
-      { mobile: { contains: v } },
-    ]);
+  if (!search?.trim()) {
+    return prisma.contact.findMany({
+      where: { orgId: ORG_ID, deletedAt: null },
+      include: { companyContacts: { include: { company: { select: { id: true, name: true } } }, take: 3 } },
+      orderBy: { name: 'asc' },
+      take: 20,
+    });
   }
-  return prisma.contact.findMany({
-    where,
-    include: {
-      companyContacts: {
-        include: { company: { select: { id: true, name: true } } },
-        take: 3,
-      },
-    },
-    orderBy: { name: 'asc' },
-    take: 20,
+  const ids = await fuzzySearchIds('Contact', ORG_ID, search, 20);
+  if (ids.length === 0) return [];
+  const rows = await prisma.contact.findMany({
+    where: { id: { in: ids } },
+    include: { companyContacts: { include: { company: { select: { id: true, name: true } } }, take: 3 } },
   });
+  return orderByIds(rows, ids);
 }
 
 // ─── CREATE COMPANY FROM ELORUS ───

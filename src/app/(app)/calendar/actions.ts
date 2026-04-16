@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
+import { fuzzySearchIds, orderByIds } from '@/lib/search';
 
 const ORG_ID = 'default-org';
 
@@ -70,50 +71,52 @@ export async function getEvents(start: string, end: string) {
 // ─── SEARCH helpers for dropdowns ───
 
 export async function searchCompaniesForCalendar(q: string) {
-  if (!q.trim()) return [];
-  return prisma.company.findMany({
-    where: {
-      orgId: ORG_ID,
-      deletedAt: null,
-      name: { contains: q.trim(), mode: 'insensitive' },
-    },
+  const ids = await fuzzySearchIds('Company', ORG_ID, q, 15);
+  if (ids.length === 0) return [];
+  const rows = await prisma.company.findMany({
+    where: { id: { in: ids } },
     select: { id: true, name: true },
-    take: 15,
-    orderBy: { name: 'asc' },
   });
+  return orderByIds(rows, ids);
 }
 
 export async function searchQuotesForCalendar(q: string) {
-  if (!q.trim()) return [];
-  const term = q.trim();
-  return prisma.quote.findMany({
-    where: {
-      orgId: ORG_ID,
-      deletedAt: null,
-      OR: [
-        { number: { contains: term, mode: 'insensitive' } },
-        { title: { contains: term, mode: 'insensitive' } },
-        { company: { name: { contains: term, mode: 'insensitive' } } },
-      ],
-    },
+  // Quote searchKey covers number + title + description.
+  // Also match via linked company name → include those quotes.
+  const [quoteIds, companyIds] = await Promise.all([
+    fuzzySearchIds('Quote', ORG_ID, q, 15),
+    fuzzySearchIds('Company', ORG_ID, q, 15),
+  ]);
+  let viaCompany: string[] = [];
+  if (companyIds.length > 0) {
+    const qs = await prisma.quote.findMany({
+      where: { orgId: ORG_ID, deletedAt: null, companyId: { in: companyIds } },
+      select: { id: true },
+      take: 15,
+    });
+    viaCompany = qs.map(x => x.id);
+  }
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const id of [...quoteIds, ...viaCompany]) {
+    if (!seen.has(id)) { seen.add(id); ids.push(id); }
+  }
+  if (ids.length === 0) return [];
+  const rows = await prisma.quote.findMany({
+    where: { id: { in: ids.slice(0, 15) } },
     select: { id: true, number: true, title: true, company: { select: { name: true } } },
-    take: 15,
-    orderBy: { createdAt: 'desc' },
   });
+  return orderByIds(rows, ids.slice(0, 15));
 }
 
 export async function searchContactsForCalendar(q: string) {
-  if (!q.trim()) return [];
-  return prisma.contact.findMany({
-    where: {
-      orgId: ORG_ID,
-      deletedAt: null,
-      name: { contains: q.trim(), mode: 'insensitive' },
-    },
+  const ids = await fuzzySearchIds('Contact', ORG_ID, q, 15);
+  if (ids.length === 0) return [];
+  const rows = await prisma.contact.findMany({
+    where: { id: { in: ids } },
     select: { id: true, name: true },
-    take: 15,
-    orderBy: { name: 'asc' },
   });
+  return orderByIds(rows, ids);
 }
 
 // ─── CREATE ───

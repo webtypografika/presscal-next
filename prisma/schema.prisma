@@ -482,6 +482,9 @@ model Company {
   folderPath        String?   // Shared folder for this company
   elorusContactId   String?   // Elorus contact (company-level)
 
+  // Fuzzy-search key (auto-maintained by DB trigger — lower+unaccent of name/email/afm/phone/legalName)
+  searchKey String   @default("")
+
   // Relations
   companyContacts CompanyContact[]
   quotes          Quote[]
@@ -516,6 +519,9 @@ model Contact {
 
   // Folder path for standalone contacts (ιδιώτες without company)
   folderPath String?
+
+  // Fuzzy-search key (auto-maintained by DB trigger — lower+unaccent of name/email/phone/mobile)
+  searchKey String   @default("")
 
   // Relations
   companyContacts CompanyContact[]
@@ -587,6 +593,9 @@ model Quote {
   title       String?
   description String?
   notes       String?
+
+  // Fuzzy-search key (auto-maintained by DB trigger — lower+unaccent of number/title/description)
+  searchKey   String  @default("")
 
   // Items stored as JSON array (QuoteLineItem[])
   items       Json    @default("[]")
