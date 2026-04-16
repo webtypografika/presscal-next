@@ -272,35 +272,66 @@ export async function archiveQuote(
   const statusPatch: Record<string, unknown> = { status: targetStatus };
   if (targetStatus === 'completed') statusPatch.completedAt = new Date();
 
-  const { toArchivePath, isArchivedPath } = await import('@/lib/job-folder');
+  const { toArchivePath, isArchivedPath, isQuoteSubfolder } = await import('@/lib/job-folder');
 
-  if (!jobFolderPath) {
+  const updateStatusOnly = async () => {
     await prisma.quote.update({ where: { id: quoteId }, data: statusPatch });
     revalidatePath('/quotes');
     revalidatePath('/jobs');
     revalidatePath('/');
+  };
+
+  if (!jobFolderPath) {
+    await updateStatusOnly();
     return { originalFolderPath: null, newFolderPath: null };
   }
 
   // Already in archive — don't double-archive. Just update status.
   if (isArchivedPath(jobFolderPath)) {
-    await prisma.quote.update({ where: { id: quoteId }, data: statusPatch });
-    revalidatePath('/quotes');
-    revalidatePath('/jobs');
-    revalidatePath('/');
+    await updateStatusOnly();
     return { originalFolderPath: null, newFolderPath: jobFolderPath };
   }
 
+  // SAFETY: never archive a customer/company folder. The path must be a QUOTE subfolder.
+  const quote = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: { number: true, company: { select: { folderPath: true } } },
+  });
+  if (!isQuoteSubfolder(jobFolderPath, quote?.company?.folderPath ?? null, quote?.number ?? '')) {
+    await updateStatusOnly();
+    throw new Error('Ο φάκελος δεν είναι φάκελος προσφοράς (πιθανόν δείχνει σε φάκελο πελάτη). Δεν αρχειοθετείται.');
+  }
+
+  // Update STATUS only — do NOT speculatively update jobFolderPath.
+  // PressKit may fail (EBUSY, permission, cancelled) so the DB must stay in sync with
+  // the real filesystem. When PressKit successfully moves the folder, it calls
+  // POST /api/quotes/:id/confirm-archive which updates jobFolderPath to the archive path.
+  await updateStatusOnly();
+
   const newFolderPath = toArchivePath(jobFolderPath);
+  return { originalFolderPath: jobFolderPath, newFolderPath };
+}
+
+// ─── CONFIRM ARCHIVE (called by PressKit after successful folder move) ───
+// PressKit hits this after a successful rename to keep the DB in sync with the
+// actual filesystem location. If the move failed, PressKit never calls this and
+// the DB remains pointing at the original path (so the Open Folder button still works).
+
+export async function confirmArchive(
+  quoteId: string,
+  newFolderPath: string,
+): Promise<void> {
+  const { isArchivedPath } = await import('@/lib/job-folder');
+  if (!isArchivedPath(newFolderPath)) {
+    throw new Error('confirmArchive: path is not an archive path');
+  }
   await prisma.quote.update({
     where: { id: quoteId },
-    data: { ...statusPatch, jobFolderPath: newFolderPath },
+    data: { jobFolderPath: newFolderPath },
   });
   revalidatePath('/quotes');
   revalidatePath('/jobs');
   revalidatePath('/');
-
-  return { originalFolderPath: jobFolderPath, newFolderPath };
 }
 
 // ─── LINK EMAIL ───

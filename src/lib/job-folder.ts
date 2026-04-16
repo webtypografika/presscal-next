@@ -74,3 +74,37 @@ export function toArchivePath(activePath: string): string {
 export function isArchivedPath(path: string): boolean {
   return /[\\/]_(?:01 )?Archive[\\/]/.test(path);
 }
+
+/**
+ * Safety guard: verifies that `candidatePath` is a QUOTE subfolder, not a customer root.
+ *
+ * Required conditions (any one is enough):
+ *   - Differs from the company folder path AND is strictly inside it, OR
+ *   - Its basename contains the quote's numeric segment (e.g. "2026-0019" or "QT-2026-0019")
+ *
+ * Rejected: `candidatePath === companyFolderPath` (would archive the customer itself).
+ */
+export function isQuoteSubfolder(
+  candidatePath: string,
+  companyFolderPath: string | null,
+  quoteNumber: string,
+): boolean {
+  if (!candidatePath) return false;
+
+  // Normalize separators for comparison (Windows paths can be mixed)
+  const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  const cand = norm(candidatePath);
+  const comp = companyFolderPath ? norm(companyFolderPath) : null;
+
+  // Hard fail: exactly the company folder root
+  if (comp && cand === comp) return false;
+
+  // Hard pass: properly inside company folder (sep-separated)
+  if (comp && cand.startsWith(comp + '/')) return true;
+
+  // Basename must contain the quote number (full "QT-2026-0019" or numeric "2026-0019")
+  const basename = candidatePath.split(/[\\/]/).filter(Boolean).pop() || '';
+  if (!quoteNumber) return true; // can't verify — allow by default
+  const numericOnly = quoteNumber.replace(/^[A-Z]+-?/i, '');
+  return basename.includes(quoteNumber) || basename.includes(numericOnly);
+}
