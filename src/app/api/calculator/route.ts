@@ -532,6 +532,16 @@ export async function POST(req: NextRequest) {
       turnType: body.impoTurnType,
       pages: body.pages || undefined,
       paperThickness: body.paperThickness || undefined,
+      // Gang Run — required so server computes the correct sheet count
+      gangPageCount: body.gangPageCount,
+      gangCellAssign: body.gangCellAssign,
+      gangJobQty: body.gangJobQty,
+      gangAutoOptimize: body.gangAutoOptimize,
+      // Cut & Stack
+      stackOrder: body.stackOrder,
+      stackStartNum: body.stackStartNum,
+      // Step Multi
+      stepBlocks: body.stepBlocks as ImpositionInput['stepBlocks'],
     };
 
     const imposition = calcImposition(impoInput);

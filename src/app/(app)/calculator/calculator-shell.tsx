@@ -1239,6 +1239,20 @@ export default function CalculatorShell() {
           impoForceRows: impoForceRows || undefined,
           impoTurnType: impoTurnType,
           impoCropMarks: impoCropMarks,
+          // Gang Run — server must know jobs + assignments to compute sheets correctly
+          gangPageCount: impoMode === 'gangrun' ? gangJobs.length : undefined,
+          gangCellAssign: impoMode === 'gangrun' ? Object.fromEntries(
+            Object.entries(gangCellAssign).map(([k, v]) => [k, v + 1])
+          ) : undefined,
+          gangJobQty: impoMode === 'gangrun' ? Object.fromEntries(
+            gangJobs.map((gj, idx) => [idx + 1, Math.max(1, gj.qty || 1)])
+          ) : undefined,
+          gangAutoOptimize: impoMode === 'gangrun' ? Object.keys(gangCellAssign).length === 0 : undefined,
+          // Cut & Stack
+          stackOrder: impoMode === 'cutstack' ? csStackOrder : undefined,
+          stackStartNum: impoMode === 'cutstack' ? csStartNum : undefined,
+          // Step Multi
+          stepBlocks: impoMode === 'stepmulti' ? smBlocks : undefined,
           wasteFixed,
           coverageLevel: color.coverage || 'mid',
           coveragePdf: pdf?.coverage ? { c: pdf.coverage.c, m: pdf.coverage.m, y: pdf.coverage.y, k: pdf.coverage.k } : undefined,
@@ -1275,7 +1289,7 @@ export default function CalculatorShell() {
         .finally(() => setCalculating(false));
     }, 300);
     return () => { if (calcTimer.current) clearTimeout(calcTimer.current); };
-  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, feedEdge, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage, overrides, prodMultiplier]);
+  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, feedEdge, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage, overrides, prodMultiplier, gangJobs, gangCellAssign, smBlocks, csStackOrder, csStartNum]);
 
   // ─── DISPLAY VALUES ───
   const r = calcResult;

@@ -39,6 +39,19 @@ export interface CalculatorInput {
   pages?: number;
   paperThickness?: number;
 
+  // Gang Run
+  gangPageCount?: number;
+  gangCellAssign?: Record<number, number>;
+  gangJobQty?: Record<number, number>;
+  gangAutoOptimize?: boolean;
+
+  // Cut & Stack
+  stackOrder?: 'row' | 'column' | 'snake';
+  stackStartNum?: number;
+
+  // Step Multi
+  stepBlocks?: unknown[]; // StepBlock[] — untyped here to avoid circular import
+
   // Offset
   offsetFrontCmyk?: number;
   offsetBackCmyk?: number;
