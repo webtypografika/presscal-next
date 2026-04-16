@@ -573,6 +573,9 @@ export default function CalculatorShell() {
     } catch { /* ignore */ }
     return {};
   });
+  // Gang brush: when active, clicking a cell paints it with this job (0-based).
+  // Null = legacy cycle-through-jobs behavior.
+  const [gangBrushJob, setGangBrushJob] = useState<number | null>(null);
   // Persist gang layout (jobs metadata + cell assignments) on change
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -3248,12 +3251,27 @@ export default function CalculatorShell() {
                         border: `1px solid color-mix(in srgb, ${jobColor} 25%, transparent)`,
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px' }}>
-                          <span style={{
-                            width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                            background: jobColor,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.55rem', fontWeight: 800, color: '#fff',
-                          }}>{i + 1}</span>
+                          {/* Color badge doubles as "brush" activator — click to make this job the active paint target */}
+                          <button
+                            onClick={() => setGangBrushJob(prev => prev === i ? null : i)}
+                            title={gangBrushJob === i
+                              ? 'Ενεργό: κλικ σε cells για να βάλεις αυτή τη δουλειά · ξανακλικ εδώ για απενεργοποίηση'
+                              : 'Κλικ για να ενεργοποιήσεις "βάψιμο" κελιών με αυτή τη δουλειά'}
+                            style={{
+                              width: 20, height: 20, borderRadius: 4, flexShrink: 0,
+                              background: jobColor,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.55rem', fontWeight: 800, color: '#fff',
+                              border: gangBrushJob === i ? '2px solid #fff' : '2px solid transparent',
+                              boxShadow: gangBrushJob === i ? `0 0 0 2px ${jobColor}` : 'none',
+                              cursor: 'pointer', padding: 0, fontFamily: 'inherit',
+                              position: 'relative',
+                            }}
+                          >
+                            {gangBrushJob === i
+                              ? <i className="fas fa-paint-brush" style={{ fontSize: '0.6rem' }} />
+                              : (i + 1)}
+                          </button>
                           <input
                             value={gj.label}
                             onChange={e => setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, label: e.target.value } : j))}
@@ -3337,7 +3355,23 @@ export default function CalculatorShell() {
 
                   {/* Cell assignments — mini sheet layout */}
                   <div style={{ marginBottom: 10 }}>
-                    <MfLabel>ΑΝΑΘΕΣΗ CELLS ({ups}-up)</MfLabel>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                      <MfLabel>ΑΝΑΘΕΣΗ CELLS ({ups}-up)</MfLabel>
+                      {gangBrushJob !== null && (
+                        <button
+                          onClick={() => setGangBrushJob(null)}
+                          style={{
+                            fontSize: '0.55rem', fontWeight: 600, padding: '2px 6px',
+                            borderRadius: 4, border: '1px solid var(--border)',
+                            background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)',
+                            cursor: 'pointer', fontFamily: 'inherit',
+                          }}
+                          title="Απενεργοποίηση βαψίματος (επιστροφή σε cycle mode)"
+                        >
+                          <i className="fas fa-times" style={{ marginRight: 3 }} />Έξοδος brush
+                        </button>
+                      )}
+                    </div>
                     {(() => {
                       const gCols = impo.cols || 1;
                       const gRows = impo.rows || 1;
@@ -3365,19 +3399,37 @@ export default function CalculatorShell() {
                                 const color = colors[jobIdx % colors.length];
                                 const cellJob = gangJobs[jobIdx];
                                 const hasPdf = !!cellJob?.pdf;
+                                const brushActive = gangBrushJob !== null;
+                                const brushColor = brushActive ? colors[gangBrushJob % colors.length] : null;
+                                const handleCellClick = () => {
+                                  setGangCellAssign(prev => {
+                                    if (brushActive) return { ...prev, [cellIdx]: gangBrushJob };
+                                    return { ...prev, [cellIdx]: (jobIdx + 1) % gangJobs.length };
+                                  });
+                                };
                                 return (
                                   <button key={`${row}-${col}`}
-                                    onClick={() => setGangCellAssign(prev => ({ ...prev, [cellIdx]: (jobIdx + 1) % gangJobs.length }))}
+                                    onClick={handleCellClick}
                                     style={{
                                       width: cellW, height: cellH, borderRadius: 3,
                                       border: hasPdf ? `2px solid ${color}` : `2px dashed ${color}`,
                                       background: `color-mix(in srgb, ${color} ${hasPdf ? 18 : 8}%, transparent)`,
                                       color, fontSize: '0.6rem', fontWeight: 800,
-                                      cursor: 'pointer', fontFamily: 'inherit',
+                                      cursor: brushActive ? 'crosshair' : 'pointer',
+                                      fontFamily: 'inherit',
                                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                                       padding: 0, position: 'relative',
                                     }}
-                                    title={`Cell ${cellIdx + 1}: ${cellJob?.label || '?'} ${hasPdf ? '· έχει PDF' : '· χωρίς PDF'} — κλικ για αλλαγή δουλειάς`}
+                                    onMouseEnter={e => {
+                                      if (brushActive && brushColor) {
+                                        e.currentTarget.style.outline = `2px solid ${brushColor}`;
+                                        e.currentTarget.style.outlineOffset = '1px';
+                                      }
+                                    }}
+                                    onMouseLeave={e => { e.currentTarget.style.outline = 'none'; }}
+                                    title={brushActive
+                                      ? `Κλικ για να βάλεις "${gangJobs[gangBrushJob!]?.label || '?'}" στο cell ${cellIdx + 1}`
+                                      : `Cell ${cellIdx + 1}: ${cellJob?.label || '?'} ${hasPdf ? '· έχει PDF' : '· χωρίς PDF'} — κλικ για αλλαγή δουλειάς`}
                                   >
                                     {jobIdx + 1}
                                     {hasPdf && (
@@ -3396,8 +3448,11 @@ export default function CalculatorShell() {
                         </div>
                       );
                     })()}
-                    <div style={{ fontSize: '0.5rem', color: '#475569', marginTop: 4 }}>
-                      <i className="fas fa-info-circle" style={{ marginRight: 3 }} />Κλικ σε cell για εναλλαγή δουλειάς
+                    <div style={{ fontSize: '0.5rem', color: gangBrushJob !== null ? 'var(--accent)' : '#475569', marginTop: 4, fontWeight: gangBrushJob !== null ? 600 : 400 }}>
+                      <i className={`fas ${gangBrushJob !== null ? 'fa-paint-brush' : 'fa-info-circle'}`} style={{ marginRight: 3 }} />
+                      {gangBrushJob !== null
+                        ? `Βάψιμο ενεργό: κλικ σε cells για "${gangJobs[gangBrushJob]?.label || '?'}"`
+                        : 'Κλικ στο έγχρωμο κουμπί δουλειάς → βάψιμο · αλλιώς κλικ σε cell για εναλλαγή'}
                     </div>
                   </div>
 
