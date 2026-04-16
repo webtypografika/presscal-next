@@ -600,7 +600,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         window.location.href = `presscal-fh://archive-quote?folderPath=${encodeURIComponent(originalFolderPath)}`;
         toast(`${label} — το PressKit μετακινεί τον φάκελο`);
       } else {
-        toast(`${label} (δεν βρέθηκε φάκελος προς μετακίνηση)`, 'info');
+        // No folder existed (quote never had one) — status change alone is enough, skip the PressKit deep link.
+        toast(label);
       }
     } catch { toast(`Σφάλμα ${label.toLowerCase()}ς`, 'error'); }
   }

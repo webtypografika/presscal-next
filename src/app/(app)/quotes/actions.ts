@@ -266,8 +266,14 @@ export async function archiveQuote(
   originalFolderPath: string | null;
   newFolderPath: string | null;
 }> {
-  // Ensure we have a resolved folder path (builds one from company + quote number if missing)
-  const { jobFolderPath } = await ensureJobFolder(quoteId);
+  // Read the path as-is from DB. We do NOT call ensureJobFolder here: if the user
+  // never had a folder for this quote, we simply update status and stop — there's
+  // no point building a phantom path just to tell PressKit to move nothing.
+  const existing = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: { jobFolderPath: true },
+  });
+  const jobFolderPath = existing?.jobFolderPath || null;
 
   const statusPatch: Record<string, unknown> = { status: targetStatus };
   if (targetStatus === 'completed') statusPatch.completedAt = new Date();

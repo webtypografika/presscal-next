@@ -302,7 +302,7 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
                                   window.location.href = `presscal-fh://archive-quote?folderPath=${encodeURIComponent(originalFolderPath)}`;
                                   toast('Αρχειοθετήθηκε — το PressKit μετακινεί τον φάκελο');
                                 } else {
-                                  toast('Αρχειοθετήθηκε (χωρίς φάκελο)');
+                                  toast('Αρχειοθετήθηκε');
                                 }
                               } catch { toast('Σφάλμα', 'error'); }
                             }}
