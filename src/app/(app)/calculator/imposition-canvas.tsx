@@ -234,6 +234,11 @@ function drawSheet(
       const cBR = (cell.bleedR ?? bleed) * scale;
       const cBT = (cell.bleedT ?? bleed) * scale;
       const cBB = (cell.bleedB ?? bleed) * scale;
+      // Trim inset: only on sides with bleed — keeps adjacent cells flush at the spine/shared edges
+      const insL = cBL > 0 ? 0.5 : 0;
+      const insR = cBR > 0 ? 0.5 : 0;
+      const insT = cBT > 0 ? 0.5 : 0;
+      const insB = cBB > 0 ? 0.5 : 0;
 
       const x = offX + cell.x * scale + gridOffsetX * scale;
       const y = offY + cell.y * scale + gridOffsetY * scale;
@@ -383,7 +388,7 @@ function drawSheet(
 
         ctx.strokeStyle = 'rgba(255,255,255,0.1)';
         ctx.lineWidth = 0.5;
-        ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+        ctx.strokeRect(trimX + insL, trimY + insT, trimW - insL - insR, trimH - insT - insB);
 
         // Gang Run: show job number badge in corner
         if (isGangMultiPdf) {
@@ -459,10 +464,10 @@ function drawSheet(
           const gjColors = ['#f58220', '#3b82f6', '#14b8a6', '#a78bfa', '#f472b6', '#facc15'];
           const gjColor = gjColors[gjIdx % gjColors.length];
           ctx.fillStyle = gjColor + '18'; // ~10% opacity
-          ctx.fillRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+          ctx.fillRect(trimX + insL, trimY + insT, trimW - insL - insR, trimH - insT - insB);
           ctx.strokeStyle = gjColor + '55';
           ctx.lineWidth = 1.5;
-          ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+          ctx.strokeRect(trimX + insL, trimY + insT, trimW - insL - insR, trimH - insT - insB);
           const fontSize = Math.min(trimW * 0.3, trimH * 0.3, 20);
           ctx.font = `800 ${fontSize}px Inter, DM Sans, sans-serif`;
           ctx.textAlign = 'center';
@@ -470,11 +475,11 @@ function drawSheet(
           ctx.fillText(String(gjIdx + 1), trimX + trimW / 2, trimY + trimH / 2 + fontSize * 0.35);
         } else {
         ctx.fillStyle = isRotated ? COLORS.rotatedFill : COLORS.trimFill;
-        ctx.fillRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+        ctx.fillRect(trimX + insL, trimY + insT, trimW - insL - insR, trimH - insT - insB);
 
         ctx.strokeStyle = isRotated ? COLORS.rotatedStroke : COLORS.trimStroke;
         ctx.lineWidth = 1;
-        ctx.strokeRect(trimX + 0.5, trimY + 0.5, trimW - 1, trimH - 1);
+        ctx.strokeRect(trimX + insL, trimY + insT, trimW - insL - insR, trimH - insT - insB);
         }
 
         if (!isGangMultiPdf) {
@@ -803,7 +808,9 @@ export default function ImpositionCanvas({
 
   // Editable distance input (click on ruler number to edit)
   const [editDist, setEditDist] = useState<{ side: 'left' | 'right' | 'top' | 'bottom' | 'gutter' | 'bleed'; x: number; y: number; value: string } | null>(null);
-  const [snapGuide, setSnapGuide] = useState<{ x: boolean; y: boolean }>({ x: false, y: false });
+  // Snap guide: stores the printable-coord position of the dashed guide line (x for vertical, y for horizontal).
+  // null = no snap on that axis. Used to visualize magnetic snaps (center / left / right / top / bottom edges).
+  const [snapGuide, setSnapGuide] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
 
   const LOGICAL_W = 750;
   const LOGICAL_H = 625;
@@ -1195,21 +1202,19 @@ export default function ImpositionCanvas({
       }
       ctx.restore();
 
-      // ─── SNAP GUIDE LINES (green, when magnetically centered) ───
-      if (snapGuide.x || snapGuide.y) {
+      // ─── SNAP GUIDE LINES (green, when magnetically snapped) ───
+      if (snapGuide.x != null || snapGuide.y != null) {
         ctx.save();
         ctx.strokeStyle = 'rgba(16,185,129,0.7)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 3]);
-        if (snapGuide.x) {
-          // Vertical center line
-          const cx = sGridX + sTrimGridW / 2;
-          ctx.beginPath(); ctx.moveTo(cx, sPaT); ctx.lineTo(cx, sPaB); ctx.stroke();
+        if (snapGuide.x != null) {
+          const lineX = sPaL + snapGuide.x * sSc;
+          ctx.beginPath(); ctx.moveTo(lineX, sPaT); ctx.lineTo(lineX, sPaB); ctx.stroke();
         }
-        if (snapGuide.y) {
-          // Horizontal center line
-          const cy = sGridY + sTrimGridH / 2;
-          ctx.beginPath(); ctx.moveTo(sPaL, cy); ctx.lineTo(sPaR, cy); ctx.stroke();
+        if (snapGuide.y != null) {
+          const lineY = sPaT + snapGuide.y * sSc;
+          ctx.beginPath(); ctx.moveTo(sPaL, lineY); ctx.lineTo(sPaR, lineY); ctx.stroke();
         }
         ctx.restore();
       }
@@ -1245,17 +1250,19 @@ export default function ImpositionCanvas({
       const centerXpx = sOffX + ((bL + bR) / 2 + (offsetX || 0)) * sSc;
       const centerYpx = sOffY + ((bT + bB) / 2 + (offsetY || 0)) * sSc;
 
-      // Snap guides (green dashed lines, when magnetically centered)
-      if (snapGuide.x || snapGuide.y) {
+      // Snap guides (green dashed lines, when magnetically snapped)
+      if (snapGuide.x != null || snapGuide.y != null) {
         ctx.save();
         ctx.strokeStyle = 'rgba(16,185,129,0.7)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 3]);
-        if (snapGuide.x) {
-          ctx.beginPath(); ctx.moveTo(centerXpx, sPaT); ctx.lineTo(centerXpx, sPaB); ctx.stroke();
+        if (snapGuide.x != null) {
+          const lineX = sPaL + snapGuide.x * sSc;
+          ctx.beginPath(); ctx.moveTo(lineX, sPaT); ctx.lineTo(lineX, sPaB); ctx.stroke();
         }
-        if (snapGuide.y) {
-          ctx.beginPath(); ctx.moveTo(sPaL, centerYpx); ctx.lineTo(sPaR, centerYpx); ctx.stroke();
+        if (snapGuide.y != null) {
+          const lineY = sPaT + snapGuide.y * sSc;
+          ctx.beginPath(); ctx.moveTo(sPaL, lineY); ctx.lineTo(sPaR, lineY); ctx.stroke();
         }
         ctx.restore();
       }
@@ -1621,13 +1628,49 @@ export default function ImpositionCanvas({
         const ax = gridDragRef.current.axis;
         let newOffX = Math.round((gridDragRef.current.origOffX + (ax !== 'y' ? dx : 0)) * 10) / 10;
         let newOffY = Math.round((gridDragRef.current.origOffY + (ax !== 'x' ? dy : 0)) * 10) / 10;
-        // Magnetic snap to center (offset=0 = centered)
+
+        // Magnetic snap: center + flush to printable edges
+        const pw2 = sheetW - marginLeft - marginRight;
+        const ph2 = sheetH - marginTop - marginBottom;
+        let bW = 0, bH = 0;
+        if (impo.cells.length > 0) {
+          let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+          for (const c of impo.cells) {
+            if (c.x < l) l = c.x;
+            if (c.y < t) t = c.y;
+            if (c.x + c.w > r) r = c.x + c.w;
+            if (c.y + c.h > b) b = c.y + c.h;
+          }
+          bW = r - l;
+          bH = b - t;
+        }
+        const edgeXMax = (pw2 - bW) / 2;
+        const edgeYMax = (ph2 - bH) / 2;
+        // Each target: offset value → printable-coord of the visual guide line
+        const xTargets: Array<{ off: number; line: number }> = [
+          { off: 0, line: pw2 / 2 },
+          ...(edgeXMax > 0 ? [
+            { off: -edgeXMax, line: 0 },
+            { off: +edgeXMax, line: pw2 },
+          ] : []),
+        ];
+        const yTargets: Array<{ off: number; line: number }> = [
+          { off: 0, line: ph2 / 2 },
+          ...(edgeYMax > 0 ? [
+            { off: -edgeYMax, line: 0 },
+            { off: +edgeYMax, line: ph2 },
+          ] : []),
+        ];
         const snapT = 1.5; // mm threshold
-        const snappedX = Math.abs(newOffX) < snapT;
-        const snappedY = Math.abs(newOffY) < snapT;
-        if (snappedX) newOffX = 0;
-        if (snappedY) newOffY = 0;
-        setSnapGuide({ x: snappedX, y: snappedY });
+        let snapXLine: number | null = null;
+        let snapYLine: number | null = null;
+        for (const t of xTargets) {
+          if (Math.abs(newOffX - t.off) < snapT) { newOffX = t.off; snapXLine = t.line; break; }
+        }
+        for (const t of yTargets) {
+          if (Math.abs(newOffY - t.off) < snapT) { newOffY = t.off; snapYLine = t.line; break; }
+        }
+        setSnapGuide({ x: snapXLine, y: snapYLine });
         onOffsetChange(newOffX, newOffY);
       }
       return;
@@ -1736,7 +1779,7 @@ export default function ImpositionCanvas({
     const canvas = canvasRef.current;
     if (canvas) canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
   }, [zoom, smBlocks, impo, onSmBlockUpdate, onSmBlockMove, onGridResize, onRotate, onOffsetChange, canvasToMM, findSmHandle, findSmBlock, findGridHandle, findRotateBtn, findGridBody, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
-  const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; gridDragRef.current = null; setSnapGuide({ x: false, y: false }); }, []);
+  const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; gridDragRef.current = null; setSnapGuide({ x: null, y: null }); }, []);
   const onDoubleClick = useCallback(() => { setZoom(1); panRef.current = { x: 0, y: 0 }; }, []);
 
   // ─── PILL STYLE ───
