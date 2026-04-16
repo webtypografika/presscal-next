@@ -861,8 +861,11 @@ async function exportBooklet(
   const offXpt = mmToPt(impo.offsetX || 0);
   const offYpt = mmToPt(impo.offsetY || 0);
   const spreadsAcross = (impo as any).spreadsAcross || 1;
-  const pageRot = (impo as any).pageRotation || 0;
-  const isRotated = pageRot === 90 || pageRot === 270;
+  const canvasRot = (impo as any).pageRotation || 0;
+  const isRotated = canvasRot === 90 || canvasRot === 270;
+  // Canvas ctx.rotate is CW (Y-down); pdf-lib rotate is CCW (Y-up). Mirror the
+  // angle so the exported PDF matches what's previewed on screen.
+  const pageRot = isRotated ? (360 - canvasRot) % 360 : 0;
   // For unrotated booklet: spread rows stack vertically on the sheet (each row is one spread tall).
   // For rotated booklet: the "rows" value from the engine counts cells (2 per spread), so divide by 2.
   const spreadsDown = isRotated
@@ -952,9 +955,13 @@ async function exportBooklet(
           };
         };
 
-        // In rotated mode, the embedded page is drawn rotated 90° on sheet, and its trim
-        // rectangle on the sheet is (trimH × trimW). drawTrimToCell takes trimW/trimH as the
-        // ORIGINAL page trim and handles the rotation internally via its rotation argument.
+        // drawTrimToCell expects trimW/trimH to be the ON-SHEET dimensions of the trim
+        // rectangle (post-rotation), because it sizes the clip and scales the embedded
+        // page to fit that rect exactly. For the rotated layout the on-sheet trim swaps
+        // dimensions: each page lands as (trimH × trimW) on the sheet.
+        const cellTrimW = isRotated ? trimHpt : trimWpt;
+        const cellTrimH = isRotated ? trimWpt : trimHpt;
+
         for (let fp = 0; fp < 2; fp++) {
           const pn = sheet.front[fp];
           if (pn > embeddedPages.length) continue;
@@ -970,9 +977,9 @@ async function exportBooklet(
             // the upper half. Creep on the spine-facing edge.
             const shiftY = fp === 0 ? -creepPt : creepPt;
             trimXf = spreadX + bleedPt;
-            trimYf = rowY + bleedPt + (1 - fp) * trimWpt + shiftY;
+            trimYf = rowY + bleedPt + (1 - fp) * cellTrimH + shiftY;
           }
-          drawTrimToCell(frontPage, ep, trimXf, trimYf, trimWpt, trimHpt, spreadBleeds(fp), pageRot, 1);
+          drawTrimToCell(frontPage, ep, trimXf, trimYf, cellTrimW, cellTrimH, spreadBleeds(fp), pageRot, 1);
         }
 
         for (let bp = 0; bp < 2; bp++) {
@@ -987,9 +994,9 @@ async function exportBooklet(
           } else {
             const shiftYb = bp === 0 ? -creepPt : creepPt;
             trimXbk = spreadX + bleedPt;
-            trimYbk = rowY + bleedPt + (1 - bp) * trimWpt + shiftYb;
+            trimYbk = rowY + bleedPt + (1 - bp) * cellTrimH + shiftYb;
           }
-          drawTrimToCell(backPage, epb, trimXbk, trimYbk, trimWpt, trimHpt, spreadBleeds(bp), pageRot, 1);
+          drawTrimToCell(backPage, epb, trimXbk, trimYbk, cellTrimW, cellTrimH, spreadBleeds(bp), pageRot, 1);
         }
       }
     }
