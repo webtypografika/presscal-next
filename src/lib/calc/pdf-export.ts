@@ -898,16 +898,25 @@ async function exportBooklet(
   const totalSigs = sigMap.totalSheets;
 
   // Crop marks config for booklet (operates on the on-sheet spread footprint).
+  // Each "cell" in the marks grid corresponds to one entire spread (2 pages sharing
+  // the spine — no internal gap). We pass trim dimensions directly and encode the
+  // inter-spread gap as `spineOffset + 2×bleed`: the 12mm zone between adjacent trims
+  // contains one bleed-band per spread plus the spine offset between them.
+  const jobW = impo.trimW || opts.jobW || 0;
+  const jobH = impo.trimH || opts.jobH || 0;
+  const spineOffsetMM = (impo as any).spineOffset || 0;
+  const rowGapMM = (impo as any).rowGap || 0;
+  const bleedMMval = opts.bleed || 0;
   const bkMarks = {
     marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
     marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
     cols: spreadsAcross,
     rows: spreadsDown,
-    pieceW: (isRotated ? (impo.trimH || opts.jobH || 0) : 2 * (impo.trimW || opts.jobW || 0)) + 2 * (opts.bleed || 0),
-    pieceH: (isRotated ? 2 * (impo.trimW || opts.jobW || 0) : (impo.trimH || opts.jobH || 0)) + 2 * (opts.bleed || 0),
-    gutterMM: (impo as any).spineOffset || 0,
-    gutterRowMM: (impo as any).rowGap || 0,
-    bleedMM: opts.bleed || 0,
+    trimW: isRotated ? jobH : (2 * jobW),
+    trimH: isRotated ? (2 * jobW) : jobH,
+    gutterMM: spineOffsetMM + 2 * bleedMMval,
+    gutterRowMM: rowGapMM + 2 * bleedMMval,
+    bleedMM: bleedMMval,
     offsetX: impo.offsetX, offsetY: impo.offsetY,
     cropMarks: opts.showCropMarks,
   };
