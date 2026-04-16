@@ -316,7 +316,7 @@ function EventModal({ form, setForm, onSave, onDelete, onClose }: {
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: 480, maxHeight: '85vh',
+          width: 400, maxHeight: '85vh',
           background: 'rgb(20,30,55)', border: '1px solid rgba(255,255,255,0.08)',
           borderRadius: 16, boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',

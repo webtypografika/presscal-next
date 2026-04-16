@@ -146,12 +146,106 @@ async function fetchActiveJobs(): Promise<JobItem[]> {
   }
 }
 
-const CAL_EVENTS = [
-  { dot: 'var(--danger)', date: '25/03', text: 'Παράδοση: Αφίσες A3 — Σύλλογος' },
-  { dot: 'var(--accent)', date: '27/03', text: 'Παράδοση: Φυλλάδια — Δημητρίου' },
-  { dot: 'var(--accent)', date: '28/03', text: 'Παράδοση: Κάρτες — Παπαδόπουλος' },
-  { dot: 'var(--blue)', date: '31/03', text: 'Παράδοση: Αφίσες Α2 — Μαρίνα' },
+const MONTH_NAMES = [
+  'Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος',
+  'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος',
+  'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος',
 ];
+
+type CalendarData = {
+  month: number;
+  year: number;
+  cells: { num: number; empty: boolean; today: boolean; event: boolean }[];
+  upcoming: { dot: string; date: string; text: string }[];
+};
+
+async function fetchCalendar(): Promise<CalendarData> {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const today = now.getDate();
+
+  const fallback: CalendarData = { month, year, cells: [], upcoming: [] };
+
+  try {
+    const session = await getServerSession(authOptions);
+    const orgId = (session?.user as Record<string, unknown>)?.orgId as string;
+    if (!orgId) return fallback;
+
+    const monthStart = new Date(year, month, 1);
+    const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
+
+    const [events, quotes] = await Promise.all([
+      prisma.calendarEvent.findMany({
+        where: { orgId, deletedAt: null, startAt: { gte: monthStart, lte: monthEnd } },
+        include: {
+          company: { select: { name: true } },
+          contact: { select: { name: true } },
+          quote: { select: { number: true, title: true } },
+        },
+        orderBy: { startAt: 'asc' },
+      }),
+      prisma.quote.findMany({
+        where: {
+          orgId,
+          deletedAt: null,
+          deadline: { gte: monthStart, lte: monthEnd },
+          status: { notIn: ['completed', 'cancelled'] },
+        },
+        select: {
+          id: true, number: true, title: true, deadline: true, jobPriority: true,
+          company: { select: { name: true } },
+        },
+      }),
+    ]);
+
+    const all: { date: Date; color: string; text: string }[] = [
+      ...events.map(e => ({
+        date: e.startAt,
+        color: e.color || '#60a5fa',
+        text: e.title,
+      })),
+      ...quotes.map(q => ({
+        date: q.deadline!,
+        color: q.jobPriority === 'rush' ? '#ef4444' : q.jobPriority === 'urgent' ? '#fb923c' : '#60a5fa',
+        text: `${q.number} ${q.company?.name || q.title || ''}`.trim(),
+      })),
+    ];
+
+    const eventDays = new Set<number>();
+    for (const ev of all) {
+      const d = new Date(ev.date);
+      if (d.getFullYear() === year && d.getMonth() === month) eventDays.add(d.getDate());
+    }
+
+    const firstDay = monthStart.getDay(); // 0=Sun
+    const startOffset = firstDay === 0 ? 6 : firstDay - 1; // Mon-based
+    const daysInMonth = monthEnd.getDate();
+
+    const cells: CalendarData['cells'] = [];
+    for (let i = 0; i < startOffset; i++) cells.push({ num: 0, empty: true, today: false, event: false });
+    for (let d = 1; d <= daysInMonth; d++) cells.push({ num: d, empty: false, today: d === today, event: eventDays.has(d) });
+
+    const fromToday = new Date(year, month, today);
+    const upcoming = all
+      .filter(e => new Date(e.date) >= fromToday)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .slice(0, 4)
+      .map(e => {
+        const d = new Date(e.date);
+        return {
+          dot: e.color,
+          date: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+          text: e.text,
+        };
+      });
+
+    return { month, year, cells, upcoming };
+  } catch (e) {
+    console.error('[dashboard] fetchCalendar error:', e);
+    return fallback;
+  }
+}
 
 const pillBg: Record<string, string> = {
   blue: 'rgba(59,130,246,0.15)',
@@ -174,24 +268,8 @@ function Pill({ text, cls }: { text: string; cls: string }) {
   );
 }
 
-/* ─── Build March 2026 calendar ─── */
-function buildCalendar() {
-  // March 2026: starts on Sunday (day 0 in JS, day 7 in EU grid)
-  const firstDay = new Date(2026, 2, 1).getDay(); // 0=Sun
-  const startOffset = firstDay === 0 ? 6 : firstDay - 1; // Mon-based
-  const daysInMonth = 31;
-  const eventDays = [25, 27, 28, 31];
-  const today = 24;
-
-  const cells: { num: number; empty: boolean; today: boolean; event: boolean }[] = [];
-  for (let i = 0; i < startOffset; i++) cells.push({ num: 0, empty: true, today: false, event: false });
-  for (let d = 1; d <= daysInMonth; d++) cells.push({ num: d, empty: false, today: d === today, event: eventDays.includes(d) });
-  return cells;
-}
-
 export default async function DashboardPage() {
-  const [inbox, quotes, jobs] = await Promise.all([fetchUnread(), fetchPendingQuotes(), fetchActiveJobs()]);
-  const cells = buildCalendar();
+  const [inbox, quotes, jobs, cal] = await Promise.all([fetchUnread(), fetchPendingQuotes(), fetchActiveJobs(), fetchCalendar()]);
 
   return (
     <div>
@@ -284,19 +362,16 @@ export default async function DashboardPage() {
         <div className="panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <h2 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <i className="fas fa-calendar-alt" style={{ color: 'var(--accent)', fontSize: '0.95rem' }} /> Μάρτιος 2026
+              <i className="fas fa-calendar-alt" style={{ color: 'var(--accent)', fontSize: '0.95rem' }} /> {MONTH_NAMES[cal.month]} {cal.year}
             </h2>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', transition: 'color 0.2s' }}><i className="fas fa-chevron-left" /></button>
-              <button style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', transition: 'color 0.2s' }}><i className="fas fa-chevron-right" /></button>
-            </div>
+            <a href="/calendar" style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}>Άνοιγμα →</a>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', gap: 2 }}>
             {['Δευ','Τρί','Τετ','Πέμ','Παρ','Σάβ','Κυρ'].map(d => (
               <span key={d} style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', padding: '4px 0' }}>{d}</span>
             ))}
-            {cells.map((c, i) => {
+            {cal.cells.map((c, i) => {
               if (c.empty) return <span key={`e${i}`} style={{ opacity: 0 }} />;
               const cls = [c.today ? 'cal-today' : '', c.event ? 'cal-ev' : ''].filter(Boolean).join(' ');
               return (
@@ -312,11 +387,14 @@ export default async function DashboardPage() {
           </div>
 
           <div style={{ marginTop: 12, borderTop: '1px solid var(--glass-border)', paddingTop: 10 }}>
-            {CAL_EVENTS.map((e, i) => (
+            {cal.upcoming.length === 0 && (
+              <div style={{ padding: '12px 4px', textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Καμία επερχόμενη καταχώρηση</div>
+            )}
+            {cal.upcoming.map((e, i) => (
               <div key={i} style={{ fontSize: '0.78rem', color: 'var(--text-dim)', padding: '5px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: e.dot }} />
                 <span style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: 42 }}>{e.date}</span>
-                {e.text}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.text}</span>
               </div>
             ))}
           </div>
