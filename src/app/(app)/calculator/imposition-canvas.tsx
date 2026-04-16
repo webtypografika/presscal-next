@@ -194,14 +194,17 @@ function drawSheet(
   }
   const isSmMultiPdf = isSM && smBlockPdfs && smBlockPdfs.some(Boolean);
 
-  // Draw cells — step multi iterates all cells directly (variable grid)
-  const cellCount = isSM ? impo.cells.length : impo.rows * impo.cols;
+  // Draw cells — step multi iterates all cells directly (variable grid).
+  // Booklet and PB may contain multi-block / rotated grids whose length doesn't match rows×cols,
+  // so iterate the cells array directly for those too.
+  const iterAll = isSM || impo.mode === 'booklet' || impo.mode === 'perfect_bound';
+  const cellCount = iterAll ? impo.cells.length : impo.rows * impo.cols;
   for (let ci = 0; ci < cellCount; ci++) {
-    const row = isSM ? 0 : Math.floor(ci / impo.cols);
-    const col = isSM ? 0 : ci % impo.cols;
-    const idx = isSM ? ci : row * impo.cols + col;
+    const idx = iterAll ? ci : (Math.floor(ci / impo.cols) * impo.cols + (ci % impo.cols));
     if (idx >= impo.cells.length) continue;
     const cell = impo.cells[idx];
+    const row = iterAll ? (cell.row ?? 0) : Math.floor(ci / impo.cols);
+    const col = iterAll ? (cell.col ?? 0) : ci % impo.cols;
 
       // Signature navigator override: swap page numbers for the active sheet
       let cellPageNum = cell.pageNum;
@@ -209,7 +212,7 @@ function drawSheet(
         const sigSheet = impo.signatureMap.sheets[activeSigSheet];
         if (sigSheet) {
           if (impo.mode === 'booklet') {
-            // Booklet: cells alternate [left, right] per spread
+            // Booklet: cells alternate [left, right] per spread (cell.col encodes L/R)
             const side = isBack ? sigSheet.back : sigSheet.front;
             const posInSpread = col % 2; // 0=left, 1=right
             cellPageNum = side[posInSpread];
@@ -456,6 +459,27 @@ function drawSheet(
             ctx.fillStyle = 'rgba(255,255,255,0.85)';
             ctx.fillText(String(overlayNum), trimX + trimW / 2, trimY + trimH / 2 + oFS * 0.35);
           }
+        } else if ((impo.mode === 'booklet' || impo.mode === 'perfect_bound') && cellPageNum) {
+          // Small corner badge at the PAGE's top-left (in page orientation).
+          // Doubles as orientation indicator — useful when the page is blank.
+          const oFS = Math.min(trimW * 0.12, trimH * 0.12, 11);
+          const pad = Math.max(3, oFS * 0.35);
+          const cr = ((cell.rotation || 0) % 360 + 360) % 360;
+          const effSwap = Math.round(cr / 90) % 2 === 1;
+          const pW = effSwap ? trimH : trimW;
+          const pH = effSwap ? trimW : trimH;
+          ctx.save();
+          ctx.translate(trimX + trimW / 2, trimY + trimH / 2);
+          ctx.rotate(cr * Math.PI / 180);
+          ctx.font = `700 ${oFS}px Inter, DM Sans, sans-serif`;
+          ctx.textAlign = 'left';
+          const tx = -pW / 2 + pad;
+          const ty = -pH / 2 + pad + oFS * 0.9;
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fillText(String(cellPageNum), tx + 0.5, ty + 0.5);
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.fillText(String(cellPageNum), tx, ty);
+          ctx.restore();
         }
       } else {
         // Gang Run without PDF: tint cell with job color
