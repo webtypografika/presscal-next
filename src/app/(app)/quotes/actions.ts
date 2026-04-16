@@ -250,6 +250,46 @@ export async function ensureJobFolder(quoteId: string): Promise<{ jobFolderPath:
   return { jobFolderPath, companyFolderPath };
 }
 
+// ─── ARCHIVE QUOTE FOLDER ───
+// Marks the quote as cancelled AND updates jobFolderPath to reflect where PressKit
+// will move the folder (into `_01 Archive/` under the current parent directory).
+// The actual filesystem move happens in PressKit via the `presscal-fh://archive-quote`
+// deep link, triggered by the UI after this action returns.
+//
+// Returns the ORIGINAL path (what to send to PressKit) and the NEW path (stored in DB).
+
+export async function archiveQuote(quoteId: string): Promise<{
+  originalFolderPath: string | null;
+  newFolderPath: string | null;
+}> {
+  // Ensure we have a resolved folder path (builds one from company + quote number if missing)
+  const { jobFolderPath } = await ensureJobFolder(quoteId);
+  if (!jobFolderPath) {
+    await prisma.quote.update({ where: { id: quoteId }, data: { status: 'cancelled' } });
+    revalidatePath('/quotes');
+    revalidatePath('/jobs');
+    return { originalFolderPath: null, newFolderPath: null };
+  }
+
+  // Compute new archived path: <parent>/_01 Archive/<basename>
+  // Detect separator by what's already in the path (Windows vs POSIX).
+  const sep = jobFolderPath.includes('\\') ? '\\' : '/';
+  const lastSepIdx = Math.max(jobFolderPath.lastIndexOf('\\'), jobFolderPath.lastIndexOf('/'));
+  const parent = lastSepIdx >= 0 ? jobFolderPath.slice(0, lastSepIdx) : jobFolderPath;
+  const basename = lastSepIdx >= 0 ? jobFolderPath.slice(lastSepIdx + 1) : jobFolderPath;
+  const newFolderPath = `${parent}${sep}_01 Archive${sep}${basename}`;
+
+  await prisma.quote.update({
+    where: { id: quoteId },
+    data: { status: 'cancelled', jobFolderPath: newFolderPath },
+  });
+  revalidatePath('/quotes');
+  revalidatePath('/jobs');
+  revalidatePath('/');
+
+  return { originalFolderPath: jobFolderPath, newFolderPath };
+}
+
 // ─── LINK EMAIL ───
 
 export async function linkEmailToQuote(quoteId: string, messageId: string, threadId: string) {

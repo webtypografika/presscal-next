@@ -5,7 +5,7 @@ import { fuzzyMatch } from '@/lib/search';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer } from '@/generated/prisma/client';
-import { createQuote, updateQuote, updateQuoteStatus, deleteQuote, createCustomer, createCompanyQuick, createCompanyFromElorus, linkEmailToQuote, saveEmailAttachments } from './actions';
+import { createQuote, updateQuote, updateQuoteStatus, deleteQuote, createCustomer, createCompanyQuick, createCompanyFromElorus, linkEmailToQuote, saveEmailAttachments, archiveQuote } from './actions';
 import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
 
 type QuoteWithCustomer = Quote & { customer: Customer | null };
@@ -294,10 +294,16 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
+                              if (!confirm(`Αρχειοθέτηση ${q.number};\n\nΟ φάκελος θα μετακινηθεί στο "_01 Archive/" μέσω PressKit.`)) return;
                               try {
-                                await updateQuoteStatus(q.id, 'cancelled');
+                                const { originalFolderPath } = await archiveQuote(q.id);
                                 setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, status: 'cancelled' } : x));
-                                toast('Αρχειοθετήθηκε');
+                                if (originalFolderPath) {
+                                  window.location.href = `presscal-fh://archive-quote?folderPath=${encodeURIComponent(originalFolderPath)}`;
+                                  toast('Αρχειοθετήθηκε — το PressKit μετακινεί τον φάκελο');
+                                } else {
+                                  toast('Αρχειοθετήθηκε (χωρίς φάκελο)');
+                                }
                               } catch { toast('Σφάλμα', 'error'); }
                             }}
                             style={{

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer, Company, Material, Org } from '@/generated/prisma/client';
-import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer, createCompanyQuick, createCompanyFromElorus } from '../actions';
+import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer, createCompanyQuick, createCompanyFromElorus, archiveQuote } from '../actions';
 import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
 import { ElorusAfmLookup, type ElorusLookupResult } from '@/components/elorus-afm-lookup';
 
@@ -584,6 +584,21 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
     } catch { toast('Σφάλμα', 'error'); }
   }
 
+  // Archive — also moves the quote folder to `_01 Archive/` via PressKit deep link.
+  async function handleArchive() {
+    if (!confirm(`Αρχειοθέτηση ${quote.number};\n\nΟ φάκελος της προσφοράς θα μετακινηθεί στο "_01 Archive/" μέσω PressKit.`)) return;
+    try {
+      const { originalFolderPath, newFolderPath } = await archiveQuote(quote.id);
+      setQuote(prev => ({ ...prev, status: 'cancelled', jobFolderPath: newFolderPath ?? prev.jobFolderPath }));
+      if (originalFolderPath) {
+        window.location.href = `presscal-fh://archive-quote?folderPath=${encodeURIComponent(originalFolderPath)}`;
+        toast('Αρχειοθετήθηκε — το PressKit μετακινεί τον φάκελο');
+      } else {
+        toast('Αρχειοθετήθηκε (δεν βρέθηκε φάκελος προς μετακίνηση)', 'info');
+      }
+    } catch { toast('Σφάλμα αρχειοθέτησης', 'error'); }
+  }
+
   const [applyingCalc, setApplyingCalc] = useState(false);
 
   async function applyCalcToOthers(sourceItem: any) {
@@ -755,17 +770,21 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         />
 
         {/* Status transitions */}
-        {transitions.map(t => (
-          <button key={t.status} onClick={() => changeStatus(t.status)} style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 500,
-            background: `color-mix(in srgb, ${t.color} 10%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${t.color} 20%, transparent)`,
-            color: t.color, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-          }}>
-            <i className={`fas ${t.icon}`} style={{ fontSize: '0.55rem' }} /> {t.label}
-          </button>
-        ))}
+        {transitions.map(t => {
+          // Archive needs special handling — also fires PressKit deep link to move the folder
+          const onClickHandler = t.label === 'Αρχειοθέτηση' ? handleArchive : () => changeStatus(t.status);
+          return (
+            <button key={t.status} onClick={onClickHandler} style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 500,
+              background: `color-mix(in srgb, ${t.color} 10%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${t.color} 20%, transparent)`,
+              color: t.color, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              <i className={`fas ${t.icon}`} style={{ fontSize: '0.55rem' }} /> {t.label}
+            </button>
+          );
+        })}
 
         {/* Send quote button */}
         {canSend && (
