@@ -1215,8 +1215,8 @@ export default function ImpositionCanvas({
       }
     }
 
-    // ─── PERFECT BOUND: rotate button on the block grid centre ───
-    if (impo.mode === 'perfect_bound' && onRotate && impo.cells.length > 0) {
+    // ─── PERFECT BOUND: rotate button + snap guides on the block grid centre ───
+    if (impo.mode === 'perfect_bound' && impo.cells.length > 0) {
       const sLeftExtra = feedEdge && machCat !== 'offset' ? 24 : 0;
       const sScX = (cW - 24 - sLeftExtra - markLen * 2) / sheetW;
       const sScY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;
@@ -1225,6 +1225,16 @@ export default function ImpositionCanvas({
       const sDH = sheetH * sSc;
       const sOffX = sLeftExtra + (cW - sLeftExtra - sDW) / 2;
       const sOffY = reserveTop + markLen + (cH - reserveTop - reserveBot - markLen * 2 - sDH) / 2;
+      const isOff = machCat === 'offset';
+      const smT = (isOff ? marginBottom : marginTop) * sSc;
+      const smL = marginLeft * sSc;
+      const sPaL = sOffX + smL;
+      const sPaT = sOffY + smT;
+      const sPrintWpx = sDW - smL - marginRight * sSc;
+      const sPrintHpx = sDH - smT - (isOff ? marginTop : marginBottom) * sSc;
+      const sPaR = sPaL + sPrintWpx;
+      const sPaB = sPaT + sPrintHpx;
+
       let bL = Infinity, bT = Infinity, bR = -Infinity, bB = -Infinity;
       for (const c of impo.cells) {
         if (c.x < bL) bL = c.x;
@@ -1232,24 +1242,42 @@ export default function ImpositionCanvas({
         if (c.x + c.w > bR) bR = c.x + c.w;
         if (c.y + c.h > bB) bB = c.y + c.h;
       }
-      const rotBtnX = sOffX + ((bL + bR) / 2 + (offsetX || 0)) * sSc;
-      const rotBtnY = sOffY + ((bT + bB) / 2 + (offsetY || 0)) * sSc;
-      ctx.fillStyle = 'rgba(245,130,32,0.85)';
-      ctx.beginPath();
-      ctx.arc(rotBtnX, rotBtnY, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(rotBtnX, rotBtnY, 4.5, -Math.PI * 0.7, Math.PI * 0.5);
-      ctx.stroke();
-      const ax = rotBtnX + 4.5 * Math.cos(Math.PI * 0.5);
-      const ay = rotBtnY + 4.5 * Math.sin(Math.PI * 0.5);
-      ctx.beginPath();
-      ctx.moveTo(ax + 2, ay - 1.5);
-      ctx.lineTo(ax - 1.5, ay);
-      ctx.lineTo(ax + 2, ay + 1.5);
-      ctx.stroke();
+      const centerXpx = sOffX + ((bL + bR) / 2 + (offsetX || 0)) * sSc;
+      const centerYpx = sOffY + ((bT + bB) / 2 + (offsetY || 0)) * sSc;
+
+      // Snap guides (green dashed lines, when magnetically centered)
+      if (snapGuide.x || snapGuide.y) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(16,185,129,0.7)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        if (snapGuide.x) {
+          ctx.beginPath(); ctx.moveTo(centerXpx, sPaT); ctx.lineTo(centerXpx, sPaB); ctx.stroke();
+        }
+        if (snapGuide.y) {
+          ctx.beginPath(); ctx.moveTo(sPaL, centerYpx); ctx.lineTo(sPaR, centerYpx); ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      if (onRotate) {
+        ctx.fillStyle = 'rgba(245,130,32,0.85)';
+        ctx.beginPath();
+        ctx.arc(centerXpx, centerYpx, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(centerXpx, centerYpx, 4.5, -Math.PI * 0.7, Math.PI * 0.5);
+        ctx.stroke();
+        const ax = centerXpx + 4.5 * Math.cos(Math.PI * 0.5);
+        const ay = centerYpx + 4.5 * Math.sin(Math.PI * 0.5);
+        ctx.beginPath();
+        ctx.moveTo(ax + 2, ay - 1.5);
+        ctx.lineTo(ax - 1.5, ay);
+        ctx.lineTo(ax + 2, ay + 1.5);
+        ctx.stroke();
+      }
     }
 
     // Bottom info strip
