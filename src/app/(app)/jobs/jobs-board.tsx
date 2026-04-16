@@ -117,8 +117,11 @@ function JobCard({ job, onDragStart, onDetail }: { job: JobQuote; onDragStart: (
           <button
             onClick={async (e) => {
               e.stopPropagation();
-              if (!confirm('Ολοκλήρωση εργασίας;')) return;
-              await updateJobStage(job.id, 'completed');
+              if (!confirm('Ολοκλήρωση εργασίας;\n\nΘα μετακινηθεί στο "_01 Archive/" μέσω PressKit.')) return;
+              const result = await updateJobStage(job.id, 'completed');
+              if (result?.originalFolderPath) {
+                window.location.href = `presscal-fh://archive-quote?folderPath=${encodeURIComponent(result.originalFolderPath)}`;
+              }
               window.location.reload();
             }}
             style={{
@@ -177,8 +180,11 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
   }
 
   async function handleComplete() {
-    if (!confirm('Ολοκλήρωση εργασίας; Θα μεταφερθεί στο αρχείο.')) return;
-    await updateJobStage(job.id, 'completed');
+    if (!confirm('Ολοκλήρωση εργασίας;\n\nΘα μετακινηθεί στο "_01 Archive/" μέσω PressKit.')) return;
+    const result = await updateJobStage(job.id, 'completed');
+    if (result?.originalFolderPath) {
+      window.location.href = `presscal-fh://archive-quote?folderPath=${encodeURIComponent(result.originalFolderPath)}`;
+    }
     onUpdate();
     onClose();
   }

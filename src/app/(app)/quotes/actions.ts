@@ -251,37 +251,50 @@ export async function ensureJobFolder(quoteId: string): Promise<{ jobFolderPath:
 }
 
 // ─── ARCHIVE QUOTE FOLDER ───
-// Marks the quote as cancelled AND updates jobFolderPath to reflect where PressKit
-// will move the folder (into `_01 Archive/` under the current parent directory).
+// Sets the quote to a terminal status ('cancelled' = archived manually, 'completed' = job done)
+// AND updates jobFolderPath to reflect where PressKit will move the folder
+// (into `_01 Archive/` under the current parent directory).
 // The actual filesystem move happens in PressKit via the `presscal-fh://archive-quote`
 // deep link, triggered by the UI after this action returns.
 //
 // Returns the ORIGINAL path (what to send to PressKit) and the NEW path (stored in DB).
 
-export async function archiveQuote(quoteId: string): Promise<{
+export async function archiveQuote(
+  quoteId: string,
+  targetStatus: 'cancelled' | 'completed' = 'cancelled',
+): Promise<{
   originalFolderPath: string | null;
   newFolderPath: string | null;
 }> {
   // Ensure we have a resolved folder path (builds one from company + quote number if missing)
   const { jobFolderPath } = await ensureJobFolder(quoteId);
+
+  const statusPatch: Record<string, unknown> = { status: targetStatus };
+  if (targetStatus === 'completed') statusPatch.completedAt = new Date();
+
+  const { toArchivePath, isArchivedPath } = await import('@/lib/job-folder');
+
   if (!jobFolderPath) {
-    await prisma.quote.update({ where: { id: quoteId }, data: { status: 'cancelled' } });
+    await prisma.quote.update({ where: { id: quoteId }, data: statusPatch });
     revalidatePath('/quotes');
     revalidatePath('/jobs');
+    revalidatePath('/');
     return { originalFolderPath: null, newFolderPath: null };
   }
 
-  // Compute new archived path: <parent>/_01 Archive/<basename>
-  // Detect separator by what's already in the path (Windows vs POSIX).
-  const sep = jobFolderPath.includes('\\') ? '\\' : '/';
-  const lastSepIdx = Math.max(jobFolderPath.lastIndexOf('\\'), jobFolderPath.lastIndexOf('/'));
-  const parent = lastSepIdx >= 0 ? jobFolderPath.slice(0, lastSepIdx) : jobFolderPath;
-  const basename = lastSepIdx >= 0 ? jobFolderPath.slice(lastSepIdx + 1) : jobFolderPath;
-  const newFolderPath = `${parent}${sep}_01 Archive${sep}${basename}`;
+  // Already in archive — don't double-archive. Just update status.
+  if (isArchivedPath(jobFolderPath)) {
+    await prisma.quote.update({ where: { id: quoteId }, data: statusPatch });
+    revalidatePath('/quotes');
+    revalidatePath('/jobs');
+    revalidatePath('/');
+    return { originalFolderPath: null, newFolderPath: jobFolderPath };
+  }
 
+  const newFolderPath = toArchivePath(jobFolderPath);
   await prisma.quote.update({
     where: { id: quoteId },
-    data: { status: 'cancelled', jobFolderPath: newFolderPath },
+    data: { ...statusPatch, jobFolderPath: newFolderPath },
   });
   revalidatePath('/quotes');
   revalidatePath('/jobs');

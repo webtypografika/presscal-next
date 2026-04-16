@@ -32,7 +32,7 @@ describe('buildJobFolderPath', () => {
       quoteTitle: 'Posters A3',
       archive: true,
     });
-    expect(result).toBe('D:\\Clients\\ASHRAE\\_Archive\\2026-0019 Posters A3');
+    expect(result).toBe('D:\\Clients\\ASHRAE\\_01 Archive\\2026-0019 Posters A3');
   });
 
   it('builds global mode path', () => {
@@ -55,7 +55,7 @@ describe('buildJobFolderPath', () => {
       quoteTitle: 'Posters A3',
       archive: true,
     });
-    expect(result).toBe('D:\\Jobs\\_Archive\\[QT-2026-0019] ASHRAE - Posters A3');
+    expect(result).toBe('D:\\Jobs\\_01 Archive\\[QT-2026-0019] ASHRAE - Posters A3');
   });
 
   it('prefers customer path over global', () => {
@@ -97,13 +97,13 @@ describe('buildJobFolderPath', () => {
 });
 
 describe('toArchivePath', () => {
-  it('inserts _Archive before last segment (backslash)', () => {
+  it('inserts _01 Archive before last segment (backslash)', () => {
     expect(toArchivePath('D:\\Clients\\ASHRAE\\2026-0019 Posters'))
-      .toBe('D:\\Clients\\ASHRAE\\_Archive\\2026-0019 Posters');
+      .toBe('D:\\Clients\\ASHRAE\\_01 Archive\\2026-0019 Posters');
   });
 
-  it('inserts _Archive before last segment (forward slash)', () => {
+  it('inserts _01 Archive before last segment (forward slash)', () => {
     expect(toArchivePath('/home/jobs/2026-0019'))
-      .toBe('/home/jobs/_Archive/2026-0019');
+      .toBe('/home/jobs/_01 Archive/2026-0019');
   });
 });

@@ -584,19 +584,25 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
     } catch { toast('Σφάλμα', 'error'); }
   }
 
-  // Archive — also moves the quote folder to `_01 Archive/` via PressKit deep link.
-  async function handleArchive() {
-    if (!confirm(`Αρχειοθέτηση ${quote.number};\n\nΟ φάκελος της προσφοράς θα μετακινηθεί στο "_01 Archive/" μέσω PressKit.`)) return;
+  // Archive or Complete — both move the quote folder to `_01 Archive/` via PressKit deep link.
+  async function handleArchiveOrComplete(targetStatus: 'cancelled' | 'completed') {
+    const label = targetStatus === 'completed' ? 'Ολοκλήρωση' : 'Αρχειοθέτηση';
+    if (!confirm(`${label} ${quote.number};\n\nΟ φάκελος της προσφοράς θα μετακινηθεί στο "_01 Archive/" μέσω PressKit.`)) return;
     try {
-      const { originalFolderPath, newFolderPath } = await archiveQuote(quote.id);
-      setQuote(prev => ({ ...prev, status: 'cancelled', jobFolderPath: newFolderPath ?? prev.jobFolderPath }));
+      const { originalFolderPath, newFolderPath } = await archiveQuote(quote.id, targetStatus);
+      setQuote(prev => ({
+        ...prev,
+        status: targetStatus,
+        ...(targetStatus === 'completed' ? { completedAt: new Date() } : {}),
+        jobFolderPath: newFolderPath ?? prev.jobFolderPath,
+      }));
       if (originalFolderPath) {
         window.location.href = `presscal-fh://archive-quote?folderPath=${encodeURIComponent(originalFolderPath)}`;
-        toast('Αρχειοθετήθηκε — το PressKit μετακινεί τον φάκελο');
+        toast(`${label} — το PressKit μετακινεί τον φάκελο`);
       } else {
-        toast('Αρχειοθετήθηκε (δεν βρέθηκε φάκελος προς μετακίνηση)', 'info');
+        toast(`${label} (δεν βρέθηκε φάκελος προς μετακίνηση)`, 'info');
       }
-    } catch { toast('Σφάλμα αρχειοθέτησης', 'error'); }
+    } catch { toast(`Σφάλμα ${label.toLowerCase()}ς`, 'error'); }
   }
 
   const [applyingCalc, setApplyingCalc] = useState(false);
@@ -771,8 +777,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 
         {/* Status transitions */}
         {transitions.map(t => {
-          // Archive needs special handling — also fires PressKit deep link to move the folder
-          const onClickHandler = t.label === 'Αρχειοθέτηση' ? handleArchive : () => changeStatus(t.status);
+          // Archive + Complete both fire the PressKit deep link to move the folder
+          const onClickHandler = t.status === 'cancelled' ? () => handleArchiveOrComplete('cancelled')
+            : t.status === 'completed' ? () => handleArchiveOrComplete('completed')
+            : () => changeStatus(t.status);
           return (
             <button key={t.status} onClick={onClickHandler} style={{
               display: 'flex', alignItems: 'center', gap: 4,

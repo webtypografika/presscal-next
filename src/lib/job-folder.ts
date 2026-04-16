@@ -35,10 +35,11 @@ export function buildJobFolderPath(opts: BuildOpts): string | null {
 
   const title = sanitize(truncate(quoteTitle || 'Εργασία', 60));
   const company = sanitize(truncate(companyName || 'Πελάτης', 40));
-  const archiveSeg = '_Archive';
+  // Matches the PressKit archive folder convention (presscal-fh://archive-quote)
+  const archiveSeg = '_01 Archive';
 
   if (companyFolderPath) {
-    // Customer mode: {companyFolder}[\_Archive]\{shortNumber} {title}
+    // Customer mode: {companyFolder}[\_01 Archive]\{shortNumber} {title}
     const short = quoteNumber.replace(/^[A-Z]+-?/i, ''); // "QT-2026-0019" → "2026-0019"
     const folderName = `${short} ${title}`;
     const root = archive ? `${companyFolderPath}\\${archiveSeg}` : companyFolderPath;
@@ -46,7 +47,7 @@ export function buildJobFolderPath(opts: BuildOpts): string | null {
   }
 
   if (globalRoot) {
-    // Global mode: {globalRoot}[\_Archive]\[{number}] {company} - {title}
+    // Global mode: {globalRoot}[\_01 Archive]\[{number}] {company} - {title}
     const folderName = `[${quoteNumber}] ${company} - ${title}`;
     const root = archive ? `${globalRoot}\\${archiveSeg}` : globalRoot;
     return `${root}\\${folderName}`;
@@ -57,12 +58,19 @@ export function buildJobFolderPath(opts: BuildOpts): string | null {
 
 /**
  * Convert an active job folder path to its archive equivalent.
- * Returns null if path doesn't contain a recognizable root.
+ * Uses the "_01 Archive" subfolder name to match PressKit.
  */
 export function toArchivePath(activePath: string): string {
-  // Insert _Archive before the last path segment
   const sep = activePath.includes('/') ? '/' : '\\';
   const parts = activePath.split(sep);
   const folderName = parts.pop()!;
-  return [...parts, '_Archive', folderName].join(sep);
+  return [...parts, '_01 Archive', folderName].join(sep);
+}
+
+/**
+ * Returns true if a path is already inside an archive subfolder.
+ * Recognises both the current `_01 Archive` and the legacy `_Archive` naming.
+ */
+export function isArchivedPath(path: string): boolean {
+  return /[\\/]_(?:01 )?Archive[\\/]/.test(path);
 }

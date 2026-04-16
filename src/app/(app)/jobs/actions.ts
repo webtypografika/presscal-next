@@ -25,24 +25,34 @@ export async function getJobs() {
 
 // ─── UPDATE JOB STAGE ───
 
-export async function updateJobStage(quoteId: string, stage: string) {
+export async function updateJobStage(
+  quoteId: string,
+  stage: string,
+): Promise<{ originalFolderPath: string | null } | void> {
   const data: Record<string, unknown> = {
     jobStage: stage,
     jobStageUpdatedAt: new Date(),
   };
-  // If stage is 'delivery' and completed, mark quote as completed
+
+  // Completion: mark quote as completed + compute archive path.
+  // Return the ORIGINAL path so the UI can fire the presscal-fh://archive-quote deep link
+  // and PressKit can actually move the folder on disk.
   if (stage === 'completed') {
     data.status = 'completed';
     data.completedAt = new Date();
     data.jobStage = 'delivery';
 
-    // Move job folder to archive
     const quote = await prisma.quote.findUnique({ where: { id: quoteId }, select: { jobFolderPath: true } });
-    if (quote?.jobFolderPath && !quote.jobFolderPath.includes('_Archive')) {
-      const { toArchivePath } = await import('@/lib/job-folder');
+    const { toArchivePath, isArchivedPath } = await import('@/lib/job-folder');
+    let originalFolderPath: string | null = null;
+    if (quote?.jobFolderPath && !isArchivedPath(quote.jobFolderPath)) {
+      originalFolderPath = quote.jobFolderPath;
       data.jobFolderPath = toArchivePath(quote.jobFolderPath);
     }
+    await prisma.quote.update({ where: { id: quoteId }, data });
+    return { originalFolderPath };
   }
+
   await prisma.quote.update({ where: { id: quoteId }, data });
 }
 
