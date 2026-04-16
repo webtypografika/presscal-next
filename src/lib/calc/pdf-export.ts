@@ -880,10 +880,13 @@ async function exportBooklet(
   const trimHpt = mmToPt(impo.trimH || opts.jobH || 0);
 
   // Spread footprint on the press sheet, accounting for rotation.
-  // Unrotated: two pages side by side, spread is (2·trim + 2·bleed) × (trim + 2·bleed).
-  // Rotated  : two pages stacked vertically, spread is (trim + 2·bleed) × (2·trim + 2·bleed).
-  const spreadWpt = isRotated ? (trimHpt + 2 * bleedPt) : (2 * trimWpt + 2 * bleedPt);
-  const spreadHpt = isRotated ? (2 * trimWpt + 2 * bleedPt) : (trimHpt + 2 * bleedPt);
+  // The engine's spread includes a "+ gutter" of intra-spread padding (wasted at
+  // one edge) — match it here so cell positions agree between canvas and export.
+  // Unrotated: two pages side by side, spread is (2·trim + 2·bleed + gutter) × (trim + 2·bleed).
+  // Rotated  : two pages stacked, spread is (trim + 2·bleed) × (2·trim + 2·bleed + gutter).
+  const spreadInflatePt = mmToPt((impo as any).spineOffset || 0);
+  const spreadWpt = isRotated ? (trimHpt + 2 * bleedPt) : (2 * trimWpt + 2 * bleedPt + spreadInflatePt);
+  const spreadHpt = isRotated ? (2 * trimWpt + 2 * bleedPt + spreadInflatePt) : (trimHpt + 2 * bleedPt);
   const totalGridW = spreadsAcross * spreadWpt + (spreadsAcross - 1) * gapVpt;
   const totalGridH = spreadsDown * spreadHpt + (spreadsDown - 1) * gapHpt;
   const gridX = mL + (printableW - totalGridW) / 2 + offXpt;
