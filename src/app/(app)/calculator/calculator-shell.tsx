@@ -3251,27 +3251,12 @@ export default function CalculatorShell() {
                         border: `1px solid color-mix(in srgb, ${jobColor} 25%, transparent)`,
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px' }}>
-                          {/* Color badge doubles as "brush" activator — click to make this job the active paint target */}
-                          <button
-                            onClick={() => setGangBrushJob(prev => prev === i ? null : i)}
-                            title={gangBrushJob === i
-                              ? 'Ενεργό: κλικ σε cells για να βάλεις αυτή τη δουλειά · ξανακλικ εδώ για απενεργοποίηση'
-                              : 'Κλικ για να ενεργοποιήσεις "βάψιμο" κελιών με αυτή τη δουλειά'}
-                            style={{
-                              width: 20, height: 20, borderRadius: 4, flexShrink: 0,
-                              background: jobColor,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '0.55rem', fontWeight: 800, color: '#fff',
-                              border: gangBrushJob === i ? '2px solid #fff' : '2px solid transparent',
-                              boxShadow: gangBrushJob === i ? `0 0 0 2px ${jobColor}` : 'none',
-                              cursor: 'pointer', padding: 0, fontFamily: 'inherit',
-                              position: 'relative',
-                            }}
-                          >
-                            {gangBrushJob === i
-                              ? <i className="fas fa-paint-brush" style={{ fontSize: '0.6rem' }} />
-                              : (i + 1)}
-                          </button>
+                          <span style={{
+                            width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                            background: jobColor,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.55rem', fontWeight: 800, color: '#fff',
+                          }}>{i + 1}</span>
                           <input
                             value={gj.label}
                             onChange={e => setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, label: e.target.value } : j))}
@@ -3338,6 +3323,26 @@ export default function CalculatorShell() {
                               <i className="fas fa-times" />
                             </button>
                           )}
+                          {/* Picker (brush): ενεργοποιείται και τότε κλικ στα cells τα βάφει με αυτή τη δουλειά */}
+                          <button
+                            onClick={() => setGangBrushJob(prev => prev === i ? null : i)}
+                            title={gangBrushJob === i
+                              ? 'Ενεργός picker — κλικ στα cells για να τα βάλεις σε αυτή τη δουλειά · ξανακλικ εδώ για απενεργοποίηση'
+                              : 'Picker — κλικ, μετά κλικ στα cells για να τα βάλεις σε αυτή τη δουλειά'}
+                            style={{
+                              marginLeft: 'auto',
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              padding: '2px 7px', borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+                              background: gangBrushJob === i ? jobColor : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${gangBrushJob === i ? jobColor : 'var(--border)'}`,
+                              color: gangBrushJob === i ? '#fff' : jobColor,
+                              fontSize: '0.55rem', fontWeight: 700,
+                              boxShadow: gangBrushJob === i ? `0 0 0 2px color-mix(in srgb, ${jobColor} 30%, transparent)` : 'none',
+                            }}
+                          >
+                            <i className="fas fa-hand-pointer" style={{ fontSize: '0.5rem' }} />
+                            {gangBrushJob === i ? 'Ενεργό' : 'Picker'}
+                          </button>
                         </div>
                       </div>
                       );
@@ -3449,10 +3454,10 @@ export default function CalculatorShell() {
                       );
                     })()}
                     <div style={{ fontSize: '0.5rem', color: gangBrushJob !== null ? 'var(--accent)' : '#475569', marginTop: 4, fontWeight: gangBrushJob !== null ? 600 : 400 }}>
-                      <i className={`fas ${gangBrushJob !== null ? 'fa-paint-brush' : 'fa-info-circle'}`} style={{ marginRight: 3 }} />
+                      <i className={`fas ${gangBrushJob !== null ? 'fa-hand-pointer' : 'fa-info-circle'}`} style={{ marginRight: 3 }} />
                       {gangBrushJob !== null
-                        ? `Βάψιμο ενεργό: κλικ σε cells για "${gangJobs[gangBrushJob]?.label || '?'}"`
-                        : 'Κλικ στο έγχρωμο κουμπί δουλειάς → βάψιμο · αλλιώς κλικ σε cell για εναλλαγή'}
+                        ? `Picker ενεργός: κλικ σε cells για "${gangJobs[gangBrushJob]?.label || '?'}"`
+                        : 'Πάτησε Picker σε μια δουλειά, μετά κλικ στα cells · ή απλό κλικ σε cell για εναλλαγή'}
                     </div>
                   </div>
 
