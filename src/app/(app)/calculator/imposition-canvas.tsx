@@ -1220,8 +1220,8 @@ export default function ImpositionCanvas({
       }
     }
 
-    // ─── PERFECT BOUND: rotate button + snap guides on the block grid centre ───
-    if (impo.mode === 'perfect_bound' && impo.cells.length > 0) {
+    // ─── PERFECT BOUND / BOOKLET: rotate button + snap guides on the block grid centre ───
+    if ((impo.mode === 'perfect_bound' || impo.mode === 'booklet') && impo.cells.length > 0) {
       const sLeftExtra = feedEdge && machCat !== 'offset' ? 24 : 0;
       const sScX = (cW - 24 - sLeftExtra - markLen * 2) / sheetW;
       const sScY = (cH - reserveTop - reserveBot - markLen * 2) / sheetH;
@@ -1384,9 +1384,9 @@ export default function ImpositionCanvas({
   }, [impo, onGridResize, marginLeft, marginTop, marginBottom, machCat, offsetX, offsetY]);
 
   const findRotateBtn = useCallback((mmX: number, mmY: number): boolean => {
-    if (!onRotate || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn' && impo.mode !== 'perfect_bound')) return false;
+    if (!onRotate || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn' && impo.mode !== 'perfect_bound' && impo.mode !== 'booklet')) return false;
     let cx: number, cy: number;
-    if (impo.mode === 'perfect_bound') {
+    if (impo.mode === 'perfect_bound' || impo.mode === 'booklet') {
       const bb = cellBBox();
       if (!bb) return false;
       // mmX/mmY are in PRINTABLE coords; convert bbox from paper to printable
@@ -1414,8 +1414,8 @@ export default function ImpositionCanvas({
   }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, machCat, gutter, offsetX, offsetY, cropMarks, cellBBox]);
 
   const findGridBody = useCallback((mmX: number, mmY: number): boolean => {
-    if (!onOffsetChange || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn' && impo.mode !== 'perfect_bound')) return false;
-    if (impo.mode === 'perfect_bound') {
+    if (!onOffsetChange || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn' && impo.mode !== 'perfect_bound' && impo.mode !== 'booklet')) return false;
+    if (impo.mode === 'perfect_bound' || impo.mode === 'booklet') {
       const bb = cellBBox();
       if (!bb) return false;
       const isOff = machCat === 'offset';

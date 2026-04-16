@@ -3906,9 +3906,9 @@ export default function CalculatorShell() {
                   setImpoForceCols(cols);
                   setImpoForceRows(rows);
                 } : undefined}
-                onRotate={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn' || impoMode === 'perfect_bound') ? () => {
-                  if (impoMode === 'perfect_bound') {
-                    // PB block: toggle 0 ↔ 90 (spine vertical ↔ horizontal)
+                onRotate={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn' || impoMode === 'perfect_bound' || impoMode === 'booklet') ? () => {
+                  if (impoMode === 'perfect_bound' || impoMode === 'booklet') {
+                    // Booklet/PB block: toggle 0 ↔ 90 (spine vertical ↔ horizontal)
                     setImpoRotation(prev => (prev === 0 || prev === 180) ? 90 : 0);
                   } else {
                     setImpoRotation(prev => (prev + 90) % 360);
@@ -3916,7 +3916,7 @@ export default function CalculatorShell() {
                     setImpoForceRows(1);
                   }
                 } : undefined}
-                onOffsetChange={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn' || impoMode === 'perfect_bound') ? (x, y) => {
+                onOffsetChange={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn' || impoMode === 'perfect_bound' || impoMode === 'booklet') ? (x, y) => {
                   setImpoOffsetX(x);
                   setImpoOffsetY(y);
                 } : undefined}

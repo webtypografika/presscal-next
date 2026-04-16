@@ -415,12 +415,16 @@ export function calcBookletCreep(totalSheets: number, paperThicknessMM: number):
 }
 
 export function calcBooklet(input: ImpositionInput): ImpositionResult {
-  const { trimW, trimH, bleed, qty, gutter, area, pages: rawPages, paperThickness = 0 } = input;
+  const { trimW, trimH, bleed, qty, gutter, area, pages: rawPages, paperThickness = 0, rotation } = input;
 
   // Pages must be multiple of 4
   const pages = Math.ceil((rawPages || 4) / 4) * 4;
   const signatureMap = buildBookletSignatureMap(pages);
   const creepPerSheet = calcBookletCreep(signatureMap.totalSheets, paperThickness);
+
+  // Spread rotation: 0 = spine vertical (natural), 90 = spine horizontal
+  const rot = ((rotation || 0) % 360 + 360) % 360;
+  const blockRotated = (rot >= 45 && rot < 135) || (rot >= 225 && rot < 315);
 
   // Booklet cell: spine edge has no bleed, face edge has bleed
   const cellW = trimW + bleed; // only face bleed, not spine
@@ -429,8 +433,10 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   const { w: pw, h: ph } = printable(area);
 
   // A booklet spread = 2 pages side by side (fold at center)
-  const spreadW = cellW * 2 + gutter;
-  const spreadH = cellH;
+  const spreadWnat = cellW * 2 + gutter;
+  const spreadHnat = cellH;
+  const spreadW = blockRotated ? spreadHnat : spreadWnat;
+  const spreadH = blockRotated ? spreadWnat : spreadHnat;
 
   // How many spreads fit on the sheet (booklet uses its own cell model)
   const spreadCols = fitCountLegacy(pw, spreadW, gutter);
@@ -441,8 +447,8 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   const sheetsNeeded = Math.ceil(signatureMap.totalSheets / spreadsPerSheet);
   const totalSheets = sheetsNeeded * qty;
 
-  const usedW = spreadCols * spreadW + (spreadCols - 1) * gutter;
-  const usedH = spreadRows * spreadH + (spreadRows - 1) * gutter;
+  const usedW = spreadCols * spreadW + Math.max(0, spreadCols - 1) * gutter;
+  const usedH = spreadRows * spreadH + Math.max(0, spreadRows - 1) * gutter;
 
   // Build cells with page numbers from signature map
   // Center spread grid in printable area
@@ -457,29 +463,47 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
       const baseX = cenOffX + sc * (spreadW + gutter);
       const baseY = cenOffY + sr * (spreadH + gutter);
 
-      // Left page (front left = first element of front pair)
-      // Booklet: left page has face bleed on left, spine=0 on right
+      // Natural cell positions within spread (spine vertical): L at (0,0), R at (cellW, 0)
+      const natL = { x: 0, y: 0, bL: bleed, bR: 0, bT: bleed, bB: bleed };
+      const natR = { x: cellW, y: 0, bL: 0, bR: bleed, bT: bleed, bB: bleed };
+
+      let L: { x: number; y: number; w: number; h: number; rot: number; bL: number; bR: number; bT: number; bB: number };
+      let R: typeof L;
+
+      if (blockRotated) {
+        // Rotate 90° CW within the natural spread frame (spreadWnat × spreadHnat).
+        // rect (x, y, w, h) → new top-left (y, spreadWnat - x - w), size (h, w).
+        // Bleeds rotate: L→T, T→R, R→B, B→L.
+        L = {
+          x: baseX + natL.y,
+          y: baseY + (spreadWnat - natL.x - cellW),
+          w: cellH, h: cellW, rot: 90,
+          bL: natL.bB, bR: natL.bT, bT: natL.bL, bB: natL.bR,
+        };
+        R = {
+          x: baseX + natR.y,
+          y: baseY + (spreadWnat - natR.x - cellW),
+          w: cellH, h: cellW, rot: 90,
+          bL: natR.bB, bR: natR.bT, bT: natR.bL, bB: natR.bR,
+        };
+      } else {
+        L = { x: baseX + natL.x, y: baseY + natL.y, w: cellW, h: cellH, rot: 0,
+              bL: natL.bL, bR: natL.bR, bT: natL.bT, bB: natL.bB };
+        R = { x: baseX + natR.x, y: baseY + natR.y, w: cellW, h: cellH, rot: 0,
+              bL: natR.bL, bR: natR.bR, bT: natR.bT, bB: natR.bB };
+      }
+
       cells.push({
-        col: sc * 2,
-        row: sr,
-        x: baseX,
-        y: baseY,
-        w: cellW,
-        h: cellH,
-        pageNum: sig.front[0],
-        bleedL: bleed, bleedR: 0, bleedT: bleed, bleedB: bleed,
+        col: sc * 2, row: sr,
+        x: L.x, y: L.y, w: L.w, h: L.h,
+        pageNum: sig.front[0], rotation: L.rot,
+        bleedL: L.bL, bleedR: L.bR, bleedT: L.bT, bleedB: L.bB,
       });
-      // Right page (front right = second element of front pair)
-      // Booklet: right page has spine=0 on left, face bleed on right
       cells.push({
-        col: sc * 2 + 1,
-        row: sr,
-        x: baseX + cellW,
-        y: baseY,
-        w: cellW,
-        h: cellH,
-        pageNum: sig.front[1],
-        bleedL: 0, bleedR: bleed, bleedT: bleed, bleedB: bleed,
+        col: sc * 2 + 1, row: sr,
+        x: R.x, y: R.y, w: R.w, h: R.h,
+        pageNum: sig.front[1], rotation: R.rot,
+        bleedL: R.bL, bleedR: R.bR, bleedT: R.bT, bleedB: R.bB,
       });
       sigIdx++;
     }
@@ -488,15 +512,16 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   return {
     mode: 'booklet',
     ups: spreadsPerSheet * 2,
-    cols: spreadCols * 2,
-    rows: spreadRows,
+    cols: blockRotated ? spreadCols : spreadCols * 2,
+    rows: blockRotated ? spreadRows * 2 : spreadRows,
     paperW: area.paperW,
     paperH: area.paperH,
-    pieceW: cellW,
-    pieceH: cellH,
+    pieceW: blockRotated ? cellH : cellW,
+    pieceH: blockRotated ? cellW : cellH,
     trimW,
     trimH,
-    rotated: false,
+    rotated: blockRotated,
+    pageRotation: rot,
     wastePercent: wastePercent(area.paperW, area.paperH, usedW, usedH),
     cells,
     totalSheets,
