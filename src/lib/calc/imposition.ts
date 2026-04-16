@@ -432,8 +432,10 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
 
   const { w: pw, h: ph } = printable(area);
 
-  // A booklet spread = 2 pages side by side (fold at center)
-  const spreadWnat = cellW * 2 + gutter;
+  // A booklet spread = 2 pages side by side (fold at center). The two pages
+  // share the spine with NO gap — the spread occupies exactly 2·cellW horizontally.
+  // Inter-spread gap is handled separately via the `gutter` step in the tiling loop.
+  const spreadWnat = cellW * 2;
   const spreadHnat = cellH;
   const spreadW = blockRotated ? spreadHnat : spreadWnat;
   const spreadH = blockRotated ? spreadWnat : spreadHnat;
