@@ -911,16 +911,17 @@ export default function CalculatorShell() {
     }
   }, [dataLoaded, searchParams, machines]);
 
-  // ─── REFRESH LINKED FILE FROM DB ON WINDOW FOCUS ───
-  // After the user picks a file in PressKit (separate app) the linkedFile is
-  // written to the DB. When they switch back to this tab, pull the fresh
-  // value so the calc can auto-load the newly linked PDF.
+  // ─── LOAD LINKED FILE FROM DB (on mount + window focus) ───
+  // On open (via recalculate or deep link) the linkedFile lives on the quote item in the DB.
+  // Fetch on mount so the PDF auto-loads, and again on focus so PressKit's pick-file flow
+  // (which writes the linkedFile externally) is picked up when the user returns to this tab.
   useEffect(() => {
     if (!quoteLink?.quoteId || !quoteLink?.itemId) return;
+    let cancelled = false;
     const refresh = async () => {
       try {
         const res = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
-        if (!res.ok) return;
+        if (!res.ok || cancelled) return;
         const data = await res.json();
         const item = (data.items as any[])?.find(i => i.id === quoteLink.itemId);
         const lf = item?.linkedFile;
@@ -929,8 +930,9 @@ export default function CalculatorShell() {
         }
       } catch {}
     };
+    refresh();
     window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
+    return () => { cancelled = true; window.removeEventListener('focus', refresh); };
   }, [quoteLink?.quoteId, quoteLink?.itemId, linkedFile?.path]);
 
   // ─── AUTO-LOAD LINKED PDF VIA HELPER FILE SERVER OR STORAGE ───
@@ -1644,9 +1646,23 @@ export default function CalculatorShell() {
                 customMachineIds: finish.customMachineIds.length ? finish.customMachineIds : undefined,
                 overrides: hasOverrides ? overrides : undefined,
               };
-              // NOTE: linkedFile is NOT set here. It is owned by the quote item
-              // in the DB (written by PressKit's pick-file flow or by the PDF
-              // drag-drop sync). The spread below at items[idx] preserves it.
+              // Build an enriched linkedFile from current state + parsed PDF metadata.
+              // We save this so when the user reopens the quote (e.g. via recalculate),
+              // the PDF auto-loads back into the calculator. Any richer existing linkedFile
+              // on the DB item (e.g. from PressKit's pick-file flow) is preferred in the
+              // merge below so we don't lose width/height/pages metadata.
+              const pdfPage0 = pdf?.pageSizes?.[0];
+              const linkedFilePayload = linkedFile
+                ? {
+                    path: linkedFile.path,
+                    name: linkedFile.name,
+                    type: 'pdf' as const,
+                    ...(pdf?.pageCount ? { pages: pdf.pageCount } : {}),
+                    ...(pdfPage0?.trimW ? { width: Math.round(pdfPage0.trimW * 10) / 10 } : {}),
+                    ...(pdfPage0?.trimH ? { height: Math.round(pdfPage0.trimH * 10) / 10 } : {}),
+                    ...(pdfPage0?.bleedDetected ? { bleed: pdfPage0.bleedDetected } : {}),
+                  }
+                : undefined;
               const itemPayload = {
                 id: quoteLink?.itemId || crypto.randomUUID(),
                 name: `${job.width}×${job.height} ${job.archetype}`,
@@ -1658,6 +1674,7 @@ export default function CalculatorShell() {
                 finalPrice: Math.round(totalPrice * 100) / 100,
                 profit: Math.round(profitAmount * 100) / 100,
                 calcData: calcDataPayload,
+                ...(linkedFilePayload ? { linkedFile: linkedFilePayload } : {}),
               };
 
               try {
@@ -1671,7 +1688,10 @@ export default function CalculatorShell() {
                   const items = (data.items as any[]) || [];
                   const idx = items.findIndex((i: any) => i.id === quoteLink.itemId);
                   if (idx >= 0) {
-                    items[idx] = { ...items[idx], ...itemPayload };
+                    // Prefer any existing richer linkedFile on the DB item over our basic {path, name}
+                    const existingLF = items[idx]?.linkedFile;
+                    const mergedLF = existingLF || itemPayload.linkedFile;
+                    items[idx] = { ...items[idx], ...itemPayload, ...(mergedLF ? { linkedFile: mergedLF } : {}) };
                   } else {
                     items.push(itemPayload);
                   }
