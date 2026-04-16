@@ -443,23 +443,25 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   const spreadRows = fitCountLegacy(ph, spreadH, gutter);
   const spreadsPerSheet = Math.max(spreadCols * spreadRows, 1);
 
-  // Each spread = 4 pages (2 front, 2 back)
-  const sheetsNeeded = Math.ceil(signatureMap.totalSheets / spreadsPerSheet);
-  const totalSheets = sheetsNeeded * qty;
+  // Traditional 2-up booklet imposition: the SAME signature is printed in every
+  // spread slot of a press sheet — 2× or 4× copies at once. Each press sheet
+  // equals one signature; the number of impressions per sig drops by sigsPerSheet.
+  const sheetsNeeded = signatureMap.totalSheets;
+  const totalSheets = sheetsNeeded * Math.ceil(qty / spreadsPerSheet);
 
   const usedW = spreadCols * spreadW + Math.max(0, spreadCols - 1) * gutter;
   const usedH = spreadRows * spreadH + Math.max(0, spreadRows - 1) * gutter;
 
-  // Build cells with page numbers from signature map
+  // Build cells with page numbers from signature map. Use sig 0 as the preview
+  // default — the navigator / activeSigSheet override swaps to the selected sig.
   // Center spread grid in printable area
   const cenOffX = area.marginLeft + (pw - usedW) / 2;
   const cenOffY = area.marginTop + (ph - usedH) / 2;
   const cells: ImpositionCell[] = [];
-  let sigIdx = 0;
+  const previewSig = signatureMap.sheets[0];
   for (let sr = 0; sr < spreadRows; sr++) {
     for (let sc = 0; sc < spreadCols; sc++) {
-      if (sigIdx >= signatureMap.sheets.length) break;
-      const sig = signatureMap.sheets[sigIdx];
+      const sig = previewSig; // same sig repeated across every slot on the sheet
       const baseX = cenOffX + sc * (spreadW + gutter);
       const baseY = cenOffY + sr * (spreadH + gutter);
 
@@ -506,7 +508,6 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
         pageNum: sig.front[1], rotation: R.rot,
         bleedL: R.bL, bleedR: R.bR, bleedT: R.bT, bleedB: R.bB,
       });
-      sigIdx++;
     }
   }
 

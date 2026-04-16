@@ -871,7 +871,10 @@ async function exportBooklet(
   const spreadsDown = isRotated
     ? Math.max(1, Math.floor((impo.rows || 2) / 2))
     : (impo.rows || 1);
-  const sigsPerSheet = (impo as any).sigsPerSheet || (spreadsAcross * spreadsDown);
+  // Traditional 2-up imposition: every spread slot on a press sheet prints
+  // the SAME signature (2 book copies printed at once). So "sigs per press sheet"
+  // is always 1 — totalPressSheets = totalSigs, and each sheet repeats one sig.
+  const sigsPerSheet = 1;
   const gapVpt = mmToPt((impo as any).spineOffset || 0);
   const gapHpt = mmToPt((impo as any).rowGap || 0);
 
@@ -919,18 +922,15 @@ async function exportBooklet(
     const frontPage = doc.addPage([paperWpt, paperHpt]);
     const backPage = doc.addPage([paperWpt, paperHpt]);
 
+    // Each press sheet represents one signature — all spread slots on this
+    // sheet print the same sig (2-up book imposition).
+    const si = canRepeat ? (ps % totalSigs) : ps;
+    if (si >= totalSigs) continue;
+    const sheet = sigMap.sheets[si];
+    const creepPt = mmToPt(creep[si] || 0);
+
     for (let row = 0; row < spreadsDown; row++) {
       for (let sp2 = 0; sp2 < spreadsAcross; sp2++) {
-        const slotIdx = row * spreadsAcross + sp2;
-        let si: number;
-        if (canRepeat) {
-          si = slotIdx % totalSigs;
-        } else {
-          si = ps * sigsPerSheet + slotIdx;
-          if (si >= totalSigs) continue;
-        }
-        const sheet = sigMap.sheets[si];
-        const creepPt = mmToPt(creep[si] || 0);
         // Place spread — y index 0 is at the TOP of the sheet (higher PDF y).
         const rowY = gridY + (spreadsDown - 1 - row) * (spreadHpt + gapHpt);
         const spreadX = gridX + sp2 * (spreadWpt + gapVpt);
