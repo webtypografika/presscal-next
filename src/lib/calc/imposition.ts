@@ -530,6 +530,11 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
     signatureMap,
     creepPerSheet,
     pageCount: rawPages || 4,
+    // Export layout (consumed by pdf-export.ts exportBooklet)
+    spreadsAcross: spreadCols,
+    sigsPerSheet: spreadsPerSheet,
+    spineOffset: gutter,
+    rowGap: gutter,
     ...marginInfo(area),
   };
 }

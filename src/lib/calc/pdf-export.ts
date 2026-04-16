@@ -860,30 +860,42 @@ async function exportBooklet(
   const printableH = paperHpt - mmToPt(impo.marginT ?? 0) - mB;
   const offXpt = mmToPt(impo.offsetX || 0);
   const offYpt = mmToPt(impo.offsetY || 0);
-  const rows = impo.rows || 1;
   const spreadsAcross = (impo as any).spreadsAcross || 1;
-  const sigsPerSheet = (impo as any).sigsPerSheet || (spreadsAcross * rows);
-  const spreadWpt = 2 * pieceW;
+  const pageRot = (impo as any).pageRotation || 0;
+  const isRotated = pageRot === 90 || pageRot === 270;
+  // For unrotated booklet: spread rows stack vertically on the sheet (each row is one spread tall).
+  // For rotated booklet: the "rows" value from the engine counts cells (2 per spread), so divide by 2.
+  const spreadsDown = isRotated
+    ? Math.max(1, Math.floor((impo.rows || 2) / 2))
+    : (impo.rows || 1);
+  const sigsPerSheet = (impo as any).sigsPerSheet || (spreadsAcross * spreadsDown);
   const gapVpt = mmToPt((impo as any).spineOffset || 0);
   const gapHpt = mmToPt((impo as any).rowGap || 0);
+
+  // Trim + bleed dimensions of a single book page (pre-rotation semantics).
+  const trimWpt = mmToPt(impo.trimW || opts.jobW || 0);
+  const trimHpt = mmToPt(impo.trimH || opts.jobH || 0);
+
+  // Spread footprint on the press sheet, accounting for rotation.
+  // Unrotated: two pages side by side, spread is (2·trim + 2·bleed) × (trim + 2·bleed).
+  // Rotated  : two pages stacked vertically, spread is (trim + 2·bleed) × (2·trim + 2·bleed).
+  const spreadWpt = isRotated ? (trimHpt + 2 * bleedPt) : (2 * trimWpt + 2 * bleedPt);
+  const spreadHpt = isRotated ? (2 * trimWpt + 2 * bleedPt) : (trimHpt + 2 * bleedPt);
   const totalGridW = spreadsAcross * spreadWpt + (spreadsAcross - 1) * gapVpt;
-  const totalGridH = rows * pieceH + (rows - 1) * gapHpt;
+  const totalGridH = spreadsDown * spreadHpt + (spreadsDown - 1) * gapHpt;
   const gridX = mL + (printableW - totalGridW) / 2 + offXpt;
   const gridY = mB + (printableH - totalGridH) / 2 - offYpt;
 
   const totalSigs = sigMap.totalSheets;
-  const trimWpt = mmToPt(impo.trimW || opts.jobW || 0);
-  const trimHpt = mmToPt(impo.trimH || opts.jobH || 0);
-  const pageRot = (impo as any).pageRotation || 0;
 
-  // Crop marks config for booklet
+  // Crop marks config for booklet (operates on the on-sheet spread footprint).
   const bkMarks = {
     marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
     marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
     cols: spreadsAcross,
-    rows,
-    pieceW: 2 * (impo.trimW || opts.jobW || 0) + 2 * (opts.bleed || 0),
-    pieceH: (impo.trimH || opts.jobH || 0) + 2 * (opts.bleed || 0),
+    rows: spreadsDown,
+    pieceW: (isRotated ? (impo.trimH || opts.jobH || 0) : 2 * (impo.trimW || opts.jobW || 0)) + 2 * (opts.bleed || 0),
+    pieceH: (isRotated ? 2 * (impo.trimW || opts.jobW || 0) : (impo.trimH || opts.jobH || 0)) + 2 * (opts.bleed || 0),
     gutterMM: (impo as any).spineOffset || 0,
     gutterRowMM: (impo as any).rowGap || 0,
     bleedMM: opts.bleed || 0,
@@ -894,15 +906,14 @@ async function exportBooklet(
   const canRepeat = sigsPerSheet >= totalSigs;
   const totalPressSheets = canRepeat ? 1 : Math.ceil(totalSigs / sigsPerSheet);
 
-  // Progressive internal bleed for row gap (inter-spread vertical gap uses the same rule).
-  // Columns within a spread share the spine — no bleed there, handled via clip bounds.
-  const bkIntBleedRowPt = internalBleed(gapHpt, bleedPt);
+  // Progressive internal bleed for the inter-spread gap on the "rows" axis.
+  const bkIntBleedGapPt = internalBleed(gapHpt, bleedPt);
 
   for (let ps = 0; ps < totalPressSheets; ps++) {
     const frontPage = doc.addPage([paperWpt, paperHpt]);
     const backPage = doc.addPage([paperWpt, paperHpt]);
 
-    for (let row = 0; row < rows; row++) {
+    for (let row = 0; row < spreadsDown; row++) {
       for (let sp2 = 0; sp2 < spreadsAcross; sp2++) {
         const slotIdx = row * spreadsAcross + sp2;
         let si: number;
@@ -914,39 +925,71 @@ async function exportBooklet(
         }
         const sheet = sigMap.sheets[si];
         const creepPt = mmToPt(creep[si] || 0);
-        const rowY = gridY + (rows - 1 - row) * (pieceH + gapHpt);
+        // Place spread — y index 0 is at the TOP of the sheet (higher PDF y).
+        const rowY = gridY + (spreadsDown - 1 - row) * (spreadHpt + gapHpt);
         const spreadX = gridX + sp2 * (spreadWpt + gapVpt);
-        const foldX = spreadX + bleedPt + trimWpt;
 
-        // Left page of spread: full bleed on outer left, none on the spine (right).
-        // Right page: none on spine (left), full bleed on outer right.
-        const spreadBleeds = (fp: number, r: number) => ({
-          bL: fp === 0 ? bleedPt : 0,
-          bR: fp === 0 ? 0 : bleedPt,
-          bT: r === 0 ? bleedPt : bkIntBleedRowPt,
-          bB: r === rows - 1 ? bleedPt : bkIntBleedRowPt,
-        });
+        // Bleeds for each page of the spread. In both orientations the spine is
+        // the inner edge where L meets R (0 bleed), and outer edges carry full bleed.
+        // fp=0 is L (first-printed), fp=1 is R.
+        const spreadBleeds = (fp: number) => {
+          if (!isRotated) {
+            // Pages side by side: spine on the inner vertical edge.
+            return {
+              bL: fp === 0 ? bleedPt : 0,
+              bR: fp === 0 ? 0 : bleedPt,
+              bT: bleedPt,
+              bB: bleedPt,
+            };
+          }
+          // Pages stacked: after 90° CW rotation, L is on TOP, R is on BOTTOM.
+          // Spine is the horizontal inner edge (L bottom / R top).
+          return {
+            bL: bleedPt,
+            bR: bleedPt,
+            bT: fp === 0 ? bleedPt : 0,
+            bB: fp === 0 ? 0 : bleedPt,
+          };
+        };
 
-        // Front side
+        // In rotated mode, the embedded page is drawn rotated 90° on sheet, and its trim
+        // rectangle on the sheet is (trimH × trimW). drawTrimToCell takes trimW/trimH as the
+        // ORIGINAL page trim and handles the rotation internally via its rotation argument.
         for (let fp = 0; fp < 2; fp++) {
           const pn = sheet.front[fp];
           if (pn > embeddedPages.length) continue;
-          const shiftX = fp === 0 ? creepPt : -creepPt;
           const ep = embeddedPages[pn - 1];
-          const trimXf = spreadX + bleedPt + fp * trimWpt + shiftX;
-          const trimYf = rowY + bleedPt;
-          drawTrimToCell(frontPage, ep, trimXf, trimYf, trimWpt, trimHpt, spreadBleeds(fp, row), pageRot, 1);
+          let trimXf: number, trimYf: number;
+          if (!isRotated) {
+            // L on the left, R on the right, creep pushes L outward / R inward.
+            const shiftX = fp === 0 ? creepPt : -creepPt;
+            trimXf = spreadX + bleedPt + fp * trimWpt + shiftX;
+            trimYf = rowY + bleedPt;
+          } else {
+            // L on top, R on bottom. In PDF coords top-y is higher, so fp=0 (L) lands at
+            // the upper half. Creep on the spine-facing edge.
+            const shiftY = fp === 0 ? -creepPt : creepPt;
+            trimXf = spreadX + bleedPt;
+            trimYf = rowY + bleedPt + (1 - fp) * trimWpt + shiftY;
+          }
+          drawTrimToCell(frontPage, ep, trimXf, trimYf, trimWpt, trimHpt, spreadBleeds(fp), pageRot, 1);
         }
 
-        // Back side
         for (let bp = 0; bp < 2; bp++) {
           const pnb = sheet.back[bp];
           if (pnb > embeddedPages.length) continue;
-          const shiftXb = bp === 0 ? creepPt : -creepPt;
           const epb = embeddedPages[pnb - 1];
-          const trimXbk = spreadX + bleedPt + bp * trimWpt + shiftXb;
-          const trimYbk = rowY + bleedPt;
-          drawTrimToCell(backPage, epb, trimXbk, trimYbk, trimWpt, trimHpt, spreadBleeds(bp, row), pageRot, 1);
+          let trimXbk: number, trimYbk: number;
+          if (!isRotated) {
+            const shiftXb = bp === 0 ? creepPt : -creepPt;
+            trimXbk = spreadX + bleedPt + bp * trimWpt + shiftXb;
+            trimYbk = rowY + bleedPt;
+          } else {
+            const shiftYb = bp === 0 ? -creepPt : creepPt;
+            trimXbk = spreadX + bleedPt;
+            trimYbk = rowY + bleedPt + (1 - bp) * trimWpt + shiftYb;
+          }
+          drawTrimToCell(backPage, epb, trimXbk, trimYbk, trimWpt, trimHpt, spreadBleeds(bp), pageRot, 1);
         }
       }
     }
