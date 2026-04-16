@@ -472,17 +472,18 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
 
       if (blockRotated) {
         // Rotate 90° CW within the natural spread frame (spreadWnat × spreadHnat).
-        // rect (x, y, w, h) → new top-left (y, spreadWnat - x - w), size (h, w).
-        // Bleeds rotate: L→T, T→R, R→B, B→L.
+        // A rect (x, y, w, h) rotated 90° CW becomes (H - y - h, x) with size (h, w).
+        // Bleeds rotate CW: B→L, L→T, T→R, R→B — keeping the spine (bR=0 on L,
+        // bL=0 on R) on the inner edge where the two pages meet after rotation.
         L = {
-          x: baseX + natL.y,
-          y: baseY + (spreadWnat - natL.x - cellW),
+          x: baseX + (spreadHnat - natL.y - cellH),
+          y: baseY + natL.x,
           w: cellH, h: cellW, rot: 90,
           bL: natL.bB, bR: natL.bT, bT: natL.bL, bB: natL.bR,
         };
         R = {
-          x: baseX + natR.y,
-          y: baseY + (spreadWnat - natR.x - cellW),
+          x: baseX + (spreadHnat - natR.y - cellH),
+          y: baseY + natR.x,
           w: cellH, h: cellW, rot: 90,
           bL: natR.bB, bR: natR.bT, bT: natR.bL, bB: natR.bR,
         };
@@ -712,13 +713,14 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
 
             if (blockRotated) {
               // Rotate 90° CW inside a (blockWnat × blockHnat) → (blockHnat × blockWnat) frame:
-              // rect (x, y, w, h) → new top-left (y, blockWnat - x - w), new size (h, w)
-              finalX = blockOrigX + natY;
-              finalY = blockOrigY + (blockWnat - natX - cellW);
+              // rect (x, y, w, h) → new top-left (H - y - h, x), new size (h, w).
+              // Bleeds rotate CW: B→L, L→T, T→R, R→B (keeps spine edges aligned
+              // with the page neighbours in the rotated layout).
+              finalX = blockOrigX + (blockHnat - natY - cellH);
+              finalY = blockOrigY + natX;
               finalW = cellH;
               finalH = cellW;
               finalRot = (natRot + 90) % 360;
-              // Bleeds rotate CW: T→R, R→B, B→L, L→T
               bL = bB0; bR = bT0; bT = bL0; bB = bR0;
             } else {
               finalX = blockOrigX + natX;
