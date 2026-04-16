@@ -137,6 +137,7 @@ export interface ExportOptions {
   machineName?: string;
   paperName?: string;
   jobDescription?: string;
+  quoteNumber?: string;            // preferred filename prefix (e.g. "QT-2026-0001")
   jobW?: number;
   jobH?: number;
   bleed?: number;
@@ -1572,13 +1573,35 @@ async function exportGangRun(
   const grTrimStepW = trimWpt + gutterPt;
   const grTrimStepH = trimHpt + gutterPt;
 
-  const page = doc.addPage([paperWpt, paperHpt]);
   const grUserRot = opts.rotation || 0;
   const grBaseRot = (grUserRot === 180 || grUserRot === 270) ? 180 : 0;
-
   const grIntBleedPt = internalBleed(gutterPt, bleedPt);
-
   const hasMultiPdf = gangJobEmbedded && gangJobEmbedded.some(arr => arr.length > 0);
+  const isDuplex = !!opts.isDuplex;
+  const isH2H = (opts.duplexOrient || 'h2h') === 'h2h';
+
+  const marksImpo = {
+    marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
+    marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
+    trimW: impo.trimW, trimH: impo.trimH,
+    cols: impo.cols, rows: impo.rows,
+    gutterMM: opts.gutter || 0, bleedMM: opts.bleed || 0,
+    offsetX: impo.offsetX, offsetY: impo.offsetY,
+    cropMarks: opts.showCropMarks,
+  };
+  const marksOpts = {
+    font,
+    colorBarPage: cbEmbed,
+    machineCat: opts.machineCat,
+    showPlateSlug: opts.showPlateSlug,
+    plateSlugEdge: opts.plateSlugEdge,
+    colorBarEdge: opts.colorBarEdge,
+    colorBarOffsetY: opts.colorBarOffsetY,
+    colorBarScale: opts.colorBarScale,
+  };
+
+  // ─── FRONT PAGE ───
+  const page = doc.addPage([paperWpt, paperHpt]);
 
   for (let row = 0; row < impo.rows; row++) {
     for (let col = 0; col < impo.cols; col++) {
@@ -1588,8 +1611,8 @@ async function exportGangRun(
 
       let epObj: EmbeddedPageInfo | undefined;
       if (hasMultiPdf) {
-        const jobPages = gangJobEmbedded![jobIdx];
-        epObj = jobPages?.[0];
+        // Multi-PDF: first page of that job's PDF
+        epObj = gangJobEmbedded![jobIdx]?.[0];
       } else {
         epObj = jobIdx >= 0 && jobIdx < embeddedPages.length ? embeddedPages[jobIdx] : undefined;
       }
@@ -1607,30 +1630,65 @@ async function exportGangRun(
   }
 
   drawUniformGutterMasks(page, cenX, cenY, impo.cols, impo.rows, trimWpt, trimHpt, gutterPt, bleedPt, paperWpt, paperHpt);
-
   const gridL = cenX - bleedPt, gridB = cenY - bleedPt;
   const gridR = cenX + trimGridW + bleedPt, gridT = cenY + trimGridH + bleedPt;
   drawMarginalMasks(page, paperWpt, paperHpt, gridL, gridR, gridB, gridT);
-
-  drawPDFMarks(page, paperWpt, paperHpt, {
-    marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,
-    marginT: impo.marginT ?? 0, marginB: impo.marginB ?? 0,
-    trimW: impo.trimW, trimH: impo.trimH,
-    cols: impo.cols, rows: impo.rows,
-    gutterMM: opts.gutter || 0, bleedMM: opts.bleed || 0,
-    offsetX: impo.offsetX, offsetY: impo.offsetY,
-    cropMarks: opts.showCropMarks,
-  }, {
-    font,
-    jobName: ascii((opts.jobDescription || 'Job') + ' Gang Run'),
-    colorBarPage: cbEmbed,
-    machineCat: opts.machineCat,
-    showPlateSlug: opts.showPlateSlug,
-    plateSlugEdge: opts.plateSlugEdge,
-    colorBarEdge: opts.colorBarEdge,
-    colorBarOffsetY: opts.colorBarOffsetY,
-    colorBarScale: opts.colorBarScale,
+  drawPDFMarks(page, paperWpt, paperHpt, marksImpo, {
+    ...marksOpts,
+    jobName: ascii((opts.jobDescription || 'Job') + ' Gang Run' + (isDuplex ? ' Front' : '')),
   });
+
+  // ─── BACK PAGE (duplex only) ───
+  // Each cell shows the SAME job but its second PDF page (page 1).
+  // Trim rect is mirrored (H2H flips X, H2F flips Y) so the back aligns with the front on press.
+  if (isDuplex) {
+    const backPage = doc.addPage([paperWpt, paperHpt]);
+
+    for (let row = 0; row < impo.rows; row++) {
+      for (let col = 0; col < impo.cols; col++) {
+        const posIdx = row * impo.cols + col;
+        // Prefer explicit cellAssignBack if present; otherwise same job as front (natural duplex).
+        const pageNum = gangData?.cellAssignBack?.[posIdx] || gangData?.cellAssign?.[posIdx] || 1;
+        const jobIdx = pageNum - 1;
+
+        let epObj: EmbeddedPageInfo | undefined;
+        if (hasMultiPdf) {
+          // Multi-PDF: second page of that job's PDF (back side of the same design)
+          const jobPages = gangJobEmbedded![jobIdx];
+          epObj = jobPages?.[1] || jobPages?.[0]; // fallback to front if no back page provided
+        } else {
+          epObj = jobIdx >= 0 && jobIdx < embeddedPages.length ? embeddedPages[jobIdx] : undefined;
+        }
+
+        if (epObj) {
+          const grCScale = (opts.contentScale || 100) / 100;
+          const cell = impo.cells[posIdx];
+          const grExtraRot = cell?.rotation ?? grBaseRot;
+          const fTrimX = cenX + col * grTrimStepW;
+          const fTrimY = cenY + (impo.rows - 1 - row) * grTrimStepH;
+          const bTrimX = isH2H ? (paperWpt - fTrimX - trimWpt) : fTrimX;
+          const bTrimY = isH2H ? fTrimY : (paperHpt - fTrimY - trimHpt);
+          const f = cellBleed(col, row, impo.cols, impo.rows, bleedPt, grIntBleedPt);
+          const b = isH2H
+            ? { bL: f.bR, bR: f.bL, bT: f.bT, bB: f.bB }
+            : { bL: f.bL, bR: f.bR, bT: f.bB, bB: f.bT };
+          drawTrimToCell(backPage, epObj, bTrimX, bTrimY, trimWpt, trimHpt, b, grExtraRot, grCScale);
+        }
+      }
+    }
+
+    // Mirror grid position for masks + marks (H2H only — H2F keeps X same)
+    const bCenX = isH2H ? (paperWpt - cenX - trimGridW) : cenX;
+    const bCenY = isH2H ? cenY : (paperHpt - cenY - trimGridH);
+    drawUniformGutterMasks(backPage, bCenX, bCenY, impo.cols, impo.rows, trimWpt, trimHpt, gutterPt, bleedPt, paperWpt, paperHpt);
+    const bGridL = bCenX - bleedPt, bGridB = bCenY - bleedPt;
+    const bGridR = bCenX + trimGridW + bleedPt, bGridT = bCenY + trimGridH + bleedPt;
+    drawMarginalMasks(backPage, paperWpt, paperHpt, bGridL, bGridR, bGridB, bGridT);
+    drawPDFMarks(backPage, paperWpt, paperHpt, marksImpo, {
+      ...marksOpts,
+      jobName: ascii((opts.jobDescription || 'Job') + ' Gang Run Back'),
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1988,34 +2046,40 @@ export async function exportImpositionPDF(options: ExportOptions): Promise<Uint8
 //  Browser Download Trigger
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * Canonical export filename builder — unified across all export paths
+ * (download, customer folder, job folder, plate order, snapshot).
+ *
+ * Format: `[quoteNumber|imposed]_[trimWxtrimH]_[sheetWxsheetH]_[modeLabel].pdf`
+ * Example: `QT-2026-0001_210x297_487x330_nup_2UP.pdf`
+ *
+ * Pass a `suffix` to append before `.pdf` (e.g. '_plates' for plate orders).
+ */
+export function buildExportFilename(options: ExportOptions, suffix = ''): string {
+  const impo = options.imposition;
+  const jobSize = Math.round(options.jobW || 0) + 'x' + Math.round(options.jobH || 0);
+  const paperSize = Math.round(impo.paperW) + 'x' + Math.round(impo.paperH);
+  const modeLabel = impo.mode === 'nup' ? 'nup_' + impo.ups + 'UP'
+    : impo.mode === 'booklet' ? 'booklet'
+    : impo.mode === 'perfect_bound' ? 'pb'
+    : impo.mode === 'cutstack' ? 'cutstack_' + impo.ups + 'UP'
+    : impo.mode === 'workturn' ? 'workturn_' + impo.ups + 'UP'
+    : impo.mode === 'gangrun' ? 'gangrun_' + impo.ups + 'UP'
+    : impo.mode === 'stepmulti' ? 'step_' + (impo.blocks?.length || 0) + 'blk'
+    : impo.mode;
+  // Prefer quote number; fall back to "imposed". Sanitize for filesystem safety.
+  const rawPrefix = (options.quoteNumber || '').trim() || 'imposed';
+  const prefix = rawPrefix.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+  return `${prefix}_${jobSize}_${paperSize}_${modeLabel}${suffix}.pdf`;
+}
+
 export async function downloadImpositionPDF(options: ExportOptions, filename?: string): Promise<void> {
   const pdfBytes = await exportImpositionPDF(options);
   const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-
-  // Generate filename from options if not provided
-  if (!filename) {
-    const impo = options.imposition;
-    const jobSize = Math.round(options.jobW || 0) + 'x' + Math.round(options.jobH || 0);
-    const paperSize = Math.round(impo.paperW) + 'x' + Math.round(impo.paperH);
-    const modeLabel = impo.mode === 'nup' ? 'nup_' + impo.ups + 'UP'
-      : impo.mode === 'booklet' ? 'booklet'
-      : impo.mode === 'perfect_bound' ? 'pb'
-      : impo.mode === 'cutstack' ? 'cutstack_' + impo.ups + 'UP'
-      : impo.mode === 'workturn' ? 'workturn_' + impo.ups + 'UP'
-      : impo.mode === 'gangrun' ? 'gangrun_' + impo.ups + 'pos'
-      : impo.mode === 'stepmulti' ? 'step_' + (impo.blocks?.length || 0) + 'blk'
-      : impo.mode;
-    // Use source PDF filename (without extension) as base, fallback to 'imposed'
-    const baseName = options.sourceFileName
-      ? options.sourceFileName.replace(/\.pdf$/i, '')
-      : 'imposed';
-    filename = `${baseName}_${jobSize}_${paperSize}_${modeLabel}.pdf`;
-  }
-
-  a.download = filename;
+  a.download = filename || buildExportFilename(options);
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

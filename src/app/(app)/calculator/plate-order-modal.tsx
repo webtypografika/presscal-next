@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { exportImpositionPDF } from '@/lib/calc/pdf-export';
+import { exportImpositionPDF, buildExportFilename } from '@/lib/calc/pdf-export';
 import type { ExportOptions } from '@/lib/calc/pdf-export';
 
 const FIREBASE_SEND = 'https://us-central1-presscal.cloudfunctions.net/claudeMachineSpecs/sendQuote';
@@ -36,7 +36,7 @@ export default function PlateOrderModal({
 
   const plateSize = `${Math.round(paperW)}×${Math.round(paperH)}mm`;
   const totalPlates = platesFront + platesBack;
-  const pdfFileName = (exportOptions.sourceFileName || 'imposition').replace(/\.pdf$/i, '') + '_plates.pdf';
+  const pdfFileName = buildExportFilename(exportOptions, '_plates');
 
   useEffect(() => {
     fetch('/api/consumables?conType=plate').then(r => r.ok ? r.json() : []).then((items: any[]) => {

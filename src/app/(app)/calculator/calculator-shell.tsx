@@ -546,11 +546,43 @@ export default function CalculatorShell() {
   const [csNumRotation, setCsNumRotation] = useState(0);
   const [csExtraNum, setCsExtraNum] = useState<{ posX: number; posY: number; fontSize: number; rotation: number }[]>([]);
   const [csFixedBack, setCsFixedBack] = useState(false);
-  // Gang Run
-  const [gangJobs, setGangJobs] = useState<{ id: string; label: string; qty: number; pdf?: ParsedPDF }[]>([
-    { id: crypto.randomUUID(), label: 'Δουλειά 1', qty: 1 },
-  ]);
-  const [gangCellAssign, setGangCellAssign] = useState<Record<number, number>>({});  // cellIdx → jobIdx (0-based)
+  // Gang Run — layout persisted to localStorage (pdf bytes NOT persisted; user re-uploads)
+  const [gangJobs, setGangJobs] = useState<{ id: string; label: string; qty: number; pdf?: ParsedPDF }[]>(() => {
+    if (typeof window === 'undefined') return [{ id: crypto.randomUUID(), label: 'Δουλειά 1', qty: 1 }];
+    try {
+      const saved = localStorage.getItem('calc-gang-state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.jobs) && parsed.jobs.length > 0) {
+          return parsed.jobs.map((j: { id: string; label: string; qty: number }) => ({
+            id: j.id, label: j.label, qty: j.qty,
+          }));
+        }
+      }
+    } catch { /* ignore corrupt state */ }
+    return [{ id: crypto.randomUUID(), label: 'Δουλειά 1', qty: 1 }];
+  });
+  const [gangCellAssign, setGangCellAssign] = useState<Record<number, number>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = localStorage.getItem('calc-gang-state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.cellAssign && typeof parsed.cellAssign === 'object') return parsed.cellAssign;
+      }
+    } catch { /* ignore */ }
+    return {};
+  });
+  // Persist gang layout (jobs metadata + cell assignments) on change
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('calc-gang-state', JSON.stringify({
+        jobs: gangJobs.map(gj => ({ id: gj.id, label: gj.label, qty: gj.qty })),
+        cellAssign: gangCellAssign,
+      }));
+    } catch { /* quota exceeded — ignore */ }
+  }, [gangJobs, gangCellAssign]);
   // Step Multi
   const [smBlocks, setSmBlocks] = useState<StepBlock[]>([
     { pageNum: 1, backPageNum: null, trimW: 90, trimH: 55, cols: 1, rows: 1, rotation: 0, x: 0, y: 0, blockW: 0, blockH: 0, _manualGrid: true },
@@ -1096,8 +1128,9 @@ export default function CalculatorShell() {
     gangCellAssign: impoMode === 'gangrun' ? Object.fromEntries(
       Object.entries(gangCellAssign).map(([k, v]) => [k, v + 1])  // engine uses 1-based page numbers
     ) : undefined,
-    gangCellQty: impoMode === 'gangrun' ? Object.fromEntries(
-      Object.entries(gangCellAssign).map(([k, v]) => [k, gangJobs[v]?.qty || 1])
+    // Per-job qty (preferred, semantic) — engine divides by cellsPerPage to get sheets.
+    gangJobQty: impoMode === 'gangrun' ? Object.fromEntries(
+      gangJobs.map((gj, idx) => [idx + 1, Math.max(1, gj.qty || 1)])
     ) : undefined,
     gangAutoOptimize: impoMode === 'gangrun' ? Object.keys(gangCellAssign).length === 0 : undefined,
     // Step Multi
@@ -1135,6 +1168,7 @@ export default function CalculatorShell() {
     blocks: impoMode === 'stepmulti' ? impo.blocks : undefined,
     smBlockPdfBytes: impoMode === 'stepmulti' ? smBlockPdfs.map(p => p?.bytes) : undefined,
     jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
+    quoteNumber: quoteLink?.quoteNumber || undefined,
   };
 
   const ups = Math.max(impo.ups, 1);
@@ -1766,7 +1800,8 @@ export default function CalculatorShell() {
                       };
                       const fd = new FormData();
                       fd.append('state', JSON.stringify(snapshotState));
-                      fd.append('pdf', new Blob([bytes as BlobPart], { type: 'application/pdf' }), 'last-export.pdf');
+                      const { buildExportFilename: bld } = await import('@/lib/calc/pdf-export');
+                      fd.append('pdf', new Blob([bytes as BlobPart], { type: 'application/pdf' }), bld(pdfExportOpts));
                       fd.append('label', `${impoMode}-${new Date().toISOString().slice(11,19)}`);
                       const res = await fetch('/api/dev/snapshot', { method: 'POST', body: fd });
                       const data = await res.json();
@@ -1796,11 +1831,10 @@ export default function CalculatorShell() {
                         folder = qData?.companyFolderPath || null;
                       }
                       if (!folder) { alert('Δεν υπάρχει ορισμένος φάκελος πελάτη. Όρισε τον στη καρτέλα της εταιρείας.'); return; }
-                      const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
+                      const { exportImpositionPDF, buildExportFilename } = await import('@/lib/calc/pdf-export');
                       const bytes = await exportImpositionPDF(pdfExportOpts);
                       const sep = folder.includes('\\') ? '\\' : '/';
-                      const baseName = (pdf?.fileName || 'imposed').replace(/\.pdf$/i, '');
-                      const savePath = `${folder}${sep}${baseName}_imposition.pdf`;
+                      const savePath = `${folder}${sep}${buildExportFilename(pdfExportOpts)}`;
                       let res: Response;
                       try {
                         res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
@@ -1830,11 +1864,10 @@ export default function CalculatorShell() {
                         alert('Δεν μπόρεσε να δημιουργηθεί φάκελος εργασίας. Όρισε global root στις Ρυθμίσεις ή folderPath στην εταιρεία.');
                         return;
                       }
-                      const { exportImpositionPDF } = await import('@/lib/calc/pdf-export');
+                      const { exportImpositionPDF, buildExportFilename } = await import('@/lib/calc/pdf-export');
                       const bytes = await exportImpositionPDF(pdfExportOpts);
                       const sep = jobFolderPath.includes('\\') ? '\\' : '/';
-                      const baseName = (pdf?.fileName || 'imposed').replace(/\.pdf$/i, '');
-                      const savePath = `${jobFolderPath}${sep}${baseName}_imposition.pdf`;
+                      const savePath = `${jobFolderPath}${sep}${buildExportFilename(pdfExportOpts)}`;
                       let res: Response;
                       try {
                         res = await fetch(`http://localhost:17824/?save=${encodeURIComponent(savePath)}`, {
@@ -3171,7 +3204,27 @@ export default function CalculatorShell() {
                 {/* Gang Run */}
                 {impoMode === 'gangrun' && (<>
                   <div style={{ marginBottom: 10 }}>
-                    <MfLabel>ΔΟΥΛΕΙΕΣ</MfLabel>
+                    {(() => {
+                      const withPdf = gangJobs.filter(gj => gj.pdf).length;
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <MfLabel>ΔΟΥΛΕΙΕΣ</MfLabel>
+                          <span style={{ fontSize: '0.55rem', color: '#64748b', fontWeight: 500 }}>
+                            {withPdf}/{gangJobs.length} με PDF
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    {/* Column legend */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '0 8px 4px', fontSize: '0.5rem', color: '#475569', fontWeight: 500,
+                    }}>
+                      <span style={{ width: 16, flexShrink: 0 }} />
+                      <span style={{ flex: 1 }}>Τίτλος δουλειάς</span>
+                      <span style={{ width: 50, textAlign: 'center', flexShrink: 0 }}>Αντίτυπα</span>
+                      {gangJobs.length > 1 && <span style={{ width: 14, flexShrink: 0 }} />}
+                    </div>
                     {gangJobs.map((gj, i) => {
                       const jobColor = ['var(--accent)', 'var(--blue)', 'var(--teal)', '#a78bfa', '#f472b6', '#facc15'][i % 6];
                       return (
@@ -3196,10 +3249,10 @@ export default function CalculatorShell() {
                             }}
                             placeholder={`Δουλειά ${i + 1}`}
                           />
-                          <span style={{ fontSize: '0.55rem', color: '#64748b', flexShrink: 0 }}>×</span>
                           <input
                             type="number"
                             value={gj.qty}
+                            title="Αντίτυπα — πόσες φορές χρειάζεται να τυπωθεί αυτή η δουλειά"
                             onChange={e => setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, qty: Math.max(1, Number(e.target.value) || 1) } : j))}
                             style={{
                               width: 50, border: '1px solid var(--border)', borderRadius: 4,
@@ -3296,21 +3349,31 @@ export default function CalculatorShell() {
                                 if (cellIdx >= ups) return <div key={`${row}-${col}`} />;
                                 const jobIdx = gangCellAssign[cellIdx] ?? 0;
                                 const color = colors[jobIdx % colors.length];
+                                const cellJob = gangJobs[jobIdx];
+                                const hasPdf = !!cellJob?.pdf;
                                 return (
                                   <button key={`${row}-${col}`}
                                     onClick={() => setGangCellAssign(prev => ({ ...prev, [cellIdx]: (jobIdx + 1) % gangJobs.length }))}
                                     style={{
                                       width: cellW, height: cellH, borderRadius: 3,
-                                      border: `2px solid ${color}`,
-                                      background: `color-mix(in srgb, ${color} 18%, transparent)`,
+                                      border: hasPdf ? `2px solid ${color}` : `2px dashed ${color}`,
+                                      background: `color-mix(in srgb, ${color} ${hasPdf ? 18 : 8}%, transparent)`,
                                       color, fontSize: '0.6rem', fontWeight: 800,
                                       cursor: 'pointer', fontFamily: 'inherit',
                                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                      padding: 0,
+                                      padding: 0, position: 'relative',
                                     }}
-                                    title={`Cell ${cellIdx + 1}: ${gangJobs[jobIdx]?.label || '?'} — κλικ για αλλαγή`}
+                                    title={`Cell ${cellIdx + 1}: ${cellJob?.label || '?'} ${hasPdf ? '· έχει PDF' : '· χωρίς PDF'} — κλικ για αλλαγή δουλειάς`}
                                   >
                                     {jobIdx + 1}
+                                    {hasPdf && (
+                                      <span style={{
+                                        position: 'absolute', top: 1, right: 2,
+                                        fontSize: '0.42rem', color, opacity: 0.9,
+                                      }}>
+                                        <i className="fas fa-file-pdf" />
+                                      </span>
+                                    )}
                                   </button>
                                 );
                               })
@@ -3334,11 +3397,20 @@ export default function CalculatorShell() {
                     }}>
                       <div style={{ fontWeight: 700, color: 'var(--teal)', marginBottom: 4 }}>Σύνοψη Gang Run</div>
                       {gangJobs.map((gj, i) => {
-                        const cellCount = Object.values(gangCellAssign).filter(v => v === i).length || (i === 0 ? ups - Object.keys(gangCellAssign).length : 0);
+                        // Count cells: all positions default to job 0 when unassigned.
+                        let cellCount = 0;
+                        for (let k = 0; k < ups; k++) {
+                          if ((gangCellAssign[k] ?? 0) === i) cellCount++;
+                        }
+                        // Each sheet prints `cellCount` copies of this job; need ceil(qty / cellCount) sheets.
+                        const sheetsForJob = cellCount > 0 ? Math.ceil(gj.qty / cellCount) : 0;
                         return (
                           <div key={gj.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
-                            <span>{gj.label}</span>
-                            <span style={{ fontWeight: 600 }}>{cellCount} cells × {gj.qty} = {impo.gangData!.gangSheetsNeeded} φύλλα</span>
+                            <span>
+                              {gj.label}
+                              {!gj.pdf && <span style={{ color: '#f87171', marginLeft: 4, fontSize: '0.55rem' }} title="Δεν έχει ανέβει PDF"><i className="fas fa-exclamation-triangle" /></span>}
+                            </span>
+                            <span style={{ fontWeight: 600 }}>{cellCount} cells · {gj.qty} αντίτυπα → {sheetsForJob} φύλλα</span>
                           </div>
                         );
                       })}
@@ -3690,12 +3762,13 @@ export default function CalculatorShell() {
           </div>
 
           {/* Page/sheet navigator (all modes except W&T) */}
-          {impoMode !== 'workturn' && (pdf || impo.signatureMap) && (
+          {/* Gang run: show navigator whenever any job has a PDF OR job is duplex — so user can toggle A/B */}
+          {impoMode !== 'workturn' && (pdf || impo.signatureMap || (impoMode === 'gangrun' && (job.sides === 2 || gangJobs.some(gj => gj.pdf)))) && (
             <DuplexNavigator
               impo={impo}
               activePage={activeSigSheet}
               showBack={sigShowBack}
-              totalPdfPages={pdf?.pageCount ?? 0}
+              totalPdfPages={pdf?.pageCount ?? (impoMode === 'gangrun' ? (job.sides === 2 ? 2 : 1) : 0)}
               isDuplex={job.sides === 2}
               ups={impo.ups}
               onPageChange={setActiveSigSheet}
@@ -3731,7 +3804,7 @@ export default function CalculatorShell() {
                 plateSlugEdge={impoPlateSlugEdge}
                 pdf={pdf}
                 feedEdge={machine?.cat === 'offset' ? 'lef' : feedEdge}
-                activeSigSheet={(pdf || impo.signatureMap) ? activeSigSheet : undefined}
+                activeSigSheet={(pdf || impo.signatureMap || (impoMode === 'gangrun' && gangJobs.some(gj => gj.pdf))) ? activeSigSheet : undefined}
                 sigShowBack={job.sides === 2 ? sigShowBack : undefined}
                 csNumbering={impoMode === 'cutstack' && csNumbering ? {
                   prefix: csNumPrefix,

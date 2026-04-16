@@ -45,7 +45,8 @@ export interface ImpositionInput {
   // Gang Run specific
   gangCellAssign?: Record<number, number>;     // posIdx → front page
   gangCellAssignBack?: Record<number, number>; // posIdx → back page
-  gangCellQty?: Record<number, number>;        // posIdx → qty
+  gangCellQty?: Record<number, number>;        // posIdx → qty (legacy per-cell)
+  gangJobQty?: Record<number, number>;         // 1-based page/job → total qty wanted (preferred)
   gangAutoOptimize?: boolean;
   gangPageCount?: number;
 
@@ -900,6 +901,7 @@ export function calcGangRun(input: ImpositionInput): ImpositionResult {
     gangCellAssign = {},
     gangCellAssignBack = {},
     gangCellQty = {},
+    gangJobQty = {},
     gangAutoOptimize = true,
     gangPageCount = 1,
     sides,
@@ -914,41 +916,38 @@ export function calcGangRun(input: ImpositionInput): ImpositionResult {
   if (gangAutoOptimize && gangPageCount > 0) {
     for (let i = 0; i < totalPositions; i++) {
       if (!cellAssign[i]) cellAssign[i] = 1; // front: all page 1
-      if (sides === 2 && !cellAssignBack[i]) {
-        cellAssignBack[i] = Math.min(i + 2, gangPageCount);
-      }
     }
   }
 
-  // Default assignments for unset cells
+  // Default assignments for unset cells.
+  // Duplex: back side uses the SAME job as front by default (each job's PDF has its own front+back pages).
   for (let j = 0; j < totalPositions; j++) {
     if (!cellQty[j]) cellQty[j] = 1;
     if (!cellAssign[j]) cellAssign[j] = 1;
     if (sides === 2 && !cellAssignBack[j]) {
-      cellAssignBack[j] = Math.min(2, gangPageCount);
+      cellAssignBack[j] = cellAssign[j];
     }
   }
 
-  // Calculate sheets needed: max sheets required by any page's quantity
-  const maxQtyPerPage: Record<number, number> = {};
+  // Sheets needed: for each job, job.qty / cellsAssignedToJob = sheets to satisfy that job.
+  // Overall sheets = max over all jobs (the slowest job drives the press run).
+  //
+  // Preferred input: gangJobQty[1-based page] = total copies wanted for that job.
+  // Fallback (legacy): take the MAX of cellQty values for cells of that page (NOT sum —
+  // multiple cells of the same job produce copies in parallel, they don't add up).
+  const cellsPerPage: Record<number, number> = {};
+  const qtyPerPage: Record<number, number> = {};
   for (let k = 0; k < totalPositions; k++) {
     const pg = cellAssign[k] || 1;
-    if (!maxQtyPerPage[pg]) maxQtyPerPage[pg] = 0;
-    maxQtyPerPage[pg] += (cellQty[k] || 1);
+    cellsPerPage[pg] = (cellsPerPage[pg] || 0) + 1;
+    const cellContribution = gangJobQty[pg] ?? cellQty[k] ?? 1;
+    qtyPerPage[pg] = Math.max(qtyPerPage[pg] || 0, cellContribution);
   }
 
   let gangSheetsNeeded = 1;
-  for (const pg in maxQtyPerPage) {
-    let positionsForPage = 0;
-    for (let m = 0; m < totalPositions; m++) {
-      if ((cellAssign[m] || 1) === Number(pg)) positionsForPage++;
-    }
-    if (positionsForPage > 0) {
-      gangSheetsNeeded = Math.max(
-        gangSheetsNeeded,
-        Math.ceil(maxQtyPerPage[pg] / positionsForPage),
-      );
-    }
+  for (const pg in qtyPerPage) {
+    const cells = cellsPerPage[pg] || 1;
+    gangSheetsNeeded = Math.max(gangSheetsNeeded, Math.ceil(qtyPerPage[pg] / cells));
   }
 
   // Update cells with page assignments
