@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
-import { fuzzySearchIds, orderByIds } from '@/lib/search'
+import { fuzzySearchIds, orderByIds } from '@/lib/search-server'
 import { authenticateFilehelper } from '../auth'
 
 // GET /api/filehelper/customers — List companies (backward-compatible response shape)

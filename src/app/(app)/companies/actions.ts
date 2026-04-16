@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
-import { fuzzySearchIds, orderByIds } from '@/lib/search';
+import { fuzzySearchIds, orderByIds } from '@/lib/search-server';
 
 const ORG_ID = 'default-org';
 
