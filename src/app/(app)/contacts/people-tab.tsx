@@ -137,7 +137,7 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, sa
               style={{ padding: '4px 10px', borderRadius: '12px 0 0 12px', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', borderRight: 'none', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.65rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
               <i className="fas fa-folder-open" style={{ fontSize: '0.55rem' }} />Φάκελος
             </a>
-            <button onClick={() => handleUpdate(contact.id, { folderPath: null } as any)} title="Αφαίρεση φακέλου"
+            <button onClick={() => onUpdate(contact.id, { folderPath: null } as any)} title="Αφαίρεση φακέλου"
               style={{ padding: '4px 6px', borderRadius: '0 12px 12px 0', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: '#94a3b8', fontSize: '0.5rem', cursor: 'pointer' }}
               onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
               onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
@@ -151,7 +151,7 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, sa
               if (!res.ok) return;
               const data = await res.json();
               if (data.canceled || !data.path) return;
-              handleUpdate(contact.id, { folderPath: data.path } as any);
+              onUpdate(contact.id, { folderPath: data.path } as any);
             } catch {}
           }} title="Επιλογή φακέλου"
             style={{ padding: '4px 10px', borderRadius: 12, border: '1px dashed var(--glass-border)', background: 'transparent', color: '#64748b', fontSize: '0.65rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.15s', whiteSpace: 'nowrap', fontFamily: 'inherit' }}
