@@ -592,14 +592,7 @@ function drawPDFMarks(
     }
   }
 
-  // Job info text
-  if (options?.jobName && options.font) {
-    const safeText = ascii(options.jobName + ' | ' + new Date().toLocaleDateString('en-GB'));
-    page.drawText(safeText, {
-      x: mmToPt(5), y: paperHpt - mmToPt(3),
-      size: 6, font: options.font, color: cmyk(0, 0, 0, 0.6),
-    });
-  }
+  // Job info text — disabled (clutters output)
 
   // Color bar (tiled at scaled size across paper width)
   if (options?.colorBarPage) {
