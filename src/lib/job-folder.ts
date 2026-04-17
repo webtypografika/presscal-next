@@ -1,7 +1,7 @@
 // Job folder path builder
 // Web app computes paths, FileHelper creates physical folders on disk
 
-const ILLEGAL_CHARS = /[<>:"|?*]/g;
+const ILLEGAL_CHARS = /[<>:"|?*\/\\]/g;
 
 function sanitize(s: string): string {
   return s.replace(ILLEGAL_CHARS, '_').replace(/\s+/g, ' ').trim();
