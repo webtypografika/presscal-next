@@ -70,6 +70,7 @@ function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: s
     if (cd.sides != null) p.set('sides', String(cd.sides));
     if (cd.pages != null) p.set('pages', String(cd.pages));
     if (cd.archetype != null) p.set('archetype', cd.archetype as string);
+    if (cd.pageRange != null) p.set('pageRange', cd.pageRange as string);
     // Machine & paper
     p.set('machineId', cd.machineId as string);
     if (cd.paperId != null) p.set('paperId', cd.paperId as string);

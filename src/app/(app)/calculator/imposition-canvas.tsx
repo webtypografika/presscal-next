@@ -59,6 +59,7 @@ interface ImpositionCanvasProps {
   contentScale?: number;  // % content scale (100 = 1:1, default)
   onGutterChange?: (v: number) => void;
   onBleedChange?: (v: number) => void;
+  pageRange?: string;  // comma-separated 1-based page indices from multi-page PDF
 }
 
 type ViewMode = 'single' | 'dual';
@@ -121,6 +122,7 @@ function drawSheet(
   gangCellAssign?: Record<number, number>,
   smBlockPdfs?: (ParsedPDF | undefined)[],
   contentScale?: number,
+  pageRange?: string,
 ) {
   const scale = drawW / sheetW;
   const hasBleed = bleed > 0;
@@ -278,6 +280,11 @@ function drawSheet(
       const pdfCount = pdf?.thumbnails?.length || 0;
       const isCutStack = mode === 'cutstack';
       const isStepRepeat = !isCutStack && (mode === 'nup' || (mode === 'gangrun' && !isGangMultiPdf));
+      // Parse pageRange into 0-based indices for thumbnail mapping
+      const prIndices: number[] | null = pageRange
+        ? pageRange.split(',').map(s => parseInt(s.trim(), 10) - 1).filter(n => !isNaN(n) && n >= 0 && n < pdfCount)
+        : null;
+      const hasPageRange = prIndices && prIndices.length > 0;
       let pidx: number;
       let cellPdf: ParsedPDF | null | undefined = pdf;
       if (isSmMultiPdf) {
@@ -290,6 +297,9 @@ function drawSheet(
         const jobIdx = gangCellAssign?.[idx] ?? 0;
         cellPdf = gangJobPdfs![jobIdx] || null;
         pidx = pdfPageIdx; // 0=front, 1=back
+      } else if (hasPageRange && isStepRepeat) {
+        // Page range: map front=0→prIndices[0], back=1→prIndices[1]
+        pidx = prIndices[pdfPageIdx] ?? prIndices[0];
       } else if (isCutStack) {
         // Cut & Stack: multi-page PDF → each position gets a different page
         // Single-page PDF → all positions show page 0 (same design, different numbering)
@@ -815,7 +825,7 @@ export default function ImpositionCanvas({
   pdf, feedEdge, activeSigSheet, sigShowBack, csNumbering,
   gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate, onSmBlockMove,
   onGridResize, onRotate, onOffsetChange, contentScale,
-  onGutterChange, onBleedChange,
+  onGutterChange, onBleedChange, pageRange,
 }: ImpositionCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -886,14 +896,14 @@ export default function ImpositionCanvas({
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale);
+        machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale, pageRange);
 
       // Back
       drawSheet(ctx, baseX + drawW + gap, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale);
+        machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale, pageRange);
     } else {
       // ═══ SINGLE VIEW: one sheet, pagination ═══
       // Extra 24px on the left for the MACHINE FEED SIDE label (digital only —
@@ -920,7 +930,7 @@ export default function ImpositionCanvas({
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
         bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
-        machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale);
+        machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale, pageRange);
 
       // ─── STEP MULTI DIMENSION LINES (during drag) ───
       if (impo.mode === 'stepmulti' && smDragRef.current && impo.blocks) {

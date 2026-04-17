@@ -34,6 +34,7 @@ interface JobData {
   bodyPages?: number;       // perfect bound
   customMult?: number;      // custom
   productId?: string;       // linked global product
+  pageRange?: string;       // comma-separated 1-based page indices from multi-page PDF (e.g. "1,5")
 }
 interface ColorData {
   model: 'cmyk' | 'bw';
@@ -781,6 +782,8 @@ export default function CalculatorShell() {
     if (productId) updates.productId = productId;
     const bleedParam = searchParams.get('bleed');
     if (bleedParam) { updates.bleed = parseFloat(bleedParam); updates.bleedOn = true; }
+    const pageRangeParam = searchParams.get('pageRange');
+    if (pageRangeParam) updates.pageRange = pageRangeParam;
     setJob(prev => ({ ...prev, ...updates }));
 
     // ─── Color from URL ───
@@ -1174,6 +1177,7 @@ export default function CalculatorShell() {
     smBlockPdfBytes: impoMode === 'stepmulti' ? smBlockPdfs.map(p => p?.bytes) : undefined,
     jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,
     quoteNumber: quoteLink?.quoteNumber || undefined,
+    pageRange: job.pageRange || undefined,
   };
 
   const ups = Math.max(impo.ups, 1);
@@ -1645,6 +1649,7 @@ export default function CalculatorShell() {
                 gatherSignatures: finish.gatherSignatures || undefined,
                 customMachineIds: finish.customMachineIds.length ? finish.customMachineIds : undefined,
                 overrides: hasOverrides ? overrides : undefined,
+                pageRange: job.pageRange || undefined,
               };
               // Build an enriched linkedFile from current state + parsed PDF metadata.
               // We save this so when the user reopens the quote (e.g. via recalculate),
@@ -2339,6 +2344,27 @@ export default function CalculatorShell() {
                 )}
               </div>
 
+
+              {/* Page range — only for multi-page PDFs */}
+              {pdf && pdf.pageCount > 1 && (
+                <div style={{ marginBottom: 10 }}>
+                  <MfLabel>ΣΕΛΙΔΕΣ PDF <span style={{ fontWeight: 400, color: '#64748b', fontSize: '0.55rem' }}>({pdf.pageCount} σελ.)</span></MfLabel>
+                  <input
+                    value={job.pageRange ?? ''}
+                    onChange={(e) => setJob({ ...job, pageRange: e.target.value || undefined })}
+                    placeholder={`1–${pdf.pageCount} (π.χ. 1,5)`}
+                    style={{
+                      width: '100%', textAlign: 'center', padding: '6px 8px', borderRadius: 6,
+                      border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+                      color: 'var(--text)', fontSize: '0.75rem', fontFamily: 'inherit',
+                      outline: 'none',
+                    }}
+                  />
+                  <div style={{ fontSize: '0.55rem', color: '#64748b', marginTop: 2 }}>
+                    Σελ. 1 = front, σελ. 2 = back (αν duplex)
+                  </div>
+                </div>
+              )}
 
               {/* Divider */}
               <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0 12px' }} />
@@ -3943,6 +3969,7 @@ export default function CalculatorShell() {
                 contentScale={impoContentScale}
                 onGutterChange={v => setImpoGutter(Math.max(0, v))}
                 onBleedChange={v => setImpoBleedOverride(v)}
+                pageRange={job.pageRange}
               />
               {/* PDF info chip (top-left) — shown when a linked PDF is loaded */}
               {pdf && (
@@ -3957,7 +3984,7 @@ export default function CalculatorShell() {
                     {pdf.fileName.slice(0, 20)}
                   </div>
                   <span style={{ fontSize: '0.58rem', color: '#94a3b8', background: 'rgba(0,0,0,0.6)', padding: '2px 5px', borderRadius: 4 }}>
-                    {pdf.pageCount}pg · {pdf.pageSizes[0]?.trimW}×{pdf.pageSizes[0]?.trimH}
+                    {job.pageRange ? `σελ. ${job.pageRange}` : `${pdf.pageCount}pg`} · {pdf.pageSizes[0]?.trimW}×{pdf.pageSizes[0]?.trimH}
                   </span>
                 </div>
               )}

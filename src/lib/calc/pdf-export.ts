@@ -203,6 +203,9 @@ export interface ExportOptions {
 
   // Source filename for export naming
   sourceFileName?: string;
+
+  // Page range — comma-separated 1-based page indices to embed from source PDF (e.g. "1,5")
+  pageRange?: string;
 }
 
 interface EmbeddedPageInfo {
@@ -228,6 +231,17 @@ interface DrawMarksOptions {
   colorBarScale?: number;
 }
 
+// ─── Parse Page Range ───
+// Input: comma-separated 1-based page numbers (e.g. "1,5" or "3,7")
+// Returns 0-based indices, or null if empty/invalid (= use all pages)
+function parsePageRange(range?: string): number[] | null {
+  if (!range || !range.trim()) return null;
+  const indices = range.split(',')
+    .map(s => parseInt(s.trim(), 10) - 1)
+    .filter(n => !isNaN(n) && n >= 0);
+  return indices.length > 0 ? indices : null;
+}
+
 // ─── Embed Source Pages ───
 
 async function embedSourcePages(
@@ -236,13 +250,20 @@ async function embedSourcePages(
   mode: string,
   bleedMM: number,
   keepSourceMarks?: boolean,
+  pageRange?: string,
 ): Promise<EmbeddedPageInfo[]> {
   const srcDoc = await PDFDocument.load(sourceBytes, { ignoreEncryption: true });
   const srcPages = srcDoc.getPages();
   const embedded: EmbeddedPageInfo[] = [];
   const bleedPt = bleedMM * MM;
 
-  for (let i = 0; i < srcPages.length; i++) {
+  // Determine which pages to embed
+  const selectedIndices = parsePageRange(pageRange);
+  const pageIndices = selectedIndices
+    ? selectedIndices.filter(i => i < srcPages.length)
+    : srcPages.map((_, i) => i);
+
+  for (const i of pageIndices) {
     const pg = srcPages[i];
 
     // Detect page /Rotate
@@ -2046,7 +2067,7 @@ export async function exportImpositionPDF(options: ExportOptions): Promise<Uint8
     const embedMode = (options.imposition.mode === 'booklet' || options.imposition.mode === 'perfect_bound')
       ? 'trim'
       : 'nup';
-    embeddedPages = await embedSourcePages(doc, options.pdfBytes, embedMode, options.bleed || 0, options.keepSourceMarks);
+    embeddedPages = await embedSourcePages(doc, options.pdfBytes, embedMode, options.bleed || 0, options.keepSourceMarks, options.pageRange);
   }
 
   const mode = options.imposition.mode;
