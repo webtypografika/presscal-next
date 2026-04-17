@@ -2928,14 +2928,13 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
     }
   }
 
-  const filtered = customers.filter((c: any) => {
-    if (!search) return true;
+  const filtered = search.trim() ? customers.filter((c: any) => {
     const s = search.toLowerCase();
     const contactMatch = c.companyContacts?.some((cc: any) =>
       cc.contact?.name?.toLowerCase().includes(s) || cc.contact?.email?.toLowerCase().includes(s)
     );
     return c.name.toLowerCase().includes(s) || (c.email || '').toLowerCase().includes(s) || (c.afm || '').includes(s) || contactMatch;
-  });
+  }) : [];
 
   return (
     <div ref={ref} style={{
@@ -3059,6 +3058,11 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
             >
               — Χωρίς πελάτη —
             </div>
+            {!search.trim() && filtered.length === 0 && (
+              <div style={{ padding: '16px 12px', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                Πληκτρολογήστε για αναζήτηση...
+              </div>
+            )}
             {filtered.map(c => (
               <div
                 key={c.id}
@@ -3368,18 +3372,19 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
       .catch(() => {});
   }, [linkedEmails]);
 
-  // Debounced search
+  // Debounced search — only search when there's input
   useEffect(() => {
     if (mode !== 'list') return;
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (!search.trim()) { setResults([]); setLoading(false); return; }
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
         const { searchContacts } = await import('../actions');
-        const data = await searchContacts(search.trim() || undefined);
+        const data = await searchContacts(search.trim());
         setResults(data as any);
       } finally { setLoading(false); }
-    }, search ? 300 : 0);
+    }, 300);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [search, mode]);
 
@@ -3563,13 +3568,19 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
               — Χωρίς επαφή —
             </div>
 
+            {!search.trim() && results.length === 0 && !loading && (
+              <div style={{ padding: '16px 12px', fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                Πληκτρολογήστε για αναζήτηση...
+              </div>
+            )}
+
             {loading && (
               <div style={{ padding: '12px', fontSize: '0.78rem', color: '#64748b' }}>
                 <i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Αναζήτηση...
               </div>
             )}
 
-            {!loading && results.length === 0 && search && (
+            {!loading && results.length === 0 && search.trim() && (
               <div style={{ padding: '16px 12px', fontSize: '0.82rem', color: '#475569', textAlign: 'center' }}>
                 Δεν βρέθηκαν επαφές
               </div>
