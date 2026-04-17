@@ -810,6 +810,20 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           </button>
         )}
 
+        {/* Print / PDF */}
+        <button onClick={() => window.open(`/quotes/${quote.id}/print`, '_blank')} style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 500,
+          background: 'transparent',
+          border: '1px solid var(--border)',
+          color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+        }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = 'var(--text-muted)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+        >
+          <i className="fas fa-print" style={{ fontSize: '0.55rem' }} /> Εκτύπωση
+        </button>
+
         {/* Autosave indicator */}
         <span style={{ fontSize: '0.72rem', color: saving ? 'var(--text-muted)' : dirty ? 'var(--accent)' : 'var(--success)', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
           {saving ? <i className="fas fa-spinner fa-spin" style={{ fontSize: '0.55rem' }} />
