@@ -1134,7 +1134,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               itemId={item.id as string}
               hasLinkedFile={!!item.linkedFile}
               linkedFileName={(item.linkedFile as any)?.name}
-              customerFolder={(selectedCustomer as any)?.folderPath}
+              customerFolder={(selectedCustomer as any)?.folderPath || (selectedContact as any)?.folderPath}
               jobFolderPath={(quote as any).jobFolderPath}
             />
           </div>
