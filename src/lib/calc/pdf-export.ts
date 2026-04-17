@@ -571,7 +571,7 @@ function drawPDFMarks(
     const slugFont = options.font;
     const slugSize = 5.5;
     const slugNames = ['Cyan', 'Magenta', 'Yellow', 'Black'];
-    const slugJobText = options.jobName ? (' \u2014 ' + options.jobName).replace(/[^\x20-\x7E\u2014]/g, '') : '';
+    const slugJobText = '';
 
     let slugY: number;
     if (options.plateSlugEdge === 'tail') {
