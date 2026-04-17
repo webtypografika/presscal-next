@@ -244,17 +244,33 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                   </span>
                 )}
                 {company.folderPath ? (
-                  <a href={`presscal-fh://open-folder?path=${encodeURIComponent(company.folderPath)}`} title={company.folderPath}
-                    style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <i className="fas fa-folder-open" style={{ fontSize: '0.7rem' }} />Φάκελος
-                  </a>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                    <a href={`presscal-fh://open-folder?path=${encodeURIComponent(company.folderPath)}`} title={company.folderPath}
+                      style={{ padding: '6px 12px', borderRadius: '6px 0 0 6px', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', borderRight: 'none', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <i className="fas fa-folder-open" style={{ fontSize: '0.7rem' }} />Φάκελος
+                    </a>
+                    <button onClick={() => updateCompanyField(company.id, 'folderPath', '')} title="Αφαίρεση φακέλου"
+                      style={{ padding: '6px 8px', borderRadius: '0 6px 6px 0', border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: '#94a3b8', fontSize: '0.6rem', cursor: 'pointer' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = '#94a3b8')}>
+                      <i className="fas fa-times" />
+                    </button>
+                  </div>
                 ) : (
-                  <a href={`presscal-fh://pick-folder?customerId=${company.id}`} title="Επιλογή φακέλου"
-                    style={{ padding: '6px 12px', borderRadius: 6, border: '1px dashed var(--glass-border)', background: 'transparent', color: '#64748b', fontSize: '0.75rem', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}
+                  <button onClick={async () => {
+                    try {
+                      const res = await fetch('http://localhost:17824/?pickFolder=1');
+                      if (!res.ok) return;
+                      const data = await res.json();
+                      if (data.canceled || !data.path) return;
+                      updateCompanyField(company.id, 'folderPath', data.path);
+                    } catch {}
+                  }} title="Επιλογή φακέλου"
+                    style={{ padding: '6px 12px', borderRadius: 6, border: '1px dashed var(--glass-border)', background: 'transparent', color: '#64748b', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s', fontFamily: 'inherit' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--glass-border)'; e.currentTarget.style.color = '#64748b'; }}>
                     <i className="fas fa-folder-plus" style={{ fontSize: '0.7rem' }} />Φάκελος
-                  </a>
+                  </button>
                 )}
                 <button onClick={() => handleNewQuote(company.id)} title="Νέα προσφορά"
                   style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)', background: 'rgba(245,130,32,0.06)', color: 'var(--accent)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'inherit', transition: 'all 0.15s' }}
