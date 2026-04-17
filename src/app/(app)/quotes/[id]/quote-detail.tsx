@@ -443,7 +443,9 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [leftTab, setLeftTab] = useState<'email' | 'files'>((quote as any).fileLinks?.length > 0 ? 'files' : 'email');
   const [courierStatus, setCourierStatus] = useState(quote.courierStatus || '');
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [customerPickerMode, setCustomerPickerMode] = useState<'current' | 'list' | 'edit' | undefined>(undefined);
   const [showContactPicker, setShowContactPicker] = useState(false);
+  const [contactPickerMode, setContactPickerMode] = useState<'current' | 'list' | 'edit' | undefined>(undefined);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [emailSender, setEmailSender] = useState<{ name: string; email: string } | null>(null);
 
@@ -463,7 +465,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const selectedCompany = customers.find((c: any) => c.id === customerId) ?? quote.company;
   const selectedCustomer = selectedCompany; // backward compat alias
   const primaryContact = selectedCompany?.companyContacts?.find((cc: any) => cc.isPrimary)?.contact;
-  const customerName = selectedCompany?.name ?? (quote as any).contact?.name ?? quote.customer?.name ?? emailSender?.name ?? emailSender?.email ?? '—';
+  const customerName = selectedCompany?.name ?? quote.customer?.name ?? emailSender?.name ?? emailSender?.email ?? '— Εταιρεία —';
   const customerInfoEmail = selectedCompany?.email || (!selectedCompany && ((quote as any).contact?.email || emailSender?.email)) || '';
   const customerInfoPhone = selectedCompany?.phone || (!selectedCompany && (quote as any).contact?.phone) || '';
   const selectedContact = (quote as any).contact ?? null;
@@ -835,7 +837,15 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         {/* Company */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
-            onClick={() => { setShowCustomerPicker(!showCustomerPicker); if (!showCustomerPicker) setShowContactPicker(false); }}
+            onClick={() => {
+              if (showCustomerPicker) {
+                setShowCustomerPicker(false);
+              } else {
+                setCustomerPickerMode(customerId ? 'edit' : 'list');
+                setShowCustomerPicker(true);
+                setShowContactPicker(false);
+              }
+            }}
             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}
             onMouseEnter={e => (e.currentTarget.style.color = 'var(--accent)')}
             onMouseLeave={e => (e.currentTarget.style.color = 'var(--text)')}
@@ -868,7 +878,15 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         {/* Contact */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
-            onClick={() => { setShowContactPicker(!showContactPicker); if (!showContactPicker) setShowCustomerPicker(false); }}
+            onClick={() => {
+              if (showContactPicker) {
+                setShowContactPicker(false);
+              } else {
+                setContactPickerMode(contactId ? 'edit' : 'list');
+                setShowContactPicker(true);
+                setShowCustomerPicker(false);
+              }
+            }}
             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, color: contactId ? 'var(--text)' : '#475569' }}
             onMouseEnter={e => (e.currentTarget.style.color = 'var(--teal)')}
             onMouseLeave={e => (e.currentTarget.style.color = contactId ? 'var(--text)' : '#475569')}
@@ -955,6 +973,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       {showCustomerPicker && (
         <CustomerPicker customers={customers} currentId={customerId}
           linkedEmails={quote.linkedEmails as string[] || []} hasElorus={elorusConfigured}
+          initialMode={customerPickerMode}
           onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
           onClose={() => setShowCustomerPicker(false)} toast={toast} />
       )}
@@ -962,6 +981,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         <ContactPicker currentId={contactId} currentContact={selectedContact}
           companyId={customerId} linkedEmails={quote.linkedEmails as string[] || []}
           hasElorus={elorusConfigured}
+          initialMode={contactPickerMode}
           onSelect={(id, contact) => { setContactId(id); if (contact) setQuote(prev => ({ ...prev, contact } as any)); setShowContactPicker(false); }}
           onClose={() => setShowContactPicker(false)} toast={toast} />
       )}
@@ -2740,29 +2760,31 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
 // ═══════════════════════════════════════════════════════
 // CUSTOMER PICKER — dropdown to select/change customer
 // ═══════════════════════════════════════════════════════
-function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelect, onClose, toast }: {
+function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initialMode, onSelect, onClose, toast }: {
   customers: any[];
   currentId: string;
   linkedEmails: string[];
   hasElorus?: boolean;
+  initialMode?: 'current' | 'list' | 'edit';
   onSelect: (id: string) => void;
   onClose: () => void;
   toast: (msg: string, type?: ToastType) => void;
 }) {
   const [search, setSearch] = useState('');
-  const [mode, setMode] = useState<'current' | 'list' | 'new' | 'edit'>(currentId ? 'current' : 'list');
   const currentCustomer = customers.find(c => c.id === currentId);
-  const [editId, setEditId] = useState('');
-  const [formName, setFormName] = useState('');
-  const [formCompany, setFormCompany] = useState('');
-  const [formEmail, setFormEmail] = useState('');
-  const [formPhone, setFormPhone] = useState('');
-  const [formAfm, setFormAfm] = useState('');
-  const [formDoy, setFormDoy] = useState('');
-  const [formAddress, setFormAddress] = useState('');
-  const [formCity, setFormCity] = useState('');
-  const [formZip, setFormZip] = useState('');
-  const [formFolder, setFormFolder] = useState('');
+  const [mode, setMode] = useState<'current' | 'list' | 'new' | 'edit'>(initialMode || (currentId ? 'current' : 'list'));
+  const [editId, setEditId] = useState(initialMode === 'edit' && currentCustomer ? currentId : '');
+  const _initEdit = initialMode === 'edit' && currentCustomer;
+  const [formName, setFormName] = useState(_initEdit ? (currentCustomer.name || '') : '');
+  const [formCompany, setFormCompany] = useState(_initEdit ? (currentCustomer.company || '') : '');
+  const [formEmail, setFormEmail] = useState(_initEdit ? (currentCustomer.email || '') : '');
+  const [formPhone, setFormPhone] = useState(_initEdit ? (currentCustomer.phone || '') : '');
+  const [formAfm, setFormAfm] = useState(_initEdit ? (currentCustomer.afm || '') : '');
+  const [formDoy, setFormDoy] = useState(_initEdit ? ((currentCustomer as any).doy || '') : '');
+  const [formAddress, setFormAddress] = useState(_initEdit ? ((currentCustomer as any).address || '') : '');
+  const [formCity, setFormCity] = useState(_initEdit ? ((currentCustomer as any).city || '') : '');
+  const [formZip, setFormZip] = useState(_initEdit ? ((currentCustomer as any).zip || '') : '');
+  const [formFolder, setFormFolder] = useState(_initEdit ? ((currentCustomer as any).folderPath || '') : '');
   const [saving, setSaving] = useState(false);
   const [emailSender, setEmailSender] = useState<{ name: string; email: string } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -3309,12 +3331,13 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, onSelec
 // ═══════════════════════════════════════════════════════
 // CONTACT PICKER — dropdown to select contact (who requested the quote)
 // ═══════════════════════════════════════════════════════
-function ContactPicker({ currentId, currentContact, companyId, linkedEmails, hasElorus, onSelect, onClose, toast }: {
+function ContactPicker({ currentId, currentContact, companyId, linkedEmails, hasElorus, initialMode, onSelect, onClose, toast }: {
   currentId: string;
   currentContact: any;
   companyId: string;
   linkedEmails: string[];
   hasElorus?: boolean;
+  initialMode?: 'current' | 'list' | 'edit';
   onSelect: (id: string, contact?: any) => void;
   onClose: () => void;
   toast: (msg: string, type?: ToastType) => void;
@@ -3322,18 +3345,19 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'current' | 'list' | 'new' | 'edit'>(currentId && currentContact ? 'current' : 'list');
+  const [mode, setMode] = useState<'current' | 'list' | 'new' | 'edit'>(initialMode || (currentId && currentContact ? 'current' : 'list'));
   const ref = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Edit form state
-  const [formName, setFormName] = useState('');
-  const [formEmail, setFormEmail] = useState('');
-  const [formPhone, setFormPhone] = useState('');
-  const [formMobile, setFormMobile] = useState('');
-  const [formRole, setFormRole] = useState('contact');
-  const [formFolder, setFormFolder] = useState('');
-  const [editId, setEditId] = useState('');
+  const _initEdit = initialMode === 'edit' && currentContact;
+  const [formName, setFormName] = useState(_initEdit ? (currentContact.name || '') : '');
+  const [formEmail, setFormEmail] = useState(_initEdit ? (currentContact.email || '') : '');
+  const [formPhone, setFormPhone] = useState(_initEdit ? (currentContact.phone || '') : '');
+  const [formMobile, setFormMobile] = useState(_initEdit ? (currentContact.mobile || '') : '');
+  const [formRole, setFormRole] = useState(_initEdit ? (currentContact.role || 'contact') : 'contact');
+  const [formFolder, setFormFolder] = useState(_initEdit ? (currentContact.folderPath || '') : '');
+  const [editId, setEditId] = useState(_initEdit ? currentId : '');
   const [saving, setSaving] = useState(false);
   const [emailSender, setEmailSender] = useState<{ name: string; email: string } | null>(null);
   const [linkToCompany, setLinkToCompany] = useState(true);
