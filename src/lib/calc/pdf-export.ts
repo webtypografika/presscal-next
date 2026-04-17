@@ -2144,7 +2144,8 @@ export function buildExportFilename(options: ExportOptions, suffix = ''): string
   // Prefer quote number; fall back to "imposed". Sanitize for filesystem safety.
   const rawPrefix = (options.quoteNumber || '').trim() || 'imposed';
   const prefix = rawPrefix.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
-  return `${prefix}_${jobSize}_${paperSize}_${modeLabel}${suffix}.pdf`;
+  const pgSuffix = options.pageRange ? '_pg' + options.pageRange.replace(/,/g, '-') : '';
+  return `${prefix}_${jobSize}_${paperSize}_${modeLabel}${pgSuffix}${suffix}.pdf`;
 }
 
 export async function downloadImpositionPDF(options: ExportOptions, filename?: string): Promise<void> {
