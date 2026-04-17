@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer, Company, Material, Org } from '@/generated/prisma/client';
-import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer, createCompanyQuick, createCompanyFromElorus, archiveQuote } from '../actions';
+import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer, createCompanyQuick, createCompanyFromElorus, archiveQuote, restoreQuote } from '../actions';
 import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
 import { ElorusAfmLookup, type ElorusLookupResult } from '@/components/elorus-afm-lookup';
 
@@ -609,6 +609,24 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
     } catch { toast(`Σφάλμα ${label.toLowerCase()}ς`, 'error'); }
   }
 
+  async function handleRestore() {
+    if (!confirm(`Επαναφορά ${quote.number};\n\nΟ φάκελος θα μετακινηθεί πίσω από το "_01 Archive/" μέσω PressKit.`)) return;
+    try {
+      const { archivedFolderPath, restoredFolderPath } = await restoreQuote(quote.id);
+      setQuote(prev => ({
+        ...prev,
+        status: 'draft',
+        jobFolderPath: restoredFolderPath ?? prev.jobFolderPath,
+      }));
+      if (archivedFolderPath && restoredFolderPath) {
+        window.location.href = `presscal-fh://restore-quote?folderPath=${encodeURIComponent(archivedFolderPath)}&restorePath=${encodeURIComponent(restoredFolderPath)}&quoteId=${quote.id}`;
+        toast('Επαναφορά — το PressKit μετακινεί τον φάκελο');
+      } else {
+        toast('Επαναφορά');
+      }
+    } catch { toast('Σφάλμα επαναφοράς', 'error'); }
+  }
+
   const [applyingCalc, setApplyingCalc] = useState(false);
 
   async function applyCalcToOthers(sourceItem: any) {
@@ -784,6 +802,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           // Archive + Complete both fire the PressKit deep link to move the folder
           const onClickHandler = t.status === 'cancelled' ? () => handleArchiveOrComplete('cancelled')
             : t.status === 'completed' ? () => handleArchiveOrComplete('completed')
+            : (t.label === 'Επαναφορά') ? () => handleRestore()
             : () => changeStatus(t.status);
           return (
             <button key={t.status} onClick={onClickHandler} style={{

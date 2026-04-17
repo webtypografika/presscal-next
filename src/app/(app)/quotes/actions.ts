@@ -340,6 +340,64 @@ export async function confirmArchive(
   revalidatePath('/');
 }
 
+// ─── RESTORE FROM ARCHIVE ───
+// Reverse of archiveQuote: status → draft, folder moved out of _01 Archive.
+
+export async function restoreQuote(
+  quoteId: string,
+): Promise<{
+  archivedFolderPath: string | null;
+  restoredFolderPath: string | null;
+}> {
+  const existing = await prisma.quote.findUnique({
+    where: { id: quoteId },
+    select: { jobFolderPath: true },
+  });
+  const jobFolderPath = existing?.jobFolderPath || null;
+
+  // Update status to draft
+  await prisma.quote.update({
+    where: { id: quoteId },
+    data: { status: 'draft' },
+  });
+  revalidatePath('/quotes');
+  revalidatePath('/jobs');
+  revalidatePath('/');
+
+  if (!jobFolderPath) {
+    return { archivedFolderPath: null, restoredFolderPath: null };
+  }
+
+  const { isArchivedPath, fromArchivePath } = await import('@/lib/job-folder');
+
+  if (!isArchivedPath(jobFolderPath)) {
+    // Not in archive — just status change
+    return { archivedFolderPath: null, restoredFolderPath: jobFolderPath };
+  }
+
+  const restoredPath = fromArchivePath(jobFolderPath);
+  return { archivedFolderPath: jobFolderPath, restoredFolderPath: restoredPath };
+}
+
+// ─── CONFIRM RESTORE (called by PressKit after successful folder move back) ───
+
+export async function confirmRestore(
+  quoteId: string,
+  newFolderPath: string,
+): Promise<void> {
+  const { isArchivedPath } = await import('@/lib/job-folder');
+  if (isArchivedPath(newFolderPath)) {
+    throw new Error('confirmRestore: path is still an archive path');
+  }
+  await prisma.quote.update({
+    where: { id: quoteId },
+    data: { jobFolderPath: newFolderPath },
+  });
+  revalidatePath('/quotes');
+  revalidatePath('/jobs');
+  revalidatePath('/');
+}
+
 // ─── LINK EMAIL ───
 
 export async function linkEmailToQuote(quoteId: string, messageId: string, threadId: string) {

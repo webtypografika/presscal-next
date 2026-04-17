@@ -76,6 +76,18 @@ export function isArchivedPath(path: string): boolean {
 }
 
 /**
+ * Convert an archived job folder path back to its active (non-archive) equivalent.
+ * Reverses `toArchivePath()` by removing the `_01 Archive` or `_Archive` segment.
+ * Returns null if the path is not an archive path.
+ */
+export function fromArchivePath(archivedPath: string): string | null {
+  const sep = archivedPath.includes('/') ? '/' : '\\';
+  const re = /[\\/]_(?:01 )?Archive[\\/]/;
+  if (!re.test(archivedPath)) return null;
+  return archivedPath.replace(re, sep);
+}
+
+/**
  * Safety guard: verifies that `candidatePath` is a QUOTE subfolder, not a customer root.
  *
  * Required conditions (any one is enough):
