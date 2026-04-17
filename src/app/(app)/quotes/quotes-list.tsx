@@ -475,6 +475,9 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
   const [searching, setSearching] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Track the picked company so it survives search clearing
+  const [pickedCustomer, setPickedCustomer] = useState<any>(null);
+
   // Server-side search with debounce
   useEffect(() => {
     if (!custSearch.trim()) { setSearchResults([]); return; }
@@ -491,7 +494,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
   }, [custSearch]);
 
   const filteredCustomers = custSearch.trim() ? searchResults : customers;
-  const selectedCustomer = [...customers, ...searchResults].find(c => c.id === customerId);
+  const selectedCustomer = pickedCustomer || [...customers, ...searchResults].find(c => c.id === customerId);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -582,7 +585,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
               </span>
               <i className={`fas fa-chevron-${custDropOpen ? 'up' : 'down'}`} style={{ fontSize: '0.6rem', color: '#64748b' }} />
             </div>
-            <button onClick={() => { setShowNewCust(!showNewCust); setCustDropOpen(false); setCustomerId(''); }} style={{
+            <button onClick={() => { setShowNewCust(!showNewCust); setCustDropOpen(false); setCustomerId(''); setPickedCustomer(null); }} style={{
               width: 38, height: 38, borderRadius: 8, border: '1px solid var(--border)',
               background: showNewCust ? 'color-mix(in srgb, var(--blue) 12%, transparent)' : 'transparent',
               color: 'var(--blue)', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -610,7 +613,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
               <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                 {searching && <div style={{ padding: '8px 14px', color: '#64748b', fontSize: '0.78rem' }}><i className="fas fa-spinner fa-spin" style={{ marginRight: 6 }} />Αναζήτηση...</div>}
                 {customerId && (
-                  <button onClick={() => { setCustomerId(''); setCustDropOpen(false); setCustSearch(''); }}
+                  <button onClick={() => { setCustomerId(''); setPickedCustomer(null); setCustDropOpen(false); setCustSearch(''); }}
                     style={{ width: '100%', padding: '8px 14px', border: 'none', background: 'transparent', color: '#64748b', fontSize: '0.8rem', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                     <i className="fas fa-times" style={{ marginRight: 8, fontSize: '0.65rem' }} />Χωρίς πελάτη
                   </button>
@@ -619,7 +622,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
                   <div style={{ padding: '12px 14px', color: '#475569', fontSize: '0.8rem' }}>Δεν βρέθηκαν αποτελέσματα</div>
                 )}
                 {filteredCustomers.map(c => (
-                  <button key={c.id} onClick={() => { setCustomerId(c.id); setCustDropOpen(false); setCustSearch(''); setShowNewCust(false); }}
+                  <button key={c.id} onClick={() => { setCustomerId(c.id); setPickedCustomer(c); setCustDropOpen(false); setCustSearch(''); setShowNewCust(false); }}
                     style={{
                       width: '100%', padding: '8px 14px', border: 'none', textAlign: 'left',
                       background: c.id === customerId ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
