@@ -811,7 +811,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         )}
 
         {/* Print / PDF */}
-        <button onClick={() => window.open(`/quotes/${quote.id}/print`, '_blank')} style={{
+        <button onClick={() => window.open(`/api/quote/print?id=${quote.id}`, '_blank')} style={{
           display: 'flex', alignItems: 'center', gap: 4,
           padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 500,
           background: 'transparent',
