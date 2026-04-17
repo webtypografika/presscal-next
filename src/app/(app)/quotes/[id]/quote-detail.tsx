@@ -61,53 +61,54 @@ function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: s
   const cd = item.calcData as Record<string, unknown> | undefined;
 
   // ─── If calcData exists (previously costed), pass all specs for full restore ───
+  // NOTE: use != null (not truthy) so that 0 values are preserved
   if (cd?.machineId) {
     // Job
-    if (cd.width) p.set('w', String(cd.width));
-    if (cd.height) p.set('h', String(cd.height));
-    if (cd.qty) p.set('qty', String(cd.qty));
-    if (cd.sides) p.set('sides', String(cd.sides));
-    if (cd.pages) p.set('pages', String(cd.pages));
-    if (cd.archetype) p.set('archetype', cd.archetype as string);
+    if (cd.width != null) p.set('w', String(cd.width));
+    if (cd.height != null) p.set('h', String(cd.height));
+    if (cd.qty != null) p.set('qty', String(cd.qty));
+    if (cd.sides != null) p.set('sides', String(cd.sides));
+    if (cd.pages != null) p.set('pages', String(cd.pages));
+    if (cd.archetype != null) p.set('archetype', cd.archetype as string);
     // Machine & paper
     p.set('machineId', cd.machineId as string);
-    if (cd.paperId) p.set('paperId', cd.paperId as string);
-    if (cd.productId) p.set('productId', cd.productId as string);
-    if (cd.feedEdge) p.set('feedEdge', cd.feedEdge as string);
-    if (cd.machineSheetW) p.set('machineSheetW', String(cd.machineSheetW));
-    if (cd.machineSheetH) p.set('machineSheetH', String(cd.machineSheetH));
+    if (cd.paperId != null) p.set('paperId', cd.paperId as string);
+    if (cd.productId != null) p.set('productId', cd.productId as string);
+    if (cd.feedEdge != null) p.set('feedEdge', cd.feedEdge as string);
+    if (cd.machineSheetW != null) p.set('machineSheetW', String(cd.machineSheetW));
+    if (cd.machineSheetH != null) p.set('machineSheetH', String(cd.machineSheetH));
     // Color
-    if (cd.colorMode) p.set('colorMode', cd.colorMode as string);
+    if (cd.colorMode != null) p.set('colorMode', cd.colorMode as string);
     if (cd.bleed != null) p.set('bleed', String(cd.bleed));
-    if (cd.coverageLevel) p.set('coverageLevel', cd.coverageLevel as string);
+    if (cd.coverageLevel != null) p.set('coverageLevel', cd.coverageLevel as string);
     if (cd.offsetFrontCmyk != null) p.set('colorsF', String(cd.offsetFrontCmyk));
     if (cd.offsetBackCmyk != null) p.set('colorsB', String(cd.offsetBackCmyk));
-    if (cd.offsetFrontPms) p.set('pmsFront', String(cd.offsetFrontPms));
-    if (cd.offsetBackPms) p.set('pmsBack', String(cd.offsetBackPms));
+    if (cd.offsetFrontPms != null) p.set('pmsFront', String(cd.offsetFrontPms));
+    if (cd.offsetBackPms != null) p.set('pmsBack', String(cd.offsetBackPms));
     if (cd.offsetOilVarnish) p.set('oilVarnish', '1');
     // Imposition
-    if (cd.impositionMode) p.set('impoMode', cd.impositionMode as string);
-    if (cd.impoRotation) p.set('impoRotation', String(cd.impoRotation));
-    if (cd.impoGutter) p.set('impoGutter', String(cd.impoGutter));
-    if (cd.impoForceUps) p.set('impoForceUps', String(cd.impoForceUps));
-    if (cd.impoForceCols) p.set('impoForceCols', String(cd.impoForceCols));
-    if (cd.impoForceRows) p.set('impoForceRows', String(cd.impoForceRows));
-    if (cd.impoDuplexOrient) p.set('impoDuplexOrient', cd.impoDuplexOrient as string);
-    if (cd.impoTurnType) p.set('impoTurnType', cd.impoTurnType as string);
-    if (cd.wasteFixed) p.set('wasteFixed', String(cd.wasteFixed));
+    if (cd.impositionMode != null) p.set('impoMode', cd.impositionMode as string);
+    if (cd.impoRotation != null) p.set('impoRotation', String(cd.impoRotation));
+    if (cd.impoGutter != null) p.set('impoGutter', String(cd.impoGutter));
+    if (cd.impoForceUps != null) p.set('impoForceUps', String(cd.impoForceUps));
+    if (cd.impoForceCols != null) p.set('impoForceCols', String(cd.impoForceCols));
+    if (cd.impoForceRows != null) p.set('impoForceRows', String(cd.impoForceRows));
+    if (cd.impoDuplexOrient != null) p.set('impoDuplexOrient', cd.impoDuplexOrient as string);
+    if (cd.impoTurnType != null) p.set('impoTurnType', cd.impoTurnType as string);
+    if (cd.wasteFixed != null) p.set('wasteFixed', String(cd.wasteFixed));
     // Finishing
-    if (cd.guillotineId) p.set('guillotineId', cd.guillotineId as string);
-    if (cd.lamMachineId) p.set('lamMachineId', cd.lamMachineId as string);
-    if (cd.lamFilmId) p.set('lamFilmId', cd.lamFilmId as string);
-    if (cd.lamSides) p.set('lamSides', String(cd.lamSides));
-    if (cd.bindingType) p.set('bindingType', cd.bindingType as string);
-    if (cd.bindingMachineId) p.set('bindingMachineId', cd.bindingMachineId as string);
-    if (cd.creaseMachineId) p.set('creaseMachineId', cd.creaseMachineId as string);
-    if (cd.creaseCount) p.set('creaseCount', String(cd.creaseCount));
-    if (cd.foldMachineId) p.set('foldMachineId', cd.foldMachineId as string);
-    if (cd.foldType) p.set('foldType', cd.foldType as string);
-    if (cd.gatherMachineId) p.set('gatherMachineId', cd.gatherMachineId as string);
-    if (cd.gatherSignatures) p.set('gatherSignatures', String(cd.gatherSignatures));
+    if (cd.guillotineId != null) p.set('guillotineId', cd.guillotineId as string);
+    if (cd.lamMachineId != null) p.set('lamMachineId', cd.lamMachineId as string);
+    if (cd.lamFilmId != null) p.set('lamFilmId', cd.lamFilmId as string);
+    if (cd.lamSides != null) p.set('lamSides', String(cd.lamSides));
+    if (cd.bindingType != null) p.set('bindingType', cd.bindingType as string);
+    if (cd.bindingMachineId != null) p.set('bindingMachineId', cd.bindingMachineId as string);
+    if (cd.creaseMachineId != null) p.set('creaseMachineId', cd.creaseMachineId as string);
+    if (cd.creaseCount != null) p.set('creaseCount', String(cd.creaseCount));
+    if (cd.foldMachineId != null) p.set('foldMachineId', cd.foldMachineId as string);
+    if (cd.foldType != null) p.set('foldType', cd.foldType as string);
+    if (cd.gatherMachineId != null) p.set('gatherMachineId', cd.gatherMachineId as string);
+    if (cd.gatherSignatures != null) p.set('gatherSignatures', String(cd.gatherSignatures));
     if (Array.isArray(cd.customMachineIds) && cd.customMachineIds.length) p.set('customMachineIds', (cd.customMachineIds as string[]).join(','));
     if (cd.overrides && Object.values(cd.overrides as Record<string, unknown>).some(v => v != null && v !== 0)) {
       p.set('overrides', JSON.stringify(cd.overrides));
