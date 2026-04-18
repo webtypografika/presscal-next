@@ -208,6 +208,7 @@ export default function EmailClient() {
     setDetail(null);
     setCurrentLabel(null);
     setSearch('');
+    fetchMessages(f);
   }
 
   // ─── CHANGE LABEL ───
@@ -490,7 +491,9 @@ export default function EmailClient() {
                           e.stopPropagation();
                           const r = e.currentTarget.getBoundingClientRect();
                           setRowLinkEmailId(prev => prev === email.id ? null : email.id);
-                          setRowLinkPos({ top: r.bottom + 4, left: Math.min(r.left - 120, window.innerWidth - 300) });
+                          const popupH = 420;
+                          const fitsBelow = r.bottom + 4 + popupH < window.innerHeight;
+                          setRowLinkPos({ top: fitsBelow ? r.bottom + 4 : Math.max(8, r.top - popupH - 4), left: Math.min(r.left - 120, window.innerWidth - 440) });
                         }}
                         title="Σύνδεση email σε..."
                         style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', fontSize: '0.6rem', color: linkedEmailMap[email.id] ? 'var(--accent)' : officeLinkedEmails.has(email.id) ? 'var(--blue)' : 'var(--text-muted)', opacity: (linkedEmailMap[email.id] || officeLinkedEmails.has(email.id)) ? 0.9 : 0.3, transition: 'all 0.15s', borderRadius: 4 }}
@@ -983,7 +986,6 @@ function EmailLinkPopup({ emailId, emailSubject, threadId, pos, onClose, onLinke
         await linkEmailToQuote(q.id, emailId, threadId);
         saveEmailAttachments(q.id, [emailId]).catch(() => {});
         onLinkedToQuote(emailId, q.number || '', q.id);
-        router.push(`/quotes/${q.id}`);
       }
     } catch {}
     setCreating(false);
