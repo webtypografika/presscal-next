@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         id: c.id,
         display_name: c.display_name,
         company: c.company,
-        tin: c.tin,
+        tin: c.vat_number || c.tin || '',
         email: Array.isArray(c.email) && c.email.length > 0 ? (c.email[0] as Record<string, string>).email : '',
       }));
       return NextResponse.json({ contacts });
@@ -59,10 +59,8 @@ export async function POST(req: NextRequest) {
         client_type: '1',
         company: company || '',
         first_name: firstName || '',
-        tin: afm,
-        tin_authority: doy || '',
+        vat_number: afm,
         profession: profession || '',
-        vat_status: 'normal',
         country: 'GR',
         is_client: true,
         is_supplier: false,

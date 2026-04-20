@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       );
       if (searchRes.ok) {
         const data = await searchRes.json();
-        const match = (data.results || []).find((c: Record<string, string>) => c.tin === afm);
+        const match = (data.results || []).find((c: Record<string, string>) => (c.vat_number || c.tin) === afm);
         if (match) contactId = match.id;
       }
     }
@@ -75,10 +75,8 @@ export async function POST(req: NextRequest) {
         client_type: '1',
         company: autoName,
         first_name: '',
-        tin: afm || '000000000',
-        tin_authority: autoDoy,
+        vat_number: afm || '',
         profession: comp?.activities || '',
-        vat_status: 'normal',
         country: 'GR',
         is_client: true,
         active: true,

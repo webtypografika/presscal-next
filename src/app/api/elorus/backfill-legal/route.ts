@@ -42,7 +42,7 @@ export async function POST() {
         const results = data.results || [];
 
         // Try exact TIN match first, then take single result if only one
-        let match = results.find((c: any) => c.tin === company.afm);
+        let match = results.find((c: any) => (c.vat_number || c.tin) === company.afm);
         if (!match && results.length === 1) {
           match = results[0]; // AFM search returned exactly 1 result — use it
         }

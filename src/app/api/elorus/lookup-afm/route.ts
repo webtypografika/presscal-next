@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
       );
       if (searchRes.ok) {
         const data = await searchRes.json();
-        const match = (data.results || []).find((c: Record<string, string>) => c.tin === afm);
+        const match = (data.results || []).find((c: Record<string, string>) => (c.vat_number || c.tin) === afm);
         if (match && match.company && !match.company.startsWith('ΑΦΜ ')) {
           // Found with real data
           return NextResponse.json({
@@ -132,10 +132,8 @@ export async function POST(req: NextRequest) {
       const contactPayload = {
         client_type: '1',  // 1 = Company type
         company: result.onomasia,
-        tin: afm,
-        tin_authority: result.doy_descr || '',
+        vat_number: afm,
         profession: result.firm_act_descr || '',
-        vat_status: 'normal',
         country: 'GR',
         is_client: true,
         is_supplier: false,
