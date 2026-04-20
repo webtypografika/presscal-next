@@ -92,6 +92,12 @@ function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: s
     if (cd.impoRotation != null) p.set('impoRotation', String(cd.impoRotation));
     if (cd.impoGutter != null) p.set('impoGutter', String(cd.impoGutter));
     if (cd.impoGutterY != null) p.set('impoGutterY', String(cd.impoGutterY));
+    if (cd.impoBleedOverride != null) p.set('impoBleedOverride', String(cd.impoBleedOverride));
+    // Price lock: pass locked price so calculator preserves it on save
+    if (item.priceLocked && (item.finalPrice as number) > 0) {
+      p.set('priceLocked', '1');
+      p.set('lockedPrice', String(item.finalPrice as number));
+    }
     if (cd.impoForceUps != null) p.set('impoForceUps', String(cd.impoForceUps));
     if (cd.impoForceCols != null) p.set('impoForceCols', String(cd.impoForceCols));
     if (cd.impoForceRows != null) p.set('impoForceRows', String(cd.impoForceRows));
@@ -1156,7 +1162,18 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               <option value="σετ">σετ</option>
             </select>
             <input type="number" value={item.unitPrice || ''} onChange={e => updateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%' }} />
-            <input type="number" value={item.finalPrice || ''} onChange={e => updateItem(idx, 'finalPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%', fontWeight: 600 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0, position: 'relative' }}>
+              <input type="number" value={item.finalPrice || ''} onChange={e => updateItem(idx, 'finalPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: item.priceLocked ? 'rgba(245,130,32,0.08)' : 'transparent', padding: '4px 4px', width: '100%', fontWeight: 600, borderRadius: 4 }} />
+              <button
+                onClick={() => updateItem(idx, 'priceLocked', !item.priceLocked)}
+                title={item.priceLocked ? 'Ξεκλείδωμα τιμής' : 'Κλείδωμα τιμής — δεν αλλάζει από κοστολόγηση'}
+                style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.55rem', color: item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.25)', padding: '2px 3px', transition: 'color 0.15s' }}
+                onMouseEnter={e => { if (!item.priceLocked) e.currentTarget.style.color = '#f58220'; }}
+                onMouseLeave={e => { if (!item.priceLocked) e.currentTarget.style.color = 'rgba(100,116,139,0.25)'; }}
+              >
+                <i className={`fas fa-${item.priceLocked ? 'lock' : 'lock-open'}`} />
+              </button>
+            </div>
             <input type="number" value={item.cost || ''} onChange={e => updateItem(idx, 'cost', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%', color: 'var(--text-muted)' }} />
             <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: 0, opacity: 0.4 }}
               onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger)'; }}

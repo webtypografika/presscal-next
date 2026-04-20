@@ -527,6 +527,8 @@ export default function CalculatorShell() {
   const [impoContentScale, setImpoContentScale] = useState(100); // % content scale (100 = 1:1)
   const [impoCropMarks, setImpoCropMarks] = useState(true);
   const [impoKeepSourceMarks, setImpoKeepSourceMarks] = useState(false);
+  const [priceLocked, setPriceLocked] = useState(false);
+  const [lockedPrice, setLockedPrice] = useState<number | null>(null);
   const [impoForceUps, setImpoForceUps] = useState<number | null>(null);
   const [impoForceCols, setImpoForceCols] = useState<number | null>(null);
   const [impoForceRows, setImpoForceRows] = useState<number | null>(null);
@@ -713,7 +715,7 @@ export default function CalculatorShell() {
           ...prev,
           width: Math.round(pg.trimW * 10) / 10,
           height: Math.round(pg.trimH * 10) / 10,
-          bleed: pg.bleedDetected > 0 ? pg.bleedDetected : prev.bleed,
+          bleed: isRestore ? prev.bleed : (pg.bleedDetected > 0 ? pg.bleedDetected : prev.bleed),
           ...(parsed.pageCount === 1 ? { sides: 1 as const } : {}),
           ...(impoMode === 'cutstack' && parsed.pageCount > 1 ? { qty: parsed.pageCount } : {}),
           ...((impoMode === 'booklet' || prev.archetype === 'booklet') && parsed.pageCount >= 4 ? { pages: parsed.pageCount } : {}),
@@ -862,6 +864,11 @@ export default function CalculatorShell() {
     if (imGut) setImpoGutter(parseFloat(imGut));
     const imGutY = searchParams.get('impoGutterY');
     if (imGutY) { setImpoGutterY(parseFloat(imGutY)); setGutterLinked(false); }
+    const imBleedOvr = searchParams.get('impoBleedOverride');
+    if (imBleedOvr) setImpoBleedOverride(parseFloat(imBleedOvr));
+    const plParam = searchParams.get('priceLocked');
+    const lpParam = searchParams.get('lockedPrice');
+    if (plParam === '1' && lpParam) { setPriceLocked(true); setLockedPrice(parseFloat(lpParam)); }
     const imForce = searchParams.get('impoForceUps');
     if (imForce) setImpoForceUps(parseInt(imForce));
     const imForceCols = searchParams.get('impoForceCols');
@@ -1013,6 +1020,10 @@ export default function CalculatorShell() {
   useEffect(() => {
     const valid = ARCHETYPE_MODES[job.archetype] || ARCHETYPE_MODES.single_leaf;
     if (!valid.includes(impoMode)) setImpoMode(valid[0]);
+    // Auto-fill pages from existing PDF when switching to booklet
+    if (job.archetype === 'booklet' && pdf && pdf.pageCount >= 4) {
+      setJob(prev => prev.pages ? prev : { ...prev, pages: pdf.pageCount });
+    }
   }, [job.archetype]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-select product: favourite first, or only product for archetype
@@ -1630,8 +1641,22 @@ export default function CalculatorShell() {
         {/* Price hero */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.02em' }}>€{fmt(totalPrice)}</div>
-            <div style={{ fontSize: '0.6rem', color: '#94a3b8' }}>€{fmt(pricePerUnit)}/τεμ · κέρδος €{fmt(profitAmount)}</div>
+            {priceLocked && lockedPrice != null ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                  <i className="fas fa-lock" style={{ fontSize: '0.6rem', color: '#f58220' }} />
+                  <span style={{ fontSize: '1.3rem', fontWeight: 600, color: '#f58220', lineHeight: 1, letterSpacing: '-0.02em' }}>€{fmt(lockedPrice)}</span>
+                </div>
+                <div style={{ fontSize: '0.55rem', color: '#64748b' }}>
+                  calc €{fmt(totalPrice)} · κέρδος €{fmt(Math.round((lockedPrice - totalCost) * 100) / 100)}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.02em' }}>€{fmt(totalPrice)}</div>
+                <div style={{ fontSize: '0.6rem', color: '#94a3b8' }}>€{fmt(pricePerUnit)}/τεμ · κέρδος €{fmt(profitAmount)}</div>
+              </>
+            )}
           </div>
           <button
             disabled={savingToQuote}
@@ -1667,6 +1692,7 @@ export default function CalculatorShell() {
                 impoRotation: impoRotation || (job.rotation ? 90 : 0),
                 impoGutter,
                 impoGutterY: engineGutterY !== engineGutter ? engineGutterY : undefined,
+                impoBleedOverride: impoBleedOverride ?? undefined,
                 impoForceUps: impoForceUps ?? undefined,
                 impoForceCols: impoForceCols ?? undefined,
                 impoForceRows: impoForceRows ?? undefined,
@@ -1712,6 +1738,11 @@ export default function CalculatorShell() {
                     ...(pdfPage0?.bleedDetected ? { bleed: pdfPage0.bleedDetected } : {}),
                   }
                 : undefined;
+              // Price lock: if locked, keep the locked price and adjust profit
+              const useLocked = priceLocked && lockedPrice != null && lockedPrice > 0;
+              const saveFinalPrice = useLocked ? lockedPrice : Math.round(totalPrice * 100) / 100;
+              const saveUnitPrice = useLocked ? Math.round((lockedPrice / Math.max(1, job.qty)) * 1000) / 1000 : Math.round(pricePerUnit * 1000) / 1000;
+              const saveProfit = Math.round((saveFinalPrice - totalCost) * 100) / 100;
               const itemPayload = {
                 id: quoteLink?.itemId || crypto.randomUUID(),
                 name: `${job.width}×${job.height} ${job.archetype}`,
@@ -1719,9 +1750,10 @@ export default function CalculatorShell() {
                 qty: job.qty,
                 unit: 'τεμ',
                 cost: Math.round(totalCost * 100) / 100,
-                unitPrice: Math.round(pricePerUnit * 1000) / 1000,
-                finalPrice: Math.round(totalPrice * 100) / 100,
-                profit: Math.round(profitAmount * 100) / 100,
+                unitPrice: saveUnitPrice,
+                finalPrice: saveFinalPrice,
+                profit: saveProfit,
+                priceLocked: priceLocked || undefined,
                 calcData: calcDataPayload,
                 ...(linkedFilePayload ? { linkedFile: linkedFilePayload } : {}),
               };

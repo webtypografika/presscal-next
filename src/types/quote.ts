@@ -16,6 +16,7 @@ export interface QuoteLineItem {
   finalPrice: number;
   cost: number;
   profit: number;
+  priceLocked?: boolean;
   notes?: string;
   calcData?: Record<string, unknown>;
   // Linked file from FileHelper
