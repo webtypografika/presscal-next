@@ -57,7 +57,7 @@ export interface ImpositionInput {
   turnType?: WorkTurnType;
 
   // Duplex orientation (front-side grid flip)
-  duplexOrient?: 'h2h' | 'h2f';
+  duplexOrient?: 'h2h' | 'h2f' | 'h2f_cols';
 }
 
 // ─── CORE HELPERS ───
@@ -124,14 +124,15 @@ function buildCells(
   bleed: number, gutter: number,
   gridStartX: number, gridStartY: number,
   rotation: number = 0,
-  duplexOrient?: 'h2h' | 'h2f',
+  duplexOrient?: 'h2h' | 'h2f' | 'h2f_cols',
 ): ImpositionCell[] {
   const intBleed = internalBleed(gutter, bleed);
-  const isH2F = duplexOrient === 'h2f';
+  const isH2FRows = duplexOrient === 'h2f';
+  const isH2FCols = duplexOrient === 'h2f_cols';
   const cells: ImpositionCell[] = [];
   for (let r = 0; r < rows; r++) {
-    // H2F: alternate rows get +180° rotation
-    const rowRot = (isH2F && r % 2 === 1) ? (rotation + 180) % 360 : rotation;
+    // H2F rows: alternate rows get +180° rotation
+    const rowRot = (isH2FRows && r % 2 === 1) ? (rotation + 180) % 360 : rotation;
     for (let c = 0; c < cols; c++) {
       const bL = c === 0 ? bleed : intBleed;
       const bR = c === cols - 1 ? bleed : intBleed;
@@ -148,7 +149,8 @@ function buildCells(
         w: trimW + bL + bR,
         h: trimH + bT + bB,
         pageNum: r * cols + c + 1,
-        rotation: rowRot,
+        // H2F cols: alternate columns get +180° rotation
+        rotation: (isH2FCols && c % 2 === 1) ? (rotation + 180) % 360 : rowRot,
         bleedL: bL, bleedR: bR, bleedT: bT, bleedB: bB,
       });
     }

@@ -159,7 +159,7 @@ export interface ExportOptions {
 
   // Duplex
   isDuplex?: boolean;
-  duplexOrient?: 'h2h' | 'h2f';
+  duplexOrient?: 'h2h' | 'h2f' | 'h2f_cols';
 
   // Mode-specific
   rotation?: number;
@@ -777,15 +777,22 @@ async function exportNUp(
           const gridRot = isRotated ? (isBackSide ? 90 : 270) : 0;
           const userRot = opts.rotation || 0;
           let extraRot = (userRot === 180 || userRot === 270) ? 180 : 0;
-          if (opts.duplexOrient === 'h2f' && (row % 2 === 1)) extraRot = (extraRot + 180) % 360;
-          const h2fRot = (isBackSide && opts.duplexOrient === 'h2f') ? 180 : 0;
+          const isH2FRows = opts.duplexOrient === 'h2f';
+          const isH2FCols = opts.duplexOrient === 'h2f_cols';
+          const isAnyH2F = isH2FRows || isH2FCols;
+          if (isH2FRows && (row % 2 === 1)) extraRot = (extraRot + 180) % 360;
+          if (isH2FCols && (col % 2 === 1)) extraRot = (extraRot + 180) % 360;
+          const h2fRot = (isBackSide && isAnyH2F) ? 180 : 0;
           const rot = (gridRot + extraRot + h2fRot) % 360;
 
           // Trim position on the output page — mirror for duplex back.
           let trimX: number, trimY: number;
-          if (isBackSide && opts.duplexOrient === 'h2f') {
+          if (isBackSide && isH2FRows) {
             trimX = frontTrimX;
             trimY = paperHpt - trimYpos - trimHpt;
+          } else if (isBackSide && isH2FCols) {
+            trimX = paperWpt - frontTrimX - trimWpt;
+            trimY = trimYpos;
           } else if (isBackSide) {
             trimX = paperWpt - frontTrimX - trimWpt;
             trimY = trimYpos;
@@ -794,10 +801,10 @@ async function exportNUp(
             trimY = trimYpos;
           }
 
-          // Per-cell bleed, mirrored for back: H2H flips L↔R, H2F flips T↔B.
+          // Per-cell bleed, mirrored for back: H2H flips L↔R, H2F-rows flips T↔B, H2F-cols flips L↔R.
           const f = cellBleed(col, row, impo.cols, impo.rows, bleedPt, intBleedPlace);
           const bleeds = !isBackSide ? f
-            : opts.duplexOrient === 'h2f'
+            : isH2FRows
               ? { bL: f.bL, bR: f.bR, bT: f.bB, bB: f.bT }
               : { bL: f.bR, bR: f.bL, bT: f.bT, bB: f.bB };
 
@@ -1289,7 +1296,9 @@ async function exportCutStack(
   const numPdfColor = (opts.numberColor === '#cc0000') ? cmyk(0, 1, 1, 0) : cmyk(0, 0, 0, 1);
   const startNum = opts.numberStartNum || 1;
 
-  const isH2H = (opts.duplexOrient || 'h2h') === 'h2h';
+  // H2F-cols mirrors like H2H (along X axis), only H2F-rows mirrors along Y
+  const isH2FRows = opts.duplexOrient === 'h2f';
+  const isH2H = !isH2FRows;
 
   const csIntBleedPt = internalBleed(gutterPt, bleedPt);
 
@@ -1652,7 +1661,9 @@ async function exportGangRun(
   const grIntBleedPt = internalBleed(gutterPt, bleedPt);
   const hasMultiPdf = gangJobEmbedded && gangJobEmbedded.some(arr => arr.length > 0);
   const isDuplex = !!opts.isDuplex;
-  const isH2H = (opts.duplexOrient || 'h2h') === 'h2h';
+  // H2F-cols mirrors like H2H (along X axis), only H2F-rows mirrors along Y
+  const grIsH2FRows = opts.duplexOrient === 'h2f';
+  const isH2H = !grIsH2FRows;
 
   const marksImpo = {
     marginL: impo.marginL ?? 0, marginR: impo.marginR ?? 0,

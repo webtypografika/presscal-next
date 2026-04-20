@@ -28,7 +28,7 @@ export interface CalculatorInput {
   // Imposition
   impositionMode: ImpositionMode;
   impoRotation: 0 | 90 | 180 | 270;
-  impoDuplexOrient: 'h2h' | 'h2f';
+  impoDuplexOrient: 'h2h' | 'h2f' | 'h2f_cols';
   impoGutter: number;
   impoBleed: number;
   impoForceUps?: number;
@@ -295,6 +295,6 @@ export interface ImpositionResult {
   halfCols?: number;
   halfRows?: number;
 
-  // Duplex orientation (h2f = alternate rows flipped 180°)
-  duplexOrient?: 'h2h' | 'h2f';
+  // Duplex orientation (h2f = alternate rows flipped 180°, h2f_cols = alternate cols)
+  duplexOrient?: 'h2h' | 'h2f' | 'h2f_cols';
 }

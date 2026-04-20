@@ -531,7 +531,7 @@ export default function CalculatorShell() {
   const [impoOffsetX, setImpoOffsetX] = useState(0);
   const [impoOffsetY, setImpoOffsetY] = useState(0);
   const [impoRotation, setImpoRotation] = useState<number>(0);
-  const [impoDuplexOrient, setImpoDuplexOrient] = useState<'h2h' | 'h2f'>('h2h');
+  const [impoDuplexOrient, setImpoDuplexOrient] = useState<'h2h' | 'h2f' | 'h2f_cols'>('h2h');
   const [impoTurnType, setImpoTurnType] = useState<'turn' | 'tumble'>('turn');
   // Cut & Stack
   const [csStackOrder, setCsStackOrder] = useState<'row' | 'column' | 'snake'>('row');
@@ -3091,9 +3091,9 @@ export default function CalculatorShell() {
               {impoModeTab === 'spacing' && (<>
                 {impoMode !== 'workturn' && impoMode !== 'booklet' && impoMode !== 'perfect_bound' && impoMode !== 'stepmulti' && (
                   <div style={{ marginBottom: 10 }}>
-                    <MfLabel>ΕΝΑΛΛΑΓΗ ΣΕΙΡΩΝ</MfLabel>
-                    <ToggleBar value={impoDuplexOrient} onChange={v => setImpoDuplexOrient(v as 'h2h' | 'h2f')}
-                      options={[{ v: 'h2h', l: 'Head-Head' }, { v: 'h2f', l: 'Head-Foot' }]} color="var(--impo)" />
+                    <MfLabel>ΕΝΑΛΛΑΓΗ</MfLabel>
+                    <ToggleBar value={impoDuplexOrient} onChange={v => setImpoDuplexOrient(v as 'h2h' | 'h2f' | 'h2f_cols')}
+                      options={[{ v: 'h2h', l: 'Head-Head' }, { v: 'h2f', l: 'H2F Rows' }, { v: 'h2f_cols', l: 'H2F Cols' }]} color="var(--impo)" />
                   </div>
                 )}
 
