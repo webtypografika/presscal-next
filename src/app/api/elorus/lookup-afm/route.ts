@@ -138,6 +138,7 @@ export async function POST(req: NextRequest) {
         is_supplier: false,
         active: true,
         addresses: [{
+          address: result.postal_address || '-',
           address_line: result.postal_address || '-',
           city: result.postal_area_description || '-',
           zip: result.postal_zip_code || '-',
