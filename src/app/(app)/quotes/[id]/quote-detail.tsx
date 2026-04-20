@@ -1626,8 +1626,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           quoteId={quote.id}
           quoteNumber={quote.number}
           customerName={customerName}
-          customerAfm={quote.customer?.afm ?? ''}
-          customerElorusId={quote.customer?.elorusContactId ?? ''}
+          customerAfm={selectedCompany?.afm ?? quote.customer?.afm ?? ''}
+          customerElorusId={quote.elorusContactId ?? quote.customer?.elorusContactId ?? ''}
           grandTotal={grandTotal}
           elorusSlug={elorusSlug ?? ''}
           onClose={() => setShowInvoiceModal(false)}
@@ -2967,15 +2967,15 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
     try {
       const data = {
         name: formName.trim(),
-        company: formCompany.trim() || undefined,
-        email: formEmail.trim() || undefined,
-        phone: formPhone.trim() || undefined,
-        afm: formAfm.trim() || undefined,
-        doy: formDoy.trim() || undefined,
-        address: formAddress.trim() || undefined,
-        city: formCity.trim() || undefined,
-        zip: formZip.trim() || undefined,
-        folderPath: formFolder.trim() || undefined,
+        company: formCompany.trim() || null,
+        email: formEmail.trim() || null,
+        phone: formPhone.trim() || null,
+        afm: formAfm.trim() || null,
+        doy: formDoy.trim() || null,
+        address: formAddress.trim() || null,
+        city: formCity.trim() || null,
+        zip: formZip.trim() || null,
+        folderPath: formFolder.trim() || null,
       };
       if (mode === 'new') {
         const c = await createCustomer(data as any);

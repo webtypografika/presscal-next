@@ -26,9 +26,11 @@ export async function POST(req: NextRequest) {
 
     const quote = await prisma.quote.findUnique({
       where: { id: quoteId },
-      include: { customer: true },
+      include: { customer: true, company: true },
     });
     if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
+    // Prefer Company model over legacy Customer
+    const comp = quote.company;
 
     // Already invoiced?
     if (quote.elorusInvoiceId) {
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     // Resolve Elorus contact
     let contactId = elorusContactId || '';
-    let afm = clientAfm || quote.customer?.afm || '';
+    let afm = clientAfm || comp?.afm || quote.customer?.afm || '';
 
     if (!contactId && afm) {
       // Search by AFM
@@ -61,17 +63,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Auto-create contact if needed
-    if (!contactId && quote.customer) {
-      const payload = {
+    const autoName = comp?.name || quote.customer?.company || quote.customer?.name || '';
+    const autoDoy = comp?.doy || '';
+    const autoEmail = comp?.email || quote.customer?.email || '';
+    const autoPhone = comp?.phone || quote.customer?.phone || '';
+    const autoAddress = comp?.address || '';
+    const autoCity = comp?.city || '';
+    const autoZip = comp?.zip || '';
+    if (!contactId && autoName) {
+      const payload: Record<string, unknown> = {
         client_type: '1',
-        company: quote.customer.company || quote.customer.name,
-        first_name: quote.customer.company ? '' : quote.customer.name,
+        company: autoName,
+        first_name: '',
         tin: afm || '000000000',
+        tin_authority: autoDoy,
         country: 'GR',
         is_client: true,
         active: true,
-        ...(quote.customer.email ? { email: [{ email: quote.customer.email, primary: true }] } : {}),
-        ...(quote.customer.phone ? { phones: [{ number: quote.customer.phone, primary: true }] } : {}),
+        ...(autoEmail ? { email: [{ email: autoEmail, primary: true }] } : {}),
+        ...(autoPhone ? { phones: [{ number: autoPhone, primary: true }] } : {}),
+        ...((autoAddress || autoCity || autoZip) ? { addresses: [{ address: autoAddress, city: autoCity, zip: autoZip, country: 'GR', ad_type: 'bill' }] } : {}),
       };
       const createRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
         method: 'POST', headers: hdrs, body: JSON.stringify(payload),
