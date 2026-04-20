@@ -1151,6 +1151,25 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                       <span style={{ fontSize: '0.62rem' }}>Εφαρμογή σε όλα</span>
                     </button>
                   )}
+                  <button
+                    onClick={() => setItems(prev => {
+                      const clone = { ...item, id: crypto.randomUUID(), name: item.name ? `${item.name} (αντίγραφο)` : 'Αντίγραφο' };
+                      const newItems = [...prev];
+                      newItems.splice(idx + 1, 0, clone);
+                      return newItems;
+                    })}
+                    title="Αντιγραφή γραμμής"
+                    style={{
+                      background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px',
+                      color: '#94a3b8', fontSize: '0.6rem', opacity: 0.6,
+                      display: 'flex', alignItems: 'center', gap: 3,
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '0.6'; }}
+                  >
+                    <i className="fas fa-clone" />
+                    <span style={{ fontSize: '0.62rem' }}>Duplicate</span>
+                  </button>
                 </div>
               )}
             </div>
