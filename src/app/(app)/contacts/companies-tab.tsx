@@ -189,7 +189,15 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
   const handleOpenAddContact = useCallback((companyId: string, e: React.MouseEvent) => {
     if (addContactOpen === companyId) { setAddContactOpen(null); setAddContactPos(null); return; }
     const rect = e.currentTarget.getBoundingClientRect();
-    setAddContactPos({ top: rect.bottom + 4, left: rect.right - 280 });
+    const popW = 280, popH = 320;
+    let top = rect.bottom + 4;
+    let left = rect.right - popW;
+    // Clamp to viewport
+    if (left < 8) left = 8;
+    if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+    if (top + popH > window.innerHeight - 8) top = rect.top - popH - 4; // flip above
+    if (top < 8) top = 8;
+    setAddContactPos({ top, left });
     setAddContactOpen(companyId);
     setAddContactSearch('');
     loadContacts('');
