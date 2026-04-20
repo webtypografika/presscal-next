@@ -51,7 +51,7 @@ export async function getQuote(id: string) {
       },
       plateOrders: {
         where: { deletedAt: null },
-        select: { id: true, supplierName: true, status: true, sentAt: true, createdAt: true },
+        select: { id: true, supplierName: true, status: true, sentAt: true, createdAt: true, items: true, jobDescription: true },
         orderBy: { createdAt: 'desc' },
       },
     },

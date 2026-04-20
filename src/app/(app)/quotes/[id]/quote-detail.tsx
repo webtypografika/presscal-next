@@ -1513,19 +1513,24 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 const calcCount = items.filter((i: any) => i.calcData?.machineId).length;
                 if (calcCount > 0) events.push({ date: quote.updatedAt || quote.createdAt, icon: 'fas fa-calculator', color: '#f58220', text: `Κοστολόγηση ${calcCount} προϊόντ${calcCount === 1 ? 'ος' : 'ων'}` });
                 // Paper order
-                if ((quote as any).paperOrderSentAt) events.push({ date: (quote as any).paperOrderSentAt, icon: 'fas fa-scroll', color: '#a78bfa', text: 'Παραγγελία χαρτιού' });
-                // Plate orders
+                if ((quote as any).paperOrderSentAt) {
+                  const paperItems = items.filter((i: any) => i.calcData?.paperName).map((i: any) => i.calcData.paperName);
+                  const uniquePapers = [...new Set(paperItems)];
+                  events.push({ date: (quote as any).paperOrderSentAt, icon: 'fas fa-scroll', color: '#a78bfa', text: uniquePapers.length > 0 ? `Παραγγελία χαρτιού: ${uniquePapers.join(', ')}` : 'Παραγγελία χαρτιού' });
+                }
+                // Plate orders — detail per order
                 const plateOrders = (quote as any).plateOrders || [];
                 for (const po of plateOrders) {
-                  events.push({ date: po.sentAt || po.createdAt, icon: 'fas fa-layer-group', color: '#f472b6', text: `Παραγγελία τσίγκου → ${po.supplierName}` });
+                  events.push({ date: po.sentAt || po.createdAt, icon: 'fas fa-layer-group', color: '#f472b6', text: `Τσίγκοι → ${po.supplierName}${po.jobDescription ? ': για «' + po.jobDescription + '»' : ''}` });
                 }
                 // Sent
                 if (quote.sentAt) events.push({ date: quote.sentAt, icon: 'fas fa-paper-plane', color: '#14b8a6', text: 'Αποστολή στον πελάτη' });
                 // Linked emails
                 const emailCount = (quote.linkedEmails as string[])?.length || 0;
                 if (emailCount > 0) events.push({ date: quote.sentAt || quote.createdAt, icon: 'fas fa-envelope', color: '#64748b', text: `${emailCount} email${emailCount > 1 ? 's' : ''} συνδεδεμέν${emailCount === 1 ? 'ο' : 'α'}` });
-                // Approved
+                // Approved / Rejected
                 if (quote.approvedAt) events.push({ date: quote.approvedAt, icon: 'fas fa-check-circle', color: '#16a34a', text: quote.partialApproval ? 'Μερική έγκριση πελάτη' : 'Έγκριση πελάτη' });
+                if (quote.status === 'rejected') events.push({ date: quote.updatedAt || quote.createdAt, icon: 'fas fa-times-circle', color: '#ef4444', text: 'Απόρριψη πελάτη' });
                 // Job stage
                 if (quote.jobStage) {
                   const stageLabels: Record<string, string> = { files: 'Αρχεία', printing: 'Εκτύπωση', cutting: 'Κοπή', finishing: 'Φινίρισμα', delivery: 'Παράδοση' };
