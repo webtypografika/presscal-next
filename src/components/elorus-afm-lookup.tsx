@@ -11,6 +11,7 @@ export interface ElorusLookupResult {
   zip: string;
   email: string;
   elorusContactId?: string;
+  activities?: string;
 }
 
 interface Props {
@@ -58,6 +59,7 @@ export function ElorusAfmLookup({ currentAfm, currentValues, onApply, toast }: P
       zip: result.postal_zip_code || '',
       email: result.email || '',
       elorusContactId: result.elorusContactId || undefined,
+      activities: result.firm_act_descr || undefined,
     });
     toast('Τα στοιχεία ενημερώθηκαν από TaxisNet');
     setOpen(false);

@@ -124,6 +124,12 @@ export async function updateCompany(id: string, data: {
   notes?: string;
   tags?: string[];
   folderPath?: string | null;
+  elorusContactId?: string | null;
+  legalName?: string | null;
+  fiscalAddress?: string | null;
+  fiscalCity?: string | null;
+  fiscalZip?: string | null;
+  activities?: string | null;
 }) {
   const company = await prisma.company.update({
     where: { id },

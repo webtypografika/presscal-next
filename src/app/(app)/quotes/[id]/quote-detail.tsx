@@ -1642,7 +1642,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           quoteNumber={quote.number}
           customerName={customerName}
           customerAfm={selectedCompany?.afm ?? quote.customer?.afm ?? ''}
-          customerElorusId={quote.elorusContactId ?? quote.customer?.elorusContactId ?? ''}
+          customerElorusId={quote.elorusContactId ?? (selectedCompany as any)?.elorusContactId ?? quote.customer?.elorusContactId ?? ''}
           grandTotal={grandTotal}
           elorusSlug={elorusSlug ?? ''}
           onClose={() => setShowInvoiceModal(false)}

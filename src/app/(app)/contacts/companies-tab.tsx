@@ -306,6 +306,7 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                 {hasElorus ? (
                   <>
                     <InfoField label="ΕΠΩΝΥΜΙΑ" value={company.legalName || ''} style={{ marginBottom: 6 }} />
+                    {(company as any).activities && <InfoField label="ΔΡΑΣΤΗΡΙΟΤΗΤΑ" value={(company as any).activities} style={{ marginBottom: 6 }} />}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                       <InfoField label="ΑΦΜ" value={company.afm || ''} />
                       <InfoField label="ΔΟΥ" value={company.doy || ''} />
@@ -330,6 +331,8 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                           if (data.city && !company.city) changes.city = data.city;
                           if (data.zip && !company.zip) changes.zip = data.zip;
                           if (data.email && !company.email) changes.email = data.email;
+                          if (data.elorusContactId) changes.elorusContactId = data.elorusContactId;
+                          if ((data as any).activities) changes.activities = (data as any).activities;
                           setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, ...changes } : c));
                           updateCompany(company.id, changes as any);
                         }}
