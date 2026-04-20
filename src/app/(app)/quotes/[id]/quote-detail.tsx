@@ -1068,12 +1068,12 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       }}>
         {/* Header */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '28px 1fr 70px 70px 85px 85px 85px 28px 28px 28px',
+          display: 'grid', gridTemplateColumns: '28px 1fr 70px 70px 85px 85px 20px 85px 28px 28px 28px',
           gap: 0, padding: '8px 10px',
           background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)',
         }}>
-          {['', 'Είδος', 'Ποσ.', 'Μονάδα', 'Τιμή/μον.', 'Σύνολο', 'Κόστος', '', '', ''].map((h, i) => (
-            <span key={i} style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--text-muted)', textAlign: i >= 2 && i <= 6 ? 'right' : undefined }}>{h}</span>
+          {['', 'Είδος', 'Ποσ.', 'Μονάδα', 'Τιμή/μον.', 'Σύνολο', '', 'Κόστος', '', '', ''].map((h, i) => (
+            <span key={i} style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--text-muted)', textAlign: i >= 2 && i <= 7 ? 'right' : undefined }}>{h}</span>
           ))}
         </div>
 
@@ -1084,7 +1084,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           </div>
         ) : items.map((item, idx) => (
           <div key={item.id} style={{
-            display: 'grid', gridTemplateColumns: '28px 1fr 70px 70px 85px 85px 85px 28px 28px 28px',
+            display: 'grid', gridTemplateColumns: '28px 1fr 70px 70px 85px 85px 20px 85px 28px 28px 28px',
             gap: 0, padding: '6px 10px', alignItems: 'center',
             borderBottom: idx < items.length - 1 ? '1px solid var(--border)' : undefined,
           }}>
@@ -1162,18 +1162,16 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               <option value="σετ">σετ</option>
             </select>
             <input type="number" value={item.unitPrice || ''} onChange={e => updateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 0, position: 'relative' }}>
-              <input type="number" value={item.finalPrice || ''} onChange={e => updateItem(idx, 'finalPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: item.priceLocked ? 'rgba(245,130,32,0.08)' : 'transparent', padding: '4px 4px', width: '100%', fontWeight: 600, borderRadius: 4 }} />
-              <button
-                onClick={() => updateItem(idx, 'priceLocked', !item.priceLocked)}
-                title={item.priceLocked ? 'Ξεκλείδωμα τιμής' : 'Κλείδωμα τιμής — δεν αλλάζει από κοστολόγηση'}
-                style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.55rem', color: item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.25)', padding: '2px 3px', transition: 'color 0.15s' }}
-                onMouseEnter={e => { if (!item.priceLocked) e.currentTarget.style.color = '#f58220'; }}
-                onMouseLeave={e => { if (!item.priceLocked) e.currentTarget.style.color = 'rgba(100,116,139,0.25)'; }}
-              >
-                <i className={`fas fa-${item.priceLocked ? 'lock' : 'lock-open'}`} />
-              </button>
-            </div>
+            <input type="number" value={item.finalPrice || ''} onChange={e => updateItem(idx, 'finalPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: item.priceLocked ? 'rgba(245,130,32,0.08)' : 'transparent', padding: '4px 4px', width: '100%', fontWeight: 600, borderRadius: 4 }} />
+            <button
+              onClick={() => updateItem(idx, 'priceLocked', !item.priceLocked)}
+              title={item.priceLocked ? 'Ξεκλείδωμα τιμής' : 'Κλείδωμα τιμής — δεν αλλάζει από κοστολόγηση'}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.65rem', color: item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)', padding: 0, transition: 'color 0.15s' }}
+              onMouseEnter={e => { if (!item.priceLocked) e.currentTarget.style.color = '#f58220'; }}
+              onMouseLeave={e => { if (!item.priceLocked) e.currentTarget.style.color = item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)'; }}
+            >
+              <i className={`fas fa-${item.priceLocked ? 'lock' : 'lock-open'}`} />
+            </button>
             <input type="number" value={item.cost || ''} onChange={e => updateItem(idx, 'cost', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%', color: 'var(--text-muted)' }} />
             <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: 0, opacity: 0.4 }}
               onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger)'; }}
