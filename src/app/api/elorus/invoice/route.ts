@@ -81,12 +81,11 @@ export async function POST(req: NextRequest) {
     const autoZip = comp?.zip || '';
     if (!contactId && autoName) {
       const payload: Record<string, unknown> = {
-        client_type: '1',
+        client_type: 1,
         company: autoName,
         first_name: '',
         vat_number: afm || '',
-        tin: afm || '',
-        tin_authority: comp?.doy || '',
+        tax_office: comp?.doy || '',
         profession: comp?.activities || '',
         is_client: true,
         is_supplier: false,
