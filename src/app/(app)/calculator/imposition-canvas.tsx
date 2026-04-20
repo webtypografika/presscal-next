@@ -1104,7 +1104,7 @@ export default function ImpositionCanvas({
     }
 
     // ─── N-UP GRID RESIZE HANDLE + ROTATE BUTTON (drawn in main draw, not drawSheet) ───
-    const isNUpLikeMode = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun' || impo.mode === 'workturn';
+    const isNUpLikeMode = impo.mode === 'nup' || impo.mode === 'cutstack' || impo.mode === 'gangrun' || impo.mode === 'workturn' || impo.mode === 'booklet';
     if (isNUpLikeMode && impo.cols > 0 && impo.rows > 0) {
       // Compute grid position in canvas pixels (replicate single-view sheet positioning,
       // incl. the leftExtra padding reserved for the feed indicator label — digital only).
@@ -1157,7 +1157,9 @@ export default function ImpositionCanvas({
         ctx.fillStyle = 'rgba(245,130,32,0.8)';
         ctx.font = '700 10px Inter, DM Sans, sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(`${impo.cols}×${impo.rows}`, sGridX + 3, sGridY - 4);
+        const labelC = impo.mode === 'booklet' ? (impo.spreadsAcross ?? 1) : impo.cols;
+        const labelR = impo.mode === 'booklet' ? (impo.spreadDown ?? 1) : impo.rows;
+        ctx.fillText(`${labelC}×${labelR}`, sGridX + 3, sGridY - 4);
       }
 
       if (onRotate) {
@@ -1407,7 +1409,7 @@ export default function ImpositionCanvas({
   }, [impo.cells]);
 
   const findGridHandle = useCallback((mmX: number, mmY: number): boolean => {
-    if (!onGridResize || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn')) return false;
+    if (!onGridResize || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn' && impo.mode !== 'booklet')) return false;
     if (impo.cells.length === 0) return false;
     // Bounding box of actual cells. cell.x/y are in PAPER coords; mmX/mmY are in PRINTABLE
     // coords (canvasToMM subtracts marginLeft/marginTop). Convert here.
@@ -1564,8 +1566,12 @@ export default function ImpositionCanvas({
       }
       if (findGridHandle(mmX, mmY) && onGridResize) {
         // For W&T, cols/rows are PER-HALF. Store start values so drag math is incremental.
-        const startC = impo.mode === 'workturn' ? (impo.halfCols ?? Math.ceil(impo.cols / 2)) : impo.cols;
-        const startR = impo.mode === 'workturn' ? (impo.halfRows ?? Math.ceil(impo.rows / 2)) : impo.rows;
+        const startC = impo.mode === 'workturn' ? (impo.halfCols ?? Math.ceil(impo.cols / 2))
+          : impo.mode === 'booklet' ? (impo.spreadsAcross ?? 1)
+          : impo.cols;
+        const startR = impo.mode === 'workturn' ? (impo.halfRows ?? Math.ceil(impo.rows / 2))
+          : impo.mode === 'booklet' ? (impo.spreadDown ?? 1)
+          : impo.rows;
         gridDragRef.current = { cols: startC, rows: startR, startCols: startC, startRows: startR, mode: 'resize', startMmX: mmX, startMmY: mmY, origOffX: offsetX || 0, origOffY: offsetY || 0 };
         e.preventDefault();
         return;
@@ -1635,8 +1641,12 @@ export default function ImpositionCanvas({
         // Incremental drag: increments tied to the centered-grid visual movement.
         // Adding 1 col/row to a centered grid moves the bottom-right by step/2, so use
         // step/2 as drag sensitivity — 1 unit of pointer travel yields a visible match.
-        const tW = impo.trimW;
-        const tH = impo.trimH;
+        // Booklet drag works in spread units (1 spread = 2 pages side by side)
+        const isBookletDrag = impo.mode === 'booklet';
+        const spreadMulW = isBookletDrag ? (impo.rotated ? 1 : 2) : 1;
+        const spreadMulH = isBookletDrag ? (impo.rotated ? 2 : 1) : 1;
+        const tW = impo.trimW * spreadMulW;
+        const tH = impo.trimH * spreadMulH;
         const sensX = (tW + gutter) / 2;
         const sensY = (tH + gY) / 2;
         const dragDx = mmX - gridDragRef.current.startMmX;

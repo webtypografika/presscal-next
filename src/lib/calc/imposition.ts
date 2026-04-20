@@ -421,7 +421,7 @@ export function calcBookletCreep(totalSheets: number, paperThicknessMM: number):
 }
 
 export function calcBooklet(input: ImpositionInput): ImpositionResult {
-  const { trimW, trimH, bleed, qty, gutter, area, pages: rawPages, paperThickness = 0, rotation } = input;
+  const { trimW, trimH, bleed, qty, gutter, area, pages: rawPages, paperThickness = 0, rotation, forceCols, forceRows } = input;
   const gX = gutter;
   const gY = input.gutterY ?? gutter;
 
@@ -449,8 +449,8 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   const spreadH = blockRotated ? spreadWnat : spreadHnat;
 
   // How many spreads fit on the sheet (booklet uses its own cell model)
-  const spreadCols = fitCountLegacy(pw, spreadW, gX);
-  const spreadRows = fitCountLegacy(ph, spreadH, gY);
+  const spreadCols = (forceCols && forceCols > 0) ? forceCols : fitCountLegacy(pw, spreadW, gX);
+  const spreadRows = (forceRows && forceRows > 0) ? forceRows : fitCountLegacy(ph, spreadH, gY);
   const spreadsPerSheet = Math.max(spreadCols * spreadRows, 1);
 
   // Traditional 2-up booklet imposition: the SAME signature is printed in every
@@ -543,6 +543,7 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
     pageCount: rawPages || 4,
     // Export layout (consumed by pdf-export.ts exportBooklet)
     spreadsAcross: spreadCols,
+    spreadDown: spreadRows,
     sigsPerSheet: spreadsPerSheet,
     spineOffset: gX,
     rowGap: gY,

@@ -4039,7 +4039,7 @@ export default function CalculatorShell() {
                 onSmBlockMove={impoMode === 'stepmulti' ? (idx, x, y) => {
                   setSmBlocks(prev => prev.map((b, i) => i === idx ? { ...b, x, y, blockW: 0, blockH: 0, _manualGrid: true } : b));
                 } : undefined}
-                onGridResize={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn') ? (cols, rows) => {
+                onGridResize={(impoMode === 'nup' || impoMode === 'cutstack' || impoMode === 'gangrun' || impoMode === 'workturn' || impoMode === 'booklet') ? (cols, rows) => {
                   setImpoForceCols(cols);
                   setImpoForceRows(rows);
                 } : undefined}
@@ -4047,6 +4047,8 @@ export default function CalculatorShell() {
                   if (impoMode === 'perfect_bound' || impoMode === 'booklet') {
                     // Booklet/PB block: toggle 0 ↔ 90 (spine vertical ↔ horizontal)
                     setImpoRotation(prev => (prev === 0 || prev === 180) ? 90 : 0);
+                    setImpoForceCols(null);
+                    setImpoForceRows(null);
                   } else {
                     setImpoRotation(prev => (prev + 90) % 360);
                     setImpoForceCols(1);

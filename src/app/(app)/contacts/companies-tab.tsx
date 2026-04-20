@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createCompany, updateCompany, deleteCompany, createContact, updateContact, unlinkContactFromCompany, setPrimaryContact } from '../companies/actions';
+import { createCompany, updateCompany, deleteCompany, createContact, updateContact, unlinkContactFromCompany, setPrimaryContact, linkContactToCompany } from '../companies/actions';
 import { createQuote } from '../quotes/actions';
 import { ElorusAfmLookup, type ElorusLookupResult } from '@/components/elorus-afm-lookup';
 import { inp, inpFocus, lbl, SectionTitle } from './shared-styles';
@@ -16,7 +16,8 @@ interface CompanyData {
   notes: string; folderPath: string | null; tags: string[]; companyContacts: CCData[]; _count: { quotes: number };
 }
 
-interface Props { initialCompanies: CompanyData[]; initialTotal: number; initialHasMore: boolean; hasElorus?: boolean; search: string }
+interface SimpleContact { id: string; name: string; email: string | null; phone: string | null }
+interface Props { initialCompanies: CompanyData[]; initialTotal: number; initialHasMore: boolean; hasElorus?: boolean; search: string; allContacts: SimpleContact[] }
 
 const PAGE_SIZE = 50;
 
@@ -99,7 +100,7 @@ function ContactRow({ cc, companyId, onUpdate, onRemove, onSetPrimary }: {
   );
 }
 
-export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, hasElorus, search }: Props) {
+export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, hasElorus, search, allContacts }: Props) {
   const router = useRouter();
   const [companies, setCompanies] = useState(initialCompanies);
   const [total, setTotal] = useState(initialTotal);
@@ -168,8 +169,20 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
     debouncedSaveContact(contactId, companyId, data);
   }, [debouncedSaveContact]);
 
-  const handleAddContact = useCallback(async (companyId: string) => {
+  const [addContactOpen, setAddContactOpen] = useState<string | null>(null);
+  const [addContactSearch, setAddContactSearch] = useState('');
+
+  const handleAddNewContact = useCallback(async (companyId: string) => {
     await createContact({ name: 'Νέα επαφή', companyId, role: 'employee' });
+    setAddContactOpen(null);
+    setAddContactSearch('');
+    window.location.reload();
+  }, []);
+
+  const handleLinkExistingContact = useCallback(async (companyId: string, contactId: string) => {
+    await linkContactToCompany({ companyId, contactId, role: 'employee' });
+    setAddContactOpen(null);
+    setAddContactSearch('');
     window.location.reload();
   }, []);
 
@@ -363,10 +376,70 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                   Επαφές ({company.companyContacts.length})
                 </span>
               </div>
-              <button onClick={() => handleAddContact(company.id)}
-                style={{ padding: '3px 10px', borderRadius: 6, border: '1px dashed color-mix(in srgb, var(--teal) 40%, transparent)', background: 'transparent', color: 'var(--teal)', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <i className="fas fa-user-plus" style={{ fontSize: '0.55rem' }} />Προσθήκη
-              </button>
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => setAddContactOpen(addContactOpen === company.id ? null : company.id)}
+                  style={{ padding: '3px 10px', borderRadius: 6, border: '1px dashed color-mix(in srgb, var(--teal) 40%, transparent)', background: addContactOpen === company.id ? 'color-mix(in srgb, var(--teal) 8%, transparent)' : 'transparent', color: 'var(--teal)', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <i className="fas fa-user-plus" style={{ fontSize: '0.55rem' }} />Προσθήκη
+                </button>
+                {addContactOpen === company.id && (() => {
+                  const linkedIds = new Set(company.companyContacts.map(cc => cc.contact.id));
+                  const filtered = allContacts.filter(c => !linkedIds.has(c.id) && (!addContactSearch || c.name.toLowerCase().includes(addContactSearch.toLowerCase()) || (c.email || '').toLowerCase().includes(addContactSearch.toLowerCase())));
+                  return (
+                    <div style={{
+                      position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
+                      width: 280, maxHeight: 320, borderRadius: 10,
+                      background: 'var(--glass-bg, #1e293b)', border: '1px solid var(--glass-border)',
+                      backdropFilter: 'blur(20px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                      display: 'flex', flexDirection: 'column',
+                    }}>
+                      <div style={{ padding: '8px 8px 4px' }}>
+                        <input
+                          autoFocus value={addContactSearch} onChange={e => setAddContactSearch(e.target.value)}
+                          placeholder="Αναζήτηση επαφής..."
+                          style={{ ...inp, width: '100%', fontSize: '0.8rem', padding: '7px 10px', borderColor: 'var(--glass-border)', background: 'rgba(255,255,255,0.04)' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+                        {filtered.slice(0, 15).map(c => (
+                          <button key={c.id} onClick={() => handleLinkExistingContact(company.id, c.id)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 8px', borderRadius: 6,
+                              border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', textAlign: 'left',
+                              fontSize: '0.8rem',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                            <div style={{
+                              width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                              background: 'color-mix(in srgb, var(--teal) 15%, transparent)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: 'var(--teal)', fontSize: '0.55rem', fontWeight: 700,
+                            }}>{c.name.charAt(0).toUpperCase()}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                              {c.email && <div style={{ fontSize: '0.65rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>}
+                            </div>
+                            <i className="fas fa-link" style={{ fontSize: '0.5rem', color: '#475569' }} />
+                          </button>
+                        ))}
+                        {filtered.length === 0 && addContactSearch && (
+                          <div style={{ padding: '8px', fontSize: '0.75rem', color: '#475569', textAlign: 'center' }}>Δεν βρέθηκε</div>
+                        )}
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--glass-border)', padding: '6px 8px' }}>
+                        <button onClick={() => handleAddNewContact(company.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '7px 8px', borderRadius: 6,
+                            border: '1px dashed color-mix(in srgb, var(--teal) 30%, transparent)', background: 'transparent',
+                            color: 'var(--teal)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
+                          }}>
+                          <i className="fas fa-plus" style={{ fontSize: '0.55rem' }} />Νέα επαφή
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
             {company.companyContacts.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>

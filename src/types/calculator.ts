@@ -258,6 +258,7 @@ export interface ImpositionResult {
   signatureMap?: BookletSignatureMap;
   creepPerSheet?: number[];
   spreadsAcross?: number;
+  spreadDown?: number;
   sigsPerSheet?: number;
   spineOffset?: number;
   rowGap?: number;

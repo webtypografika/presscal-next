@@ -17,12 +17,13 @@ interface Props {
   initialContactsHasMore: boolean;
   hasElorus: boolean;
   allCompanies: { id: string; name: string }[];
+  allContacts: { id: string; name: string; email: string | null; phone: string | null }[];
 }
 
 export function ContactsPage({
   initialCompanies, initialCompaniesTotal, initialCompaniesHasMore,
   initialContacts, initialContactsTotal, initialContactsHasMore,
-  hasElorus, allCompanies,
+  hasElorus, allCompanies, allContacts,
 }: Props) {
   const [tab, setTab] = useState<Tab>(() => {
     if (typeof window !== 'undefined') {
@@ -124,6 +125,7 @@ export function ContactsPage({
           initialHasMore={initialCompaniesHasMore}
           hasElorus={hasElorus}
           search={debouncedSearch}
+          allContacts={allContacts}
         />
       </div>
       <div style={{ display: tab === 'people' ? 'block' : 'none' }}>
