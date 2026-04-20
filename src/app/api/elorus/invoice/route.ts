@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
       draft: true,
       items: invoiceItems,
       billing_address: {
-        address: billAddress || '-',
+        address_line: billAddress || '-',
         city: billCity || '-',
         zip: billZip || '-',
         country: 'GR',
