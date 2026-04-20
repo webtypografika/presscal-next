@@ -108,7 +108,7 @@ export async function createQuote(data: {
       title: data.title || null,
       description: data.description || null,
       notes: data.notes || null,
-      items: (data.items ?? []) as any,
+      items: ((data.items ?? []) as any[]).map((it: any) => ({ ...it, id: it.id || crypto.randomUUID() })) as any,
       subtotal: data.subtotal ?? 0,
       vatRate: data.vatRate ?? 24,
       vatAmount: data.vatAmount ?? 0,

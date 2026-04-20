@@ -191,7 +191,7 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
   }, []);
 
   const handleNewQuote = useCallback(async (companyId: string) => {
-    const q = await createQuote({ companyId, items: [{ name: '', qty: 1, unitPrice: 0, finalPrice: 0 }] });
+    const q = await createQuote({ companyId, items: [{ id: crypto.randomUUID(), name: '', qty: 1, unitPrice: 0, finalPrice: 0 }] });
     router.push(`/quotes/${q.id}`);
   }, [router]);
 
