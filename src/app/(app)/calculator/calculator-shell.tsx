@@ -1181,7 +1181,9 @@ export default function CalculatorShell() {
   };
 
   const ups = Math.max(impo.ups, 1);
-  const rawSheetsBase = impo.totalSheets || Math.ceil(job.qty / ups);
+  const padMult = job.archetype === 'pad' ? (job.sheetsPerPad || 50) : 1;
+  const effectiveQty = job.qty * padMult;
+  const rawSheetsBase = impo.totalSheets || Math.ceil(effectiveQty / ups);
   const rawSheets = rawSheetsBase * prodMultiplier;
   const wasteSheets = wasteFixed;
   const sheets = rawSheets + wasteSheets;
@@ -1229,7 +1231,7 @@ export default function CalculatorShell() {
           productId: job.productId || undefined,
           jobW: job.width,
           jobH: job.height,
-          qty: job.qty * prodMultiplier,
+          qty: effectiveQty * prodMultiplier,
           sides: job.sides,
           colorMode: color.model === 'cmyk' ? 'color' : 'bw',
           bleed: effectiveBleed,
