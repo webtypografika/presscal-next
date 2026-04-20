@@ -981,6 +981,8 @@ export default function CalculatorShell() {
   // Auto-select product: favourite first, or only product for archetype
   useEffect(() => {
     if (!products.length || job.productId) return;
+    // Don't auto-select if URL params will restore a specific product
+    if (searchParams.get('productId')) return;
     const matching = products.filter(p => p.archetype === job.archetype);
     if (matching.length === 0) return;
     const fav = matching.find(p => p.isFavourite);
