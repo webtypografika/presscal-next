@@ -3389,13 +3389,22 @@ export default function CalculatorShell() {
                         </div>
                         {/* Per-job PDF upload — PressKit or file input */}
                         <div style={{ padding: '0 8px 5px', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          {presskitEnabled && quoteLink?.quoteId ? (
-                            <button onClick={() => {
-                              window.location.href = `presscal-fh://pick-gang-file?quoteId=${quoteLink.quoteId}&gangIdx=${i}`;
+                          {presskitEnabled ? (
+                            <button onClick={async () => {
+                              const qId = quoteLink?.quoteId || 'gang-temp';
+                              // Resolve customer/job folder for PressKit navigation
+                              let folder = '';
+                              if (quoteLink?.quoteId) {
+                                try {
+                                  const r = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
+                                  if (r.ok) { const d = await r.json(); folder = d.jobFolderPath || d.companyFolderPath || ''; }
+                                } catch {}
+                              }
+                              window.location.href = `presscal-fh://pick-gang-file?quoteId=${qId}&gangIdx=${i}${folder ? '&folder=' + encodeURIComponent(folder) : ''}`;
                               // Poll for picked file
                               const poll = setInterval(async () => {
                                 try {
-                                  const res = await fetch(`/api/filehelper/gang-pick?quoteId=${quoteLink.quoteId}&gangIdx=${i}`);
+                                  const res = await fetch(`/api/filehelper/gang-pick?quoteId=${qId}&gangIdx=${i}`);
                                   const data = await res.json();
                                   if (!data.picked) return;
                                   clearInterval(poll);
