@@ -138,9 +138,9 @@ export async function POST(req: NextRequest) {
         is_supplier: false,
         active: true,
         addresses: [{
-          address: result.postal_address,
-          city: result.postal_area_description,
-          zip: result.postal_zip_code,
+          address_line: result.postal_address || '-',
+          city: result.postal_area_description || '-',
+          zip: result.postal_zip_code || '-',
           country: 'GR',
           ad_type: 'bill',
         }],
@@ -161,7 +161,9 @@ export async function POST(req: NextRequest) {
           const created = await createRes.json();
           result.elorusContactId = created.id;
         } else {
-          console.error('[Elorus] CREATE contact failed:', createRes.status, await createRes.text().catch(() => ''));
+          const errText = await createRes.text().catch(() => '');
+          console.error('[Elorus] CREATE contact failed:', createRes.status, errText);
+          return NextResponse.json({ error: `Elorus: ${createRes.status} — ${errText.slice(0, 200)}` }, { status: 500 });
         }
       }
     }

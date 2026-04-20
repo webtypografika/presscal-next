@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       if (phone) payload.phones = [{ number: phone, primary: true }];
       if (address || city || zip) {
         payload.addresses = [{
-          address: address || '', city: city || '', zip: zip || '',
+          address_line: address || '-', city: city || '-', zip: zip || '-',
           country: 'GR', ad_type: 'bill',
         }];
       }

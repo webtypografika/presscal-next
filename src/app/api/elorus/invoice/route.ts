@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
         active: true,
         ...(autoEmail ? { email: [{ email: autoEmail, primary: true }] } : {}),
         ...(autoPhone ? { phones: [{ number: autoPhone, primary: true }] } : {}),
-        ...((autoAddress || autoCity || autoZip) ? { addresses: [{ address: autoAddress, city: autoCity, zip: autoZip, country: 'GR', ad_type: 'bill' }] } : {}),
+        ...((autoAddress || autoCity || autoZip) ? { addresses: [{ address_line: autoAddress || '-', city: autoCity || '-', zip: autoZip || '-', country: 'GR', ad_type: 'bill' }] } : {}),
       };
       const createRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
         method: 'POST', headers: hdrs, body: JSON.stringify(payload),
