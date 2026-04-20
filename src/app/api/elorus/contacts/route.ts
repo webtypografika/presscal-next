@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
       if (!company && !firstName) return NextResponse.json({ error: 'Εταιρεία ή Όνομα απαιτείται' }, { status: 400 });
 
       const payload: Record<string, unknown> = {
+        client_type: company ? '1' : '2',
         company: company || '',
         first_name: firstName || '',
         vat_number: afm,
