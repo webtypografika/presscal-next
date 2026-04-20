@@ -1874,14 +1874,14 @@ export default function CalculatorShell() {
                           specs: (machine as any).specs,
                         } : null,
                         // Strip binary/PDF fields from gangJobs — only save when in gang mode
-                        gangJobs: impoMode === 'gangrun' ? gangJobs.map(g => ({
+                        gangJobs: (() => { console.log('[SAVE] impoMode:', impoMode, 'gangJobs:', gangJobs.length, gangJobs.map(g => ({ label: g.label, filePath: g.filePath, fileName: g.fileName }))); return impoMode === 'gangrun' ? gangJobs.map(g => ({
                           id: g.id,
                           label: g.label,
                           qty: g.qty,
                           filePath: g.filePath || null,
                           fileName: g.fileName || (g.pdf ? g.pdf.fileName : null),
                           pdf: g.pdf ? { fileName: g.pdf.fileName, pageCount: g.pdf.pageCount, pageSizes: g.pdf.pageSizes } : null,
-                        })) : undefined,
+                        })) : undefined; })(),
                         exportOpts: {
                           bleed: pdfExportOpts.bleed,
                           gutter: pdfExportOpts.gutter,
