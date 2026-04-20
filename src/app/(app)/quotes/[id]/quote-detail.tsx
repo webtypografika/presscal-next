@@ -994,14 +994,29 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             </button>
           )}
           {elorusConfigured && quote.elorusInvoiceId && (
-            <a href={quote.elorusInvoiceUrl || '#'} target="_blank" rel="noreferrer" style={{
-              padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
-              background: 'color-mix(in srgb, var(--success) 12%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--success) 25%, transparent)',
-              color: 'var(--success)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4,
-            }}>
-              <i className="fas fa-check" style={{ fontSize: '0.5rem' }} />Τιμολόγιο
-            </a>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <a href={quote.elorusInvoiceUrl || '#'} target="_blank" rel="noreferrer" style={{
+                padding: '5px 10px', borderRadius: '6px 0 0 6px', fontSize: '0.72rem', fontWeight: 600,
+                background: 'color-mix(in srgb, var(--success) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--success) 25%, transparent)',
+                color: 'var(--success)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+                <i className="fas fa-check" style={{ fontSize: '0.5rem' }} />Τιμολόγιο
+              </a>
+              <button onClick={async () => {
+                if (!confirm('Αφαίρεση σύνδεσης τιμολογίου;')) return;
+                await updateQuote(quote.id, { elorusInvoiceId: null, elorusInvoiceUrl: null, elorusContactId: null } as any);
+                setQuote(prev => ({ ...prev, elorusInvoiceId: null, elorusInvoiceUrl: null, elorusContactId: null }));
+                toast('Σύνδεση τιμολογίου αφαιρέθηκε');
+              }} title="Αφαίρεση σύνδεσης τιμολογίου" style={{
+                padding: '5px 6px', borderRadius: '0 6px 6px 0', fontSize: '0.6rem',
+                background: 'color-mix(in srgb, var(--success) 12%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--success) 25%, transparent)', borderLeft: 'none',
+                color: 'var(--text-muted)', cursor: 'pointer',
+              }}>
+                <i className="fas fa-times" />
+              </button>
+            </div>
           )}
         </div>
       </div>
