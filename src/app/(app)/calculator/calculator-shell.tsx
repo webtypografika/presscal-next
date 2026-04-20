@@ -1151,12 +1151,15 @@ export default function CalculatorShell() {
   const engineGutter = impoGutter;
   const engineGutterY = impoGutterY ?? impoGutter;
 
+  const padMult = job.archetype === 'pad' ? (job.sheetsPerPad || 50) : 1;
+  const effectiveQty = job.qty * padMult;
+
   const impoInput: ImpositionInput = {
     mode: impoMode,
     trimW: job.width,
     trimH: job.height,
     bleed: effectiveBleed,
-    qty: job.qty,
+    qty: effectiveQty,
     sides: job.sides,
     gutter: engineGutter,
     gutterY: engineGutterY !== engineGutter ? engineGutterY : undefined,
@@ -1214,7 +1217,7 @@ export default function CalculatorShell() {
     keepSourceMarks: impoKeepSourceMarks, isDuplex: job.sides === 2,
     duplexOrient: impoDuplexOrient, rotation: impoRotation, turnType: impoTurnType,
     stackPositions: impo.stackPositions,
-    csStackSize: impo.totalSheets || Math.ceil(job.qty / Math.max(impo.ups, 1)),
+    csStackSize: impo.totalSheets || Math.ceil(effectiveQty / Math.max(impo.ups, 1)),
     csGetStackNum: impo.stackPositions ? (posIdx: number) => impo.stackPositions![posIdx]?.stackNum ?? posIdx : undefined,
     numberingEnabled: impoMode === 'cutstack' && csNumbering,
     numberPrefix: csNumPrefix, numberStartNum: csStartNum, numberDigits: csNumDigits,
@@ -1232,8 +1235,6 @@ export default function CalculatorShell() {
   };
 
   const ups = Math.max(impo.ups, 1);
-  const padMult = job.archetype === 'pad' ? (job.sheetsPerPad || 50) : 1;
-  const effectiveQty = job.qty * padMult;
   const rawSheetsBase = impo.totalSheets || Math.ceil(effectiveQty / ups);
   const rawSheets = rawSheetsBase * prodMultiplier;
   const wasteSheets = wasteFixed;
