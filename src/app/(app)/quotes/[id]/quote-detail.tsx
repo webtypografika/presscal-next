@@ -97,6 +97,7 @@ function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: s
     if (cd.impoForceRows != null) p.set('impoForceRows', String(cd.impoForceRows));
     if (cd.impoDuplexOrient != null) p.set('impoDuplexOrient', cd.impoDuplexOrient as string);
     if (cd.impoTurnType != null) p.set('impoTurnType', cd.impoTurnType as string);
+    if (Array.isArray(cd.gangJobs) && cd.gangJobs.length > 0) p.set('gangJobs', JSON.stringify(cd.gangJobs));
     if (cd.wasteFixed != null) p.set('wasteFixed', String(cd.wasteFixed));
     // Finishing
     if (cd.guillotineId != null) p.set('guillotineId', cd.guillotineId as string);

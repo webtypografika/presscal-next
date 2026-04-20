@@ -550,15 +550,17 @@ export default function CalculatorShell() {
   const [csExtraNum, setCsExtraNum] = useState<{ posX: number; posY: number; fontSize: number; rotation: number }[]>([]);
   const [csFixedBack, setCsFixedBack] = useState(false);
   // Gang Run — layout persisted to localStorage (pdf bytes NOT persisted; user re-uploads)
-  const [gangJobs, setGangJobs] = useState<{ id: string; label: string; qty: number; pdf?: ParsedPDF }[]>(() => {
+  const [gangJobs, setGangJobs] = useState<{ id: string; label: string; qty: number; pdf?: ParsedPDF; filePath?: string; fileName?: string }[]>(() => {
     if (typeof window === 'undefined') return [{ id: crypto.randomUUID(), label: 'Δουλειά 1', qty: 1 }];
     try {
       const saved = localStorage.getItem('calc-gang-state');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.jobs) && parsed.jobs.length > 0) {
-          return parsed.jobs.map((j: { id: string; label: string; qty: number }) => ({
+          return parsed.jobs.map((j: any) => ({
             id: j.id, label: j.label, qty: j.qty,
+            filePath: j.filePath || undefined,
+            fileName: j.fileName || undefined,
           }));
         }
       }
@@ -584,11 +586,26 @@ export default function CalculatorShell() {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem('calc-gang-state', JSON.stringify({
-        jobs: gangJobs.map(gj => ({ id: gj.id, label: gj.label, qty: gj.qty })),
+        jobs: gangJobs.map(gj => ({ id: gj.id, label: gj.label, qty: gj.qty, filePath: gj.filePath, fileName: gj.fileName })),
         cellAssign: gangCellAssign,
       }));
     } catch { /* quota exceeded — ignore */ }
   }, [gangJobs, gangCellAssign]);
+  // Auto-load gang PDFs from filePath (via PressKit file server)
+  useEffect(() => {
+    gangJobs.forEach((gj, i) => {
+      if (gj.pdf || !gj.filePath || !gj.fileName?.toLowerCase().endsWith('.pdf')) return;
+      const url = gj.filePath.startsWith('/storage/')
+        ? gj.filePath
+        : `http://localhost:17824/?path=${encodeURIComponent(gj.filePath)}`;
+      fetch(url).then(r => r.ok ? r.blob() : null).then(async blob => {
+        if (!blob) return;
+        const file = new File([blob], gj.fileName!, { type: 'application/pdf' });
+        const parsed = await parsePDF(file);
+        setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: parsed } : j));
+      }).catch(() => {});
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Step Multi
   const [smBlocks, setSmBlocks] = useState<StepBlock[]>([
     { pageNum: 1, backPageNum: null, trimW: 90, trimH: 55, cols: 1, rows: 1, rotation: 0, x: 0, y: 0, blockW: 0, blockH: 0, _manualGrid: true },
@@ -851,6 +868,18 @@ export default function CalculatorShell() {
     if (imDuplex === 'h2h' || imDuplex === 'h2f' || imDuplex === 'h2f_cols') setImpoDuplexOrient(imDuplex);
     const imTurn = searchParams.get('impoTurnType');
     if (imTurn === 'turn' || imTurn === 'tumble') setImpoTurnType(imTurn);
+    const gangParam = searchParams.get('gangJobs');
+    if (gangParam) {
+      try {
+        const gj = JSON.parse(gangParam);
+        if (Array.isArray(gj) && gj.length > 0) {
+          setGangJobs(gj.map((g: any) => ({
+            id: g.id || crypto.randomUUID(), label: g.label || '', qty: g.qty || 1,
+            filePath: g.filePath || undefined, fileName: g.fileName || g.pdf?.fileName || undefined,
+          })));
+        }
+      } catch {}
+    }
     const wf = searchParams.get('wasteFixed');
     if (wf) setWasteFixed(parseInt(wf));
 
@@ -1841,6 +1870,8 @@ export default function CalculatorShell() {
                           id: g.id,
                           label: g.label,
                           qty: g.qty,
+                          filePath: g.filePath || null,
+                          fileName: g.fileName || (g.pdf ? g.pdf.fileName : null),
                           pdf: g.pdf ? { fileName: g.pdf.fileName, pageCount: g.pdf.pageCount, pageSizes: g.pdf.pageSizes } : null,
                         })),
                         exportOpts: {
@@ -3356,28 +3387,61 @@ export default function CalculatorShell() {
                             </button>
                           )}
                         </div>
-                        {/* Per-job PDF upload */}
+                        {/* Per-job PDF upload — PressKit or file input */}
                         <div style={{ padding: '0 8px 5px', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <label style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            padding: '2px 6px', borderRadius: 4, cursor: 'pointer',
-                            background: gj.pdf ? `color-mix(in srgb, ${jobColor} 18%, transparent)` : 'rgba(255,255,255,0.04)',
-                            border: `1px solid ${gj.pdf ? jobColor : 'var(--border)'}`,
-                            color: gj.pdf ? jobColor : '#64748b',
-                            fontSize: '0.55rem', fontWeight: 600, fontFamily: 'inherit',
-                          }}>
-                            <i className={`fas ${gj.pdf ? 'fa-file-pdf' : 'fa-upload'}`} style={{ fontSize: '0.5rem' }} />
-                            {gj.pdf ? gj.pdf.fileName.slice(0, 20) : 'PDF'}
-                            <input type="file" accept=".pdf" hidden onChange={async e => {
-                              const f = e.target.files?.[0];
-                              if (!f) return;
-                              const parsed = await parsePDF(f);
-                              setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: parsed } : j));
-                              e.target.value = '';
-                            }} />
-                          </label>
+                          {presskitEnabled && quoteLink?.quoteId ? (
+                            <button onClick={() => {
+                              window.location.href = `presscal-fh://pick-gang-file?quoteId=${quoteLink.quoteId}&gangIdx=${i}`;
+                              // Poll for picked file
+                              const poll = setInterval(async () => {
+                                try {
+                                  const res = await fetch(`/api/filehelper/gang-pick?quoteId=${quoteLink.quoteId}&gangIdx=${i}`);
+                                  const data = await res.json();
+                                  if (!data.picked) return;
+                                  clearInterval(poll);
+                                  // Load PDF via PressKit file server
+                                  const pdfRes = await fetch(`http://localhost:17824/?path=${encodeURIComponent(data.filePath)}`);
+                                  if (!pdfRes.ok) return;
+                                  const blob = await pdfRes.blob();
+                                  const file = new File([blob], data.fileName, { type: 'application/pdf' });
+                                  const parsed = await parsePDF(file);
+                                  setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: parsed, filePath: data.filePath, fileName: data.fileName } : j));
+                                } catch {}
+                              }, 1000);
+                              setTimeout(() => clearInterval(poll), 60_000); // stop after 1min
+                            }} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              padding: '2px 6px', borderRadius: 4, cursor: 'pointer',
+                              background: gj.pdf ? `color-mix(in srgb, ${jobColor} 18%, transparent)` : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${gj.pdf ? jobColor : 'var(--border)'}`,
+                              color: gj.pdf ? jobColor : '#64748b',
+                              fontSize: '0.55rem', fontWeight: 600,
+                            }}>
+                              <i className={`fas ${gj.pdf ? 'fa-file-pdf' : 'fa-folder-open'}`} style={{ fontSize: '0.5rem' }} />
+                              {gj.pdf ? gj.pdf.fileName.slice(0, 20) : 'PDF'}
+                            </button>
+                          ) : (
+                            <label style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              padding: '2px 6px', borderRadius: 4, cursor: 'pointer',
+                              background: gj.pdf ? `color-mix(in srgb, ${jobColor} 18%, transparent)` : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${gj.pdf ? jobColor : 'var(--border)'}`,
+                              color: gj.pdf ? jobColor : '#64748b',
+                              fontSize: '0.55rem', fontWeight: 600, fontFamily: 'inherit',
+                            }}>
+                              <i className={`fas ${gj.pdf ? 'fa-file-pdf' : 'fa-upload'}`} style={{ fontSize: '0.5rem' }} />
+                              {gj.pdf ? gj.pdf.fileName.slice(0, 20) : 'PDF'}
+                              <input type="file" accept=".pdf" hidden onChange={async e => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                const parsed = await parsePDF(f);
+                                setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: parsed, fileName: f.name } : j));
+                                e.target.value = '';
+                              }} />
+                            </label>
+                          )}
                           {gj.pdf && (
-                            <button onClick={() => setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: undefined } : j))}
+                            <button onClick={() => setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: undefined, filePath: undefined, fileName: undefined } : j))}
                               style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.5rem', padding: '2px' }}>
                               <i className="fas fa-times" />
                             </button>
