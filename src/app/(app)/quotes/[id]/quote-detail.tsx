@@ -486,59 +486,39 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 
   // One-click invoice: auto-detect best path
   const handleOneClickInvoice = useCallback(async () => {
-    const elorusId = quote.elorusContactId || (selectedCompany as any)?.elorusContactId || quote.customer?.elorusContactId;
     const afm = selectedCompany?.afm || quote.customer?.afm;
 
-    // Helper: create invoice with a given contactId
-    const doInvoice = async (cId: string, cAfm?: string) => {
+    if (!afm || afm.length !== 9) {
+      // No AFM → ask for it
+      setShowAfmPrompt(true);
+      setPromptAfm('');
+      return;
+    }
+
+    setInvoicing(true);
+    try {
+      // Step 1: Always ensure fresh Elorus contact via AFM lookup
+      const lookupRes = await fetch('/api/elorus/lookup-afm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ afm }),
+      });
+      const lookupData = await lookupRes.json();
+      if (!lookupRes.ok) { toast(lookupData.error || 'Σφάλμα ΑΑΔΕ', 'error'); setInvoicing(false); return; }
+      const contactId = lookupData.elorusContactId;
+      if (!contactId) { toast('Δεν δημιουργήθηκε επαφή Elorus', 'error'); setInvoicing(false); return; }
+
+      // Step 2: Create invoice with the confirmed contact
       const res = await fetch('/api/elorus/invoice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quoteId: quote.id, elorusContactId: cId, clientAfm: cAfm || afm }),
+        body: JSON.stringify({ quoteId: quote.id, elorusContactId: contactId, clientAfm: afm }),
       });
       const data = await res.json();
       if (data.ok) {
         setQuote(prev => ({ ...prev, elorusInvoiceId: data.invoiceId, elorusInvoiceUrl: data.invoiceUrl, elorusContactId: data.contactId }));
         toast('Τιμολόγιο δημιουργήθηκε!');
-        return true;
-      }
-      return data.error || 'Σφάλμα';
-    };
-
-    // Helper: lookup AFM → create Elorus contact → return contactId
-    const doLookupAndCreate = async (lookupAfm: string) => {
-      const lookupRes = await fetch('/api/elorus/lookup-afm', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ afm: lookupAfm }),
-      });
-      const lookupData = await lookupRes.json();
-      if (!lookupRes.ok) return { error: lookupData.error || 'Σφάλμα ΑΑΔΕ' };
-      if (!lookupData.elorusContactId) return { error: 'Δεν δημιουργήθηκε επαφή Elorus' };
-      return { contactId: lookupData.elorusContactId };
-    };
-
-    setInvoicing(true);
-    try {
-      // Path 1: try existing elorusContactId
-      if (elorusId) {
-        const result = await doInvoice(elorusId);
-        if (result === true) { setInvoicing(false); return; }
-        // Stale contact — fall through to Path 2
-      }
-
-      // Path 2: lookup by AFM → create contact → invoice
-      if (afm && afm.length === 9) {
-        const lookup = await doLookupAndCreate(afm);
-        if (lookup.error) { toast(lookup.error, 'error'); setInvoicing(false); return; }
-        const result = await doInvoice(lookup.contactId!);
-        if (result !== true) { toast(result, 'error'); }
-        setInvoicing(false);
-        return;
-      }
-    } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); setInvoicing(false); return; }
-
-    // No AFM → ask for it
-    setShowAfmPrompt(true);
-    setPromptAfm('');
+      } else { toast(data.error || 'Σφάλμα', 'error'); }
+    } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); }
+    setInvoicing(false);
   }, [quote, selectedCompany, toast]);
 
   const handleAfmPromptInvoice = useCallback(async () => {

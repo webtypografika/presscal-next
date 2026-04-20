@@ -98,11 +98,15 @@ export async function POST(req: NextRequest) {
       if (createRes.ok) {
         const created = await createRes.json();
         contactId = created.id;
+      } else {
+        const errText = await createRes.text().catch(() => '');
+        console.error('[Elorus] Invoice auto-create contact failed:', createRes.status, errText);
+        return NextResponse.json({ error: `Elorus contact create: ${createRes.status} — ${errText.slice(0, 300)}` }, { status: 400 });
       }
     }
 
     if (!contactId) {
-      return NextResponse.json({ error: `Δεν βρέθηκε ή δημιουργήθηκε επαφή Elorus (ΑΦΜ: ${afm || 'κενό'}, company: ${autoName || 'κενό'})` }, { status: 400 });
+      return NextResponse.json({ error: `Δεν βρέθηκε επαφή Elorus (ΑΦΜ: ${afm || 'κενό'}, company: ${autoName || 'κενό'}). Προσθέστε ΑΦΜ στην εταιρεία.` }, { status: 400 });
     }
 
     // Resolve unit measure for v1.1 invoices
