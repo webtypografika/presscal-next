@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { doyToElorusCode } from '@/lib/elorus-doy-map';
 
 const ORG_ID = 'default-org';
 const ELORUS_BASE = 'https://api.elorus.com';
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
         company: company || '',
         first_name: firstName || '',
         vat_number: afm,
-        tax_office: doy || '',
+        tax_office: doyToElorusCode(doy) || '',
         profession: profession || '',
         is_client: true,
         is_supplier: false,
