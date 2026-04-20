@@ -30,6 +30,7 @@ export async function POST(
     const itemIndex = items.findIndex((i: any) => i.id === itemId)
 
     if (itemIndex === -1) {
+      console.error('link-file: Item not found', { quoteId: id, itemId, availableIds: items.map((i: any) => i.id) })
       return NextResponse.json({ error: 'Item not found' }, { status: 404 })
     }
 

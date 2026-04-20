@@ -844,7 +844,7 @@ export default function CalculatorShell() {
     const imForceRows = searchParams.get('impoForceRows');
     if (imForceRows) setImpoForceRows(parseInt(imForceRows));
     const imDuplex = searchParams.get('impoDuplexOrient');
-    if (imDuplex === 'h2h' || imDuplex === 'h2f') setImpoDuplexOrient(imDuplex);
+    if (imDuplex === 'h2h' || imDuplex === 'h2f' || imDuplex === 'h2f_cols') setImpoDuplexOrient(imDuplex);
     const imTurn = searchParams.get('impoTurnType');
     if (imTurn === 'turn' || imTurn === 'tumble') setImpoTurnType(imTurn);
     const wf = searchParams.get('wasteFixed');
@@ -899,7 +899,6 @@ export default function CalculatorShell() {
     const quoteNumber = searchParams.get('quoteNumber');
     if (quoteId) {
       setQuoteLink({ quoteId, itemId: itemId || '', desc: desc || '', quoteNumber: quoteNumber || '' });
-      setActivePanel('machine');
     } else {
       setQuoteLink(null);
     }
