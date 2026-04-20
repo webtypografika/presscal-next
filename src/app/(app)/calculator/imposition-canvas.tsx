@@ -19,6 +19,7 @@ interface ImpositionCanvasProps {
   marginRight: number;
   bleed: number;
   gutter: number;
+  gutterY?: number;
   cropMarks: boolean;
   machCat?: 'digital' | 'offset';
   sides?: 1 | 2;
@@ -107,7 +108,7 @@ function drawSheet(
   impo: ImpositionResult,
   sheetW: number, sheetH: number,
   marginTop: number, marginBottom: number, marginLeft: number, marginRight: number,
-  bleed: number, gutter: number, cropMarks: boolean,
+  bleed: number, gutter: number, gutterY: number, cropMarks: boolean,
   gridOffsetX: number, gridOffsetY: number,
   showColorBar: boolean, colorBarEdge: string, colorBarOffY: number, colorBarScale: number,
   showPlateSlug: boolean, plateSlugEdge: string,
@@ -176,7 +177,7 @@ function drawSheet(
   const pw = impo.pieceW * scale;
   const ph = impo.pieceH * scale;
   const trimGridW = impo.cols * trimWpx + Math.max(0, impo.cols - 1) * gutter * scale;
-  const trimGridH = impo.rows * trimHpx + Math.max(0, impo.rows - 1) * gutter * scale;
+  const trimGridH = impo.rows * trimHpx + Math.max(0, impo.rows - 1) * gutterY * scale;
   // cenX/cenY = top-left of first TRIM in printable area
   const cenX = paX + (printAreaW - trimGridW) / 2 + gridOffsetX * scale;
   const cenY = paY + (printAreaH - trimGridH) / 2 + gridOffsetY * scale;
@@ -614,20 +615,24 @@ function drawSheet(
   }
 
   // Gutter fill between trims (skip for W&T, StepMulti)
-  const gutterPxTrim = gutter * scale;
-  const trimStepW = trimWpx + gutterPxTrim;
-  const trimStepH = trimHpx + gutterPxTrim;
+  const gutterPxX = gutter * scale;
+  const gutterPxY = gutterY * scale;
+  const trimStepW = trimWpx + gutterPxX;
+  const trimStepH = trimHpx + gutterPxY;
   const isBookletLike = impo.mode === 'booklet' || impo.mode === 'perfect_bound';
-  if (gutterPxTrim > 0.5 && !isWT && !isSM && !isBookletLike) {
+  if ((gutterPxX > 0.5 || gutterPxY > 0.5) && !isWT && !isSM && !isBookletLike) {
     ctx.fillStyle = COLORS.gutterFill;
-    for (let col = 0; col < impo.cols - 1; col++) {
-      // Gutter starts at right trim edge of col, width = gutterPxTrim
-      const gx = cenX + (col + 1) * trimWpx + col * gutterPxTrim;
-      ctx.fillRect(gx, cenY - bleedPx, gutterPxTrim, trimGridH + 2 * bleedPx);
+    if (gutterPxX > 0.5) {
+      for (let col = 0; col < impo.cols - 1; col++) {
+        const gx = cenX + (col + 1) * trimWpx + col * gutterPxX;
+        ctx.fillRect(gx, cenY - bleedPx, gutterPxX, trimGridH + 2 * bleedPx);
+      }
     }
-    for (let row = 0; row < impo.rows - 1; row++) {
-      const gy = cenY + (row + 1) * trimHpx + row * gutterPxTrim;
-      ctx.fillRect(cenX - bleedPx, gy, trimGridW + 2 * bleedPx, gutterPxTrim);
+    if (gutterPxY > 0.5) {
+      for (let row = 0; row < impo.rows - 1; row++) {
+        const gy = cenY + (row + 1) * trimHpx + row * gutterPxY;
+        ctx.fillRect(cenX - bleedPx, gy, trimGridW + 2 * bleedPx, gutterPxY);
+      }
     }
   }
 
@@ -820,13 +825,14 @@ function drawSheet(
 
 export default function ImpositionCanvas({
   impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
-  bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY,
+  bleed, gutter, gutterY: gutterYProp, cropMarks, machCat, sides, offsetX, offsetY,
   showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge,
   pdf, feedEdge, activeSigSheet, sigShowBack, csNumbering,
   gangJobPdfs, gangCellAssign, smBlockPdfs, smBlocks, onSmBlockUpdate, onSmBlockMove,
   onGridResize, onRotate, onOffsetChange, contentScale,
   onGutterChange, onBleedChange, pageRange,
 }: ImpositionCanvasProps) {
+  const gY = gutterYProp ?? gutter;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -894,14 +900,14 @@ export default function ImpositionCanvas({
       // Front
       drawSheet(ctx, baseX, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
-        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
+        bleed, gutter, gY, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
         machCat, pdf, 0, false, 'A', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale, pageRange);
 
       // Back
       drawSheet(ctx, baseX + drawW + gap, baseY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
-        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
+        bleed, gutter, gY, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
         machCat, pdf, 1, true, 'B', activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale, pageRange);
     } else {
@@ -928,7 +934,7 @@ export default function ImpositionCanvas({
         : 0;
       drawSheet(ctx, offX, offY, drawW, drawH,
         impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight,
-        bleed, gutter, cropMarks, offsetX ?? 0, offsetY ?? 0,
+        bleed, gutter, gY, cropMarks, offsetX ?? 0, offsetY ?? 0,
         showColorBar ?? false, colorBarEdge ?? 'tail', colorBarOffY ?? 0, colorBarScale ?? 100, showPlateSlug ?? false, plateSlugEdge ?? 'tail',
         machCat, pdf, pageIdx, isBack, isDuplex ? (isBack ? 'B' : 'A') : undefined, activeSigSheet, csNumbering, gangJobPdfs, gangCellAssign, smBlockPdfs, contentScale, pageRange);
 
@@ -1119,9 +1125,10 @@ export default function ImpositionCanvas({
       const sPrintH = sDH - smT - (isOff ? marginTop : marginBottom) * sSc;
       const sTrimWpx = impo.trimW * sSc;
       const sTrimHpx = impo.trimH * sSc;
-      const sGutPx = gutter * sSc;
-      const sTrimGridW = impo.cols * sTrimWpx + Math.max(0, impo.cols - 1) * sGutPx;
-      const sTrimGridH = impo.rows * sTrimHpx + Math.max(0, impo.rows - 1) * sGutPx;
+      const sGutPxX = gutter * sSc;
+      const sGutPxY = gY * sSc;
+      const sTrimGridW = impo.cols * sTrimWpx + Math.max(0, impo.cols - 1) * sGutPxX;
+      const sTrimGridH = impo.rows * sTrimHpx + Math.max(0, impo.rows - 1) * sGutPxY;
       const sGridX = sPaX + (sPrintW - sTrimGridW) / 2 + (offsetX || 0) * sSc;
       const sGridY = sPaY + (sPrintH - sTrimGridH) / 2 + (offsetY || 0) * sSc;
 
@@ -1197,7 +1204,7 @@ export default function ImpositionCanvas({
       const pW = sheetW - marginLeft - marginRight;
       const pH = sheetH - marginTop - marginBottom;
       const gTrimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
-      const gTrimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+      const gTrimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gY;
       const gridOX = (pW - gTrimGridWmm) / 2 + (offsetX || 0);
       const gridOY = (pH - gTrimGridHmm) / 2 + (offsetY || 0);
       const dL = gridOX - bleed;
@@ -1345,7 +1352,7 @@ export default function ImpositionCanvas({
       ctx.fillText('ΕΚΤΟΣ ΟΡΙΩΝ ΜΗΧΑΝΗΣ', cW / 2, cH - 16);
     }
 
-  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate, onOffsetChange, contentScale, snapGuide]);
+  }, [impo, sheetW, sheetH, marginTop, marginBottom, marginLeft, marginRight, bleed, gutter, gY, cropMarks, machCat, sides, offsetX, offsetY, showColorBar, colorBarEdge, colorBarOffY, colorBarScale, showPlateSlug, plateSlugEdge, pdf, viewMode, isDuplex, feedEdge, activeSigSheet, sigShowBack, hasSigNav, csNumbering, onGridResize, onRotate, onOffsetChange, contentScale, snapGuide]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -1432,7 +1439,7 @@ export default function ImpositionCanvas({
       const pw = sheetW - marginLeft - marginRight;
       const ph = sheetH - marginTop - marginBottom;
       const trimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
-      const trimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+      const trimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gY;
       const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
       const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
       cx = gridStartX + trimGridWmm / 2;
@@ -1445,7 +1452,7 @@ export default function ImpositionCanvas({
     const hitR = 9 / sc;
     const dist = Math.sqrt((mmX - cx) ** 2 + (mmY - cy) ** 2);
     return dist < hitR;
-  }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, machCat, gutter, offsetX, offsetY, cropMarks, cellBBox]);
+  }, [impo, onRotate, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, machCat, gutter, gY, offsetX, offsetY, cropMarks, cellBBox]);
 
   const findGridBody = useCallback((mmX: number, mmY: number): boolean => {
     if (!onOffsetChange || (impo.mode !== 'nup' && impo.mode !== 'cutstack' && impo.mode !== 'gangrun' && impo.mode !== 'workturn' && impo.mode !== 'perfect_bound' && impo.mode !== 'booklet')) return false;
@@ -1463,12 +1470,12 @@ export default function ImpositionCanvas({
     const pw = sheetW - marginLeft - marginRight;
     const ph = sheetH - marginTop - marginBottom;
     const trimGridWmm = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
-    const trimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+    const trimGridHmm = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gY;
     const gridStartX = (pw - trimGridWmm) / 2 + (offsetX || 0);
     const gridStartY = (ph - trimGridHmm) / 2 + (offsetY || 0);
     return mmX >= gridStartX && mmX <= gridStartX + trimGridWmm &&
            mmY >= gridStartY && mmY <= gridStartY + trimGridHmm;
-  }, [impo, onOffsetChange, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, machCat, gutter, offsetX, offsetY, cellBBox]);
+  }, [impo, onOffsetChange, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, machCat, gutter, gY, offsetX, offsetY, cellBBox]);
 
   // ─── STEP MULTI DRAG ───
   const smDragRef = useRef<{
@@ -1573,7 +1580,7 @@ export default function ImpositionCanvas({
         const pw2 = sheetW - marginLeft - marginRight;
         const ph2 = sheetH - marginTop - marginBottom;
         const tgW = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
-        const tgH = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+        const tgH = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gY;
         const goX = (pw2 - tgW) / 2 + (offsetX || 0);
         const goY = (ph2 - tgH) / 2 + (offsetY || 0);
         const dL = goX - bleed, dR = pw2 - goX - tgW - bleed;
@@ -1619,7 +1626,7 @@ export default function ImpositionCanvas({
     if (zoom <= 1.02) return;
     draggingRef.current = true;
     dragLastRef.current = { x: e.clientX, y: e.clientY };
-  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle, findSmBlock, onGridResize, onRotate, onOffsetChange, onGutterChange, onBleedChange, findGridHandle, findRotateBtn, findGridBody, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
+  }, [zoom, smBlocks, impo, canvasToMM, findSmHandle, findSmBlock, onGridResize, onRotate, onOffsetChange, onGutterChange, onBleedChange, findGridHandle, findRotateBtn, findGridBody, bleed, gutter, gY, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     // N-Up grid drag resize
     if (gridDragRef.current) {
@@ -1631,7 +1638,7 @@ export default function ImpositionCanvas({
         const tW = impo.trimW;
         const tH = impo.trimH;
         const sensX = (tW + gutter) / 2;
-        const sensY = (tH + gutter) / 2;
+        const sensY = (tH + gY) / 2;
         const dragDx = mmX - gridDragRef.current.startMmX;
         const dragDy = mmY - gridDragRef.current.startMmY;
         const startC = gridDragRef.current.startCols;
@@ -1642,7 +1649,7 @@ export default function ImpositionCanvas({
         const capW = isWt ? (isTumble ? sheetW : sheetW / 2) : sheetW;
         const capH = isWt ? (isTumble ? sheetH / 2 : sheetH) : sheetH;
         const maxCols = Math.max(1, Math.floor((capW + gutter) / (tW + gutter)));
-        const maxRows = Math.max(1, Math.floor((capH + gutter) / (tH + gutter)));
+        const maxRows = Math.max(1, Math.floor((capH + gY) / (tH + gY)));
         const newCols = Math.max(1, Math.min(startC + Math.round(dragDx / sensX), maxCols));
         const newRows = Math.max(1, Math.min(startR + Math.round(dragDy / sensY), maxRows));
         if (newCols !== gridDragRef.current.cols || newRows !== gridDragRef.current.rows) {
@@ -1743,8 +1750,8 @@ export default function ImpositionCanvas({
           Math.floor((printW - bx + gutter) / (cellW + gutter)),
         ));
         const newRows = Math.max(1, Math.min(
-          Math.round((dragH + gutter) / (cellH + gutter)),
-          Math.floor((printH - by + gutter) / (cellH + gutter)),
+          Math.round((dragH + gY) / (cellH + gY)),
+          Math.floor((printH - by + gY) / (cellH + gY)),
         ));
         if (newCols !== smDragRef.current.cols || newRows !== smDragRef.current.rows) {
           smDragRef.current.cols = newCols;
@@ -1812,7 +1819,7 @@ export default function ImpositionCanvas({
     panRef.current.y += dy;
     const canvas = canvasRef.current;
     if (canvas) canvas.style.transform = `translate(${panRef.current.x}px,${panRef.current.y}px) scale(${zoom})`;
-  }, [zoom, smBlocks, impo, onSmBlockUpdate, onSmBlockMove, onGridResize, onRotate, onOffsetChange, canvasToMM, findSmHandle, findSmBlock, findGridHandle, findRotateBtn, findGridBody, bleed, gutter, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
+  }, [zoom, smBlocks, impo, onSmBlockUpdate, onSmBlockMove, onGridResize, onRotate, onOffsetChange, canvasToMM, findSmHandle, findSmBlock, findGridHandle, findRotateBtn, findGridBody, bleed, gutter, gY, sheetW, sheetH, marginLeft, marginRight, marginTop, marginBottom, offsetX, offsetY]);
   const onMouseUp = useCallback(() => { draggingRef.current = false; smDragRef.current = null; gridDragRef.current = null; setSnapGuide({ x: null, y: null }); }, []);
   const onDoubleClick = useCallback(() => { setZoom(1); panRef.current = { x: 0, y: 0 }; }, []);
 
@@ -1859,7 +1866,7 @@ export default function ImpositionCanvas({
                 const pw2 = sheetW - marginLeft - marginRight;
                 const ph2 = sheetH - marginTop - marginBottom;
                 const tgW = impo.cols * impo.trimW + Math.max(0, impo.cols - 1) * gutter;
-                const tgH = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gutter;
+                const tgH = impo.rows * impo.trimH + Math.max(0, impo.rows - 1) * gY;
                 // Convert desired distance to offset
                 // distance = (printable - grid) / 2 + offset - bleed → offset = distance + bleed - (printable - grid) / 2
                 if (editDist.side === 'left') {

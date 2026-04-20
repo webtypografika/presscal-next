@@ -26,7 +26,8 @@ export interface ImpositionInput {
   bleed: number;         // mm each side
   qty: number;
   sides: 1 | 2;
-  gutter: number;        // mm between cells
+  gutter: number;        // mm between cells (X axis / cols)
+  gutterY?: number;      // mm between rows (if different from gutter)
   area: PrintableArea;
   forceUps?: number;
   forceCols?: number;
@@ -100,14 +101,14 @@ export function internalBleed(gutter: number, bleed: number): number {
 function bestOrientation(
   pw: number, ph: number,
   trimW: number, trimH: number,
-  bleed: number, gutter: number,
+  bleed: number, gutterX: number, gutterY: number,
 ): { cols: number; rows: number; rotated: boolean } {
-  const cols1 = fitCount(pw, trimW, bleed, gutter);
-  const rows1 = fitCount(ph, trimH, bleed, gutter);
+  const cols1 = fitCount(pw, trimW, bleed, gutterX);
+  const rows1 = fitCount(ph, trimH, bleed, gutterY);
   const ups1 = cols1 * rows1;
 
-  const cols2 = fitCount(pw, trimH, bleed, gutter);
-  const rows2 = fitCount(ph, trimW, bleed, gutter);
+  const cols2 = fitCount(pw, trimH, bleed, gutterX);
+  const rows2 = fitCount(ph, trimW, bleed, gutterY);
   const ups2 = cols2 * rows2;
 
   if (ups2 > ups1) {
@@ -121,12 +122,13 @@ function bestOrientation(
 function buildCells(
   cols: number, rows: number,
   trimW: number, trimH: number,
-  bleed: number, gutter: number,
+  bleed: number, gutterX: number, gutterY: number,
   gridStartX: number, gridStartY: number,
   rotation: number = 0,
   duplexOrient?: 'h2h' | 'h2f' | 'h2f_cols',
 ): ImpositionCell[] {
-  const intBleed = internalBleed(gutter, bleed);
+  const intBleedX = internalBleed(gutterX, bleed);
+  const intBleedY = internalBleed(gutterY, bleed);
   const isH2FRows = duplexOrient === 'h2f';
   const isH2FCols = duplexOrient === 'h2f_cols';
   const cells: ImpositionCell[] = [];
@@ -134,13 +136,13 @@ function buildCells(
     // H2F rows: alternate rows get +180° rotation
     const rowRot = (isH2FRows && r % 2 === 1) ? (rotation + 180) % 360 : rotation;
     for (let c = 0; c < cols; c++) {
-      const bL = c === 0 ? bleed : intBleed;
-      const bR = c === cols - 1 ? bleed : intBleed;
-      const bT = r === 0 ? bleed : intBleed;
-      const bB = r === rows - 1 ? bleed : intBleed;
+      const bL = c === 0 ? bleed : intBleedX;
+      const bR = c === cols - 1 ? bleed : intBleedX;
+      const bT = r === 0 ? bleed : intBleedY;
+      const bB = r === rows - 1 ? bleed : intBleedY;
       // Trim position on the regular grid
-      const trimX = gridStartX + c * (trimW + gutter);
-      const trimY = gridStartY + r * (trimH + gutter);
+      const trimX = gridStartX + c * (trimW + gutterX);
+      const trimY = gridStartY + r * (trimH + gutterY);
       cells.push({
         col: c,
         row: r,
@@ -185,6 +187,8 @@ function wastePercent(paperW: number, paperH: number, usedW: number, usedH: numb
 
 export function calcNUp(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, sides, gutter, area, forceUps, forceCols, forceRows, rotation, duplexOrient } = input;
+  const gX = gutter;
+  const gY = input.gutterY ?? gutter;
 
   const { w: pw, h: ph } = printable(area);
 
@@ -208,20 +212,20 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
     rows = forceRows;
   } else if (forceCols) {
     cols = forceCols;
-    rows = fitCount(fitH, tH, bleed, gutter);
+    rows = fitCount(fitH, tH, bleed, gY);
   } else if (forceRows) {
     rows = forceRows;
-    cols = fitCount(fitW, tW, bleed, gutter);
+    cols = fitCount(fitW, tW, bleed, gX);
   } else if (forceUps) {
-    cols = fitCount(fitW, tW, bleed, gutter);
-    rows = fitCount(fitH, tH, bleed, gutter);
+    cols = fitCount(fitW, tW, bleed, gX);
+    rows = fitCount(fitH, tH, bleed, gY);
     if (cols === 0) cols = 1;
     if (rows === 0) rows = 1;
     while (cols * rows > forceUps && cols > 1) cols--;
     while (cols * rows > forceUps && rows > 1) rows--;
   } else {
     // Try both orientations, pick the one with more ups
-    const best = bestOrientation(area.paperW, area.paperH, tW, tH, bleed, gutter);
+    const best = bestOrientation(area.paperW, area.paperH, tW, tH, bleed, gX, gY);
     cols = best.cols;
     rows = best.rows;
     if (best.rotated) {
@@ -236,8 +240,8 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   const rotated = isSwapped;
 
   // Total footprint: 2*bleed (external) + N*trim + (N-1)*gutter
-  const usedW = 2 * bleed + cols * tW + (cols - 1) * gutter;
-  const usedH = 2 * bleed + rows * tH + (rows - 1) * gutter;
+  const usedW = 2 * bleed + cols * tW + (cols - 1) * gX;
+  const usedH = 2 * bleed + rows * tH + (rows - 1) * gY;
 
   const rawSheets = Math.ceil(qty / ups);
 
@@ -246,13 +250,13 @@ export function calcNUp(input: ImpositionInput): ImpositionResult {
   const cenAreaH = ph;
   const cenBaseX = area.marginLeft;
   const cenBaseY = area.marginTop;
-  const trimGridW = cols * tW + (cols - 1) * gutter;
-  const trimGridH = rows * tH + (rows - 1) * gutter;
+  const trimGridW = cols * tW + (cols - 1) * gX;
+  const trimGridH = rows * tH + (rows - 1) * gY;
   const gridStartX = cenBaseX + (cenAreaW - trimGridW) / 2;
   const gridStartY = cenBaseY + (cenAreaH - trimGridH) / 2;
 
   const cells = buildCells(
-    cols, rows, tW, tH, bleed, gutter,
+    cols, rows, tW, tH, bleed, gX, gY,
     gridStartX, gridStartY,
     contentRotation,
     duplexOrient,
@@ -418,6 +422,8 @@ export function calcBookletCreep(totalSheets: number, paperThicknessMM: number):
 
 export function calcBooklet(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, gutter, area, pages: rawPages, paperThickness = 0, rotation } = input;
+  const gX = gutter;
+  const gY = input.gutterY ?? gutter;
 
   // Pages must be multiple of 4
   const pages = Math.ceil((rawPages || 4) / 4) * 4;
@@ -443,8 +449,8 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   const spreadH = blockRotated ? spreadWnat : spreadHnat;
 
   // How many spreads fit on the sheet (booklet uses its own cell model)
-  const spreadCols = fitCountLegacy(pw, spreadW, gutter);
-  const spreadRows = fitCountLegacy(ph, spreadH, gutter);
+  const spreadCols = fitCountLegacy(pw, spreadW, gX);
+  const spreadRows = fitCountLegacy(ph, spreadH, gY);
   const spreadsPerSheet = Math.max(spreadCols * spreadRows, 1);
 
   // Traditional 2-up booklet imposition: the SAME signature is printed in every
@@ -453,8 +459,8 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   const sheetsNeeded = signatureMap.totalSheets;
   const totalSheets = sheetsNeeded * Math.ceil(qty / spreadsPerSheet);
 
-  const usedW = spreadCols * spreadW + Math.max(0, spreadCols - 1) * gutter;
-  const usedH = spreadRows * spreadH + Math.max(0, spreadRows - 1) * gutter;
+  const usedW = spreadCols * spreadW + Math.max(0, spreadCols - 1) * gX;
+  const usedH = spreadRows * spreadH + Math.max(0, spreadRows - 1) * gY;
 
   // Build cells with page numbers from signature map. Use sig 0 as the preview
   // default — the navigator / activeSigSheet override swaps to the selected sig.
@@ -466,8 +472,8 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
   for (let sr = 0; sr < spreadRows; sr++) {
     for (let sc = 0; sc < spreadCols; sc++) {
       const sig = previewSig; // same sig repeated across every slot on the sheet
-      const baseX = cenOffX + sc * (spreadW + gutter);
-      const baseY = cenOffY + sr * (spreadH + gutter);
+      const baseX = cenOffX + sc * (spreadW + gX);
+      const baseY = cenOffY + sr * (spreadH + gY);
 
       // Natural cell positions within spread (spine vertical): L at (0,0), R at (cellW, 0)
       const natL = { x: 0, y: 0, bL: bleed, bR: 0, bT: bleed, bB: bleed };
@@ -538,8 +544,8 @@ export function calcBooklet(input: ImpositionInput): ImpositionResult {
     // Export layout (consumed by pdf-export.ts exportBooklet)
     spreadsAcross: spreadCols,
     sigsPerSheet: spreadsPerSheet,
-    spineOffset: gutter,
-    rowGap: gutter,
+    spineOffset: gX,
+    rowGap: gY,
     ...marginInfo(area),
   };
 }
@@ -589,6 +595,8 @@ const PB_PAGE_MAP: Record<number, { front: number[][]; back: number[][] }> = {
 
 export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, gutter, area, pages: rawPages, paperThickness = 0.1, rotation } = input;
+  const gX = gutter;
+  const gY = input.gutterY ?? gutter;
 
   const pages = rawPages || 16;
   const spineWidth = (pages / 2) * paperThickness;
@@ -608,8 +616,8 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
     const cW = trimW + bleed; // spine edge = no bleed
     const cH = trimH + bleed * 2;
     const nP = Math.ceil(lay.cols / 2);
-    const bW0 = nP * 2 * cW + (nP > 1 ? gutter : 0);
-    const bH0 = lay.rows * cH + (lay.rows > 1 ? gutter : 0);
+    const bW0 = nP * 2 * cW + (nP > 1 ? gX : 0);
+    const bH0 = lay.rows * cH + (lay.rows > 1 ? gY : 0);
     const checkW = blockRotated ? bH0 : bW0;
     const checkH = blockRotated ? bW0 : bH0;
     if (checkW <= pw && checkH <= ph) {
@@ -627,8 +635,8 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   // Natural (unrotated) block dimensions
   const numPairs = Math.ceil(layout.cols / 2);
   const pairW = 2 * cellW;
-  const blockWnat = numPairs * pairW + (numPairs > 1 ? gutter : 0);
-  const blockHnat = layout.rows * cellH + (layout.rows > 1 ? gutter : 0);
+  const blockWnat = numPairs * pairW + (numPairs > 1 ? gX : 0);
+  const blockHnat = layout.rows * cellH + (layout.rows > 1 ? gY : 0);
   // Effective block dimensions on sheet (after rotation)
   const blockW = blockRotated ? blockHnat : blockWnat;
   const blockH = blockRotated ? blockWnat : blockHnat;
@@ -692,7 +700,7 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
   // Each block shows the fold pattern (canvas uses the active signature for actual page numbers).
   const cells: ImpositionCell[] = [];
   if (foldMap) {
-    const interPairGap = numPairs > 1 ? gutter : 0;
+    const interPairGap = numPairs > 1 ? gX : 0;
     const halfwayMark = Math.floor(layout.rows / 2);
 
     for (let by = 0; by < sigsDown; by++) {
@@ -711,7 +719,7 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
             // Cell position/size in NATURAL (unrotated) block frame (origin = block top-left)
             const natX = pairIdx * (pairW + interPairGap) + colInPair * cellW;
             const isInBottomHalf = layout.rows > 1 && r >= halfwayMark;
-            const natY = r * cellH + (isInBottomHalf ? gutter : 0);
+            const natY = r * cellH + (isInBottomHalf ? gY : 0);
             const bL0 = colInPair === 0 ? bleed : 0;
             const bR0 = colInPair === 1 ? bleed : 0;
             const bT0 = bleed;
@@ -784,8 +792,8 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
     sigsPerSheet,
     blockGapH,
     blockGapV,
-    gapVmm: numPairs > 1 ? gutter : 0,
-    gapHmm: layout.rows > 1 ? gutter : 0,
+    gapVmm: numPairs > 1 ? gX : 0,
+    gapHmm: layout.rows > 1 ? gY : 0,
     canRepeat,
     totalPressSheets,
     pbSignatures,
@@ -799,6 +807,8 @@ export function calcPerfectBound(input: ImpositionInput): ImpositionResult {
 
 export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, gutter, area, rotation, turnType = 'turn', forceCols, forceRows } = input;
+  const gX = gutter;
+  const gY = input.gutterY ?? gutter;
 
   const { w: pw, h: ph } = printable(area);
   const rot = ((rotation || 0) % 360 + 360) % 360;
@@ -810,11 +820,11 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
 
   // ─── Step 1: Auto-orient — find best base orientation ───
   let tW = trimW, tH = trimH;
-  const cols1 = fitCount(halfW, tW, bleed, gutter);
-  const rows1 = fitCount(halfH, tH, bleed, gutter);
+  const cols1 = fitCount(halfW, tW, bleed, gX);
+  const rows1 = fitCount(halfH, tH, bleed, gY);
   const fit1 = cols1 * rows1;
-  const cols2 = fitCount(halfW, tH, bleed, gutter);
-  const rows2 = fitCount(halfH, tW, bleed, gutter);
+  const cols2 = fitCount(halfW, tH, bleed, gX);
+  const rows2 = fitCount(halfH, tW, bleed, gY);
   const fit2 = cols2 * rows2;
 
   let autoRotated = fit2 > fit1;
@@ -829,8 +839,8 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
 
   // Re-compute fit with final trim dimensions. forceCols/forceRows override the auto-fit
   // (interpreted as PER-HALF for W&T, since the layout is split between two halves).
-  const autoCols = fitCount(halfW, tW, bleed, gutter);
-  const autoRows = fitCount(halfH, tH, bleed, gutter);
+  const autoCols = fitCount(halfW, tW, bleed, gX);
+  const autoRows = fitCount(halfH, tH, bleed, gY);
   const cols = forceCols && forceCols > 0 ? forceCols : autoCols;
   const rows = forceRows && forceRows > 0 ? forceRows : autoRows;
   const fitsPerHalf = cols * rows;
@@ -864,8 +874,8 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
     : frontRot;
 
   // Trim grid per half
-  const trimGridW = cols * tW + (cols - 1) * gutter;
-  const trimGridH = rows * tH + (rows - 1) * gutter;
+  const trimGridW = cols * tW + (cols - 1) * gX;
+  const trimGridH = rows * tH + (rows - 1) * gY;
 
   // Center in printable half (margins define center)
   const printHalfW = isTumble ? pw : pw / 2;
@@ -873,19 +883,20 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
   const gridOffX = (printHalfW - trimGridW) / 2;
   const gridOffY = (printHalfH - trimGridH) / 2;
 
-  const intBleed = internalBleed(gutter, bleed);
+  const intBleedX = internalBleed(gX, bleed);
+  const intBleedY = internalBleed(gY, bleed);
 
   // Build cells with asymmetric bleed
   const cells: ImpositionCell[] = [];
   const buildHalfCells = (baseX: number, baseY: number, pageNum: number, cellRot: number, colOffset: number, rowOffset: number) => {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        const bL = c === 0 ? bleed : intBleed;
-        const bR = c === cols - 1 ? bleed : intBleed;
-        const bT = r === 0 ? bleed : intBleed;
-        const bB = r === rows - 1 ? bleed : intBleed;
-        const trimX = baseX + gridOffX + c * (tW + gutter);
-        const trimY = baseY + gridOffY + r * (tH + gutter);
+        const bL = c === 0 ? bleed : intBleedX;
+        const bR = c === cols - 1 ? bleed : intBleedX;
+        const bT = r === 0 ? bleed : intBleedY;
+        const bB = r === rows - 1 ? bleed : intBleedY;
+        const trimX = baseX + gridOffX + c * (tW + gX);
+        const trimY = baseY + gridOffY + r * (tH + gY);
         cells.push({
           col: colOffset + c, row: rowOffset + r,
           x: trimX - bL, y: trimY - bT,
@@ -905,12 +916,12 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
     for (let r = 0; r < rows; r++) {
       // Left half cells
       for (let c = 0; c < cols; c++) {
-        const bL = c === 0 ? bleed : intBleed;
-        const bR = c === cols - 1 ? bleed : intBleed;
-        const bT = r === 0 ? bleed : intBleed;
-        const bB = r === rows - 1 ? bleed : intBleed;
-        const trimX = area.marginLeft + gridOffX + c * (tW + gutter);
-        const trimY = area.marginTop + gridOffY + r * (tH + gutter);
+        const bL = c === 0 ? bleed : intBleedX;
+        const bR = c === cols - 1 ? bleed : intBleedX;
+        const bT = r === 0 ? bleed : intBleedY;
+        const bB = r === rows - 1 ? bleed : intBleedY;
+        const trimX = area.marginLeft + gridOffX + c * (tW + gX);
+        const trimY = area.marginTop + gridOffY + r * (tH + gY);
         cells.push({
           col: c, row: r,
           x: trimX - bL, y: trimY - bT,
@@ -921,12 +932,12 @@ export function calcWorkTurn(input: ImpositionInput): ImpositionResult {
       }
       // Right half cells
       for (let c = 0; c < cols; c++) {
-        const bL = c === 0 ? bleed : intBleed;
-        const bR = c === cols - 1 ? bleed : intBleed;
-        const bT = r === 0 ? bleed : intBleed;
-        const bB = r === rows - 1 ? bleed : intBleed;
-        const trimX = area.marginLeft + printHalfW + gridOffX + c * (tW + gutter);
-        const trimY = area.marginTop + gridOffY + r * (tH + gutter);
+        const bL = c === 0 ? bleed : intBleedX;
+        const bR = c === cols - 1 ? bleed : intBleedX;
+        const bT = r === 0 ? bleed : intBleedY;
+        const bB = r === rows - 1 ? bleed : intBleedY;
+        const trimX = area.marginLeft + printHalfW + gridOffX + c * (tW + gX);
+        const trimY = area.marginTop + gridOffY + r * (tH + gY);
         cells.push({
           col: cols + c, row: r,
           x: trimX - bL, y: trimY - bT,
@@ -1072,14 +1083,15 @@ function findFreePosition(
   printW: number, printH: number,
   blocks: StepBlock[],
   skipIdx: number,
-  gutter: number,
+  gutterX: number,
+  gutterY: number,
 ): { x: number; y: number } {
   // Try right of each existing block
   for (let i = 0; i < blocks.length; i++) {
     if (i === skipIdx) continue;
     const b = blocks[i];
     if (b.blockW === 0) continue;
-    const testX = b.x + b.blockW + gutter;
+    const testX = b.x + b.blockW + gutterX;
     const testY = b.y;
     if (testX + blockW <= printW + 0.1 && testY + blockH <= printH + 0.1) {
       let overlaps = false;
@@ -1102,7 +1114,7 @@ function findFreePosition(
     const b = blocks[i];
     if (b.blockH === 0) continue;
     const testX = b.x;
-    const testY = b.y + b.blockH + gutter;
+    const testY = b.y + b.blockH + gutterY;
     if (testX + blockW <= printW + 0.1 && testY + blockH <= printH + 0.1) {
       let overlaps = false;
       for (let j = 0; j < blocks.length; j++) {
@@ -1125,7 +1137,7 @@ function findFreePosition(
 function calcStepBlocks(
   blocks: StepBlock[],
   printW: number, printH: number,
-  gutter: number, bleed: number,
+  gutterX: number, gutterY: number, bleed: number,
 ): void {
   // Precompute cell sizes per block
   const cellSizes = blocks.map(block => {
@@ -1146,16 +1158,16 @@ function calcStepBlocks(
     const { cellW, cellH } = cellSizes[bi];
     const availW = printW - block.x;
     const availH = printH - block.y;
-    block.cols = Math.max(1, Math.floor((availW + gutter) / (cellW + gutter)));
-    block.rows = Math.max(1, Math.floor((availH + gutter) / (cellH + gutter)));
-    if (block.cols * cellW + (block.cols - 1) * gutter > availW + 0.01) block.cols = Math.max(1, block.cols - 1);
-    if (block.rows * cellH + (block.rows - 1) * gutter > availH + 0.01) block.rows = Math.max(1, block.rows - 1);
-    block.blockW = block.cols * cellW + Math.max(0, block.cols - 1) * gutter;
-    block.blockH = block.rows * cellH + Math.max(0, block.rows - 1) * gutter;
+    block.cols = Math.max(1, Math.floor((availW + gutterX) / (cellW + gutterX)));
+    block.rows = Math.max(1, Math.floor((availH + gutterY) / (cellH + gutterY)));
+    if (block.cols * cellW + (block.cols - 1) * gutterX > availW + 0.01) block.cols = Math.max(1, block.cols - 1);
+    if (block.rows * cellH + (block.rows - 1) * gutterY > availH + 0.01) block.rows = Math.max(1, block.rows - 1);
+    block.blockW = block.cols * cellW + Math.max(0, block.cols - 1) * gutterX;
+    block.blockH = block.rows * cellH + Math.max(0, block.rows - 1) * gutterY;
   } else if (N > 1) {
     // Multiple auto-blocks: stack vertically, each gets a fair share of height
     // Allocate strips: divide printH into N strips
-    const stripH = (printH - (N - 1) * gutter) / N;
+    const stripH = (printH - (N - 1) * gutterY) / N;
     let curY = 0;
 
     for (let ai = 0; ai < N; ai++) {
@@ -1167,19 +1179,19 @@ function calcStepBlocks(
       block.y = curY;
 
       // Max cols in full width
-      let maxC = Math.max(1, Math.floor((printW + gutter) / (cellW + gutter)));
-      if (maxC * cellW + (maxC - 1) * gutter > printW + 0.01) maxC = Math.max(1, maxC - 1);
+      let maxC = Math.max(1, Math.floor((printW + gutterX) / (cellW + gutterX)));
+      if (maxC * cellW + (maxC - 1) * gutterX > printW + 0.01) maxC = Math.max(1, maxC - 1);
 
       // Max rows in this strip
-      let maxR = Math.max(1, Math.floor((stripH + gutter) / (cellH + gutter)));
-      if (maxR * cellH + (maxR - 1) * gutter > stripH + 0.01) maxR = Math.max(1, maxR - 1);
+      let maxR = Math.max(1, Math.floor((stripH + gutterY) / (cellH + gutterY)));
+      if (maxR * cellH + (maxR - 1) * gutterY > stripH + 0.01) maxR = Math.max(1, maxR - 1);
 
       block.cols = maxC;
       block.rows = maxR;
-      block.blockW = maxC * cellW + Math.max(0, maxC - 1) * gutter;
-      block.blockH = maxR * cellH + Math.max(0, maxR - 1) * gutter;
+      block.blockW = maxC * cellW + Math.max(0, maxC - 1) * gutterX;
+      block.blockH = maxR * cellH + Math.max(0, maxR - 1) * gutterY;
 
-      curY += block.blockH + gutter;
+      curY += block.blockH + gutterY;
     }
   }
 
@@ -1189,8 +1201,8 @@ function calcStepBlocks(
     const { cellW, cellH } = cellSizes[bi];
 
     if (block.blockW === 0) {
-      block.blockW = block.cols * cellW + Math.max(0, block.cols - 1) * gutter;
-      block.blockH = block.rows * cellH + Math.max(0, block.rows - 1) * gutter;
+      block.blockW = block.cols * cellW + Math.max(0, block.cols - 1) * gutterX;
+      block.blockH = block.rows * cellH + Math.max(0, block.rows - 1) * gutterY;
     }
 
     if (block.x + block.blockW > printW + 0.1) block.x = Math.max(0, printW - block.blockW);
@@ -1263,6 +1275,8 @@ export function stepOverlaps(
 
 export function calcStepMulti(input: ImpositionInput): ImpositionResult {
   const { trimW, trimH, bleed, qty, gutter, area } = input;
+  const gX = gutter;
+  const gY = input.gutterY ?? gutter;
   const { w: pw, h: ph } = printable(area);
 
   // Copy blocks to avoid mutating input
@@ -1284,7 +1298,7 @@ export function calcStepMulti(input: ImpositionInput): ImpositionResult {
   }
 
   // Calculate block dimensions + auto-place
-  calcStepBlocks(blocks, pw, ph, gutter, bleed);
+  calcStepBlocks(blocks, pw, ph, gX, gY, bleed);
 
   // Calculate total UPs across all blocks
   let totalUps = 0;
@@ -1308,8 +1322,8 @@ export function calcStepMulti(input: ImpositionInput): ImpositionResult {
         cells.push({
           col: c,
           row: r,
-          x: area.marginLeft + block.x + c * (cellW + gutter),
-          y: area.marginTop + block.y + r * (cellH + gutter),
+          x: area.marginLeft + block.x + c * (cellW + gX),
+          y: area.marginTop + block.y + r * (cellH + gY),
           w: cellW,
           h: cellH,
           pageNum: block.pageNum,

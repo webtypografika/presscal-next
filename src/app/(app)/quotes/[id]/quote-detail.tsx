@@ -91,6 +91,7 @@ function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: s
     if (cd.impositionMode != null) p.set('impoMode', cd.impositionMode as string);
     if (cd.impoRotation != null) p.set('impoRotation', String(cd.impoRotation));
     if (cd.impoGutter != null) p.set('impoGutter', String(cd.impoGutter));
+    if (cd.impoGutterY != null) p.set('impoGutterY', String(cd.impoGutterY));
     if (cd.impoForceUps != null) p.set('impoForceUps', String(cd.impoForceUps));
     if (cd.impoForceCols != null) p.set('impoForceCols', String(cd.impoForceCols));
     if (cd.impoForceRows != null) p.set('impoForceRows', String(cd.impoForceRows));
@@ -151,7 +152,8 @@ function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: s
       p.set('h', String(lf.height));
     }
     if (lf.pages) p.set('pages', String(lf.pages));
-    if (lf.colors) {
+    if (lf.colors && !cd?.offsetFrontCmyk) {
+      // Only use linkedFile colors if calcData hasn't set them (first-time costing)
       const c = lf.colors as string;
       if (c.includes('/')) {
         const cm = c.match(/(\d+)\s*\/\s*(\d+)/);

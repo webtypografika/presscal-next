@@ -521,6 +521,8 @@ export default function CalculatorShell() {
 
   // Imposition settings
   const [impoGutter, setImpoGutter] = useState(6);
+  const [impoGutterY, setImpoGutterY] = useState<number | null>(null); // null = same as X
+  const [gutterLinked, setGutterLinked] = useState(true); // linked = same X/Y
   const [impoBleedOverride, setImpoBleedOverride] = useState<number | null>(null); // null = use job.bleed
   const [impoContentScale, setImpoContentScale] = useState(100); // % content scale (100 = 1:1)
   const [impoCropMarks, setImpoCropMarks] = useState(true);
@@ -795,8 +797,8 @@ export default function CalculatorShell() {
     const oilVarnish = searchParams.get('oilVarnish');
     const coverageLevel = searchParams.get('coverageLevel');
     if (colorsF || colorsB || colorMode) {
-      const f = parseInt(colorsF || '4');
-      const b = parseInt(colorsB || '0');
+      const f = colorsF != null ? parseInt(colorsF) : 4;
+      const b = colorsB != null ? parseInt(colorsB) : 0;
       setColor(prev => ({
         ...prev,
         model: colorMode === 'bw' ? 'bw' : (f <= 1 && b <= 1) ? 'bw' : 'cmyk',
@@ -837,6 +839,8 @@ export default function CalculatorShell() {
     if (imRot) setImpoRotation(parseInt(imRot));
     const imGut = searchParams.get('impoGutter');
     if (imGut) setImpoGutter(parseFloat(imGut));
+    const imGutY = searchParams.get('impoGutterY');
+    if (imGutY) { setImpoGutterY(parseFloat(imGutY)); setGutterLinked(false); }
     const imForce = searchParams.get('impoForceUps');
     if (imForce) setImpoForceUps(parseInt(imForce));
     const imForceCols = searchParams.get('impoForceCols');
@@ -1101,6 +1105,7 @@ export default function CalculatorShell() {
   // No gutter clamp: the engine uses progressive internal bleed (imposition.ts internalBleed)
   // so gutter=0 with bleed>0 yields μονοτομή (no internal bleed, outer bleed only).
   const engineGutter = impoGutter;
+  const engineGutterY = impoGutterY ?? impoGutter;
 
   const impoInput: ImpositionInput = {
     mode: impoMode,
@@ -1110,6 +1115,7 @@ export default function CalculatorShell() {
     qty: job.qty,
     sides: job.sides,
     gutter: engineGutter,
+    gutterY: engineGutterY !== engineGutter ? engineGutterY : undefined,
     area: {
       paperW: vizW,
       paperH: vizH,
@@ -1154,7 +1160,7 @@ export default function CalculatorShell() {
     pdfPageSizes: pdf?.pageSizes?.map((p: any) => ({ trimW: p.trimW, trimH: p.trimH })),
     sourceFileName: pdf?.fileName, machineCat: machine.cat as 'digital' | 'offset',
     machineName: machine.name, paperName: paper?.name,
-    jobW: job.width, jobH: job.height, bleed: effectiveBleed, gutter: impoGutter,
+    jobW: job.width, jobH: job.height, bleed: effectiveBleed, gutter: impoGutter, gutterY: engineGutterY !== engineGutter ? engineGutterY : undefined,
     contentScale: impoContentScale, showCropMarks: impoCropMarks,
     showRegistration: machine.cat === 'offset', showColorBar: impoColorBar,
     colorBarType: impoColorBarType as 'cmyk' | 'cmyk_tint50',
@@ -1240,6 +1246,7 @@ export default function CalculatorShell() {
           impoRotation: impoRotation || (job.rotation ? 90 : 0),
           impoDuplexOrient: impoDuplexOrient,
           impoGutter: impoGutter,
+          impoGutterY: engineGutterY !== engineGutter ? engineGutterY : undefined,
           pages: (impoMode === 'booklet' || job.archetype === 'booklet') ? job.pages
             : (impoMode === 'perfect_bound' || job.archetype === 'perfect_bound') ? job.bodyPages
             : finish.binding === 'spiral' ? (job.bodyPages || job.pages)
@@ -1301,7 +1308,7 @@ export default function CalculatorShell() {
         .finally(() => setCalculating(false));
     }, 300);
     return () => { if (calcTimer.current) clearTimeout(calcTimer.current); };
-  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, feedEdge, impoMode, impoGutter, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage, overrides, prodMultiplier, gangJobs, gangCellAssign, smBlocks, csStackOrder, csStartNum]);
+  }, [machine.id, activePaperId, job, color, wasteFixed, sheetW, sheetH, feedEdge, impoMode, impoGutter, impoGutterY, impoRotation, impoDuplexOrient, impoForceUps, impoForceCols, impoForceRows, impoBleedOverride, impoCropMarks, effectiveBleed, finish, pdf?.coverage, overrides, prodMultiplier, gangJobs, gangCellAssign, smBlocks, csStackOrder, csStartNum]);
 
   // ─── DISPLAY VALUES ───
   const r = calcResult;
@@ -1626,6 +1633,7 @@ export default function CalculatorShell() {
                 impositionMode: impoMode,
                 impoRotation: impoRotation || (job.rotation ? 90 : 0),
                 impoGutter,
+                impoGutterY: engineGutterY !== engineGutter ? engineGutterY : undefined,
                 impoForceUps: impoForceUps ?? undefined,
                 impoForceCols: impoForceCols ?? undefined,
                 impoForceRows: impoForceRows ?? undefined,
@@ -3916,6 +3924,7 @@ export default function CalculatorShell() {
                 marginRight={machine?.marginRight || 0}
                 bleed={effectiveBleed}
                 gutter={engineGutter}
+                gutterY={engineGutterY !== engineGutter ? engineGutterY : undefined}
                 cropMarks={impoCropMarks}
                 machCat={machine?.cat as 'digital' | 'offset' | undefined}
                 sides={job.sides}
@@ -4003,16 +4012,51 @@ export default function CalculatorShell() {
                   borderRadius: 5, padding: '2px 4px',
                 }}>
                   <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#f58220' }}>Gutter</span>
-                  <input
-                    type="number" step="0.5" min="0"
-                    value={impoGutter}
-                    onChange={e => setImpoGutter(Math.max(0, parseFloat(e.target.value) || 0))}
+                  {gutterLinked ? (
+                    <input
+                      type="number" step="0.5" min="0"
+                      value={impoGutter}
+                      onChange={e => { const v = Math.max(0, parseFloat(e.target.value) || 0); setImpoGutter(v); setImpoGutterY(null); }}
+                      style={{
+                        width: 36, height: 18, fontSize: '0.6rem', fontWeight: 600, textAlign: 'center',
+                        border: '1px solid rgba(245,130,32,0.3)', borderRadius: 3,
+                        background: 'rgba(0,0,0,0.4)', color: '#f58220', outline: 'none', padding: 0,
+                      }}
+                    />
+                  ) : (<>
+                    <span style={{ fontSize: '0.5rem', color: '#f58220', opacity: 0.7 }}>X</span>
+                    <input
+                      type="number" step="0.5" min="0"
+                      value={impoGutter}
+                      onChange={e => setImpoGutter(Math.max(0, parseFloat(e.target.value) || 0))}
+                      style={{
+                        width: 30, height: 18, fontSize: '0.6rem', fontWeight: 600, textAlign: 'center',
+                        border: '1px solid rgba(245,130,32,0.3)', borderRadius: 3,
+                        background: 'rgba(0,0,0,0.4)', color: '#f58220', outline: 'none', padding: 0,
+                      }}
+                    />
+                    <span style={{ fontSize: '0.5rem', color: '#f58220', opacity: 0.7 }}>Y</span>
+                    <input
+                      type="number" step="0.5" min="0"
+                      value={impoGutterY ?? impoGutter}
+                      onChange={e => setImpoGutterY(Math.max(0, parseFloat(e.target.value) || 0))}
+                      style={{
+                        width: 30, height: 18, fontSize: '0.6rem', fontWeight: 600, textAlign: 'center',
+                        border: '1px solid rgba(245,130,32,0.3)', borderRadius: 3,
+                        background: 'rgba(0,0,0,0.4)', color: '#f58220', outline: 'none', padding: 0,
+                      }}
+                    />
+                  </>)}
+                  <button
+                    onClick={() => { if (!gutterLinked) { setImpoGutterY(null); } setGutterLinked(!gutterLinked); }}
+                    title={gutterLinked ? 'Ξεχωριστό gutter ανά άξονα' : 'Κοινό gutter'}
                     style={{
-                      width: 36, height: 18, fontSize: '0.6rem', fontWeight: 600, textAlign: 'center',
-                      border: '1px solid rgba(245,130,32,0.3)', borderRadius: 3,
-                      background: 'rgba(0,0,0,0.4)', color: '#f58220', outline: 'none', padding: 0,
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '0.55rem',
+                      color: gutterLinked ? '#f58220' : 'rgba(245,130,32,0.5)',
                     }}
-                  />
+                  >
+                    <i className={gutterLinked ? 'fas fa-link' : 'fas fa-unlink'} />
+                  </button>
                 </div>
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 2,

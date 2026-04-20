@@ -524,6 +524,7 @@ export async function POST(req: NextRequest) {
       qty: body.qty,
       sides: body.sides,
       gutter: body.impoGutter || 0,
+      gutterY: body.impoGutterY ?? undefined,
       area,
       forceUps: body.impoForceUps,
       forceCols: body.impoForceCols,

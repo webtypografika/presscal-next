@@ -30,6 +30,7 @@ export interface CalculatorInput {
   impoRotation: 0 | 90 | 180 | 270;
   impoDuplexOrient: 'h2h' | 'h2f' | 'h2f_cols';
   impoGutter: number;
+  impoGutterY?: number;
   impoBleed: number;
   impoForceUps?: number;
   impoForceCols?: number;
