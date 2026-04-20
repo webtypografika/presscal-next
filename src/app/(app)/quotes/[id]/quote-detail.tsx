@@ -1466,6 +1466,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             ?? (quote as any).contact?.email
             ?? (quote as any).company?.email
             ?? quote.customer?.email
+            ?? emailSender?.email
             ?? ''
           }
           threadId={quote.threadId}
@@ -1579,7 +1580,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           key={customerId}
           quoteId={quote.id}
           quoteNumber={quote.number}
-          customerEmail={primaryContact?.email || selectedCompany?.email || ''}
+          customerEmail={primaryContact?.email || selectedCompany?.email || selectedContact?.email || emailSender?.email || ''}
           customerName={customerName}
           grandTotal={grandTotal}
           companyContacts={selectedCompany?.companyContacts || []}
