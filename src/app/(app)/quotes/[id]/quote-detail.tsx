@@ -449,6 +449,9 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [saving, setSaving] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoicing, setInvoicing] = useState(false);
+  const [showAfmPrompt, setShowAfmPrompt] = useState(false);
+  const [promptAfm, setPromptAfm] = useState('');
   const [showCourierModal, setShowCourierModal] = useState(false);
   const [courierVoucher, setCourierVoucher] = useState(quote.courierVoucherId || '');
   const [leftTab, setLeftTab] = useState<'email' | 'files'>((quote as any).fileLinks?.length > 0 ? 'files' : 'email');
@@ -480,6 +483,84 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const customerInfoEmail = selectedCompany?.email || (!selectedCompany && ((quote as any).contact?.email || emailSender?.email)) || '';
   const customerInfoPhone = selectedCompany?.phone || (!selectedCompany && (quote as any).contact?.phone) || '';
   const selectedContact = (quote as any).contact ?? null;
+
+  // One-click invoice: auto-detect best path
+  const handleOneClickInvoice = useCallback(async () => {
+    const elorusId = quote.elorusContactId || (selectedCompany as any)?.elorusContactId || quote.customer?.elorusContactId;
+    const afm = selectedCompany?.afm || quote.customer?.afm;
+
+    if (elorusId) {
+      setInvoicing(true);
+      try {
+        const res = await fetch('/api/elorus/invoice', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quoteId: quote.id, elorusContactId: elorusId, clientAfm: afm }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setQuote(prev => ({ ...prev, elorusInvoiceId: data.invoiceId, elorusInvoiceUrl: data.invoiceUrl, elorusContactId: data.contactId }));
+          toast('Τιμολόγιο δημιουργήθηκε!');
+        } else { toast(data.error || 'Σφάλμα', 'error'); }
+      } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); }
+      setInvoicing(false);
+      return;
+    }
+
+    if (afm && afm.length === 9) {
+      setInvoicing(true);
+      try {
+        const lookupRes = await fetch('/api/elorus/lookup-afm', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ afm }),
+        });
+        const lookupData = await lookupRes.json();
+        if (!lookupRes.ok) { toast(lookupData.error || 'Σφάλμα ΑΑΔΕ', 'error'); setInvoicing(false); return; }
+        const cId = lookupData.elorusContactId;
+        if (!cId) { toast('Δεν δημιουργήθηκε επαφή Elorus', 'error'); setInvoicing(false); return; }
+        const res = await fetch('/api/elorus/invoice', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quoteId: quote.id, elorusContactId: cId, clientAfm: afm }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          setQuote(prev => ({ ...prev, elorusInvoiceId: data.invoiceId, elorusInvoiceUrl: data.invoiceUrl, elorusContactId: data.contactId }));
+          toast('Τιμολόγιο δημιουργήθηκε!');
+        } else { toast(data.error || 'Σφάλμα', 'error'); }
+      } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); }
+      setInvoicing(false);
+      return;
+    }
+
+    // No AFM → ask for it
+    setShowAfmPrompt(true);
+    setPromptAfm('');
+  }, [quote, selectedCompany, toast]);
+
+  const handleAfmPromptInvoice = useCallback(async () => {
+    if (promptAfm.length !== 9) return;
+    setShowAfmPrompt(false);
+    setInvoicing(true);
+    try {
+      const lookupRes = await fetch('/api/elorus/lookup-afm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ afm: promptAfm }),
+      });
+      const lookupData = await lookupRes.json();
+      if (!lookupRes.ok) { toast(lookupData.error || 'Σφάλμα ΑΑΔΕ', 'error'); setInvoicing(false); return; }
+      const cId = lookupData.elorusContactId;
+      if (!cId) { toast('Δεν δημιουργήθηκε επαφή Elorus', 'error'); setInvoicing(false); return; }
+      const res = await fetch('/api/elorus/invoice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quoteId: quote.id, elorusContactId: cId, clientAfm: promptAfm }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setQuote(prev => ({ ...prev, elorusInvoiceId: data.invoiceId, elorusInvoiceUrl: data.invoiceUrl, elorusContactId: data.contactId }));
+        toast('Τιμολόγιο δημιουργήθηκε!');
+      } else { toast(data.error || 'Σφάλμα', 'error'); }
+    } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); }
+    setInvoicing(false);
+  }, [promptAfm, quote.id, toast]);
 
   // Fetch sender from first linked email as last-resort fallback
   useEffect(() => {
@@ -991,14 +1072,59 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             </button>
           )}
           {elorusConfigured && !quote.elorusInvoiceId && (
-            <button onClick={() => setShowInvoiceModal(true)} style={{
-              padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
-              background: 'color-mix(in srgb, #818cf8 15%, transparent)',
-              border: '1px solid color-mix(in srgb, #818cf8 30%, transparent)',
-              color: '#a5b4fc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
-            }}>
-              <i className="fas fa-file-invoice-dollar" style={{ fontSize: '0.5rem' }} />Τιμολόγηση
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button onClick={handleOneClickInvoice} disabled={invoicing} style={{
+                padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 600,
+                background: 'color-mix(in srgb, #818cf8 15%, transparent)',
+                border: '1px solid color-mix(in srgb, #818cf8 30%, transparent)',
+                color: '#a5b4fc', cursor: invoicing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap',
+                opacity: invoicing ? 0.6 : 1,
+              }}>
+                {invoicing
+                  ? <><i className="fas fa-spinner fa-spin" style={{ fontSize: '0.5rem' }} />Τιμολόγηση...</>
+                  : <><i className="fas fa-file-invoice-dollar" style={{ fontSize: '0.5rem' }} />Τιμολόγηση</>
+                }
+              </button>
+              {showAfmPrompt && createPortal(
+                <>
+                  <div onClick={() => setShowAfmPrompt(false)} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} />
+                  <div style={{
+                    position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
+                    width: 320, padding: 20, borderRadius: 12,
+                    background: 'var(--glass-bg, #1e293b)', border: '1px solid var(--glass-border)',
+                    backdropFilter: 'blur(20px)', boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+                  }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: 12 }}>
+                      <i className="fas fa-file-invoice-dollar" style={{ color: '#818cf8', marginRight: 6 }} />
+                      Τιμολόγηση — ΑΦΜ
+                    </div>
+                    <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 10 }}>
+                      Δεν βρέθηκε ΑΦΜ στην εταιρεία. Πληκτρολογήστε το ΑΦΜ:
+                    </p>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        autoFocus value={promptAfm} onChange={e => setPromptAfm(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                        placeholder="9 ψηφία" maxLength={9}
+                        onKeyDown={e => { if (e.key === 'Enter' && promptAfm.length === 9) handleAfmPromptInvoice(); }}
+                        style={{
+                          flex: 1, padding: '8px 10px', borderRadius: 6, fontSize: '0.9rem',
+                          background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)',
+                          color: 'var(--text)', outline: 'none', letterSpacing: '0.1em', fontVariantNumeric: 'tabular-nums',
+                        }}
+                      />
+                      <button onClick={handleAfmPromptInvoice} disabled={promptAfm.length !== 9} style={{
+                        padding: '8px 14px', borderRadius: 6, border: 'none',
+                        background: promptAfm.length === 9 ? '#818cf8' : '#334155',
+                        color: '#fff', fontSize: '0.8rem', fontWeight: 700, cursor: promptAfm.length === 9 ? 'pointer' : 'not-allowed',
+                      }}>
+                        Τιμολόγηση
+                      </button>
+                    </div>
+                  </div>
+                </>,
+                document.body
+              )}
+            </div>
           )}
           {elorusConfigured && quote.elorusInvoiceId && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
