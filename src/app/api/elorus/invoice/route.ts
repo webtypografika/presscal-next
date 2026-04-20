@@ -77,6 +77,8 @@ export async function POST(req: NextRequest) {
         first_name: '',
         tin: afm || '000000000',
         tin_authority: autoDoy,
+        profession: comp?.activities || '',
+        vat_status: 'normal',
         country: 'GR',
         is_client: true,
         active: true,

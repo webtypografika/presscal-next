@@ -134,6 +134,8 @@ export async function POST(req: NextRequest) {
         company: result.onomasia,
         tin: afm,
         tin_authority: result.doy_descr || '',
+        profession: result.firm_act_descr || '',
+        vat_status: 'normal',
         country: 'GR',
         is_client: true,
         is_supplier: false,
