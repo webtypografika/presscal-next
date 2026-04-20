@@ -85,6 +85,8 @@ export async function POST(req: NextRequest) {
         company: autoName,
         first_name: '',
         vat_number: afm || '',
+        tin: afm || '',
+        tin_authority: comp?.doy || '',
         profession: comp?.activities || '',
         is_client: true,
         is_supplier: false,

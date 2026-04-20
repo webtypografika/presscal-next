@@ -133,6 +133,8 @@ export async function POST(req: NextRequest) {
         client_type: '1',
         company: result.onomasia,
         vat_number: afm,
+        tin: afm,
+        tin_authority: result.doy_descr || '',
         profession: result.firm_act_descr || '',
         country: 'GR',
         is_client: true,

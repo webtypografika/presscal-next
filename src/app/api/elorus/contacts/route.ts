@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
         company: company || '',
         first_name: firstName || '',
         vat_number: afm,
+        tin: afm,
+        tin_authority: doy || '',
         profession: profession || '',
         is_client: true,
         is_supplier: false,
