@@ -3916,6 +3916,25 @@ function ElorusInvoiceModal({ quoteId, quoteNumber, customerName, customerAfm, c
     }
   }
 
+  // Auto-invoice: has AFM but no elorusContactId — lookup + create + invoice in one step
+  async function autoInvoiceWithAfm() {
+    if (!customerAfm || customerAfm.length !== 9) return;
+    setCreating(true);
+    try {
+      // Step 1: lookup AFM → auto-creates Elorus contact
+      const lookupRes = await fetch('/api/elorus/lookup-afm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ afm: customerAfm }),
+      });
+      const lookupData = await lookupRes.json();
+      if (!lookupRes.ok) { toast(lookupData.error || 'Σφάλμα ΑΑΔΕ lookup', 'error'); setCreating(false); return; }
+      const contactId = lookupData.elorusContactId;
+      if (!contactId) { toast('Δεν δημιουργήθηκε επαφή στο Elorus', 'error'); setCreating(false); return; }
+      // Step 2: create invoice with the new contact
+      await selectContact(contactId, customerAfm);
+    } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); setCreating(false); }
+  }
+
   async function lookupAfm() {
     if (!afm || afm.length !== 9) { toast('ΑΦΜ πρέπει να είναι 9 ψηφία', 'error'); return; }
     setLookupLoading(true);
@@ -4003,6 +4022,20 @@ function ElorusInvoiceModal({ quoteId, quoteNumber, customerName, customerAfm, c
             opacity: creating ? 0.5 : 1,
           }}>
             <i className="fas fa-bolt" /> Γρήγορη τιμολόγηση (υπάρχουσα επαφή Elorus)
+          </button>
+        )}
+
+        {/* Auto-invoice with AFM — no elorusContactId yet but has AFM */}
+        {!customerElorusId && customerAfm && customerAfm.length === 9 && (
+          <button onClick={autoInvoiceWithAfm} disabled={creating} style={{
+            width: '100%', padding: '10px 14px', borderRadius: 8, marginBottom: 14,
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'color-mix(in srgb, #4f46e5 8%, transparent)',
+            border: '1px solid color-mix(in srgb, #4f46e5 25%, transparent)',
+            color: '#4f46e5', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+            opacity: creating ? 0.5 : 1,
+          }}>
+            <i className="fas fa-bolt" /> Τιμολόγηση με ΑΦΜ {customerAfm} (αυτόματη δημιουργία επαφής)
           </button>
         )}
 
