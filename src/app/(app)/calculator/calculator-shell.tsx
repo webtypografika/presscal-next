@@ -550,10 +550,14 @@ export default function CalculatorShell() {
   const [csExtraNum, setCsExtraNum] = useState<{ posX: number; posY: number; fontSize: number; rotation: number }[]>([]);
   const [csFixedBack, setCsFixedBack] = useState(false);
   // Gang Run — layout persisted to localStorage (pdf bytes NOT persisted; user re-uploads)
+  // Gang state localStorage key — scoped per quote item to prevent cross-contamination
+  const gangStorageKey = typeof window !== 'undefined'
+    ? `calc-gang-state:${new URLSearchParams(window.location.search).get('quoteId') || ''}:${new URLSearchParams(window.location.search).get('itemId') || ''}`
+    : 'calc-gang-state';
   const [gangJobs, setGangJobs] = useState<{ id: string; label: string; qty: number; pdf?: ParsedPDF; filePath?: string; fileName?: string }[]>(() => {
     if (typeof window === 'undefined') return [{ id: crypto.randomUUID(), label: 'Δουλειά 1', qty: 1 }];
     try {
-      const saved = localStorage.getItem('calc-gang-state');
+      const saved = localStorage.getItem(gangStorageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.jobs) && parsed.jobs.length > 0) {
@@ -570,7 +574,7 @@ export default function CalculatorShell() {
   const [gangCellAssign, setGangCellAssign] = useState<Record<number, number>>(() => {
     if (typeof window === 'undefined') return {};
     try {
-      const saved = localStorage.getItem('calc-gang-state');
+      const saved = localStorage.getItem(gangStorageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.cellAssign && typeof parsed.cellAssign === 'object') return parsed.cellAssign;
@@ -585,7 +589,7 @@ export default function CalculatorShell() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem('calc-gang-state', JSON.stringify({
+      localStorage.setItem(gangStorageKey, JSON.stringify({
         jobs: gangJobs.map(gj => ({ id: gj.id, label: gj.label, qty: gj.qty, filePath: gj.filePath, fileName: gj.fileName })),
         cellAssign: gangCellAssign,
       }));
@@ -879,6 +883,10 @@ export default function CalculatorShell() {
           })));
         }
       } catch {}
+    } else {
+      // No gang data in URL — reset to default (prevents cross-item contamination)
+      setGangJobs([{ id: crypto.randomUUID(), label: 'Δουλειά 1', qty: 1 }]);
+      setGangCellAssign({});
     }
     const wf = searchParams.get('wasteFixed');
     if (wf) setWasteFixed(parseInt(wf));
@@ -1865,15 +1873,15 @@ export default function CalculatorShell() {
                           id: machine.id, name: machine.name, cat: machine.cat,
                           specs: (machine as any).specs,
                         } : null,
-                        // Strip binary/PDF fields from gangJobs — they don't round-trip through JSON.
-                        gangJobs: gangJobs.map(g => ({
+                        // Strip binary/PDF fields from gangJobs — only save when in gang mode
+                        gangJobs: impoMode === 'gangrun' ? gangJobs.map(g => ({
                           id: g.id,
                           label: g.label,
                           qty: g.qty,
                           filePath: g.filePath || null,
                           fileName: g.fileName || (g.pdf ? g.pdf.fileName : null),
                           pdf: g.pdf ? { fileName: g.pdf.fileName, pageCount: g.pdf.pageCount, pageSizes: g.pdf.pageSizes } : null,
-                        })),
+                        })) : undefined,
                         exportOpts: {
                           bleed: pdfExportOpts.bleed,
                           gutter: pdfExportOpts.gutter,
