@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { createCompany, updateCompany, deleteCompany, createContact, updateContact, unlinkContactFromCompany, setPrimaryContact, linkContactToCompany } from '../companies/actions';
+import { createCompany, updateCompany, deleteCompany, createContact, updateContact, unlinkContactFromCompany, setPrimaryContact, linkContactToCompany, searchContacts } from '../companies/actions';
 import { createQuote } from '../quotes/actions';
 import { ElorusAfmLookup, type ElorusLookupResult } from '@/components/elorus-afm-lookup';
 import { inp, inpFocus, lbl, SectionTitle } from './shared-styles';
@@ -100,7 +101,7 @@ function ContactRow({ cc, companyId, onUpdate, onRemove, onSetPrimary }: {
   );
 }
 
-export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, hasElorus, search, allContacts }: Props) {
+export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, hasElorus, search, allContacts: _allContacts }: Props) {
   const router = useRouter();
   const [companies, setCompanies] = useState(initialCompanies);
   const [total, setTotal] = useState(initialTotal);
@@ -170,7 +171,35 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
   }, [debouncedSaveContact]);
 
   const [addContactOpen, setAddContactOpen] = useState<string | null>(null);
+  const [addContactPos, setAddContactPos] = useState<{ top: number; left: number } | null>(null);
   const [addContactSearch, setAddContactSearch] = useState('');
+  const [addContactResults, setAddContactResults] = useState<SimpleContact[]>([]);
+  const [addContactLoading, setAddContactLoading] = useState(false);
+  const addContactTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Load contacts when popover opens or search changes
+  const loadContacts = useCallback(async (query: string) => {
+    setAddContactLoading(true);
+    try {
+      const results = await searchContacts(query || undefined);
+      setAddContactResults(results.map((c: any) => ({ id: c.id, name: c.name, email: c.email, phone: c.phone })));
+    } finally { setAddContactLoading(false); }
+  }, []);
+
+  const handleOpenAddContact = useCallback((companyId: string, e: React.MouseEvent) => {
+    if (addContactOpen === companyId) { setAddContactOpen(null); setAddContactPos(null); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setAddContactPos({ top: rect.bottom + 4, left: rect.right - 280 });
+    setAddContactOpen(companyId);
+    setAddContactSearch('');
+    loadContacts('');
+  }, [addContactOpen, loadContacts]);
+
+  const handleAddContactSearch = useCallback((q: string) => {
+    setAddContactSearch(q);
+    if (addContactTimer.current) clearTimeout(addContactTimer.current);
+    addContactTimer.current = setTimeout(() => loadContacts(q), 300);
+  }, [loadContacts]);
 
   const handleAddNewContact = useCallback(async (companyId: string) => {
     await createContact({ name: 'Νέα επαφή', companyId, role: 'employee' });
@@ -376,70 +405,10 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                   Επαφές ({company.companyContacts.length})
                 </span>
               </div>
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => setAddContactOpen(addContactOpen === company.id ? null : company.id)}
-                  style={{ padding: '3px 10px', borderRadius: 6, border: '1px dashed color-mix(in srgb, var(--teal) 40%, transparent)', background: addContactOpen === company.id ? 'color-mix(in srgb, var(--teal) 8%, transparent)' : 'transparent', color: 'var(--teal)', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <i className="fas fa-user-plus" style={{ fontSize: '0.55rem' }} />Προσθήκη
-                </button>
-                {addContactOpen === company.id && (() => {
-                  const linkedIds = new Set(company.companyContacts.map(cc => cc.contact.id));
-                  const filtered = allContacts.filter(c => !linkedIds.has(c.id) && (!addContactSearch || c.name.toLowerCase().includes(addContactSearch.toLowerCase()) || (c.email || '').toLowerCase().includes(addContactSearch.toLowerCase())));
-                  return (
-                    <div style={{
-                      position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 50,
-                      width: 280, maxHeight: 320, borderRadius: 10,
-                      background: 'var(--glass-bg, #1e293b)', border: '1px solid var(--glass-border)',
-                      backdropFilter: 'blur(20px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                      display: 'flex', flexDirection: 'column',
-                    }}>
-                      <div style={{ padding: '8px 8px 4px' }}>
-                        <input
-                          autoFocus value={addContactSearch} onChange={e => setAddContactSearch(e.target.value)}
-                          placeholder="Αναζήτηση επαφής..."
-                          style={{ ...inp, width: '100%', fontSize: '0.8rem', padding: '7px 10px', borderColor: 'var(--glass-border)', background: 'rgba(255,255,255,0.04)' }}
-                        />
-                      </div>
-                      <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-                        {filtered.slice(0, 15).map(c => (
-                          <button key={c.id} onClick={() => handleLinkExistingContact(company.id, c.id)}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 8px', borderRadius: 6,
-                              border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', textAlign: 'left',
-                              fontSize: '0.8rem',
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
-                            <div style={{
-                              width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                              background: 'color-mix(in srgb, var(--teal) 15%, transparent)',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: 'var(--teal)', fontSize: '0.55rem', fontWeight: 700,
-                            }}>{c.name.charAt(0).toUpperCase()}</div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 600, fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
-                              {c.email && <div style={{ fontSize: '0.65rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>}
-                            </div>
-                            <i className="fas fa-link" style={{ fontSize: '0.5rem', color: '#475569' }} />
-                          </button>
-                        ))}
-                        {filtered.length === 0 && addContactSearch && (
-                          <div style={{ padding: '8px', fontSize: '0.75rem', color: '#475569', textAlign: 'center' }}>Δεν βρέθηκε</div>
-                        )}
-                      </div>
-                      <div style={{ borderTop: '1px solid var(--glass-border)', padding: '6px 8px' }}>
-                        <button onClick={() => handleAddNewContact(company.id)}
-                          style={{
-                            display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '7px 8px', borderRadius: 6,
-                            border: '1px dashed color-mix(in srgb, var(--teal) 30%, transparent)', background: 'transparent',
-                            color: 'var(--teal)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
-                          }}>
-                          <i className="fas fa-plus" style={{ fontSize: '0.55rem' }} />Νέα επαφή
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
+              <button onClick={e => handleOpenAddContact(company.id, e)}
+                style={{ padding: '3px 10px', borderRadius: 6, border: '1px dashed color-mix(in srgb, var(--teal) 40%, transparent)', background: addContactOpen === company.id ? 'color-mix(in srgb, var(--teal) 8%, transparent)' : 'transparent', color: 'var(--teal)', fontSize: '0.68rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <i className="fas fa-user-plus" style={{ fontSize: '0.55rem' }} />Προσθήκη
+              </button>
             </div>
             {company.companyContacts.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
@@ -474,6 +443,78 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
           <i className="fas fa-building" style={{ fontSize: '2.5rem', color: 'var(--text-muted)', opacity: 0.2 }} />
           <p style={{ marginTop: 16, color: 'var(--text-muted)', fontSize: '0.85rem' }}>{search ? 'Δεν βρέθηκαν αποτελέσματα' : 'Δεν υπάρχουν εταιρείες'}</p>
         </div>
+      )}
+      {/* ── ADD CONTACT PORTAL POPOVER ── */}
+      {addContactOpen && addContactPos && ReactDOM.createPortal(
+        <>
+          <div onClick={() => { setAddContactOpen(null); setAddContactPos(null); setAddContactSearch(''); }} style={{ position: 'fixed', inset: 0, zIndex: 9998 }} />
+          <div style={{
+            position: 'fixed',
+            top: addContactPos.top,
+            left: addContactPos.left,
+            zIndex: 9999,
+            width: 280, maxHeight: 320, borderRadius: 10,
+            background: 'var(--glass-bg, #1e293b)', border: '1px solid var(--glass-border)',
+            backdropFilter: 'blur(20px)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <div style={{ padding: '8px 8px 4px' }}>
+              <input
+                autoFocus value={addContactSearch} onChange={e => handleAddContactSearch(e.target.value)}
+                placeholder="Αναζήτηση επαφής..."
+                style={{ ...inp, width: '100%', fontSize: '0.8rem', padding: '7px 10px', borderColor: 'var(--glass-border)', background: 'rgba(255,255,255,0.04)' }}
+              />
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+              {(() => {
+                const company = companies.find(c => c.id === addContactOpen);
+                const linkedIds = new Set(company?.companyContacts.map(cc => cc.contact.id) || []);
+                const filtered = addContactResults.filter(c => !linkedIds.has(c.id));
+                return <>
+                  {filtered.slice(0, 15).map(c => (
+                    <button key={c.id} onClick={() => handleLinkExistingContact(addContactOpen, c.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 8px', borderRadius: 6,
+                        border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', textAlign: 'left',
+                        fontSize: '0.8rem',
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+                      <div style={{
+                        width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                        background: 'color-mix(in srgb, var(--teal) 15%, transparent)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--teal)', fontSize: '0.55rem', fontWeight: 700,
+                      }}>{c.name.charAt(0).toUpperCase()}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                        {c.email && <div style={{ fontSize: '0.65rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>}
+                      </div>
+                      <i className="fas fa-link" style={{ fontSize: '0.5rem', color: '#475569' }} />
+                    </button>
+                  ))}
+                  {addContactLoading && (
+                    <div style={{ padding: '8px', fontSize: '0.75rem', color: '#475569', textAlign: 'center' }}>Αναζήτηση...</div>
+                  )}
+                  {!addContactLoading && filtered.length === 0 && (
+                    <div style={{ padding: '8px', fontSize: '0.75rem', color: '#475569', textAlign: 'center' }}>{addContactSearch ? 'Δεν βρέθηκε' : 'Δεν υπάρχουν επαφές'}</div>
+                  )}
+                </>;
+              })()}
+            </div>
+            <div style={{ borderTop: '1px solid var(--glass-border)', padding: '6px 8px' }}>
+              <button onClick={() => handleAddNewContact(addContactOpen)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, width: '100%', padding: '7px 8px', borderRadius: 6,
+                  border: '1px dashed color-mix(in srgb, var(--teal) 30%, transparent)', background: 'transparent',
+                  color: 'var(--teal)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
+                }}>
+                <i className="fas fa-plus" style={{ fontSize: '0.55rem' }} />Νέα επαφή
+              </button>
+            </div>
+          </div>
+        </>,
+        document.body
       )}
     </>
   );
