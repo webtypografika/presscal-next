@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!contactId) {
-      return NextResponse.json({ error: 'Δεν βρέθηκε ή δημιουργήθηκε επαφή Elorus' }, { status: 400 });
+      return NextResponse.json({ error: `Δεν βρέθηκε ή δημιουργήθηκε επαφή Elorus (ΑΦΜ: ${afm || 'κενό'}, company: ${autoName || 'κενό'})` }, { status: 400 });
     }
 
     // Resolve unit measure for v1.1 invoices
