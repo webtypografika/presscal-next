@@ -706,6 +706,7 @@ model FileLink {
   preflightStatus String?    // 'pass' | 'warning' | 'error'
   notes           String?
   savedToFolder   DateTime?  // when file was downloaded to job folder
+  subfolder       String?    // subfolder within job folder (e.g. "01_2026-04-18" per email)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

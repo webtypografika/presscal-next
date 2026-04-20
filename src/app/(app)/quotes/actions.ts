@@ -617,9 +617,13 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
     // Check for existing fileLinks to avoid duplicates
     const existing = await prisma.fileLink.findMany({
       where: { quoteId, source: 'email' },
-      select: { filePath: true, fileName: true },
+      select: { filePath: true, fileName: true, subfolder: true },
     });
     const existingPaths = new Set(existing.map(f => f.filePath));
+
+    // Compute next email subfolder number (01, 02, ...)
+    const existingSubfolders = new Set(existing.map(f => f.subfolder).filter(Boolean));
+    let nextSubfolderNum = existingSubfolders.size + 1;
 
     let saved = 0;
     // Track used filenames to differentiate duplicates (e.g., multiple "image0.gif")
@@ -630,6 +634,12 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
         const msg = await getMessage(token, msgId);
         if (!msg.attachments?.length) continue;
 
+        // Compute subfolder for this email: "01_2026-04-18"
+        const msgDateObj = msg.date ? new Date(msg.date) : new Date();
+        const dateStr = msgDateObj.toISOString().slice(0, 10);
+        const emailSubfolder = `${String(nextSubfolderNum).padStart(2, '0')}_${dateStr}`;
+
+        const savedBefore = saved;
         // Extract sender name for filename disambiguation
         const senderMatch = (msg.from || '').match(/^([^<]+)/);
         const senderName = senderMatch ? senderMatch[1].replace(/"/g, '').trim().split(/\s+/)[0] : '';
@@ -685,12 +695,15 @@ export async function saveEmailAttachments(quoteId: string, messageIds: string[]
               source: 'email',
               quoteId,
               thumbnail,
+              subfolder: emailSubfolder,
             },
           });
 
           existingPaths.add(downloadPath);
           saved++;
         }
+        // Increment subfolder counter only if this email had new files
+        if (saved > savedBefore) nextSubfolderNum++;
       } catch (e) { console.error('[saveEmailAttachments] message error:', msgId, (e as Error).message); }
     }
 
