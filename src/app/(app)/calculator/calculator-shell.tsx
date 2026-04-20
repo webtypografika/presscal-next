@@ -1712,6 +1712,7 @@ export default function CalculatorShell() {
                   const totalProfit = Math.round((subtotal - totalCost) * 100) / 100;
                   console.log('[CALC SAVE] Writing calcData:', {
                     impositionMode: calcDataPayload.impositionMode,
+                    impoDuplexOrient: calcDataPayload.impoDuplexOrient,
                     impoRotation: calcDataPayload.impoRotation,
                     impoGutter: calcDataPayload.impoGutter,
                     impoForceUps: calcDataPayload.impoForceUps,
@@ -1720,6 +1721,7 @@ export default function CalculatorShell() {
                     ups: calcDataPayload.ups,
                     machineId: calcDataPayload.machineId,
                     paperId: calcDataPayload.paperId,
+                    productId: calcDataPayload.productId,
                   });
                   await updateQuote(quoteLink.quoteId, { items, subtotal, vatRate, vatAmount, grandTotal, totalCost, totalProfit });
                   // Verify save succeeded
