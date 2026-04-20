@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
       } else {
         const errText = await createRes.text().catch(() => '');
         console.error('[Elorus] Invoice auto-create contact failed:', createRes.status, errText);
-        return NextResponse.json({ error: `Elorus contact create: ${createRes.status} — ${errText.slice(0, 300)}` }, { status: 400 });
+        return NextResponse.json({ error: `[invoice auto-create contact] ${createRes.status} — ${errText.slice(0, 300)}` }, { status: 400 });
       }
     }
 
@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
     if (!invRes.ok) {
       const errText = await invRes.text();
       console.error('Elorus invoice error:', errText);
-      return NextResponse.json({ error: `Elorus: ${invRes.status} — ${errText.slice(0, 200)}` }, { status: 500 });
+      return NextResponse.json({ error: `[invoice create] ${invRes.status} — ${errText.slice(0, 300)}` }, { status: 500 });
     }
 
     const invoice = await invRes.json();

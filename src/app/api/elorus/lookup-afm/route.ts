@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
         } else {
           const errText = await createRes.text().catch(() => '');
           console.error('[Elorus] CREATE contact failed:', createRes.status, errText);
-          return NextResponse.json({ error: `Elorus: ${createRes.status} — ${errText.slice(0, 200)}` }, { status: 500 });
+          return NextResponse.json({ error: `[lookup-afm create] ${createRes.status} — ${errText.slice(0, 300)}` }, { status: 500 });
         }
       }
     }
