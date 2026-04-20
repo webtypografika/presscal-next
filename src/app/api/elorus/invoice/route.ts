@@ -49,6 +49,15 @@ export async function POST(req: NextRequest) {
     let contactId = elorusContactId || '';
     let afm = clientAfm || comp?.afm || quote.customer?.afm || '';
 
+    // Validate that the contactId still exists in Elorus
+    if (contactId) {
+      const checkRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/${contactId}/`, { headers: hdrs });
+      if (!checkRes.ok) {
+        console.warn('[Elorus] Contact', contactId, 'no longer exists, will re-resolve');
+        contactId = '';
+      }
+    }
+
     if (!contactId && afm) {
       // Search by AFM
       const searchRes = await fetch(
@@ -148,6 +157,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Build billing address from company data
+    const billAddress = comp?.fiscalAddress || comp?.address || '';
+    const billCity = comp?.fiscalCity || comp?.city || '';
+    const billZip = comp?.fiscalZip || comp?.zip || '';
+
     // Create invoice via v1.2
     const invoicePayload: Record<string, unknown> = {
       calculator_mode: 'initial',
@@ -156,6 +170,13 @@ export async function POST(req: NextRequest) {
       date: new Date().toISOString().split('T')[0],
       draft: true,
       items: invoiceItems,
+      billing_address: {
+        address: billAddress || '-',
+        city: billCity || '-',
+        zip: billZip || '-',
+        country: 'GR',
+        ad_type: 'bill',
+      },
     };
     if (afm) invoicePayload.client_vat_number = afm;
     if (org.elorusDefaultDocType) invoicePayload.documenttype = org.elorusDefaultDocType;
