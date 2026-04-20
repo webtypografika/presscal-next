@@ -95,9 +95,20 @@ export async function POST(req: NextRequest) {
         ...(autoPhone ? { phones: [{ number: autoPhone, primary: true }] } : {}),
         ...((autoAddress || autoCity || autoZip) ? { addresses: [{ address: autoAddress || '-', address_line: autoAddress || '-', city: autoCity || '-', zip: autoZip || '-', country: 'GR', ad_type: 'bill' }] } : {}),
       };
-      const createRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
+      let createRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
         method: 'POST', headers: hdrs, body: JSON.stringify(payload),
       });
+      // Fallback: if tax_office fails, retry without it
+      if (!createRes.ok && payload.tax_office) {
+        const errText = await createRes.text().catch(() => '');
+        if (errText.includes('tax_office')) {
+          console.warn('[Elorus] tax_office rejected, retrying without:', payload.tax_office);
+          delete payload.tax_office;
+          createRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
+            method: 'POST', headers: hdrs, body: JSON.stringify(payload),
+          });
+        }
+      }
       if (createRes.ok) {
         const created = await createRes.json();
         contactId = created.id;

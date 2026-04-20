@@ -76,13 +76,24 @@ export async function POST(req: NextRequest) {
         }];
       }
 
-      const res = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
+      let res = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
         method: 'POST', headers: hdrs, body: JSON.stringify(payload),
       });
+      // Fallback: if tax_office fails, retry without it
+      if (!res.ok && payload.tax_office) {
+        const err = await res.text();
+        if (err.includes('tax_office')) {
+          console.warn('[Elorus] tax_office rejected, retrying without:', payload.tax_office);
+          delete payload.tax_office;
+          res = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
+            method: 'POST', headers: hdrs, body: JSON.stringify(payload),
+          });
+        }
+      }
       if (!res.ok) {
         const err = await res.text();
         console.error('Elorus create contact error:', err);
-        return NextResponse.json({ error: 'Αποτυχία δημιουργίας επαφής' }, { status: 500 });
+        return NextResponse.json({ error: `Αποτυχία δημιουργίας επαφής: ${err.slice(0, 200)}` }, { status: 500 });
       }
       const contact = await res.json();
       return NextResponse.json({

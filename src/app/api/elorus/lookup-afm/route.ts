@@ -158,9 +158,20 @@ export async function POST(req: NextRequest) {
         if (!patchRes.ok) console.error('[Elorus] PATCH contact failed:', patchRes.status, await patchRes.text().catch(() => ''));
       } else {
         // Create new
-        const createRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
+        let createRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
           method: 'POST', headers: hdrs, body: JSON.stringify(contactPayload),
         });
+        // Fallback: if tax_office fails, retry without it
+        if (!createRes.ok && contactPayload.tax_office) {
+          const errText = await createRes.text().catch(() => '');
+          if (errText.includes('tax_office')) {
+            console.warn('[Elorus] tax_office rejected, retrying without it:', contactPayload.tax_office);
+            const { tax_office, ...payloadWithout } = contactPayload;
+            createRes = await fetch(`${ELORUS_BASE}/v1.2/contacts/`, {
+              method: 'POST', headers: hdrs, body: JSON.stringify(payloadWithout),
+            });
+          }
+        }
         if (createRes.ok) {
           const created = await createRes.json();
           result.elorusContactId = created.id;
