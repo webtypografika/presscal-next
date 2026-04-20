@@ -187,7 +187,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Save contactId to customer if available
+    // Save contactId back to company (so future invoices use quick-invoice)
+    if (quote.companyId) {
+      await prisma.company.update({
+        where: { id: quote.companyId },
+        data: { elorusContactId: contactId },
+      }).catch(() => { /* non-critical */ });
+    }
+    // Legacy: save to customer if available
     if (quote.customerId) {
       await prisma.customer.update({
         where: { id: quote.customerId },
