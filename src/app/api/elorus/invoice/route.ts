@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { doyToElorusCode } from '@/lib/elorus-doy-map';
+import { normalizeAfm } from '@/lib/normalize-afm';
 
 const ORG_ID = 'default-org';
 const ELORUS_BASE = 'https://api.elorus.com';
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     // Resolve Elorus contact
     let contactId = elorusContactId || '';
-    let afm = clientAfm || comp?.afm || quote.customer?.afm || '';
+    let afm = normalizeAfm(clientAfm || comp?.afm || quote.customer?.afm || '');
 
     // Validate that the contactId still exists in Elorus
     if (contactId) {
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       );
       if (searchRes.ok) {
         const data = await searchRes.json();
-        const match = (data.results || []).find((c: Record<string, string>) => (c.vat_number || c.tin) === afm);
+        const match = (data.results || []).find((c: Record<string, string>) => normalizeAfm(c.vat_number || c.tin) === afm);
         if (match) contactId = match.id;
       }
     }

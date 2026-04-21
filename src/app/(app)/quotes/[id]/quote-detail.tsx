@@ -487,18 +487,21 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   // One-click invoice: auto-detect best path
   const handleOneClickInvoice = useCallback(async () => {
     // Try multiple sources: direct company link → old customer → match by name/email in companies list
-    let afm = selectedCompany?.afm || quote.customer?.afm;
+    // Strip EL/GR country prefix from VAT numbers
+    const stripPrefix = (v: string) => v.replace(/^(EL|GR)\s*/i, '').replace(/\s/g, '');
+    let afm = stripPrefix(selectedCompany?.afm || quote.customer?.afm || '');
     if (!afm || afm.length !== 9) {
       const name = selectedCompany?.name || quote.customer?.name;
       const email = selectedCompany?.email || quote.customer?.email;
-      const match = customers.find((c: any) =>
-        (c.afm && c.afm.length === 9) && (
+      const match = customers.find((c: any) => {
+        const cAfm = stripPrefix(c.afm || '');
+        return (cAfm && cAfm.length === 9) && (
           (name && c.name?.toLowerCase() === name.toLowerCase()) ||
           (name && c.legalName?.toLowerCase() === name.toLowerCase()) ||
           (email && c.email?.toLowerCase() === email.toLowerCase())
-        )
-      );
-      if (match) afm = match.afm;
+        );
+      });
+      if (match) afm = stripPrefix(match.afm);
     }
 
     if (!afm || afm.length !== 9) {
@@ -1101,8 +1104,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                     </p>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <input
-                        autoFocus value={promptAfm} onChange={e => setPromptAfm(e.target.value.replace(/\D/g, '').slice(0, 9))}
-                        placeholder="9 ψηφία" maxLength={9}
+                        autoFocus value={promptAfm} onChange={e => setPromptAfm(e.target.value.replace(/^(EL|GR)\s*/i, '').replace(/\D/g, '').slice(0, 9))}
+                        placeholder="9 ψηφία ή EL..." maxLength={14}
                         onKeyDown={e => { if (e.key === 'Enter' && promptAfm.length === 9) handleAfmPromptInvoice(); }}
                         style={{
                           flex: 1, padding: '8px 10px', borderRadius: 6, fontSize: '0.9rem',

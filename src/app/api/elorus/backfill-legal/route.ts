@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { normalizeAfm } from '@/lib/normalize-afm';
 
 const ORG_ID = 'default-org';
 const ELORUS_BASE = 'https://api.elorus.com';
@@ -42,7 +43,7 @@ export async function POST() {
         const results = data.results || [];
 
         // Try exact TIN match first, then take single result if only one
-        let match = results.find((c: any) => (c.vat_number || c.tin) === company.afm);
+        let match = results.find((c: any) => normalizeAfm(c.vat_number || c.tin) === normalizeAfm(company.afm));
         if (!match && results.length === 1) {
           match = results[0]; // AFM search returned exactly 1 result — use it
         }

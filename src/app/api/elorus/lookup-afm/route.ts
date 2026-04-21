@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { doyToElorusCode } from '@/lib/elorus-doy-map';
+import { normalizeAfm } from '@/lib/normalize-afm';
 
 const ORG_ID = 'default-org';
 const ELORUS_BASE = 'https://api.elorus.com';
@@ -48,7 +49,8 @@ function extractXmlValue(xml: string, tag: string): string {
 // ═══ POST /api/elorus/lookup-afm ═══
 export async function POST(req: NextRequest) {
   try {
-    const { afm } = await req.json();
+    const { afm: rawAfm } = await req.json();
+    const afm = normalizeAfm(rawAfm);
     if (!afm || !/^\d{9}$/.test(afm)) {
       return NextResponse.json({ error: 'ΑΦΜ πρέπει να είναι 9 ψηφία' }, { status: 400 });
     }
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
         const res = await fetch(url, { headers: hdrs });
         if (res.ok) {
           const data = await res.json();
-          match = (data.results || []).find((c: Record<string, string>) => (c.vat_number || c.tin) === afm);
+          match = (data.results || []).find((c: Record<string, string>) => normalizeAfm(c.vat_number || c.tin) === afm);
         }
       }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { doyToElorusCode } from '@/lib/elorus-doy-map';
+import { normalizeAfm } from '@/lib/normalize-afm';
 
 const ORG_ID = 'default-org';
 const ELORUS_BASE = 'https://api.elorus.com';
@@ -52,7 +53,8 @@ export async function POST(req: NextRequest) {
 
     // ─── CREATE contact ───
     if (action === 'create') {
-      const { company, firstName, afm, doy, email, phone, address, city, zip, profession } = body;
+      const { company, firstName, afm: rawAfm, doy, email, phone, address, city, zip, profession } = body;
+      const afm = normalizeAfm(rawAfm);
       if (!afm || afm.length !== 9) return NextResponse.json({ error: 'ΑΦΜ πρέπει να είναι 9 ψηφία' }, { status: 400 });
       if (!company && !firstName) return NextResponse.json({ error: 'Εταιρεία ή Όνομα απαιτείται' }, { status: 400 });
 
