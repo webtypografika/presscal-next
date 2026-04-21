@@ -11,6 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         items: true,
         jobFolderPath: true,
         company: { select: { folderPath: true } },
+        contact: { select: { folderPath: true } },
       }
     })
 
@@ -21,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({
       items: quote.items,
       jobFolderPath: quote.jobFolderPath,
-      companyFolderPath: quote.company?.folderPath || null,
+      companyFolderPath: quote.company?.folderPath || quote.contact?.folderPath || null,
     })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })

@@ -4630,21 +4630,26 @@ function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, presskitEnabled, onB
 }) {
   const [open, setOpen] = useState(false);
   const [folders, setFolders] = useState<{ customer: string | null; job: string | null }>({ customer: null, job: null });
+  const [foldersLoaded, setFoldersLoaded] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-  // Load folders lazily when opening (PressKit mode only)
+  // Reset when quoteId changes
+  useEffect(() => { setFolders({ customer: null, job: null }); setFoldersLoaded(false); }, [quoteId]);
+
+  // Load folders every time the menu opens (PressKit mode only)
   useEffect(() => {
-    if (!presskitEnabled || !open || folders.customer || folders.job) return;
+    if (!presskitEnabled || !open) return;
     fetch(`/api/quotes/${quoteId}/items`)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d) setFolders({ customer: d.companyFolderPath || null, job: d.jobFolderPath || null });
+        setFoldersLoaded(true);
       })
-      .catch(() => {});
-  }, [open, quoteId, folders, presskitEnabled]);
+      .catch(() => { setFoldersLoaded(true); });
+  }, [open, quoteId, presskitEnabled]);
 
   useEffect(() => {
     if (!open) { setPos(null); return; }
@@ -4747,7 +4752,7 @@ function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, presskitEnabled, onB
           <CalcMenuItem
             icon="fa-user"
             label="Φάκελος πελάτη"
-            hint={folders.customer || undefined}
+            hint={folders.customer ? folders.customer.replace(/^.*[/\\]/, '') : undefined}
             disabled={!folders.customer}
             disabledHint="Ορίστε folderPath στην εταιρεία"
             onClick={() => openPressKit(folders.customer!)}
@@ -4755,7 +4760,7 @@ function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, presskitEnabled, onB
           <CalcMenuItem
             icon="fa-briefcase"
             label="Φάκελος προσφοράς"
-            hint={folders.job || 'Θα δημιουργηθεί'}
+            hint={folders.job ? folders.job.replace(/^.*[/\\]/, '') : 'Θα δημιουργηθεί'}
             onClick={handleJobFolder}
           />
           <CalcMenuItem
