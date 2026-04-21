@@ -3149,7 +3149,7 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
         company: formCompany.trim() || null,
         email: formEmail.trim() || null,
         phone: formPhone.trim() || null,
-        afm: formAfm.trim() || null,
+        afm: formAfm.trim().replace(/^(EL|GR)\s*/i, '') || null,
         doy: formDoy.trim() || null,
         address: formAddress.trim() || null,
         city: formCity.trim() || null,

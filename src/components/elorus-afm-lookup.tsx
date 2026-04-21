@@ -26,13 +26,13 @@ interface Props {
 
 export function ElorusAfmLookup({ currentAfm, currentValues, onApply, toast }: Props) {
   const [open, setOpen] = useState(false);
-  const [afm, setAfm] = useState(currentAfm || '');
+  const [afm, setAfm] = useState((currentAfm || '').replace(/^(EL|GR)\s*/i, '').replace(/\s/g, ''));
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
 
   async function lookup() {
-    const clean = afm.replace(/\s/g, '');
+    const clean = afm.replace(/^(EL|GR)\s*/i, '').replace(/\s/g, '');
     if (!/^\d{9}$/.test(clean)) { setError('Το ΑΦΜ πρέπει να είναι 9 ψηφία'); return; }
     setLoading(true); setError(''); setResult(null);
     try {
@@ -90,7 +90,8 @@ export function ElorusAfmLookup({ currentAfm, currentValues, onApply, toast }: P
     fontSize: '0.92rem', width: '100%', outline: 'none', fontFamily: 'inherit',
   };
 
-  const hasAfm = !!(currentAfm && currentAfm.trim());
+  const cleanAfm = (currentAfm || '').replace(/^(EL|GR)\s*/i, '').replace(/\s/g, '');
+  const hasAfm = /^\d{9}$/.test(cleanAfm);
 
   if (!open) {
     return (

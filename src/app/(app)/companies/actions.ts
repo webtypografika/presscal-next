@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { fuzzySearchIds, orderByIds } from '@/lib/search-server';
+import { normalizeAfm } from '@/lib/normalize-afm';
 
 const ORG_ID = 'default-org';
 
@@ -89,7 +90,7 @@ export async function createCompany(data: {
     data: {
       orgId: ORG_ID,
       name: data.name,
-      afm: data.afm || null,
+      afm: normalizeAfm(data.afm) || null,
       doy: data.doy || null,
       address: data.address || null,
       city: data.city || null,
@@ -131,6 +132,8 @@ export async function updateCompany(id: string, data: {
   fiscalZip?: string | null;
   activities?: string | null;
 }) {
+  // Normalize AFM on save (strip EL/GR prefix)
+  if (data.afm !== undefined) data.afm = normalizeAfm(data.afm) || null;
   const company = await prisma.company.update({
     where: { id },
     data,
@@ -385,7 +388,7 @@ export async function createCompanyFromElorus(data: {
     data: {
       orgId: ORG_ID,
       name: data.name,
-      afm: data.afm || null,
+      afm: normalizeAfm(data.afm) || null,
       doy: data.doy || null,
       email: data.email || null,
       phone: data.phone || null,
@@ -418,7 +421,7 @@ export async function createCompanyQuick(data: {
       name: data.name,
       email: data.email || null,
       phone: data.phone || null,
-      afm: data.afm || null,
+      afm: normalizeAfm(data.afm) || null,
       folderPath: data.folderPath || null,
     },
   });
