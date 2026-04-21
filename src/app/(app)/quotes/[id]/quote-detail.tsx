@@ -1777,6 +1777,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
         <CourierVoucherModal
           quoteId={quote.id}
           company={selectedCompany}
+          contact={selectedContact}
+          customer={quote.customer}
           onClose={() => setShowCourierModal(false)}
           onCreated={async (voucherId) => {
             setCourierVoucher(voucherId);
@@ -4294,18 +4296,20 @@ function ElorusInvoiceModal({ quoteId, quoteNumber, customerName, customerAfm, c
 }
 
 // ═══ COURIER VOUCHER MODAL ═══
-function CourierVoucherModal({ quoteId, company, onClose, onCreated }: {
+function CourierVoucherModal({ quoteId, company, contact, customer, onClose, onCreated }: {
   quoteId: string;
   company: any;
+  contact?: any;
+  customer?: any;
   onClose: () => void;
   onCreated: (voucherId: string) => void;
 }) {
   const primaryContact = company?.companyContacts?.find((cc: any) => cc.isPrimary)?.contact;
-  const [name, setName] = useState(company?.name || '');
-  const [phone, setPhone] = useState(primaryContact?.phone || company?.phone || '');
-  const [address, setAddress] = useState(company?.address || '');
-  const [city, setCity] = useState(company?.city || '');
-  const [zip, setZip] = useState(company?.zip || '');
+  const [name, setName] = useState(company?.name || customer?.name || '');
+  const [phone, setPhone] = useState(primaryContact?.phone || primaryContact?.mobile || contact?.phone || contact?.mobile || company?.phone || customer?.phone || '');
+  const [address, setAddress] = useState(company?.address || customer?.address || '');
+  const [city, setCity] = useState(company?.city || customer?.city || '');
+  const [zip, setZip] = useState(company?.zip || customer?.zip || '');
   const [weight, setWeight] = useState(1);
   const [cod, setCod] = useState(0);
   const [notes, setNotes] = useState('');

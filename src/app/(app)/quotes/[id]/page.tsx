@@ -23,7 +23,7 @@ export default async function QuoteDetailPage({ params }: { params: Promise<{ id
       include: {
         companyContacts: {
           where: { isPrimary: true },
-          include: { contact: { select: { id: true, name: true, email: true } } },
+          include: { contact: { select: { id: true, name: true, email: true, phone: true, mobile: true } } },
           take: 1,
         },
       },
