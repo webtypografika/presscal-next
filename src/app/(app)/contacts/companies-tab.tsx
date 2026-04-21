@@ -14,7 +14,7 @@ interface CompanyData {
   id: string; name: string; isSupplier: boolean; legalName: string | null; afm: string | null; doy: string | null; email: string | null; phone: string | null;
   website: string | null; address: string | null; city: string | null; zip: string | null;
   fiscalAddress: string | null; fiscalCity: string | null; fiscalZip: string | null;
-  notes: string; folderPath: string | null; tags: string[]; companyContacts: CCData[]; _count: { quotes: number };
+  activities: string | null; notes: string; folderPath: string | null; tags: string[]; companyContacts: CCData[]; _count: { quotes: number };
 }
 
 interface SimpleContact { id: string; name: string; email: string | null; phone: string | null }
@@ -363,7 +363,7 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                 {hasElorus ? (
                   <>
                     <InfoField label="ΕΠΩΝΥΜΙΑ" value={company.legalName || ''} style={{ marginBottom: 6 }} />
-                    {(company as any).activities && <InfoField label="ΔΡΑΣΤΗΡΙΟΤΗΤΑ" value={(company as any).activities} style={{ marginBottom: 6 }} />}
+                    {company.activities && <InfoField label="ΔΡΑΣΤΗΡΙΟΤΗΤΑ" value={company.activities} style={{ marginBottom: 6 }} />}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                       <InfoField label="ΑΦΜ" value={company.afm || ''} />
                       <InfoField label="ΔΟΥ" value={company.doy || ''} />
@@ -389,7 +389,7 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                           if (data.zip && !company.zip) changes.zip = data.zip;
                           if (data.email && !company.email) changes.email = data.email;
                           if (data.elorusContactId) changes.elorusContactId = data.elorusContactId;
-                          if ((data as any).activities) changes.activities = (data as any).activities;
+                          if (data.activities) changes.activities = data.activities;
                           setCompanies(prev => prev.map(c => c.id === company.id ? { ...c, ...changes } : c));
                           updateCompany(company.id, changes as any);
                         }}
@@ -400,6 +400,7 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
                 ) : (
                   <>
                     <Field label="ΕΠΩΝΥΜΙΑ" value={company.legalName || ''} onChange={v => updateCompanyField(company.id, 'legalName', v)} placeholder="Φορολογική επωνυμία" style={{ marginBottom: 6 }} />
+                    <Field label="ΔΡΑΣΤΗΡΙΟΤΗΤΑ" value={company.activities || ''} onChange={v => updateCompanyField(company.id, 'activities', v)} placeholder="—" style={{ marginBottom: 6 }} />
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                       <Field label="ΑΦΜ" value={company.afm || ''} onChange={v => updateCompanyField(company.id, 'afm', v)} placeholder="—" />
                       <Field label="ΔΟΥ" value={company.doy || ''} onChange={v => updateCompanyField(company.id, 'doy', v)} placeholder="—" />

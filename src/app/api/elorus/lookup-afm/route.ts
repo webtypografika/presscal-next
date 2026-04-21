@@ -75,16 +75,18 @@ export async function POST(req: NextRequest) {
       }
 
       if (match && match.company && !match.company.startsWith('ΑΦΜ ')) {
-        // Found with real data
+        // Found with real data — extract address from Elorus record
+        const addr = Array.isArray(match.addresses) && match.addresses.length > 0 ? match.addresses[0] : null;
         return NextResponse.json({
           source: 'elorus_existing',
           elorusContactId: match.id,
           onomasia: match.company || match.display_name || '',
           commer_title: match.company || '',
-          doy_descr: '',
-          postal_address: '',
-          postal_zip_code: '',
-          postal_area_description: '',
+          doy_descr: match.tax_office_name || match.tax_office || '',
+          postal_address: addr?.address || addr?.address_line || '',
+          postal_zip_code: addr?.zip || '',
+          postal_area_description: addr?.city || '',
+          firm_act_descr: match.profession || '',
           email: Array.isArray(match.email) && match.email.length > 0 ? match.email[0].email : '',
         });
       }
