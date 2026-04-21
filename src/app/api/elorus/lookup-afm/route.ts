@@ -59,29 +59,36 @@ export async function POST(req: NextRequest) {
     let elorusContactId: string | null = null;
     if (org?.apiElorus && org.elorusOrgId) {
       const hdrs = elorusHeaders(org.apiElorus, org.elorusOrgId);
-      const searchRes = await fetch(
+
+      // Try exact vat_number filter first, then generic search as fallback
+      let match: Record<string, any> | undefined;
+      for (const url of [
+        `${ELORUS_BASE}/v1.2/contacts/?vat_number=${afm}&page_size=5`,
         `${ELORUS_BASE}/v1.2/contacts/?search=${afm}&page_size=5&is_client=true`,
-        { headers: hdrs },
-      );
-      if (searchRes.ok) {
-        const data = await searchRes.json();
-        const match = (data.results || []).find((c: Record<string, string>) => (c.vat_number || c.tin) === afm);
-        if (match && match.company && !match.company.startsWith('ΑΦΜ ')) {
-          // Found with real data
-          return NextResponse.json({
-            source: 'elorus_existing',
-            elorusContactId: match.id,
-            onomasia: match.company || match.display_name || '',
-            commer_title: match.company || '',
-            doy_descr: '',
-            postal_address: '',
-            postal_zip_code: '',
-            postal_area_description: '',
-            email: Array.isArray(match.email) && match.email.length > 0 ? match.email[0].email : '',
-          });
+      ]) {
+        if (match) break;
+        const res = await fetch(url, { headers: hdrs });
+        if (res.ok) {
+          const data = await res.json();
+          match = (data.results || []).find((c: Record<string, string>) => (c.vat_number || c.tin) === afm);
         }
-        if (match) elorusContactId = match.id;
       }
+
+      if (match && match.company && !match.company.startsWith('ΑΦΜ ')) {
+        // Found with real data
+        return NextResponse.json({
+          source: 'elorus_existing',
+          elorusContactId: match.id,
+          onomasia: match.company || match.display_name || '',
+          commer_title: match.company || '',
+          doy_descr: '',
+          postal_address: '',
+          postal_zip_code: '',
+          postal_area_description: '',
+          email: Array.isArray(match.email) && match.email.length > 0 ? match.email[0].email : '',
+        });
+      }
+      if (match) elorusContactId = match.id;
     }
 
     // Step 2: Query AADE

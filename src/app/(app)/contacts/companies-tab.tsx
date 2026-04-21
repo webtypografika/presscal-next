@@ -210,18 +210,25 @@ export function CompaniesTab({ initialCompanies, initialTotal, initialHasMore, h
   }, [loadContacts]);
 
   const handleAddNewContact = useCallback(async (companyId: string) => {
-    await createContact({ name: 'Νέα επαφή', companyId, role: 'employee' });
+    const contact = await createContact({ name: 'Νέα επαφή', companyId, role: 'employee' });
+    setCompanies(prev => prev.map(c => c.id === companyId ? {
+      ...c, companyContacts: [...c.companyContacts, { id: `${companyId}_${contact.id}`, role: 'employee', isPrimary: false, contact: { id: contact.id, name: contact.name, email: contact.email, phone: contact.phone, mobile: contact.mobile ?? null, role: contact.role ?? 'employee' } }]
+    } : c));
     setAddContactOpen(null);
     setAddContactSearch('');
-    window.location.reload();
   }, []);
 
   const handleLinkExistingContact = useCallback(async (companyId: string, contactId: string) => {
     await linkContactToCompany({ companyId, contactId, role: 'employee' });
+    const linked = addContactResults.find(c => c.id === contactId);
+    if (linked) {
+      setCompanies(prev => prev.map(c => c.id === companyId ? {
+        ...c, companyContacts: [...c.companyContacts, { id: `${companyId}_${contactId}`, role: 'employee', isPrimary: false, contact: { id: linked.id, name: linked.name, email: linked.email, phone: linked.phone, mobile: null, role: 'employee' } }]
+      } : c));
+    }
     setAddContactOpen(null);
     setAddContactSearch('');
-    window.location.reload();
-  }, []);
+  }, [addContactResults]);
 
   const handleRemoveContact = useCallback(async (companyId: string, contactId: string) => {
     await unlinkContactFromCompany(companyId, contactId);

@@ -486,7 +486,20 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 
   // One-click invoice: auto-detect best path
   const handleOneClickInvoice = useCallback(async () => {
-    const afm = selectedCompany?.afm || quote.customer?.afm;
+    // Try multiple sources: direct company link → old customer → match by name/email in companies list
+    let afm = selectedCompany?.afm || quote.customer?.afm;
+    if (!afm || afm.length !== 9) {
+      const name = selectedCompany?.name || quote.customer?.name;
+      const email = selectedCompany?.email || quote.customer?.email;
+      const match = customers.find((c: any) =>
+        (c.afm && c.afm.length === 9) && (
+          (name && c.name?.toLowerCase() === name.toLowerCase()) ||
+          (name && c.legalName?.toLowerCase() === name.toLowerCase()) ||
+          (email && c.email?.toLowerCase() === email.toLowerCase())
+        )
+      );
+      if (match) afm = match.afm;
+    }
 
     if (!afm || afm.length !== 9) {
       // No AFM → ask for it
@@ -519,7 +532,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       } else { toast(data.error || 'Σφάλμα', 'error'); }
     } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); }
     setInvoicing(false);
-  }, [quote, selectedCompany, toast]);
+  }, [quote, selectedCompany, customers, toast]);
 
   const handleAfmPromptInvoice = useCallback(async () => {
     if (promptAfm.length !== 9) return;
