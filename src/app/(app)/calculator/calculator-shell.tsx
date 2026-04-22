@@ -8,7 +8,7 @@ import type { ImpositionInput } from '@/lib/calc/imposition';
 import type { ImpositionMode, ImpositionResult, CalculatorResult, StepBlock } from '@/types/calculator';
 import ImpositionCanvas from './imposition-canvas';
 import DuplexNavigator from './signature-navigator';
-import { parsePDF } from '@/lib/calc/pdf-utils';
+import { parsePDF, createSinglePageView, createDuplexPageView } from '@/lib/calc/pdf-utils';
 import type { ParsedPDF } from '@/lib/calc/pdf-utils';
 import { downloadImpositionPDF } from '@/lib/calc/pdf-export';
 import PlateOrderModal from './plate-order-modal';
@@ -587,6 +587,9 @@ export default function CalculatorShell() {
   // Gang brush: when active, clicking a cell paints it with this job (0-based).
   // Null = legacy cycle-through-jobs behavior.
   const [gangBrushJob, setGangBrushJob] = useState<number | null>(null);
+  // Multi-page PDF split popup
+  const [gangSplitPending, setGangSplitPending] = useState<{ pdf: ParsedPDF; sourceJobIdx: number | null } | null>(null);
+  const [gangSplitMode, setGangSplitMode] = useState<'common_back' | 'paired' | 'fronts_only'>('fronts_only');
   // Persist gang layout (jobs metadata + cell assignments) on change
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -709,6 +712,23 @@ export default function CalculatorShell() {
       if (!isRestore) {
         setImpoForceCols(1);
         setImpoForceRows(1);
+      }
+      // Gang run + multi-page → show split popup instead of normal processing
+      if (impoMode === 'gangrun' && parsed.pageCount > 1) {
+        if (parsed.pageSizes.length > 0) {
+          const pg = parsed.pageSizes[0];
+          setJob(prev => ({
+            ...prev,
+            width: Math.round(pg.trimW * 10) / 10,
+            height: Math.round(pg.trimH * 10) / 10,
+            bleed: pg.bleedDetected > 0 ? pg.bleedDetected : prev.bleed,
+          }));
+        }
+        // Auto-select default split mode based on page count parity
+        setGangSplitMode(parsed.pageCount % 2 === 0 ? 'paired' : 'common_back');
+        setGangSplitPending({ pdf: parsed, sourceJobIdx: null });
+        setPdfLoading(false);
+        return;
       }
       if (parsed.pageSizes.length > 0) {
         const pg = parsed.pageSizes[0];
@@ -3385,6 +3405,166 @@ export default function CalculatorShell() {
                         </div>
                       );
                     })()}
+                    {/* Multi-page PDF split popup */}
+                    {gangSplitPending && (() => {
+                      const sp = gangSplitPending;
+                      const pc = sp.pdf.pageCount;
+                      const isEven = pc % 2 === 0;
+                      const pairedCount = Math.floor(pc / 2);
+                      const commonBackCount = pc - 1;
+
+                      const applySplit = () => {
+                        const src = sp.pdf;
+                        let newJobs: typeof gangJobs = [];
+
+                        if (gangSplitMode === 'common_back') {
+                          // Page 1 = common back, pages 2..N = fronts
+                          for (let i = 1; i < src.pageCount; i++) {
+                            newJobs.push({
+                              id: crypto.randomUUID(),
+                              label: `Σελ. ${i + 1}`,
+                              qty: 1,
+                              pdf: createDuplexPageView(src, i, 0),
+                            });
+                          }
+                          setJob(prev => ({ ...prev, sides: 2 as const }));
+                        } else if (gangSplitMode === 'paired') {
+                          // Pairs: pages 1/2 = job1, 3/4 = job2, etc.
+                          for (let i = 0; i < src.pageCount - 1; i += 2) {
+                            newJobs.push({
+                              id: crypto.randomUUID(),
+                              label: `Σελ. ${i + 1}/${i + 2}`,
+                              qty: 1,
+                              pdf: createDuplexPageView(src, i, i + 1),
+                            });
+                          }
+                          setJob(prev => ({ ...prev, sides: 2 as const }));
+                        } else {
+                          // Fronts only: each page = 1 single-sided job
+                          for (let i = 0; i < src.pageCount; i++) {
+                            newJobs.push({
+                              id: crypto.randomUUID(),
+                              label: `Σελ. ${i + 1}`,
+                              qty: 1,
+                              pdf: createSinglePageView(src, i),
+                            });
+                          }
+                          setJob(prev => ({ ...prev, sides: 1 as const }));
+                        }
+
+                        setGangJobs(newJobs);
+                        setPdf(src); // Keep full PDF for preview
+
+                        // Auto-assign cells round-robin
+                        const totalUps = (impo?.cols || 1) * (impo?.rows || 1);
+                        const assign: Record<number, number> = {};
+                        for (let c = 0; c < Math.max(totalUps, newJobs.length); c++) {
+                          assign[c] = c % newJobs.length;
+                        }
+                        setGangCellAssign(assign);
+
+                        // Auto-expand grid if needed
+                        if (newJobs.length > totalUps) {
+                          const cols = impo?.cols || 1;
+                          setImpoForceRows(Math.ceil(newJobs.length / cols));
+                        }
+
+                        setGangSplitPending(null);
+                      };
+
+                      const radioStyle = (active: boolean): React.CSSProperties => ({
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '6px 8px', borderRadius: 6, cursor: 'pointer',
+                        background: active ? 'rgba(20,184,166,0.12)' : 'transparent',
+                        border: `1px solid ${active ? 'rgba(20,184,166,0.35)' : 'transparent'}`,
+                        transition: 'all 0.15s',
+                      });
+                      const dotStyle = (active: boolean): React.CSSProperties => ({
+                        width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
+                        border: `2px solid ${active ? 'var(--teal)' : '#475569'}`,
+                        background: active ? 'var(--teal)' : 'transparent',
+                        transition: 'all 0.15s',
+                      });
+
+                      return (
+                        <div style={{
+                          marginBottom: 8, padding: 10, borderRadius: 8,
+                          background: 'color-mix(in srgb, var(--teal) 6%, transparent)',
+                          border: '1px solid color-mix(in srgb, var(--teal) 20%, transparent)',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <i className="fas fa-file-pdf" style={{ color: 'var(--teal)', fontSize: '0.65rem' }} />
+                            <span style={{ fontWeight: 600, fontSize: '0.78rem', color: 'var(--teal)' }}>
+                              {sp.pdf.fileName}
+                            </span>
+                            <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                              — {pc} σελίδες
+                            </span>
+                          </div>
+
+                          {/* Page thumbnails */}
+                          <div style={{ display: 'flex', gap: 4, marginBottom: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                            {sp.pdf.thumbnails.map((thumb, ti) => (
+                              <div key={ti} style={{
+                                flexShrink: 0, width: 36, textAlign: 'center',
+                              }}>
+                                {thumb ? (
+                                  <canvas
+                                    ref={c => { if (c && thumb) { c.width = thumb.width; c.height = thumb.height; c.getContext('2d')?.drawImage(thumb, 0, 0); } }}
+                                    style={{ width: 36, height: 'auto', borderRadius: 3, border: '1px solid var(--border)' }}
+                                  />
+                                ) : (
+                                  <div style={{ width: 36, height: 48, borderRadius: 3, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)' }} />
+                                )}
+                                <div style={{ fontSize: '0.5rem', color: '#64748b', marginTop: 1 }}>{ti + 1}</div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Split mode options */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
+                            {isEven && (
+                              <div style={radioStyle(gangSplitMode === 'paired')} onClick={() => setGangSplitMode('paired')}>
+                                <div style={dotStyle(gangSplitMode === 'paired')} />
+                                <div>
+                                  <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text)' }}>Ζευγάρια μπρος/πίσω</div>
+                                  <div style={{ fontSize: '0.6rem', color: '#64748b' }}>{pairedCount} δουλειές × 2 όψεις</div>
+                                </div>
+                              </div>
+                            )}
+                            <div style={radioStyle(gangSplitMode === 'common_back')} onClick={() => setGangSplitMode('common_back')}>
+                              <div style={dotStyle(gangSplitMode === 'common_back')} />
+                              <div>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text)' }}>Κοινή πίσω όψη (σελ. 1)</div>
+                                <div style={{ fontSize: '0.6rem', color: '#64748b' }}>{commonBackCount} δουλειές + 1 κοινή πλάτη</div>
+                              </div>
+                            </div>
+                            <div style={radioStyle(gangSplitMode === 'fronts_only')} onClick={() => setGangSplitMode('fronts_only')}>
+                              <div style={dotStyle(gangSplitMode === 'fronts_only')} />
+                              <div>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text)' }}>Μόνο μπροστά</div>
+                                <div style={{ fontSize: '0.6rem', color: '#64748b' }}>{pc} δουλειές × 1 όψη</div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            <button onClick={() => setGangSplitPending(null)} style={{
+                              padding: '5px 12px', borderRadius: 6, fontSize: '0.7rem', fontWeight: 600,
+                              border: '1px solid var(--border)', background: 'transparent',
+                              color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit',
+                            }}>Ακύρωση</button>
+                            <button onClick={applySplit} style={{
+                              padding: '5px 14px', borderRadius: 6, fontSize: '0.7rem', fontWeight: 700,
+                              border: 'none', background: 'var(--teal)', color: '#fff',
+                              cursor: 'pointer', fontFamily: 'inherit',
+                            }}>Εφαρμογή</button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Column legend */}
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: 6,
@@ -3477,7 +3657,12 @@ export default function CalculatorShell() {
                                   const blob = await pdfRes.blob();
                                   const file = new File([blob], data.fileName, { type: 'application/pdf' });
                                   const parsed = await parsePDF(file);
-                                  setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: parsed, filePath: data.filePath, fileName: data.fileName } : j));
+                                  if (parsed.pageCount > 1) {
+                                    setGangSplitMode(parsed.pageCount % 2 === 0 ? 'paired' : 'common_back');
+                                    setGangSplitPending({ pdf: parsed, sourceJobIdx: i });
+                                  } else {
+                                    setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: parsed, filePath: data.filePath, fileName: data.fileName } : j));
+                                  }
                                 } catch {}
                               }, 1000);
                               setTimeout(() => clearInterval(poll), 60_000); // stop after 1min
@@ -3507,7 +3692,12 @@ export default function CalculatorShell() {
                                 const f = e.target.files?.[0];
                                 if (!f) return;
                                 const parsed = await parsePDF(f);
-                                setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: parsed, fileName: f.name } : j));
+                                if (parsed.pageCount > 1) {
+                                  setGangSplitMode(parsed.pageCount % 2 === 0 ? 'paired' : 'common_back');
+                                  setGangSplitPending({ pdf: parsed, sourceJobIdx: i });
+                                } else {
+                                  setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: parsed, fileName: f.name } : j));
+                                }
                                 e.target.value = '';
                               }} />
                             </label>

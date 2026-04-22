@@ -38,6 +38,32 @@ export interface ParsedPDF {
   fileMap?: { name: string; startPage: number; endPage: number }[];
 }
 
+// ─── PAGE-VIEW HELPERS (for gang run multi-page split) ───
+
+/** Create a lightweight single-page "view" over a source PDF (shared bytes, no copy) */
+export function createSinglePageView(source: ParsedPDF, pageIndex: number): ParsedPDF {
+  return {
+    bytes: source.bytes,
+    pageCount: 1,
+    pageSizes: [source.pageSizes[pageIndex]],
+    fileName: `${source.fileName} (σελ.${pageIndex + 1})`,
+    thumbnails: [source.thumbnails[pageIndex]],
+    coverage: source.coverage,
+  };
+}
+
+/** Create a 2-page "view" (front + back) over a source PDF (shared bytes, no copy) */
+export function createDuplexPageView(source: ParsedPDF, frontIdx: number, backIdx: number): ParsedPDF {
+  return {
+    bytes: source.bytes,
+    pageCount: 2,
+    pageSizes: [source.pageSizes[frontIdx], source.pageSizes[backIdx]],
+    fileName: `${source.fileName} (σελ.${frontIdx + 1}/${backIdx + 1})`,
+    thumbnails: [source.thumbnails[frontIdx], source.thumbnails[backIdx]],
+    coverage: source.coverage,
+  };
+}
+
 // ─── PT → MM ───
 function ptToMM(pt: number): number {
   return Math.round(pt * 25.4 / 72 * 10) / 10;
