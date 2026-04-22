@@ -259,8 +259,18 @@ export default function EmailClient() {
 
       // Match contact → company (fast, local DB lookup)
       const matchRes = await fetch(`/api/email/match-customer?email=${encodeURIComponent(senderEmail)}`).then(r => r.json()).catch(() => ({}));
-      const companyId = matchRes?.companies?.[0]?.id || undefined;
-      const contactId = matchRes?.contact?.id || undefined;
+      let companyId = matchRes?.companies?.[0]?.id || undefined;
+      let contactId = matchRes?.contact?.id || undefined;
+
+      // No match → auto-create Contact from sender (not Company)
+      if (!contactId) {
+        try {
+          const { createContact } = await import('../companies/actions');
+          const newContact = await createContact({ name: senderName, email: senderEmail, role: 'contact' });
+          contactId = newContact.id;
+          companyId = undefined; // Don't auto-assign company for new contacts
+        } catch {}
+      }
 
       // Create quote immediately
       const q = await createQuote({

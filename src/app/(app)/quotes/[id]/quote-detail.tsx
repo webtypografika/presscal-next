@@ -262,9 +262,26 @@ function LinkFileMenu({ quoteId, itemId, hasLinkedFile, linkedFileName, customer
   jobFolderPath?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const linkingFileRef = useRef<string | undefined>(linkedFileName);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Clear linking spinner when linkedFile changes (file arrived via poll)
+  useEffect(() => {
+    if (linking && linkedFileName && linkedFileName !== linkingFileRef.current) {
+      setLinking(false);
+    }
+    linkingFileRef.current = linkedFileName;
+  }, [linkedFileName, linking]);
+
+  // Safety timeout: clear spinner after 60s
+  useEffect(() => {
+    if (!linking) return;
+    const t = setTimeout(() => setLinking(false), 60000);
+    return () => clearTimeout(t);
+  }, [linking]);
 
   useEffect(() => {
     if (!open) { setPos(null); return; }
@@ -296,6 +313,7 @@ function LinkFileMenu({ quoteId, itemId, hasLinkedFile, linkedFileName, customer
     const url = folder
       ? `presscal-fh://pick-file-for-item?quoteId=${quoteId}&itemId=${itemId}&folder=${encodeURIComponent(folder)}`
       : `presscal-fh://pick-file-for-item?quoteId=${quoteId}&itemId=${itemId}`;
+    setLinking(true);
     window.location.href = url;
     setOpen(false);
   };
@@ -304,6 +322,7 @@ function LinkFileMenu({ quoteId, itemId, hasLinkedFile, linkedFileName, customer
     const url = startFolder
       ? `presscal-fh://pick-file-dialog?quoteId=${quoteId}&itemId=${itemId}&folder=${encodeURIComponent(startFolder)}`
       : `presscal-fh://pick-file-dialog?quoteId=${quoteId}&itemId=${itemId}`;
+    setLinking(true);
     window.location.href = url;
     setOpen(false);
   };
@@ -336,7 +355,7 @@ function LinkFileMenu({ quoteId, itemId, hasLinkedFile, linkedFileName, customer
         onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
         onMouseLeave={e => { e.currentTarget.style.opacity = hasLinkedFile ? '0.8' : '0.4'; }}
       >
-        <i className="fas fa-paperclip" />
+        <i className={`fas ${linking ? 'fa-spinner fa-spin' : 'fa-paperclip'}`} />
       </button>
       {open && pos && createPortal(
         <div
@@ -479,8 +498,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const selectedCompany = customers.find((c: any) => c.id === customerId) ?? quote.company;
   const selectedCustomer = selectedCompany; // backward compat alias
   const primaryContact = selectedCompany?.companyContacts?.find((cc: any) => cc.isPrimary)?.contact;
-  const customerName = selectedCompany?.name ?? quote.customer?.name ?? emailSender?.name ?? emailSender?.email ?? '— Εταιρεία —';
-  const customerInfoEmail = selectedCompany?.email || (!selectedCompany && ((quote as any).contact?.email || emailSender?.email)) || '';
+  const customerName = selectedCompany?.name ?? quote.customer?.name ?? '— Εταιρεία —';
+  const customerInfoEmail = selectedCompany?.email || '';
   const customerInfoPhone = selectedCompany?.phone || (!selectedCompany && (quote as any).contact?.phone) || '';
   const selectedContact = (quote as any).contact ?? null;
 
@@ -3267,26 +3286,7 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
             </button>
           </div>
 
-          {/* Email sender hint */}
-          {emailSender && !customers.some(c => c.email?.toLowerCase() === emailSender.email.toLowerCase()) && (
-            <div
-              onClick={openNew}
-              style={{
-                padding: '8px 12px', borderBottom: '1px solid var(--border)',
-                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                background: 'rgba(245,130,32,0.04)',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.08)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(245,130,32,0.04)')}
-            >
-              <i className="fas fa-envelope" style={{ fontSize: '0.65rem', color: 'var(--accent)' }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.82rem', color: 'var(--accent)', fontWeight: 600 }}>Δημιουργία από email</div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{emailSender.name} · {emailSender.email}</div>
-              </div>
-              <i className="fas fa-plus" style={{ fontSize: '0.6rem', color: 'var(--accent)' }} />
-            </div>
-          )}
+          {/* Email sender hint removed — contacts from email should be created via ContactPicker */}
 
           {/* Customer list */}
           <div style={{ flex: 1, overflow: 'auto' }}>

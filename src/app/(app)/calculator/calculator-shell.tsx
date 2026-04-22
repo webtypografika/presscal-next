@@ -678,6 +678,7 @@ export default function CalculatorShell() {
   // saving to the wrong quote if the user navigates via sidebar)
   const [quoteLink, setQuoteLink] = useState<{ quoteId: string; itemId: string; desc: string; quoteNumber: string } | null>(null);
   const [linkedFile, setLinkedFile] = useState<{ path: string; name: string } | null>(null);
+  const [linkPolling, setLinkPolling] = useState(false);
   const [savingToQuote, setSavingToQuote] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const firstPdfLoad = useRef(true); // true until first PDF is loaded
@@ -980,6 +981,29 @@ export default function CalculatorShell() {
     window.addEventListener('focus', refresh);
     return () => { cancelled = true; window.removeEventListener('focus', refresh); };
   }, [quoteLink?.quoteId, quoteLink?.itemId, linkedFile?.path]);
+
+  // ─── POLL FOR LINKED FILE WHILE LINKING IN PROGRESS ───
+  useEffect(() => {
+    if (!linkPolling || !quoteLink?.quoteId || !quoteLink?.itemId) return;
+    let cancelled = false;
+    const prevPath = linkedFile?.path;
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/quotes/${quoteLink.quoteId}/items`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const item = (data.items as any[])?.find(i => i.id === quoteLink.itemId);
+        const lf = item?.linkedFile;
+        if (lf?.path && lf?.name && lf.path !== prevPath) {
+          setLinkedFile({ path: lf.path, name: lf.name });
+          setLinkPolling(false);
+        }
+      } catch {}
+    }, 3000);
+    // Safety: stop polling after 60s
+    const timeout = setTimeout(() => { if (!cancelled) setLinkPolling(false); }, 60000);
+    return () => { cancelled = true; clearInterval(poll); clearTimeout(timeout); };
+  }, [linkPolling, quoteLink?.quoteId, quoteLink?.itemId, linkedFile?.path]);
 
   // ─── AUTO-LOAD LINKED PDF VIA HELPER FILE SERVER OR STORAGE ───
   useEffect(() => {
@@ -1462,8 +1486,10 @@ export default function CalculatorShell() {
               quoteId={quoteLink.quoteId}
               itemId={quoteLink.itemId}
               hasLinkedFile={!!linkedFile || !!pdf}
+              linkedFilePath={linkedFile?.path}
               presskitEnabled={presskitEnabled}
               onBrowserUpload={handlePdfFiles}
+              onLinkStart={() => setLinkPolling(true)}
             />
           </div>
         </div>
@@ -4621,23 +4647,42 @@ function MfStepper({ value, onChange, step = 1, min, max, style }: {
 // Two modes based on presskitEnabled:
 // PressKit ON: pick from customer/quote folder or native Windows dialog (presscal-fh:// protocol)
 // PressKit OFF: simple browser <input type="file"> for in-memory PDF loading
-function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, presskitEnabled, onBrowserUpload }: {
+function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, linkedFilePath, presskitEnabled, onBrowserUpload, onLinkStart }: {
   quoteId: string;
   itemId: string;
   hasLinkedFile: boolean;
+  linkedFilePath?: string;
   presskitEnabled: boolean;
   onBrowserUpload: (files: FileList) => void;
+  onLinkStart?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [folders, setFolders] = useState<{ customer: string | null; job: string | null }>({ customer: null, job: null });
   const [foldersLoaded, setFoldersLoaded] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const linkingPathRef = useRef(linkedFilePath);
+
+  // Clear linking spinner when linkedFile path changes (new file arrived)
+  useEffect(() => {
+    if (linking && linkedFilePath && linkedFilePath !== linkingPathRef.current) {
+      setLinking(false);
+    }
+    linkingPathRef.current = linkedFilePath;
+  }, [linkedFilePath, linking]);
+
+  // Safety timeout: clear spinner after 60s
+  useEffect(() => {
+    if (!linking) return;
+    const t = setTimeout(() => setLinking(false), 60000);
+    return () => clearTimeout(t);
+  }, [linking]);
 
   // Reset when quoteId changes
-  useEffect(() => { setFolders({ customer: null, job: null }); setFoldersLoaded(false); }, [quoteId]);
+  useEffect(() => { setFolders({ customer: null, job: null }); setFoldersLoaded(false); setLinking(false); }, [quoteId]);
 
   // Load folders every time the menu opens (PressKit mode only)
   useEffect(() => {
@@ -4681,6 +4726,8 @@ function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, presskitEnabled, onB
     const url = folder
       ? `presscal-fh://pick-file-for-item?quoteId=${quoteId}&itemId=${itemId}&folder=${encodeURIComponent(folder)}`
       : `presscal-fh://pick-file-for-item?quoteId=${quoteId}&itemId=${itemId}`;
+    setLinking(true);
+    onLinkStart?.();
     window.location.href = url;
     setOpen(false);
   };
@@ -4689,6 +4736,8 @@ function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, presskitEnabled, onB
     const url = startFolder
       ? `presscal-fh://pick-file-dialog?quoteId=${quoteId}&itemId=${itemId}&folder=${encodeURIComponent(startFolder)}`
       : `presscal-fh://pick-file-dialog?quoteId=${quoteId}&itemId=${itemId}`;
+    setLinking(true);
+    onLinkStart?.();
     window.location.href = url;
     setOpen(false);
   };
@@ -4733,10 +4782,12 @@ function CalcLinkFileMenu({ quoteId, itemId, hasLinkedFile, presskitEnabled, onB
           : 'Επιλογή PDF για preview'
         }
       >
-        <i className={`fas ${presskitEnabled ? 'fa-link' : 'fa-file-pdf'}`} style={{ fontSize: '0.55rem' }} />
-        {presskitEnabled
-          ? (hasLinkedFile ? 'Αλλαγή' : 'Σύνδεση αρχείου')
-          : (hasLinkedFile ? 'Αλλαγή PDF' : 'Επιλογή PDF')
+        <i className={`fas ${linking ? 'fa-spinner fa-spin' : presskitEnabled ? 'fa-link' : 'fa-file-pdf'}`} style={{ fontSize: '0.55rem' }} />
+        {linking
+          ? 'Φόρτωση...'
+          : presskitEnabled
+            ? (hasLinkedFile ? 'Αλλαγή' : 'Σύνδεση αρχείου')
+            : (hasLinkedFile ? 'Αλλαγή PDF' : 'Επιλογή PDF')
         }
       </button>
       {presskitEnabled && open && pos && createPortal(
