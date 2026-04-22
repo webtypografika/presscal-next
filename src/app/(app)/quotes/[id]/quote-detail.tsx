@@ -1051,6 +1051,12 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               {selectedContact.email && <span>{selectedContact.email}</span>}
               {selectedContact.phone && <span>{selectedContact.phone}</span>}
               {selectedContact.mobile && <span>{selectedContact.mobile}</span>}
+              {(selectedContact.folderPath || selectedCompany?.folderPath) && (
+                <a href={`presscal-fh://open-folder?path=${encodeURIComponent(selectedContact.folderPath || selectedCompany?.folderPath)}${selectedContact.email ? `&email=${encodeURIComponent(selectedContact.email)}` : ''}&quoteId=${quote.id}`}
+                  style={{ color: '#f58220', textDecoration: 'none', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                  <i className="fas fa-folder-open" style={{ fontSize: '0.5rem' }} />Φάκελος
+                </a>
+              )}
             </div>
           )}
         </div>
