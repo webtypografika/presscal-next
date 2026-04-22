@@ -199,6 +199,7 @@ export interface ExportOptions {
   // Gang Run
   gangData?: GangRunData;
   gangJobPdfBytes?: (Uint8Array | undefined)[];  // per-job PDF bytes (indexed by jobIdx)
+  gangJobPageIndices?: (number[] | undefined)[];  // per-job source page mapping (from page-view split)
 
   // Step Multi
   blocks?: StepBlock[];
@@ -2121,9 +2122,24 @@ export async function exportImpositionPDF(options: ExportOptions): Promise<Uint8
     let gangJobEmbedded: EmbeddedPageInfo[][] | undefined;
     if (options.gangJobPdfBytes && options.gangJobPdfBytes.some(Boolean)) {
       gangJobEmbedded = [];
-      for (const jobBytes of options.gangJobPdfBytes) {
+      // Deduplicate: if jobs share the same bytes (page-view split), embed once
+      const embeddedCache = new Map<Uint8Array, EmbeddedPageInfo[]>();
+      for (let ji = 0; ji < options.gangJobPdfBytes.length; ji++) {
+        const jobBytes = options.gangJobPdfBytes[ji];
+        const pageIndices = options.gangJobPageIndices?.[ji];
         if (jobBytes && jobBytes.length > 0) {
-          gangJobEmbedded.push(await embedSourcePages(doc, jobBytes, 'nup', options.bleed || 0, options.keepSourceMarks));
+          // Embed the full PDF (cached if same bytes reference)
+          let allPages = embeddedCache.get(jobBytes);
+          if (!allPages) {
+            allPages = await embedSourcePages(doc, jobBytes, 'nup', options.bleed || 0, options.keepSourceMarks);
+            embeddedCache.set(jobBytes, allPages);
+          }
+          if (pageIndices && pageIndices.length > 0) {
+            // Page-view: pick only the mapped pages from the full embedded set
+            gangJobEmbedded.push(pageIndices.map(pi => allPages![pi]).filter(Boolean));
+          } else {
+            gangJobEmbedded.push(allPages);
+          }
         } else {
           gangJobEmbedded.push([]);
         }

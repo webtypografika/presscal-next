@@ -1273,6 +1273,7 @@ export default function CalculatorShell() {
     numberExtra: csExtraNum.length > 0 ? csExtraNum : undefined,
     fixedBack: impoMode === 'cutstack' && csFixedBack, fixedBackPdfBytes: csBackPdf?.bytes,
     gangJobPdfBytes: impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf?.bytes) : undefined,
+    gangJobPageIndices: impoMode === 'gangrun' ? gangJobs.map(gj => gj.pdf?.sourcePageIndices) : undefined,
     blocks: impoMode === 'stepmulti' ? impo.blocks : undefined,
     smBlockPdfBytes: impoMode === 'stepmulti' ? smBlockPdfs.map(p => p?.bytes) : undefined,
     jobDescription: `${job.width}x${job.height}mm - ${job.qty} pcs - ${impoMode}`,

@@ -36,6 +36,8 @@ export interface ParsedPDF {
   thumbnails: (HTMLCanvasElement | null)[];
   coverage?: PDFCoverage;  // average coverage across all pages
   fileMap?: { name: string; startPage: number; endPage: number }[];
+  /** For page-view wrappers: maps view page indices to source PDF page indices (0-based) */
+  sourcePageIndices?: number[];
 }
 
 // ─── PAGE-VIEW HELPERS (for gang run multi-page split) ───
@@ -49,6 +51,7 @@ export function createSinglePageView(source: ParsedPDF, pageIndex: number): Pars
     fileName: `${source.fileName} (σελ.${pageIndex + 1})`,
     thumbnails: [source.thumbnails[pageIndex]],
     coverage: source.coverage,
+    sourcePageIndices: [pageIndex],
   };
 }
 
@@ -61,6 +64,7 @@ export function createDuplexPageView(source: ParsedPDF, frontIdx: number, backId
     fileName: `${source.fileName} (σελ.${frontIdx + 1}/${backIdx + 1})`,
     thumbnails: [source.thumbnails[frontIdx], source.thumbnails[backIdx]],
     coverage: source.coverage,
+    sourcePageIndices: [frontIdx, backIdx],
   };
 }
 
