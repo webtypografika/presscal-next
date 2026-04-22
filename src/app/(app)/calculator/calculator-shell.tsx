@@ -556,7 +556,7 @@ export default function CalculatorShell() {
   const gangStorageKey = typeof window !== 'undefined'
     ? `calc-gang-state:${new URLSearchParams(window.location.search).get('quoteId') || ''}:${new URLSearchParams(window.location.search).get('itemId') || ''}`
     : 'calc-gang-state';
-  const [gangJobs, setGangJobs] = useState<{ id: string; label: string; qty: number; pdf?: ParsedPDF; filePath?: string; fileName?: string }[]>(() => {
+  const [gangJobs, setGangJobs] = useState<{ id: string; label: string; qty: number; pdf?: ParsedPDF; filePath?: string; fileName?: string; splitSourcePath?: string; splitPageIndices?: number[] }[]>(() => {
     if (typeof window === 'undefined') return [{ id: crypto.randomUUID(), label: 'Δουλειά 1', qty: 1 }];
     try {
       const saved = localStorage.getItem(gangStorageKey);
@@ -567,6 +567,8 @@ export default function CalculatorShell() {
             id: j.id, label: j.label, qty: j.qty,
             filePath: j.filePath || undefined,
             fileName: j.fileName || undefined,
+            splitSourcePath: j.splitSourcePath || undefined,
+            splitPageIndices: j.splitPageIndices || undefined,
           }));
         }
       }
@@ -596,18 +598,58 @@ export default function CalculatorShell() {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(gangStorageKey, JSON.stringify({
-        jobs: gangJobs.map(gj => ({ id: gj.id, label: gj.label, qty: gj.qty, filePath: gj.filePath, fileName: gj.fileName })),
+        jobs: gangJobs.map(gj => ({
+          id: gj.id, label: gj.label, qty: gj.qty,
+          filePath: gj.filePath, fileName: gj.fileName,
+          splitSourcePath: gj.splitSourcePath, splitPageIndices: gj.splitPageIndices,
+        })),
         cellAssign: gangCellAssign,
       }));
     } catch { /* quota exceeded — ignore */ }
   }, [gangJobs, gangCellAssign]);
   // Auto-load gang PDFs from filePath (via PressKit file server)
+  // For split jobs (splitSourcePath + splitPageIndices), fetch source PDF once and create page-views
   useEffect(() => {
-    gangJobs.forEach((gj, i) => {
-      if (gj.pdf || !gj.filePath || !gj.fileName?.toLowerCase().endsWith('.pdf')) return;
-      const url = gj.filePath.startsWith('/storage/')
-        ? gj.filePath
-        : `http://localhost:17824/?path=${encodeURIComponent(gj.filePath)}`;
+    const splitSourceJobs = gangJobs.filter(gj => !gj.pdf && gj.splitSourcePath && gj.splitPageIndices);
+    const regularJobs = gangJobs.filter(gj => !gj.pdf && gj.filePath && !gj.splitSourcePath && gj.fileName?.toLowerCase().endsWith('.pdf'));
+
+    // Load split source PDFs (grouped by source path to avoid duplicate fetches)
+    if (splitSourceJobs.length > 0) {
+      const bySource = new Map<string, number[]>();
+      splitSourceJobs.forEach((gj, _) => {
+        const idx = gangJobs.indexOf(gj);
+        const path = gj.splitSourcePath!;
+        if (!bySource.has(path)) bySource.set(path, []);
+        bySource.get(path)!.push(idx);
+      });
+      bySource.forEach((jobIndices, sourcePath) => {
+        const url = sourcePath.startsWith('/storage/')
+          ? sourcePath
+          : `http://localhost:17824/?path=${encodeURIComponent(sourcePath)}`;
+        fetch(url).then(r => r.ok ? r.blob() : null).then(async blob => {
+          if (!blob) return;
+          const file = new File([blob], sourcePath.replace(/^.*[/\\]/, ''), { type: 'application/pdf' });
+          const sourcePdf = await parsePDF(file);
+          setGangJobs(prev => prev.map((j, idx) => {
+            if (!jobIndices.includes(idx) || j.pdf) return j;
+            const pi = j.splitPageIndices!;
+            const viewPdf = pi.length === 2
+              ? createDuplexPageView(sourcePdf, pi[0], pi[1])
+              : createSinglePageView(sourcePdf, pi[0]);
+            return { ...j, pdf: viewPdf };
+          }));
+          // Also set the main PDF for preview
+          setPdf(prev => prev || sourcePdf);
+        }).catch(() => {});
+      });
+    }
+
+    // Load regular (non-split) gang PDFs
+    regularJobs.forEach(gj => {
+      const i = gangJobs.indexOf(gj);
+      const url = gj.filePath!.startsWith('/storage/')
+        ? gj.filePath!
+        : `http://localhost:17824/?path=${encodeURIComponent(gj.filePath!)}`;
       fetch(url).then(r => r.ok ? r.blob() : null).then(async blob => {
         if (!blob) return;
         const file = new File([blob], gj.fileName!, { type: 'application/pdf' });
@@ -3419,6 +3461,8 @@ export default function CalculatorShell() {
 
                       const applySplit = () => {
                         const src = sp.pdf;
+                        // Source path for persistence: from linked file or the original job's filePath
+                        const sourcePath = linkedFile?.path || (sp.sourceJobIdx != null ? gangJobs[sp.sourceJobIdx]?.filePath : undefined);
                         let newJobs: typeof gangJobs = [];
 
                         if (gangSplitMode === 'common_back') {
@@ -3430,6 +3474,8 @@ export default function CalculatorShell() {
                               label: `Σελ. ${i + 1}`,
                               qty: 1,
                               pdf: createDuplexPageView(src, i, backIdx),
+                              splitSourcePath: sourcePath,
+                              splitPageIndices: [i, backIdx],
                             });
                           }
                           setJob(prev => ({ ...prev, sides: 2 as const }));
@@ -3441,6 +3487,8 @@ export default function CalculatorShell() {
                               label: `Σελ. ${i + 1}/${i + 2}`,
                               qty: 1,
                               pdf: createDuplexPageView(src, i, i + 1),
+                              splitSourcePath: sourcePath,
+                              splitPageIndices: [i, i + 1],
                             });
                           }
                           setJob(prev => ({ ...prev, sides: 2 as const }));
@@ -3452,6 +3500,8 @@ export default function CalculatorShell() {
                               label: `Σελ. ${i + 1}`,
                               qty: 1,
                               pdf: createSinglePageView(src, i),
+                              splitSourcePath: sourcePath,
+                              splitPageIndices: [i],
                             });
                           }
                           setJob(prev => ({ ...prev, sides: 1 as const }));
