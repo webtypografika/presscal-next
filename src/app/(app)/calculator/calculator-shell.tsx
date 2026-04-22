@@ -590,6 +590,7 @@ export default function CalculatorShell() {
   // Multi-page PDF split popup
   const [gangSplitPending, setGangSplitPending] = useState<{ pdf: ParsedPDF; sourceJobIdx: number | null } | null>(null);
   const [gangSplitMode, setGangSplitMode] = useState<'common_back' | 'paired' | 'fronts_only'>('fronts_only');
+  const [gangSplitBackPage, setGangSplitBackPage] = useState(0); // 0-based index of the common back page
   // Persist gang layout (jobs metadata + cell assignments) on change
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -726,6 +727,7 @@ export default function CalculatorShell() {
         }
         // Auto-select default split mode based on page count parity
         setGangSplitMode(parsed.pageCount % 2 === 0 ? 'paired' : 'common_back');
+        setGangSplitBackPage(0);
         setGangSplitPending({ pdf: parsed, sourceJobIdx: null });
         setPdfLoading(false);
         return;
@@ -3410,6 +3412,7 @@ export default function CalculatorShell() {
                       const sp = gangSplitPending;
                       const pc = sp.pdf.pageCount;
                       const isEven = pc % 2 === 0;
+                      const backIdx = gangSplitBackPage;
                       const pairedCount = Math.floor(pc / 2);
                       const commonBackCount = pc - 1;
 
@@ -3418,13 +3421,14 @@ export default function CalculatorShell() {
                         let newJobs: typeof gangJobs = [];
 
                         if (gangSplitMode === 'common_back') {
-                          // Page 1 = common back, pages 2..N = fronts
-                          for (let i = 1; i < src.pageCount; i++) {
+                          // backIdx = common back, all other pages = fronts
+                          for (let i = 0; i < src.pageCount; i++) {
+                            if (i === backIdx) continue;
                             newJobs.push({
                               id: crypto.randomUUID(),
                               label: `Σελ. ${i + 1}`,
                               qty: 1,
-                              pdf: createDuplexPageView(src, i, 0),
+                              pdf: createDuplexPageView(src, i, backIdx),
                             });
                           }
                           setJob(prev => ({ ...prev, sides: 2 as const }));
@@ -3502,24 +3506,85 @@ export default function CalculatorShell() {
                             </span>
                           </div>
 
-                          {/* Page thumbnails */}
+                          {/* Page thumbnails — clickable in common_back mode to pick the back page */}
                           <div style={{ display: 'flex', gap: 4, marginBottom: 8, overflowX: 'auto', paddingBottom: 4 }}>
-                            {sp.pdf.thumbnails.map((thumb, ti) => (
-                              <div key={ti} style={{
-                                flexShrink: 0, width: 36, textAlign: 'center',
-                              }}>
-                                {thumb ? (
-                                  <canvas
-                                    ref={c => { if (c && thumb) { c.width = thumb.width; c.height = thumb.height; c.getContext('2d')?.drawImage(thumb, 0, 0); } }}
-                                    style={{ width: 36, height: 'auto', borderRadius: 3, border: '1px solid var(--border)' }}
-                                  />
-                                ) : (
-                                  <div style={{ width: 36, height: 48, borderRadius: 3, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)' }} />
-                                )}
-                                <div style={{ fontSize: '0.5rem', color: '#64748b', marginTop: 1 }}>{ti + 1}</div>
-                              </div>
-                            ))}
+                            {sp.pdf.thumbnails.map((thumb, ti) => {
+                              const isBack = gangSplitMode === 'common_back' && ti === backIdx;
+                              const isPairedFront = gangSplitMode === 'paired' && ti % 2 === 0;
+                              const isPairedBack = gangSplitMode === 'paired' && ti % 2 === 1;
+                              const isFront = gangSplitMode === 'common_back' && ti !== backIdx;
+                              return (
+                                <div key={ti} style={{
+                                  flexShrink: 0, width: 36, textAlign: 'center',
+                                  cursor: gangSplitMode === 'common_back' ? 'pointer' : 'default',
+                                }}
+                                  onClick={() => { if (gangSplitMode === 'common_back') setGangSplitBackPage(ti); }}
+                                  title={gangSplitMode === 'common_back'
+                                    ? (isBack ? 'Επιλεγμένη πίσω όψη' : 'Κλικ για πίσω όψη')
+                                    : undefined
+                                  }
+                                >
+                                  <div style={{ position: 'relative' }}>
+                                    {thumb ? (
+                                      <canvas
+                                        ref={c => { if (c && thumb) { c.width = thumb.width; c.height = thumb.height; c.getContext('2d')?.drawImage(thumb, 0, 0); } }}
+                                        style={{
+                                          width: 36, height: 'auto', borderRadius: 3,
+                                          border: isBack ? '2px solid var(--accent)' : isFront ? '2px solid var(--teal)' : '1px solid var(--border)',
+                                          opacity: gangSplitMode === 'fronts_only' ? 1 : (isBack || isFront || isPairedFront || isPairedBack) ? 1 : 0.5,
+                                        }}
+                                      />
+                                    ) : (
+                                      <div style={{ width: 36, height: 48, borderRadius: 3, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)' }} />
+                                    )}
+                                    {/* Badge */}
+                                    {isBack && (
+                                      <div style={{
+                                        position: 'absolute', top: -4, right: -4,
+                                        width: 14, height: 14, borderRadius: '50%',
+                                        background: 'var(--accent)', color: '#fff',
+                                        fontSize: '0.4rem', fontWeight: 800,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      }}>B</div>
+                                    )}
+                                    {isFront && (
+                                      <div style={{
+                                        position: 'absolute', top: -4, right: -4,
+                                        width: 14, height: 14, borderRadius: '50%',
+                                        background: 'var(--teal)', color: '#fff',
+                                        fontSize: '0.4rem', fontWeight: 800,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      }}>F</div>
+                                    )}
+                                    {isPairedFront && (
+                                      <div style={{
+                                        position: 'absolute', top: -4, right: -4,
+                                        width: 14, height: 14, borderRadius: '50%',
+                                        background: 'var(--teal)', color: '#fff',
+                                        fontSize: '0.4rem', fontWeight: 800,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      }}>F</div>
+                                    )}
+                                    {isPairedBack && (
+                                      <div style={{
+                                        position: 'absolute', top: -4, right: -4,
+                                        width: 14, height: 14, borderRadius: '50%',
+                                        background: 'var(--accent)', color: '#fff',
+                                        fontSize: '0.4rem', fontWeight: 800,
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                      }}>B</div>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '0.5rem', color: isBack ? 'var(--accent)' : '#64748b', fontWeight: isBack ? 700 : 400, marginTop: 1 }}>{ti + 1}</div>
+                                </div>
+                              );
+                            })}
                           </div>
+                          {gangSplitMode === 'common_back' && (
+                            <div style={{ fontSize: '0.6rem', color: '#64748b', marginBottom: 6, fontStyle: 'italic' }}>
+                              Κλικ σε thumbnail για αλλαγή πίσω όψης
+                            </div>
+                          )}
 
                           {/* Split mode options */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 8 }}>
@@ -3535,7 +3600,7 @@ export default function CalculatorShell() {
                             <div style={radioStyle(gangSplitMode === 'common_back')} onClick={() => setGangSplitMode('common_back')}>
                               <div style={dotStyle(gangSplitMode === 'common_back')} />
                               <div>
-                                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text)' }}>Κοινή πίσω όψη (σελ. 1)</div>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text)' }}>Κοινή πίσω όψη (σελ. {backIdx + 1})</div>
                                 <div style={{ fontSize: '0.6rem', color: '#64748b' }}>{commonBackCount} δουλειές + 1 κοινή πλάτη</div>
                               </div>
                             </div>
@@ -3659,6 +3724,7 @@ export default function CalculatorShell() {
                                   const parsed = await parsePDF(file);
                                   if (parsed.pageCount > 1) {
                                     setGangSplitMode(parsed.pageCount % 2 === 0 ? 'paired' : 'common_back');
+                                    setGangSplitBackPage(0);
                                     setGangSplitPending({ pdf: parsed, sourceJobIdx: i });
                                   } else {
                                     setGangJobs(prev => prev.map((j, idx) => idx === i ? { ...j, pdf: parsed, filePath: data.filePath, fileName: data.fileName } : j));
