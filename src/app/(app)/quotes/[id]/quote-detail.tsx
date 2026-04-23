@@ -3169,24 +3169,27 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
     if (!formName.trim()) { toast('Εισάγετε όνομα', 'error'); return; }
     setSaving(true);
     try {
-      const data = {
-        name: formName.trim(),
-        company: formCompany.trim() || null,
-        email: formEmail.trim() || null,
-        phone: formPhone.trim() || null,
-        afm: formAfm.trim().replace(/^(EL|GR)\s*/i, '') || null,
-        doy: formDoy.trim() || null,
-        address: formAddress.trim() || null,
-        city: formCity.trim() || null,
-        zip: formZip.trim() || null,
-        folderPath: formFolder.trim() || null,
-      };
       if (mode === 'new') {
-        const c = await createCustomer(data as any);
+        const c = await createCustomer({
+          name: formCompany.trim() || formName.trim(),
+          company: formCompany.trim() || undefined,
+          email: formEmail.trim() || undefined,
+          phone: formPhone.trim() || undefined,
+        } as any);
         toast('Πελάτης δημιουργήθηκε');
         onSelect(c.id);
       } else {
-        await updateCustomer(editId, data);
+        await updateCustomer(editId, {
+          name: formName.trim(),
+          email: formEmail.trim() || null,
+          phone: formPhone.trim() || null,
+          afm: formAfm.trim().replace(/^(EL|GR)\s*/i, '') || null,
+          doy: formDoy.trim() || null,
+          address: formAddress.trim() || null,
+          city: formCity.trim() || null,
+          zip: formZip.trim() || null,
+          folderPath: formFolder.trim() || null,
+        });
         toast('Πελάτης ενημερώθηκε');
         onSelect(editId);
       }
