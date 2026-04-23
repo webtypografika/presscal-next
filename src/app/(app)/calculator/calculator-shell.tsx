@@ -944,6 +944,10 @@ export default function CalculatorShell() {
     if (imDuplex === 'h2h' || imDuplex === 'h2f' || imDuplex === 'h2f_cols') setImpoDuplexOrient(imDuplex);
     const imTurn = searchParams.get('impoTurnType');
     if (imTurn === 'turn' || imTurn === 'tumble') setImpoTurnType(imTurn);
+    const imOffX = searchParams.get('impoOffsetX');
+    if (imOffX) setImpoOffsetX(parseFloat(imOffX));
+    const imOffY = searchParams.get('impoOffsetY');
+    if (imOffY) setImpoOffsetY(parseFloat(imOffY));
     const gangParam = searchParams.get('gangJobs');
     if (gangParam) {
       try {
@@ -1288,6 +1292,9 @@ export default function CalculatorShell() {
   };
 
   const impo: ImpositionResult = calcImposition(impoInput);
+  // Attach user-set grid offset so canvas + PDF export both honour it
+  impo.offsetX = impoOffsetX || 0;
+  impo.offsetY = impoOffsetY || 0;
 
   // Shared PDF export options
   const pdfExportOpts = {
@@ -1790,6 +1797,8 @@ export default function CalculatorShell() {
                 impoForceRows: impoForceRows ?? undefined,
                 impoDuplexOrient,
                 impoTurnType,
+                impoOffsetX: impoOffsetX || undefined,
+                impoOffsetY: impoOffsetY || undefined,
                 wasteFixed,
                 coverageLevel: color.coverage || 'mid',
                 offsetFrontCmyk: color.platesFront,
