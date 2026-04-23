@@ -948,6 +948,97 @@ export default function CalculatorShell() {
     if (imOffX) setImpoOffsetX(parseFloat(imOffX));
     const imOffY = searchParams.get('impoOffsetY');
     if (imOffY) setImpoOffsetY(parseFloat(imOffY));
+    // ─── Marks & Export settings ───
+    const imCropMarks = searchParams.get('impoCropMarks');
+    if (imCropMarks === '0' || imCropMarks === 'false') setImpoCropMarks(false);
+    const imContentScale = searchParams.get('impoContentScale');
+    if (imContentScale) setImpoContentScale(parseFloat(imContentScale));
+    const imKeepSource = searchParams.get('impoKeepSourceMarks');
+    if (imKeepSource === '1' || imKeepSource === 'true') setImpoKeepSourceMarks(true);
+    const imColorBar = searchParams.get('impoColorBar');
+    if (imColorBar === '1' || imColorBar === 'true') setImpoColorBar(true);
+    const imColorBarType = searchParams.get('impoColorBarType');
+    if (imColorBarType) setImpoColorBarType(imColorBarType as 'cmyk' | 'cmyk_tint50');
+    const imColorBarEdge = searchParams.get('impoColorBarEdge');
+    if (imColorBarEdge) setImpoColorBarEdge(imColorBarEdge as 'tail' | 'gripper');
+    const imColorBarOffY = searchParams.get('impoColorBarOffY');
+    if (imColorBarOffY) setImpoColorBarOffY(parseFloat(imColorBarOffY));
+    const imColorBarScale = searchParams.get('impoColorBarScale');
+    if (imColorBarScale) setImpoColorBarScale(parseFloat(imColorBarScale));
+    const imPlateSlug = searchParams.get('impoPlateSlug');
+    if (imPlateSlug === '1' || imPlateSlug === 'true') setImpoPlateSlug(true);
+    const imPlateSlugEdge = searchParams.get('impoPlateSlugEdge');
+    if (imPlateSlugEdge) setImpoPlateSlugEdge(imPlateSlugEdge as 'tail' | 'gripper');
+
+    // ─── Cut & Stack settings ───
+    const csStackOrd = searchParams.get('csStackOrder');
+    if (csStackOrd) setCsStackOrder(csStackOrd as 'row' | 'column' | 'snake');
+    const csNum = searchParams.get('csNumbering');
+    if (csNum === '1' || csNum === 'true') setCsNumbering(true);
+    const csStart = searchParams.get('csStartNum');
+    if (csStart) setCsStartNum(parseInt(csStart));
+    const csPrefix = searchParams.get('csNumPrefix');
+    if (csPrefix) setCsNumPrefix(csPrefix);
+    const csDigits = searchParams.get('csNumDigits');
+    if (csDigits) setCsNumDigits(parseInt(csDigits));
+    const csFontSize = searchParams.get('csNumFontSize');
+    if (csFontSize) setCsNumFontSize(parseFloat(csFontSize));
+    const csColor = searchParams.get('csNumColor');
+    if (csColor) setCsNumColor(csColor as 'black' | 'red');
+    const csFont = searchParams.get('csNumFont');
+    if (csFont) setCsNumFont(csFont as 'Helvetica' | 'Courier');
+    const csPosX = searchParams.get('csNumPosX');
+    if (csPosX) setCsNumPosX(parseFloat(csPosX));
+    const csPosY = searchParams.get('csNumPosY');
+    if (csPosY) setCsNumPosY(parseFloat(csPosY));
+    const csRot = searchParams.get('csNumRotation');
+    if (csRot) setCsNumRotation(parseFloat(csRot));
+    const csExtra = searchParams.get('csExtraNum');
+    if (csExtra) { try { setCsExtraNum(JSON.parse(csExtra)); } catch {} }
+    const csFixed = searchParams.get('csFixedBack');
+    if (csFixed === '1' || csFixed === 'true') setCsFixedBack(true);
+
+    // ─── Gang Run settings ───
+    const gangCellParam = searchParams.get('gangCellAssign');
+    if (gangCellParam) { try { setGangCellAssign(JSON.parse(gangCellParam)); } catch {} }
+    const gangSplitM = searchParams.get('gangSplitMode');
+    if (gangSplitM) setGangSplitMode(gangSplitM as 'common_back' | 'paired' | 'fronts_only');
+    const gangSplitBP = searchParams.get('gangSplitBackPage');
+    if (gangSplitBP) setGangSplitBackPage(parseInt(gangSplitBP));
+
+    // ─── Step Multi ───
+    const smBlocksParam = searchParams.get('smBlocks');
+    if (smBlocksParam) { try { setSmBlocks(JSON.parse(smBlocksParam)); } catch {} }
+
+    // ─── Job settings ───
+    const sheetsPerPadParam = searchParams.get('sheetsPerPad');
+    if (sheetsPerPadParam) setJob(prev => ({ ...prev, sheetsPerPad: parseInt(sheetsPerPadParam) }));
+    const bodyPagesParam = searchParams.get('bodyPages');
+    if (bodyPagesParam) setJob(prev => ({ ...prev, bodyPages: parseInt(bodyPagesParam) }));
+    const customMultParam = searchParams.get('customMult');
+    if (customMultParam) setJob(prev => ({ ...prev, customMult: parseFloat(customMultParam) }));
+
+    // ─── Production/Cost settings ───
+    const prodMultParam = searchParams.get('prodMultiplier');
+    if (prodMultParam) setProdMultiplier(parseFloat(prodMultParam));
+    const speedOvr = searchParams.get('speedOverride');
+    if (speedOvr) setSpeedOverride(parseInt(speedOvr));
+    const pbThick = searchParams.get('pbPaperThickness');
+    if (pbThick) setPbPaperThickness(parseFloat(pbThick));
+
+    // ─── Color settings ───
+    const varnTiming = searchParams.get('varnishTiming');
+    const perfectParam = searchParams.get('perfecting');
+    const printMeth = searchParams.get('printMethod');
+    if (varnTiming || perfectParam || printMeth) {
+      setColor(prev => ({
+        ...prev,
+        ...(varnTiming ? { varnishTiming: varnTiming as ColorData['varnishTiming'] } : {}),
+        ...(perfectParam === '1' || perfectParam === 'true' ? { perfecting: true } : {}),
+        ...(printMeth ? { printMethod: printMeth as ColorData['printMethod'] } : {}),
+      }));
+    }
+
     const gangParam = searchParams.get('gangJobs');
     if (gangParam) {
       try {
@@ -1821,6 +1912,48 @@ export default function CalculatorShell() {
                 customMachineIds: finish.customMachineIds.length ? finish.customMachineIds : undefined,
                 overrides: hasOverrides ? overrides : undefined,
                 pageRange: job.pageRange || undefined,
+                // Marks & Export
+                impoCropMarks: impoCropMarks ? undefined : false,
+                impoContentScale: impoContentScale !== 100 ? impoContentScale : undefined,
+                impoKeepSourceMarks: impoKeepSourceMarks || undefined,
+                impoColorBar: impoColorBar || undefined,
+                impoColorBarType: impoColorBar && impoColorBarType !== 'cmyk' ? impoColorBarType : undefined,
+                impoColorBarEdge: impoColorBar && impoColorBarEdge !== 'tail' ? impoColorBarEdge : undefined,
+                impoColorBarOffY: impoColorBar && impoColorBarOffY ? impoColorBarOffY : undefined,
+                impoColorBarScale: impoColorBar && impoColorBarScale !== 100 ? impoColorBarScale : undefined,
+                impoPlateSlug: impoPlateSlug || undefined,
+                impoPlateSlugEdge: impoPlateSlug && impoPlateSlugEdge !== 'tail' ? impoPlateSlugEdge : undefined,
+                // Cut & Stack
+                csStackOrder: csStackOrder !== 'row' ? csStackOrder : undefined,
+                csNumbering: csNumbering || undefined,
+                csStartNum: csStartNum !== 1 ? csStartNum : undefined,
+                csNumPrefix: csNumPrefix || undefined,
+                csNumDigits: csNumDigits !== 4 ? csNumDigits : undefined,
+                csNumFontSize: csNumFontSize !== 8 ? csNumFontSize : undefined,
+                csNumColor: csNumColor !== 'black' ? csNumColor : undefined,
+                csNumFont: csNumFont !== 'Helvetica' ? csNumFont : undefined,
+                csNumPosX: csNumPosX !== 0.5 ? csNumPosX : undefined,
+                csNumPosY: csNumPosY !== 0.95 ? csNumPosY : undefined,
+                csNumRotation: csNumRotation || undefined,
+                csExtraNum: csExtraNum.length ? JSON.stringify(csExtraNum) : undefined,
+                csFixedBack: csFixedBack || undefined,
+                // Gang Run
+                gangCellAssign: Object.keys(gangCellAssign).length ? JSON.stringify(gangCellAssign) : undefined,
+                gangSplitMode: gangSplitMode !== 'fronts_only' ? gangSplitMode : undefined,
+                gangSplitBackPage: gangSplitBackPage || undefined,
+                // Step Multi
+                smBlocks: smBlocks.length > 1 || (smBlocks.length === 1 && (smBlocks[0].cols > 1 || smBlocks[0].rows > 1)) ? JSON.stringify(smBlocks) : undefined,
+                // Job settings
+                sheetsPerPad: job.sheetsPerPad !== 50 ? job.sheetsPerPad : undefined,
+                bodyPages: job.bodyPages !== 64 ? job.bodyPages : undefined,
+                customMult: job.customMult !== 1 ? job.customMult : undefined,
+                // Production/Cost
+                speedOverride: speedOverride ?? undefined,
+                pbPaperThickness: pbPaperThickness !== 0.1 ? pbPaperThickness : undefined,
+                // Color settings
+                varnishTiming: color.varnishTiming !== 'inline' ? color.varnishTiming : undefined,
+                perfecting: color.perfecting || undefined,
+                printMethod: color.printMethod !== 'sheetwise' ? color.printMethod : undefined,
               };
               // Build an enriched linkedFile from current state + parsed PDF metadata.
               // We save this so when the user reopens the quote (e.g. via recalculate),

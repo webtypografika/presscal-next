@@ -107,6 +107,49 @@ function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: s
     if (cd.impoOffsetY != null) p.set('impoOffsetY', String(cd.impoOffsetY));
     if (Array.isArray(cd.gangJobs) && cd.gangJobs.length > 0) p.set('gangJobs', JSON.stringify(cd.gangJobs));
     if (cd.wasteFixed != null) p.set('wasteFixed', String(cd.wasteFixed));
+    // Marks & Export
+    if (cd.impoCropMarks === false) p.set('impoCropMarks', '0');
+    if (cd.impoContentScale != null && cd.impoContentScale !== 100) p.set('impoContentScale', String(cd.impoContentScale));
+    if (cd.impoKeepSourceMarks) p.set('impoKeepSourceMarks', '1');
+    if (cd.impoColorBar) p.set('impoColorBar', '1');
+    if (cd.impoColorBarType != null) p.set('impoColorBarType', cd.impoColorBarType as string);
+    if (cd.impoColorBarEdge != null) p.set('impoColorBarEdge', cd.impoColorBarEdge as string);
+    if (cd.impoColorBarOffY != null) p.set('impoColorBarOffY', String(cd.impoColorBarOffY));
+    if (cd.impoColorBarScale != null) p.set('impoColorBarScale', String(cd.impoColorBarScale));
+    if (cd.impoPlateSlug) p.set('impoPlateSlug', '1');
+    if (cd.impoPlateSlugEdge != null) p.set('impoPlateSlugEdge', cd.impoPlateSlugEdge as string);
+    // Cut & Stack
+    if (cd.csStackOrder != null) p.set('csStackOrder', cd.csStackOrder as string);
+    if (cd.csNumbering) p.set('csNumbering', '1');
+    if (cd.csStartNum != null) p.set('csStartNum', String(cd.csStartNum));
+    if (cd.csNumPrefix != null) p.set('csNumPrefix', cd.csNumPrefix as string);
+    if (cd.csNumDigits != null) p.set('csNumDigits', String(cd.csNumDigits));
+    if (cd.csNumFontSize != null) p.set('csNumFontSize', String(cd.csNumFontSize));
+    if (cd.csNumColor != null) p.set('csNumColor', cd.csNumColor as string);
+    if (cd.csNumFont != null) p.set('csNumFont', cd.csNumFont as string);
+    if (cd.csNumPosX != null) p.set('csNumPosX', String(cd.csNumPosX));
+    if (cd.csNumPosY != null) p.set('csNumPosY', String(cd.csNumPosY));
+    if (cd.csNumRotation != null) p.set('csNumRotation', String(cd.csNumRotation));
+    if (cd.csExtraNum != null) p.set('csExtraNum', typeof cd.csExtraNum === 'string' ? cd.csExtraNum as string : JSON.stringify(cd.csExtraNum));
+    if (cd.csFixedBack) p.set('csFixedBack', '1');
+    // Gang Run
+    if (cd.gangCellAssign != null) p.set('gangCellAssign', typeof cd.gangCellAssign === 'string' ? cd.gangCellAssign as string : JSON.stringify(cd.gangCellAssign));
+    if (cd.gangSplitMode != null) p.set('gangSplitMode', cd.gangSplitMode as string);
+    if (cd.gangSplitBackPage != null) p.set('gangSplitBackPage', String(cd.gangSplitBackPage));
+    // Step Multi
+    if (cd.smBlocks != null) p.set('smBlocks', typeof cd.smBlocks === 'string' ? cd.smBlocks as string : JSON.stringify(cd.smBlocks));
+    // Job settings
+    if (cd.sheetsPerPad != null) p.set('sheetsPerPad', String(cd.sheetsPerPad));
+    if (cd.bodyPages != null) p.set('bodyPages', String(cd.bodyPages));
+    if (cd.customMult != null) p.set('customMult', String(cd.customMult));
+    // Production/Cost
+    if (cd.prodMultiplier != null) p.set('prodMultiplier', String(cd.prodMultiplier));
+    if (cd.speedOverride != null) p.set('speedOverride', String(cd.speedOverride));
+    if (cd.pbPaperThickness != null) p.set('pbPaperThickness', String(cd.pbPaperThickness));
+    // Color settings
+    if (cd.varnishTiming != null) p.set('varnishTiming', cd.varnishTiming as string);
+    if (cd.perfecting) p.set('perfecting', '1');
+    if (cd.printMethod != null) p.set('printMethod', cd.printMethod as string);
     // Finishing
     if (cd.guillotineId != null) p.set('guillotineId', cd.guillotineId as string);
     if (cd.lamMachineId != null) p.set('lamMachineId', cd.lamMachineId as string);
