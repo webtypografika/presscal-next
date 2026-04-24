@@ -1331,7 +1331,11 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                       {item.calcData.ups ? ` ×${item.calcData.ups}` : ''}
                     </span>
                   )}
-                  {items.some(i => i.id !== item.id && !i.calcData?.machineId) && (
+                </div>
+              )}
+              {/* Action buttons — always visible */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px', marginTop: -2, flexWrap: 'wrap' }}>
+                  {item.calcData?.machineId && items.some(i => i.id !== item.id && !i.calcData?.machineId) && (
                     <button
                       onClick={() => applyCalcToOthers(item)}
                       disabled={applyingCalc}
@@ -1367,8 +1371,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                     <i className="fas fa-clone" />
                     <span style={{ fontSize: '0.62rem' }}>Duplicate</span>
                   </button>
-                </div>
-              )}
+              </div>
             </div>
             <input type="number" value={item.qty || ''} onChange={e => updateItem(idx, 'qty', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%' }} />
             <select value={item.unit || 'τεμ'} onChange={e => updateItem(idx, 'unit', e.target.value)} style={{ ...inp, border: 'none', background: 'transparent', padding: '4px 2px', textAlign: 'center', width: '100%', fontSize: '0.78rem', cursor: 'pointer', appearance: 'none' }}>
