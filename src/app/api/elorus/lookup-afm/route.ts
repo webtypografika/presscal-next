@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
       if (match && match.company && !match.company.startsWith('ΑΦΜ ')) {
         // Found with real data — extract address from Elorus record
         const addr = Array.isArray(match.addresses) && match.addresses.length > 0 ? match.addresses[0] : null;
-        const contactName = [match.first_name, match.last_name].filter(Boolean).join(' ').trim();
+        const contactName = [match.first_name, match.last_name].filter(Boolean).join(' ').trim() || match.company || match.display_name || '';
         const primaryEmail = Array.isArray(match.email) && match.email.length > 0 ? match.email[0].email : '';
         return NextResponse.json({
           source: 'elorus_existing',
