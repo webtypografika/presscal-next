@@ -940,71 +940,145 @@ function ElorusSettings({ org, inputCls }: { org: { apiElorus?: string | null; e
 
 // ═══ COURIER SETTINGS ═══
 function CourierSettings({ inputCls }: { inputCls: string }) {
-  const [connected, setConnected] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [apiKeyMasked, setApiKeyMasked] = useState('');
+  const [providers, setProviders] = useState<{ id: string; apiKeyMasked: string; baseUrl?: string }[]>([]);
+  const [defaultId, setDefaultId] = useState<string | null>(null);
+  const [available, setAvailable] = useState<{ id: string; name: string; defaultBaseUrl: string; authHelp?: string }[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  const [loaded, setLoaded] = useState(false);
+
+  // Add form
+  const [addingId, setAddingId] = useState('');
+  const [newKey, setNewKey] = useState('');
 
   useState(() => {
     fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get' }) })
       .then(r => r.json())
       .then(d => {
-        setConnected(d.connected);
-        setApiKeyMasked(d.apiKeyMasked || '');
+        setProviders(d.providers || []);
+        setDefaultId(d.defaultId || null);
+        setAvailable(d.available || []);
         setLoaded(true);
       }).catch(() => setLoaded(true));
   });
 
-  async function handleSave() {
+  async function reload() {
+    const d = await fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get' }) }).then(r => r.json());
+    setProviders(d.providers || []);
+    setDefaultId(d.defaultId || null);
+    setAvailable(d.available || []);
+  }
+
+  async function handleAdd() {
+    if (!addingId || !newKey) return;
     setBusy(true); setMsg('');
     const res = await fetch('/api/courier', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'save', apiKey }),
+      body: JSON.stringify({ action: 'save', providerId: addingId, apiKey: newKey }),
     }).then(r => r.json());
     setBusy(false);
-    if (res.ok) { setMsg('Συνδέθηκε!'); setConnected(true); setApiKeyMasked('••••' + apiKey.slice(-4)); setApiKey(''); }
+    if (res.ok) { setMsg('Συνδέθηκε!'); setAddingId(''); setNewKey(''); await reload(); }
     else setMsg(res.error || 'Σφάλμα');
   }
 
-  async function handleDisconnect() {
+  async function handleRemove(id: string) {
     setBusy(true);
-    await fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'disconnect' }) });
-    setConnected(false); setApiKeyMasked(''); setApiKey('');
+    await fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'remove', providerId: id }) });
+    await reload();
     setBusy(false); setMsg('');
+  }
+
+  async function handleSetDefault(id: string) {
+    await fetch('/api/courier', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setDefault', providerId: id }) });
+    setDefaultId(id);
   }
 
   if (!loaded) return null;
 
+  const configuredIds = new Set(providers.map(p => p.id));
+  const unconfigured = available.filter(a => !configuredIds.has(a.id));
+  const addMeta = available.find(a => a.id === addingId);
+
   return (
     <Section icon="fa-truck" iconColor="#10b981" title="COURIER — ΑΠΟΣΤΟΛΕΣ">
-      {connected ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <i className="fas fa-check-circle" style={{ color: 'var(--success)' }} />
-          <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>NexDay (Hermes)</span>
-          <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{apiKeyMasked}</span>
-          <span style={{ fontSize: '0.65rem', color: '#64748b' }}>· Στοιχεία αποστολέα από Προφίλ Εταιρείας</span>
-          <button onClick={handleDisconnect} disabled={busy} style={{
-            marginLeft: 'auto', border: 'none', background: 'transparent',
-            color: '#ef4444', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600,
-          }}>Αποσύνδεση</button>
+      {/* Configured providers */}
+      {providers.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+          {providers.map(p => {
+            const meta = available.find(a => a.id === p.id);
+            const isDefault = p.id === defaultId;
+            return (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: isDefault ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.02)', border: `1px solid ${isDefault ? 'rgba(16,185,129,0.2)' : 'var(--border)'}` }}>
+                <i className="fas fa-check-circle" style={{ color: '#10b981', fontSize: '0.75rem' }} />
+                <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{meta?.name || p.id}</span>
+                <span style={{ fontSize: '0.72rem', color: '#64748b' }}>{p.apiKeyMasked}</span>
+                {isDefault && <span style={{ fontSize: '0.6rem', padding: '2px 6px', borderRadius: 4, background: 'rgba(16,185,129,0.12)', color: '#10b981', fontWeight: 700 }}>Προεπιλογή</span>}
+                {!isDefault && providers.length > 1 && (
+                  <button onClick={() => handleSetDefault(p.id)} style={{ border: 'none', background: 'transparent', color: '#64748b', fontSize: '0.68rem', cursor: 'pointer' }}>
+                    Ορισμός προεπιλογής
+                  </button>
+                )}
+                <button onClick={() => handleRemove(p.id)} disabled={busy} style={{
+                  marginLeft: 'auto', border: 'none', background: 'transparent',
+                  color: '#ef4444', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600,
+                }}>Αποσύνδεση</button>
+              </div>
+            );
+          })}
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Συνδέστε τον λογαριασμό NexDay (Hermes) για αποστολή vouchers. Τα στοιχεία αποστολέα λαμβάνονται από το Προφίλ Εταιρείας.</div>
+      )}
+
+      {/* Add new provider */}
+      {!addingId && unconfigured.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {providers.length === 0 && (
+            <span style={{ fontSize: '0.78rem', color: '#94a3b8', marginRight: 4 }}>Συνδέστε courier για αποστολή vouchers.</span>
+          )}
+          {unconfigured.map(u => (
+            <button key={u.id} onClick={() => setAddingId(u.id)} style={{
+              padding: '6px 14px', borderRadius: 8, border: '1px dashed var(--border)',
+              background: 'transparent', color: 'var(--text)', fontSize: '0.78rem',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.color = '#10b981'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)'; }}
+            >
+              <i className="fas fa-plus" style={{ fontSize: '0.6rem' }} />{u.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {addingId && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+              <i className="fas fa-truck" style={{ marginRight: 6, color: '#10b981' }} />{addMeta?.name || addingId}
+            </span>
+            <button onClick={() => { setAddingId(''); setNewKey(''); setMsg(''); }} style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <i className="fas fa-times" />
+            </button>
+          </div>
+          {addMeta?.authHelp && <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{addMeta.authHelp}</div>}
           <div>
             <label style={{ fontSize: '0.68rem', color: '#94a3b8', display: 'block', marginBottom: 2 }}>API Key</label>
-            <input value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="NexDay Bearer Token" className={inputCls} />
+            <input value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="API Key / Bearer Token" className={inputCls} />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button onClick={handleSave} disabled={busy || !apiKey} style={{
-              padding: '8px 16px', borderRadius: 8, border: 'none', cursor: apiKey ? 'pointer' : 'not-allowed',
-              background: apiKey ? '#10b981' : 'var(--border)', color: '#fff', fontSize: '0.78rem', fontWeight: 600,
+            <button onClick={handleAdd} disabled={busy || !newKey} style={{
+              padding: '8px 16px', borderRadius: 8, border: 'none', cursor: newKey ? 'pointer' : 'not-allowed',
+              background: newKey ? '#10b981' : 'var(--border)', color: '#fff', fontSize: '0.78rem', fontWeight: 600,
               opacity: busy ? 0.5 : 1,
             }}>{busy ? 'Σύνδεση...' : 'Σύνδεση'}</button>
             {msg && <span style={{ fontSize: '0.72rem', color: msg.includes('!') ? 'var(--success)' : '#ef4444', fontWeight: 600 }}>{msg}</span>}
           </div>
+        </div>
+      )}
+
+      {providers.length > 0 && (
+        <div style={{ marginTop: 8, fontSize: '0.68rem', color: '#475569' }}>
+          <i className="fas fa-info-circle" style={{ marginRight: 4 }} />
+          Στοιχεία αποστολέα από το Προφίλ Εταιρείας · Tracking email αποστέλλεται αυτόματα
         </div>
       )}
     </Section>

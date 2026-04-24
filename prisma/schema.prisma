@@ -121,9 +121,13 @@ model Org {
   // Job folder settings
   jobFolderRoot String?  // Global root path e.g. "D:\\Εργασίες"
 
-  // Courier integration
-  courierProvider      String?  // 'nexday' (future: 'acs', 'speedex' etc.)
-  courierApiKey        String?  // Bearer token
+  // Courier integration (multi-provider)
+  courierProviders  Json?    // [{id, apiKey, baseUrl?}]
+  courierDefaultId  String?  // default provider id
+
+  // DEPRECATED — kept for migration from single-provider
+  courierProvider      String?
+  courierApiKey        String?
   courierSenderName    String?
   courierSenderPhone   String?
   courierSenderAddress String?
@@ -400,18 +404,33 @@ model Product {
   archetype String   // 'single_leaf' | 'pad' | 'booklet' | 'perfect_bound' | 'die_cut' | 'custom'
   notes     String   @default("")
 
-  // Archetype-specific fields
+  // Product type: 'calculator' (pricing profiles) or 'catalog' (sellable items)
+  productType String @default("calculator") // 'calculator' | 'catalog'
+
+  // Archetype-specific fields (calculator)
   pages          Int?     // booklet pages
   sheetsPerPad   Int?     // pad sheets
   bodyPages      Int?     // perfect bound body pages
   customMult     Float?   // custom multiplier
 
-  // Offset profit settings
+  // Offset profit settings (calculator)
   offset    Json     @default("{}")
-  // Digital profit settings
+  // Digital profit settings (calculator)
   digital   Json     @default("{}")
-  // Finishing settings
+  // Finishing settings (calculator)
   finishing Json     @default("[]")
+
+  // Catalog fields
+  sku            String?  // product code / SKU
+  sellPrice      Float?   // sell price (ex-VAT)
+  unit           String?  // unit of measure label (τεμ, m², κιλό, ώρα, etc.)
+  description    String?  // product description for invoices
+
+  // Elorus sync
+  elorusProductId   String?  // Elorus product UUID
+  elorusTaxId       String?  // default tax for this product
+  elorusUnitId      String?  // Elorus unit measure ID
+  elorusSyncedAt    DateTime?
 
   isFavourite Boolean @default(false)
 
@@ -421,6 +440,8 @@ model Product {
 
   @@index([orgId, archetype])
   @@index([orgId, deletedAt])
+  @@index([orgId, productType])
+  @@index([elorusProductId])
 }
 
 // ─── CUSTOMERS (DEPRECATED — kept for migration) ───
