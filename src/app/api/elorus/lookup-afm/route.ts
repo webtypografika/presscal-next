@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { doyToElorusCode } from '@/lib/elorus-doy-map';
+import { doyToElorusCode, elorusCodeToDoyName } from '@/lib/elorus-doy-map';
 import { normalizeAfm } from '@/lib/normalize-afm';
 
 const ORG_ID = 'default-org';
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
           elorusContactId: match.id,
           onomasia: match.company || match.display_name || '',
           commer_title: match.company || '',
-          doy_descr: match.tax_office_name || match.tax_office || '',
+          doy_descr: match.tax_office_name || elorusCodeToDoyName(match.tax_office) || '',
           postal_address: addr?.address || addr?.address_line || '',
           postal_zip_code: addr?.zip || '',
           postal_area_description: addr?.city || '',

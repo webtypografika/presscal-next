@@ -54,6 +54,8 @@ export async function updateJobStage(
       && isQuoteSubfolder(quote.jobFolderPath, quote.company?.folderPath ?? null, quote.number)
     ) {
       originalFolderPath = quote.jobFolderPath;
+      // Queue for FileHelper polling — any machine with PressKit can pick this up
+      data.pendingArchivePath = originalFolderPath;
     }
     await prisma.quote.update({ where: { id: quoteId }, data });
     return { originalFolderPath };

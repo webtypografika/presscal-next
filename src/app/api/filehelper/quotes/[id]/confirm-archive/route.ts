@@ -45,7 +45,7 @@ export async function POST(
 
   await prisma.quote.update({
     where: { id },
-    data: { jobFolderPath: newFolderPath },
+    data: { jobFolderPath: newFolderPath, pendingArchivePath: null },
   })
 
   return NextResponse.json({ ok: true, jobFolderPath: newFolderPath })

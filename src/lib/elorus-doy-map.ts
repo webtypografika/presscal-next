@@ -148,6 +148,18 @@ function greeklish(s: string): string {
  * Convert AADE doy_descr (Greek, e.g. "ΚΕΦΟΔΕ ΑΤΤΙΚΗΣ") to Elorus tax_office code (e.g. "1190").
  * Returns empty string if no match found.
  */
+/**
+ * Convert Elorus tax_office code (e.g. "7151") to Greek DOY name (e.g. "ΝΑΞΟΥ").
+ * Returns the code as-is if no match found.
+ */
+export function elorusCodeToDoyName(code: string): string {
+  if (!code) return '';
+  const name = DOY_MAP[code];
+  if (!name) return code;
+  // Convert greeklish back to a presentable form (capitalize)
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 export function doyToElorusCode(doyDescr: string): string {
   if (!doyDescr) return '';
   const norm = greeklish(doyDescr);

@@ -312,6 +312,8 @@ export async function archiveQuote(
   // PressKit may fail (EBUSY, permission, cancelled) so the DB must stay in sync with
   // the real filesystem. When PressKit successfully moves the folder, it calls
   // POST /api/quotes/:id/confirm-archive which updates jobFolderPath to the archive path.
+  // Set pendingArchivePath so any FileHelper can pick this up via polling.
+  statusPatch.pendingArchivePath = jobFolderPath;
   await updateStatusOnly();
 
   const newFolderPath = toArchivePath(jobFolderPath);
@@ -333,7 +335,7 @@ export async function confirmArchive(
   }
   await prisma.quote.update({
     where: { id: quoteId },
-    data: { jobFolderPath: newFolderPath },
+    data: { jobFolderPath: newFolderPath, pendingArchivePath: null },
   });
   revalidatePath('/quotes');
   revalidatePath('/jobs');
@@ -508,7 +510,7 @@ export async function createCompanyFromElorus(data: {
 
 export async function getCompaniesForQuotes(search?: string) {
   if (!search?.trim()) {
-    return prisma.company.findMany({
+    const companies = await prisma.company.findMany({
       where: { orgId: ORG_ID, deletedAt: null },
       include: {
         companyContacts: {
@@ -519,36 +521,57 @@ export async function getCompaniesForQuotes(search?: string) {
       orderBy: { name: 'asc' },
       take: 30,
     });
+    return companies.map((c: any) => ({ ...c, _type: 'company' as const }));
   }
   // Fuzzy: match company directly OR via linked contacts (name/email)
   const [companyIds, contactIds] = await Promise.all([
     fuzzySearchIds('Company', ORG_ID, search, 30),
     fuzzySearchIds('Contact', ORG_ID, search, 30),
   ]);
+  // Find which contacts are linked to companies
+  let linkedContactIds = new Set<string>();
   let viaContact: string[] = [];
   if (contactIds.length > 0) {
     const links = await prisma.companyContact.findMany({
       where: { contactId: { in: contactIds } },
-      select: { companyId: true },
+      select: { companyId: true, contactId: true },
     });
     viaContact = links.map(l => l.companyId);
+    linkedContactIds = new Set(links.map(l => l.contactId));
   }
+  // Standalone contacts (not linked to any company)
+  const standaloneContactIds = contactIds.filter(id => !linkedContactIds.has(id));
+
   const seen = new Set<string>();
   const ids: string[] = [];
   for (const id of [...companyIds, ...viaContact]) {
     if (!seen.has(id)) { seen.add(id); ids.push(id); }
   }
-  if (ids.length === 0) return [];
-  const rows = await prisma.company.findMany({
-    where: { id: { in: ids.slice(0, 30) }, deletedAt: null },
-    include: {
-      companyContacts: {
-        include: { contact: true },
-        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
-      },
-    },
-  });
-  return orderByIds(rows, ids.slice(0, 30));
+
+  const [companyRows, contactRows] = await Promise.all([
+    ids.length > 0
+      ? prisma.company.findMany({
+          where: { id: { in: ids.slice(0, 30) }, deletedAt: null },
+          include: {
+            companyContacts: {
+              include: { contact: true },
+              orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+            },
+          },
+        })
+      : [],
+    standaloneContactIds.length > 0
+      ? prisma.contact.findMany({
+          where: { id: { in: standaloneContactIds.slice(0, 15) }, deletedAt: null },
+        })
+      : [],
+  ]);
+
+  const orderedCompanies = ids.length > 0 ? orderByIds(companyRows, ids.slice(0, 30)) : [];
+  return [
+    ...orderedCompanies.map((c: any) => ({ ...c, _type: 'company' as const })),
+    ...contactRows.map((c: any) => ({ ...c, _type: 'contact' as const })),
+  ];
 }
 
 // ─── QUOTE RECIPIENTS ───

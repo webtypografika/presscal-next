@@ -613,6 +613,7 @@ model Quote {
   jobStage          String?   // 'files' | 'printing' | 'cutting' | 'finishing' | 'delivery'
   jobStageUpdatedAt DateTime?
   jobFolderPath     String?   // Resolved local path (set on approval)
+  pendingArchivePath String?  // Set on completion; cleared by FileHelper after move
   deadline          DateTime?
   jobPriority       String?   // 'normal' | 'urgent' | 'rush'
   jobNotes          String?

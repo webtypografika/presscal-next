@@ -508,7 +508,13 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
   async function create() {
     setSaving(true);
     try {
-      const q = await createQuote({ companyId: customerId || undefined, title: title || undefined, items: [emptyItem()] });
+      const isContact = pickedCustomer?._type === 'contact';
+      const q = await createQuote({
+        companyId: customerId && !isContact ? customerId : undefined,
+        contactId: customerId && isContact ? customerId : undefined,
+        title: title || undefined,
+        items: [emptyItem()],
+      });
       onCreated(q);
     } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); }
     finally { setSaving(false); }
@@ -581,7 +587,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
               }}
             >
               <span style={{ color: selectedCustomer ? 'var(--text)' : '#64748b' }}>
-                {selectedCustomer ? selectedCustomer.name : 'Αναζήτηση εταιρείας...'}
+                {selectedCustomer ? selectedCustomer.name : 'Αναζήτηση πελάτη...'}
               </span>
               <i className={`fas fa-chevron-${custDropOpen ? 'up' : 'down'}`} style={{ fontSize: '0.6rem', color: '#64748b' }} />
             </div>
@@ -590,7 +596,7 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
               background: showNewCust ? 'color-mix(in srgb, var(--blue) 12%, transparent)' : 'transparent',
               color: 'var(--blue)', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'all 0.2s',
-            }} title="Νέα εταιρεία"><i className={`fas ${showNewCust ? 'fa-times' : 'fa-plus'}`} /></button>
+            }} title="Νέος πελάτης"><i className={`fas ${showNewCust ? 'fa-times' : 'fa-plus'}`} /></button>
           </div>
 
           {/* Dropdown */}
@@ -621,7 +627,10 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
                 {!searching && filteredCustomers.length === 0 && custSearch.trim() && (
                   <div style={{ padding: '12px 14px', color: '#475569', fontSize: '0.8rem' }}>Δεν βρέθηκαν αποτελέσματα</div>
                 )}
-                {filteredCustomers.map(c => (
+                {filteredCustomers.map(c => {
+                  const isContact = c._type === 'contact';
+                  const accentColor = isContact ? 'var(--teal)' : 'var(--blue)';
+                  return (
                   <button key={c.id} onClick={() => { setCustomerId(c.id); setPickedCustomer(c); setCustDropOpen(false); setCustSearch(''); setShowNewCust(false); }}
                     style={{
                       width: '100%', padding: '8px 14px', border: 'none', textAlign: 'left',
@@ -635,16 +644,19 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
                   >
                     <div style={{
                       width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                      background: 'color-mix(in srgb, var(--blue) 12%, transparent)',
-                      border: '1.5px solid color-mix(in srgb, var(--blue) 25%, transparent)',
+                      background: `color-mix(in srgb, ${accentColor} 12%, transparent)`,
+                      border: `1.5px solid color-mix(in srgb, ${accentColor} 25%, transparent)`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'var(--blue)', fontSize: '0.65rem', fontWeight: 700,
+                      color: accentColor, fontSize: '0.65rem', fontWeight: 700,
                     }}>
-                      {c.name.charAt(0).toUpperCase()}
+                      <i className={`fas ${isContact ? 'fa-user' : 'fa-building'}`} style={{ fontSize: '0.55rem' }} />
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{c.name}</div>
-                      {(c.email || c.afm || c.companyContacts?.length > 0) && (
+                      {isContact ? (
+                        c.email && <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{c.email}</div>
+                      ) : (
+                      (c.email || c.afm || c.companyContacts?.length > 0) && (
                         <div style={{ fontSize: '0.7rem', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center', gap: 4 }}>
                           {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name && (
                             <span style={{ color: 'var(--teal)' }}>
@@ -655,10 +667,11 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
                           {c.companyContacts?.find((cc: any) => cc.isPrimary)?.contact?.name && c.email ? <span>·</span> : null}{c.email && <span>{c.email}</span>}
                           {c.afm ? <span>· ΑΦΜ {c.afm}</span> : null}
                         </div>
-                      )}
+                      ))}
                     </div>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

@@ -42,6 +42,11 @@ function stageIndex(stage: string | null, stages: StageConfig[]): number {
   return stages.findIndex(s => s.id === stage);
 }
 
+function jobCustomerName(j: JobQuote) {
+  const emailSender = typeof j.description === 'string' && j.description.startsWith('Email από:') ? j.description.replace('Email από:', '').trim() : null;
+  return (j as any).company?.name ?? (j as any).contact?.name ?? j.customer?.name ?? (j as any).contact?.email ?? (j as any).company?.email ?? j.customer?.email ?? emailSender ?? j.title ?? '—';
+}
+
 // ─── TOAST ───
 interface ToastData { message: string; type: 'success' | 'error' | 'info'; id: number; }
 let tId = 0;
@@ -55,7 +60,7 @@ function JobCard({ job, onDragStart, onDetail }: { job: JobQuote; onDragStart: (
   const overdue = isOverdue(job.deadline);
   const priority = job.jobPriority || 'normal';
 
-  const name = (job as any).company?.name ?? (job as any).contact?.name ?? job.customer?.name ?? (job as any).contact?.email ?? (job as any).company?.email ?? job.customer?.email ?? '—';
+  const name = jobCustomerName(job);
   const title = job.title || desc || '';
   const hasInvoice = !!(job as any).elorusInvoiceUrl;
   const hasVoucher = !!(job as any).courierVoucherId;
@@ -195,7 +200,7 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--accent)' }}>{job.number}</span>
-          <span style={{ fontSize: '1.1rem', fontWeight: 700, flex: 1 }}>{(job as any).company?.name || job.customer?.name || '—'}</span>
+          <span style={{ fontSize: '1.1rem', fontWeight: 700, flex: 1 }}>{jobCustomerName(job)}</span>
           <button onClick={() => router.push(`/quotes/${job.id}`)} style={{
             border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.04)', borderRadius: 8,
             padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--accent)', cursor: 'pointer',
@@ -694,7 +699,7 @@ export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
                 background: 'rgba(255,255,255,0.03)', cursor: 'grab', fontSize: '0.78rem', fontWeight: 600,
               }}>
                 <span style={{ color: 'var(--accent)', marginRight: 6 }}>{j.number}</span>
-                {(j as any).company?.name || j.customer?.name || '—'}
+                {jobCustomerName(j)}
               </div>
             ))}
           </div>
@@ -765,7 +770,7 @@ export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
                 return (
                   <tr key={j.id} onClick={() => setDetailJob(j)} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s' }}>
                     <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--accent)' }}>{j.number}</td>
-                    <td style={{ padding: '10px 12px' }}>{(j as any).company?.name || j.customer?.name || '—'}</td>
+                    <td style={{ padding: '10px 12px' }}>{jobCustomerName(j)}</td>
                     <td style={{ padding: '10px 12px' }}>
                       {stage ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', fontWeight: 600, color: stage.color }}>
@@ -814,7 +819,7 @@ export function JobsBoard({ jobs: initialJobs, stages: initialStages }: Props) {
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
                     <td style={{ padding: '10px 12px', fontWeight: 700, color: '#4ade80' }}>{j.number}</td>
-                    <td style={{ padding: '10px 12px' }}>{(j as any).company?.name || j.customer?.name || '—'}</td>
+                    <td style={{ padding: '10px 12px' }}>{jobCustomerName(j)}</td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>{formatDate(j.completedAt) || '—'}</td>
                     <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                       {new Intl.NumberFormat('el-GR', { style: 'currency', currency: 'EUR' }).format(j.grandTotal)}
