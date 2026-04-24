@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { Product } from '@/generated/prisma/client';
-import { createProduct, updateProduct, deleteProduct } from './actions';
+import { createProduct, updateProduct, deleteProduct, createCatalogProduct, updateCatalogProduct } from './actions';
 
 // ─── ARCHETYPES ───
 const ARCHETYPES: Record<string, {
@@ -96,17 +96,31 @@ function ModalPortal({ open, onClose, children }: { open: boolean; onClose: () =
 }
 
 // ─── SUB TABS ───
-type SubTab = 'products' | 'archetypes';
+type SubTab = 'products' | 'catalog' | 'archetypes';
+
+interface ElorusTax { id: string; title: string; percentage: string }
 
 // ─── MAIN COMPONENT ───
-export default function ProductsList({ initialProducts }: { initialProducts: Product[] }) {
+export default function ProductsList({ initialProducts, initialCatalog, elorusConnected, elorusTaxes }: {
+  initialProducts: Product[];
+  initialCatalog: Product[];
+  elorusConnected: boolean;
+  elorusTaxes: ElorusTax[];
+}) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [catalog, setCatalog] = useState<Product[]>(initialCatalog);
   const [tab, setTab] = useState<SubTab>('products');
   const [search, setSearch] = useState('');
   const [archFilter, setArchFilter] = useState('');
   const [toasts, setToasts] = useState<ToastData[]>([]);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
+  // Catalog state
+  const [catSearch, setCatSearch] = useState('');
+  const [editingCatalog, setEditingCatalog] = useState<Product | null>(null);
+  const [showNewCatalog, setShowNewCatalog] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [pushing, setPushing] = useState<string | null>(null);
 
   const addToast = useCallback((message: string, type: ToastType = 'success') => {
     setToasts(prev => [...prev, { message, type, id: ++toastId }]);
@@ -153,6 +167,78 @@ export default function ProductsList({ initialProducts }: { initialProducts: Pro
     setShowNewModal(false);
   }
 
+  // ─── CATALOG CRUD ───
+  const filteredCatalog = catalog.filter(p => {
+    if (catSearch && !p.name.toLowerCase().includes(catSearch.toLowerCase())
+      && !(p.sku || '').toLowerCase().includes(catSearch.toLowerCase())) return false;
+    return true;
+  });
+
+  async function handleCatalogSave(data: {
+    name: string; description?: string; sku?: string;
+    sellPrice?: number; unit?: string; elorusTaxId?: string;
+  }, existingId?: string) {
+    if (existingId) {
+      const updated = await updateCatalogProduct(existingId, data);
+      setCatalog(prev => prev.map(p => p.id === existingId ? updated : p));
+      addToast('Προϊόν καταλόγου ενημερώθηκε');
+    } else {
+      const created = await createCatalogProduct(data);
+      setCatalog(prev => [created, ...prev]);
+      addToast('Νέο προϊόν καταλόγου');
+    }
+    setEditingCatalog(null);
+    setShowNewCatalog(false);
+  }
+
+  async function handleCatalogDelete(id: string) {
+    await deleteProduct(id);
+    setCatalog(prev => prev.filter(p => p.id !== id));
+    addToast('Προϊόν καταλόγου διαγράφηκε');
+  }
+
+  async function handleImportElorus() {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/elorus/products', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'import' }),
+      });
+      const data = await res.json();
+      if (!res.ok) { addToast(data.error || 'Σφάλμα import', 'error'); return; }
+      addToast(`Import: ${data.created} νέα, ${data.updated} ενημερωμένα, ${data.skipped} ανενεργά`);
+      // Refresh catalog list
+      const freshRes = await fetch('/api/elorus/products', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'import' }),
+      });
+      // Just reload catalog from page — simpler
+      window.location.reload();
+    } catch (e) {
+      addToast('Σφάλμα σύνδεσης', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handlePushElorus(productId: string) {
+    setPushing(productId);
+    try {
+      const res = await fetch('/api/elorus/products', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'push', productId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { addToast(data.error || 'Σφάλμα push', 'error'); return; }
+      addToast('Προϊόν στάλθηκε στο Elorus');
+      setCatalog(prev => prev.map(p => p.id === productId ? { ...p, elorusProductId: data.elorusProductId, elorusSyncedAt: new Date() } : p));
+    } catch {
+      addToast('Σφάλμα σύνδεσης', 'error');
+    } finally {
+      setPushing(null);
+    }
+  }
+
   // ─── RENDER ───
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -175,6 +261,7 @@ export default function ProductsList({ initialProducts }: { initialProducts: Pro
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'rgba(255,255,255,0.03)', padding: 4, borderRadius: 10, width: 'fit-content', border: '1px solid var(--border)' }}>
         {([
           { id: 'products' as const, label: 'Προϊόντα', icon: 'fas fa-box' },
+          { id: 'catalog' as const, label: 'Κατάλογος', icon: 'fas fa-tags' },
           { id: 'archetypes' as const, label: 'Archetypes', icon: 'fas fa-shapes' },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -354,6 +441,212 @@ export default function ProductsList({ initialProducts }: { initialProducts: Pro
           </div>
         </>
       )}
+
+      {/* ═══ CATALOG TAB ═══ */}
+      {tab === 'catalog' && (
+        <>
+          {/* Toolbar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+            padding: '12px 16px', background: 'rgba(0,0,0,0.2)',
+            borderRadius: '10px 10px 0 0', border: '1px solid var(--border)', borderBottom: 'none',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <i className="fas fa-tags" style={{ color: '#10b981', fontSize: '0.82rem' }} />
+              <span style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text)', letterSpacing: '0.01em' }}>
+                Κατάλογος Προϊόντων / Υπηρεσιών ({filteredCatalog.length})
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* Search */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '0 10px', height: 34,
+                border: '1px solid var(--border)', borderRadius: 8,
+                background: 'rgba(255,255,255,0.04)',
+              }}>
+                <i className="fas fa-search" style={{ color: '#64748b', fontSize: '0.72rem' }} />
+                <input value={catSearch} onChange={e => setCatSearch(e.target.value)}
+                  placeholder="Αναζήτηση..."
+                  style={{ border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none', width: 140 }}
+                />
+              </div>
+              {/* Sync from Elorus */}
+              {elorusConnected && (
+                <button onClick={handleImportElorus} disabled={syncing} style={{
+                  padding: '8px 14px', borderRadius: 20, border: '1px solid rgba(16,185,129,0.3)',
+                  background: 'rgba(16,185,129,0.08)', color: '#10b981', fontSize: '0.78rem', fontWeight: 600,
+                  cursor: syncing ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  transition: 'all 0.2s', opacity: syncing ? 0.6 : 1,
+                }}>
+                  <i className={`fas ${syncing ? 'fa-spinner fa-spin' : 'fa-cloud-download-alt'}`} />
+                  Sync από Elorus
+                </button>
+              )}
+              {/* New Catalog Product */}
+              <button onClick={() => setShowNewCatalog(true)} style={{
+                padding: '8px 16px', borderRadius: 20, border: 'none',
+                background: '#10b981', color: '#fff', fontSize: '0.82rem', fontWeight: 600,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                boxShadow: '0 2px 8px rgba(16,185,129,0.3)', transition: 'all 0.2s',
+              }}>
+                <i className="fas fa-plus" /> Νέο Είδος
+              </button>
+            </div>
+          </div>
+
+          {/* Catalog Table */}
+          <div style={{
+            background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border)',
+            borderRadius: '0 0 10px 10px', overflow: 'hidden',
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {['Προϊόν / Υπηρεσία', 'SKU', 'Τιμή', 'Μονάδα', 'Elorus', 'Ενέργειες'].map((h, i) => (
+                    <th key={h} style={{
+                      padding: '10px 16px', textAlign: i >= 2 ? 'center' : 'left',
+                      fontSize: '0.68rem', fontWeight: 600, color: '#64748b',
+                      textTransform: 'uppercase', letterSpacing: '0.04em',
+                      borderBottom: '2px solid var(--border)', background: 'rgba(0,0,0,0.1)',
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCatalog.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
+                      <i className="fas fa-tags" style={{ fontSize: '2rem', marginBottom: 10, display: 'block', color: '#475569' }} />
+                      Δεν υπάρχουν είδη καταλόγου.
+                      {elorusConnected && ' Πατήστε "Sync από Elorus" ή "Νέο Είδος".'}
+                    </td>
+                  </tr>
+                ) : filteredCatalog.map(p => (
+                  <tr key={p.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    <td style={{ padding: '12px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <i className="fas fa-tag" style={{ fontSize: '0.9rem', color: '#10b981', width: 24, textAlign: 'center' }} />
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--text)', fontSize: '0.88rem', letterSpacing: '0.01em' }}>{p.name}</div>
+                          {p.description && <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: 2, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 16px', color: '#94a3b8', fontSize: '0.82rem', fontFamily: 'monospace' }}>
+                      {p.sku || '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      {p.sellPrice != null ? (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 2,
+                          background: 'rgba(16,185,129,0.1)', color: '#10b981',
+                          padding: '3px 10px', borderRadius: 6, fontSize: '0.82rem', fontWeight: 600,
+                        }}>
+                          {p.sellPrice.toFixed(2)}€
+                        </span>
+                      ) : <span style={{ color: '#475569' }}>—</span>}
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem' }}>
+                      {p.unit || 'τεμ'}
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      {p.elorusProductId ? (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          background: 'rgba(16,185,129,0.1)', color: '#10b981',
+                          padding: '3px 8px', borderRadius: 6, fontSize: '0.68rem', fontWeight: 600,
+                        }}>
+                          <i className="fas fa-link" style={{ fontSize: '0.55rem' }} /> Synced
+                        </span>
+                      ) : elorusConnected ? (
+                        <button onClick={() => handlePushElorus(p.id)} disabled={pushing === p.id} style={{
+                          background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)',
+                          borderRadius: 6, padding: '3px 8px', fontSize: '0.68rem', fontWeight: 600,
+                          color: '#f59e0b', cursor: pushing === p.id ? 'wait' : 'pointer',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}>
+                          <i className={`fas ${pushing === p.id ? 'fa-spinner fa-spin' : 'fa-cloud-upload-alt'}`} style={{ fontSize: '0.55rem' }} />
+                          Push
+                        </button>
+                      ) : (
+                        <span style={{ color: '#475569', fontSize: '0.68rem' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                      <button onClick={() => setEditingCatalog(p)} style={{
+                        background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px',
+                        borderRadius: 6, color: 'var(--blue)', transition: 'all 0.15s',
+                      }} title="Επεξεργασία">
+                        <i className="fas fa-edit" />
+                      </button>
+                      <button onClick={() => { if (confirm('Διαγραφή είδους;')) handleCatalogDelete(p.id); }} style={{
+                        background: 'none', border: 'none', cursor: 'pointer', padding: '6px 8px',
+                        borderRadius: 6, color: 'var(--danger)', transition: 'all 0.15s',
+                      }} title="Διαγραφή">
+                        <i className="fas fa-trash" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Quick info */}
+          <div style={{
+            marginTop: 16, padding: '14px 18px', background: 'rgba(0,0,0,0.15)',
+            border: '1px solid var(--border)', borderRadius: 10,
+            display: 'flex', alignItems: 'center', gap: 16,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.08)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <i className="fas fa-tags" style={{ color: '#10b981', fontSize: '1.1rem' }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '1.1rem', color: 'var(--text)' }}>{catalog.length}</div>
+                <div style={{ fontSize: '0.68rem', color: '#64748b' }}>Σύνολο ειδών</div>
+              </div>
+            </div>
+            <div style={{ width: 1, height: 30, background: 'var(--border)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.08)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <i className="fas fa-link" style={{ color: '#10b981', fontSize: '1.1rem' }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '1.1rem', color: 'var(--text)' }}>{catalog.filter(p => p.elorusProductId).length}</div>
+                <div style={{ fontSize: '0.68rem', color: '#64748b' }}>Synced με Elorus</div>
+              </div>
+            </div>
+            {!elorusConnected && (
+              <>
+                <div style={{ width: 1, height: 30, background: 'var(--border)' }} />
+                <div style={{ fontSize: '0.72rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="fas fa-exclamation-triangle" />
+                  Elorus δεν είναι συνδεδεμένο. Ρυθμίστε το στις Ρυθμίσεις.
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ═══ CATALOG MODAL ═══ */}
+      <ModalPortal open={showNewCatalog || editingCatalog !== null} onClose={() => { setShowNewCatalog(false); setEditingCatalog(null); }}>
+        <CatalogModal
+          product={editingCatalog}
+          taxes={elorusTaxes}
+          onSave={handleCatalogSave}
+          onClose={() => { setShowNewCatalog(false); setEditingCatalog(null); }}
+        />
+      </ModalPortal>
 
       {/* ═══ ARCHETYPES TAB ═══ */}
       {tab === 'archetypes' && (
@@ -728,6 +1021,154 @@ function ProductModal({ product, onSave, onClose }: ProductModalProps) {
           background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: '0.82rem',
           cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
           boxShadow: '0 2px 8px rgba(245,130,32,0.3)', transition: 'all 0.2s',
+          opacity: saving || !name.trim() ? 0.5 : 1,
+        }}>
+          {saving ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-save" />}
+          {isNew ? 'Δημιουργία' : 'Αποθήκευση'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// CATALOG MODAL — Create/Edit catalog product
+// ═══════════════════════════════════════════════════
+
+const UNITS = ['τεμ', 'ώρα', 'υπηρεσία', 'm²', 'κιλό', 'μέτρο', 'πακέτο', 'σελίδα'];
+
+function CatalogModal({ product, taxes, onSave, onClose }: {
+  product: Product | null;
+  taxes: ElorusTax[];
+  onSave: (data: {
+    name: string; description?: string; sku?: string;
+    sellPrice?: number; unit?: string; elorusTaxId?: string;
+  }, existingId?: string) => void;
+  onClose: () => void;
+}) {
+  const isNew = !product;
+  const [name, setName] = useState(product?.name || '');
+  const [description, setDescription] = useState(product?.description || '');
+  const [sku, setSku] = useState(product?.sku || '');
+  const [sellPrice, setSellPrice] = useState(product?.sellPrice ?? 0);
+  const [unit, setUnit] = useState(product?.unit || 'τεμ');
+  const [elorusTaxId, setElorusTaxId] = useState(product?.elorusTaxId || '');
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit() {
+    if (!name.trim()) return;
+    setSaving(true);
+    await onSave({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      sku: sku.trim() || undefined,
+      sellPrice: sellPrice || undefined,
+      unit,
+      elorusTaxId: elorusTaxId || undefined,
+    }, product?.id);
+    setSaving(false);
+  }
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', height: 38, borderRadius: 8, border: '1px solid var(--border)',
+    background: 'rgba(255,255,255,0.04)', color: 'var(--text)', padding: '0 10px',
+    fontSize: '0.85rem', fontFamily: 'inherit', boxSizing: 'border-box',
+  };
+  const labelStyle: React.CSSProperties = {
+    display: 'block', fontSize: '0.68rem', fontWeight: 600, color: '#64748b',
+    textTransform: 'uppercase', marginBottom: 4, letterSpacing: '0.04em',
+  };
+
+  return (
+    <div style={{
+      width: 500, maxHeight: '88vh', overflowY: 'auto',
+      background: 'rgb(16,24,48)', border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: 16, padding: 24, boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <h2 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, margin: 0, color: 'var(--text)', letterSpacing: '0.01em' }}>
+          <i className="fas fa-tag" style={{ color: '#10b981' }} />
+          {isNew ? 'Νέο Είδος Καταλόγου' : 'Επεξεργασία Είδους'}
+        </h2>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '1.2rem', cursor: 'pointer' }}>&times;</button>
+      </div>
+
+      {/* Name */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Όνομα</label>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="π.χ. Εκτύπωση Α4 Color" style={inputStyle} />
+      </div>
+
+      {/* Description */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Περιγραφή</label>
+        <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Σύντομη περιγραφή για τιμολόγια..."
+          rows={2} style={{ ...inputStyle, height: 'auto', padding: '8px 10px', resize: 'vertical' }} />
+      </div>
+
+      {/* SKU + Price */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+        <div>
+          <label style={labelStyle}>SKU / Κωδικός</label>
+          <input value={sku} onChange={e => setSku(e.target.value)} placeholder="π.χ. SRV-001" style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Τιμή Πώλησης (χωρίς ΦΠΑ)</label>
+          <input type="number" value={sellPrice} onChange={e => setSellPrice(Number(e.target.value))} min={0} step={0.01} style={inputStyle} />
+        </div>
+      </div>
+
+      {/* Unit + Tax */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+        <div>
+          <label style={labelStyle}>Μονάδα Μέτρησης</label>
+          <select value={unit} onChange={e => setUnit(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+          </select>
+        </div>
+        {taxes.length > 0 && (
+          <div>
+            <label style={labelStyle}>ΦΠΑ (Elorus)</label>
+            <select value={elorusTaxId} onChange={e => setElorusTaxId(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="">Προεπιλογή οργανισμού</option>
+              {taxes.map(t => <option key={t.id} value={t.id}>{t.title} ({t.percentage}%)</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* Elorus badge */}
+      {product?.elorusProductId && (
+        <div style={{
+          marginBottom: 18, padding: '10px 14px', borderRadius: 8,
+          background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <i className="fas fa-link" style={{ color: '#10b981', fontSize: '0.72rem' }} />
+          <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 600 }}>
+            Συνδεδεμένο με Elorus
+          </span>
+          {product.elorusSyncedAt && (
+            <span style={{ fontSize: '0.65rem', color: '#64748b', marginLeft: 'auto' }}>
+              Τελευταίο sync: {new Date(product.elorusSyncedAt).toLocaleDateString('el-GR')}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Footer */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <button onClick={onClose} style={{
+          padding: '10px 20px', borderRadius: 20, border: '1px solid var(--border)',
+          background: 'transparent', color: '#94a3b8', fontWeight: 600, fontSize: '0.82rem',
+          cursor: 'pointer', transition: 'all 0.2s',
+        }}>Ακύρωση</button>
+        <button onClick={handleSubmit} disabled={saving || !name.trim()} style={{
+          padding: '10px 24px', borderRadius: 20, border: 'none',
+          background: '#10b981', color: '#fff', fontWeight: 600, fontSize: '0.82rem',
+          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+          boxShadow: '0 2px 8px rgba(16,185,129,0.3)', transition: 'all 0.2s',
           opacity: saving || !name.trim() ? 0.5 : 1,
         }}>
           {saving ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-save" />}

@@ -18,6 +18,9 @@ export interface QuoteLineItem {
   profit: number;
   priceLocked?: boolean;
   notes?: string;
+  description?: string;
+  catalogProductId?: string;   // FK to Product (catalog type) for invoice linking
+  elorusProductId?: string;    // cached Elorus product ID for fast invoice creation
   calcData?: Record<string, unknown>;
   // Linked file from FileHelper
   linkedFile?: {

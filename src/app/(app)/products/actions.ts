@@ -70,3 +70,54 @@ export async function updateProduct(id: string, data: {
 export async function deleteProduct(id: string) {
   return prisma.product.delete({ where: { id } });
 }
+
+// ─── CATALOG PRODUCTS ───
+
+export async function getCatalogProducts() {
+  return prisma.product.findMany({
+    where: { orgId: ORG_ID, productType: 'catalog', deletedAt: null },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function createCatalogProduct(data: {
+  name: string;
+  description?: string;
+  sku?: string;
+  sellPrice?: number;
+  unit?: string;
+  elorusTaxId?: string;
+}) {
+  return prisma.product.create({
+    data: {
+      orgId: ORG_ID,
+      productType: 'catalog',
+      archetype: 'custom',
+      name: data.name,
+      description: data.description || null,
+      sku: data.sku || null,
+      sellPrice: data.sellPrice ?? null,
+      unit: data.unit || 'τεμ',
+      elorusTaxId: data.elorusTaxId || null,
+    },
+  });
+}
+
+export async function updateCatalogProduct(id: string, data: {
+  name?: string;
+  description?: string;
+  sku?: string;
+  sellPrice?: number | null;
+  unit?: string;
+  elorusTaxId?: string | null;
+}) {
+  const update: Prisma.ProductUpdateInput = {};
+  if (data.name !== undefined) update.name = data.name;
+  if (data.description !== undefined) update.description = data.description || null;
+  if (data.sku !== undefined) update.sku = data.sku || null;
+  if (data.sellPrice !== undefined) update.sellPrice = data.sellPrice;
+  if (data.unit !== undefined) update.unit = data.unit;
+  if (data.elorusTaxId !== undefined) update.elorusTaxId = data.elorusTaxId;
+
+  return prisma.product.update({ where: { id }, data: update });
+}

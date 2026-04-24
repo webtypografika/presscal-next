@@ -149,16 +149,26 @@ export async function POST(req: NextRequest) {
         const qty = (item.qty as number) || 1;
         const price = (item.finalPrice as number) || (item.unitPrice as number) || 0;
         const unitValue = qty > 0 ? (price / qty) : price;
-        return {
+        const elorusProdId = (item.elorusProductId as string) || '';
+
+        const lineItem: Record<string, unknown> = {
           title: (item.name as string) || 'Είδος',
           description: (item.description as string) || '',
           quantity: String(qty),
           unit_measure: resolveUnit((item.unit as string) || 'τεμ'),
           unit_value: unitValue.toFixed(2),
           taxes: org.elorusDefaultTaxId ? [org.elorusDefaultTaxId] : [],
-          ...(org.elorusDefaultClassCat ? { mydata_classification_category: org.elorusDefaultClassCat } : {}),
-          ...(org.elorusDefaultClassType ? { mydata_classification_type: org.elorusDefaultClassType } : {}),
         };
+
+        // If item is linked to an Elorus product, use product reference
+        if (elorusProdId) {
+          lineItem.product = elorusProdId;
+        }
+
+        if (org.elorusDefaultClassCat) lineItem.mydata_classification_category = org.elorusDefaultClassCat;
+        if (org.elorusDefaultClassType) lineItem.mydata_classification_type = org.elorusDefaultClassType;
+
+        return lineItem;
       });
 
     // Fallback: single item from subtotal

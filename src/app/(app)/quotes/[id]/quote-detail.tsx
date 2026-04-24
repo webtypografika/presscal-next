@@ -229,6 +229,180 @@ function emptyItem() {
   return { id: crypto.randomUUID(), name: '', type: 'manual' as const, qty: 1, unit: 'τεμ', unitPrice: 0, finalPrice: 0, cost: 0, profit: 0, notes: '', status: 'pending' };
 }
 
+// ─── CATALOG AUTOCOMPLETE ───
+function CatalogAutocomplete({ value, onChange, catalogProducts, itemType, onSelect, inputStyle }: {
+  value: string;
+  onChange: (v: string) => void;
+  catalogProducts: CatalogProduct[];
+  itemType: string;
+  onSelect: (p: CatalogProduct) => void;
+  inputStyle: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  // Only show autocomplete for non-calculator items when catalog exists
+  const canAutocomplete = itemType !== 'calculator' && catalogProducts.length > 0;
+
+  const filtered = canAutocomplete && open && q.length > 0
+    ? catalogProducts.filter(p => {
+        const term = q.toLowerCase();
+        return p.name.toLowerCase().includes(term) || (p.sku || '').toLowerCase().includes(term);
+      }).slice(0, 8)
+    : [];
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <input
+        value={value}
+        onChange={e => {
+          onChange(e.target.value);
+          setQ(e.target.value);
+          if (canAutocomplete && e.target.value.length > 0) setOpen(true);
+        }}
+        onFocus={() => { setQ(value); if (canAutocomplete && value.length > 0) setOpen(true); }}
+        placeholder={canAutocomplete ? 'Τίτλος ή αναζήτηση καταλόγου...' : 'Τίτλος προϊόντος'}
+        style={inputStyle}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          background: 'rgb(20,30,55)', border: '1px solid var(--border)', borderRadius: 8,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)', maxHeight: 240, overflowY: 'auto',
+          marginTop: 2,
+        }}>
+          {filtered.map(p => (
+            <button key={p.id} onClick={() => { onSelect(p); setOpen(false); }} style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+              padding: '8px 10px', border: 'none', background: 'transparent',
+              cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+              borderBottom: '1px solid var(--border)',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <i className="fas fa-tag" style={{ color: '#10b981', fontSize: '0.7rem', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                <div style={{ fontSize: '0.68rem', color: '#64748b', display: 'flex', gap: 8 }}>
+                  {p.sku && <span>{p.sku}</span>}
+                  {p.description && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</span>}
+                </div>
+              </div>
+              {p.sellPrice != null && (
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#10b981', flexShrink: 0 }}>{p.sellPrice.toFixed(2)}€</span>
+              )}
+              {p.elorusProductId && (
+                <i className="fas fa-link" style={{ color: '#10b981', fontSize: '0.5rem', flexShrink: 0 }} title="Synced με Elorus" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CATALOG PICKER BUTTON (browse full catalog) ───
+function CatalogPickerButton({ catalogProducts, onSelect }: {
+  catalogProducts: CatalogProduct[];
+  onSelect: (p: CatalogProduct) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  const filtered = q
+    ? catalogProducts.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || (p.sku || '').toLowerCase().includes(q.toLowerCase())).slice(0, 10)
+    : catalogProducts.slice(0, 10);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(!open)} style={{
+        display: 'flex', alignItems: 'center', gap: 5,
+        padding: '6px 10px', borderRadius: 6, border: '1px dashed rgba(16,185,129,0.4)',
+        background: 'transparent', color: '#10b981', cursor: 'pointer',
+        fontSize: '0.78rem', fontWeight: 500, fontFamily: 'inherit', whiteSpace: 'nowrap',
+      }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#10b981'; e.currentTarget.style.background = 'rgba(16,185,129,0.06)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(16,185,129,0.4)'; e.currentTarget.style.background = 'transparent'; }}
+      >
+        <i className="fas fa-tags" style={{ fontSize: '0.6rem' }} /> Από Κατάλογο
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: '100%', right: 0, zIndex: 60, width: 340,
+          background: 'rgb(20,30,55)', border: '1px solid var(--border)', borderRadius: 10,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)', marginBottom: 4,
+        }}>
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
+            <input
+              autoFocus
+              value={q} onChange={e => setQ(e.target.value)}
+              placeholder="Αναζήτηση καταλόγου..."
+              style={{
+                width: '100%', padding: '6px 8px', borderRadius: 6,
+                border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)',
+                color: 'var(--text)', fontSize: '0.82rem', fontFamily: 'inherit', outline: 'none',
+              }}
+            />
+          </div>
+          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: 16, textAlign: 'center', fontSize: '0.78rem', color: '#64748b' }}>
+                Δεν βρέθηκαν είδη
+              </div>
+            ) : filtered.map(p => (
+              <button key={p.id} onClick={() => { onSelect(p); setOpen(false); setQ(''); }} style={{
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                padding: '8px 10px', border: 'none', background: 'transparent',
+                cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                borderBottom: '1px solid var(--border)',
+              }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <i className="fas fa-tag" style={{ color: '#10b981', fontSize: '0.7rem', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                  {(p.sku || p.description) && (
+                    <div style={{ fontSize: '0.68rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {[p.sku, p.description].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
+                </div>
+                {p.sellPrice != null && (
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#10b981', flexShrink: 0 }}>{p.sellPrice.toFixed(2)}€</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Folder pick button that opens PressKit's native folder dialog and stores the path */
 function FolderPickerButton({ value, onChange, emptyLabel, toast }: {
   value: string;
@@ -496,9 +670,10 @@ function aiToItem(ai: any) {
 
 // ─── MAIN COMPONENT ───
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { quote: QuoteWithCustomer; customers: any[]; elorusConfigured?: boolean; elorusSlug?: string; courierConfigured?: boolean; materials?: Material[]; org?: Pick<Org, 'legalName' | 'afm' | 'doy' | 'address' | 'city' | 'postalCode' | 'phone' | 'email'> | null; }
+interface CatalogProduct { id: string; name: string; description: string | null; sku: string | null; sellPrice: number | null; unit: string | null; elorusProductId: string | null; }
+interface Props { quote: QuoteWithCustomer; customers: any[]; elorusConfigured?: boolean; elorusSlug?: string; courierConfigured?: boolean; materials?: Material[]; org?: Pick<Org, 'legalName' | 'afm' | 'doy' | 'address' | 'city' | 'postalCode' | 'phone' | 'email'> | null; catalogProducts?: CatalogProduct[]; }
 
-export function QuoteDetail({ quote: initial, customers, elorusConfigured, elorusSlug, courierConfigured, materials = [], org }: Props) {
+export function QuoteDetail({ quote: initial, customers, elorusConfigured, elorusSlug, courierConfigured, materials = [], org, catalogProducts = [] }: Props) {
   const router = useRouter();
   const [quote, setQuote] = useState(initial);
   const [items, setItems] = useState<any[]>(() => Array.isArray(initial.items) && (initial.items as any[]).length > 0 ? initial.items as any[] : []);
@@ -1290,7 +1465,22 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
               <i className={`fas ${item.type === 'calculator' ? 'fa-calculator' : item.type === 'catalog' ? 'fa-book' : 'fa-pen'}`} />
             </span>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <input value={item.name} onChange={e => updateItem(idx, 'name', e.target.value)} placeholder="Τίτλος προϊόντος" style={{ ...inp, border: 'none', background: 'transparent', padding: '4px 6px', fontWeight: 600 }} />
+              <CatalogAutocomplete
+                value={item.name}
+                onChange={(v) => updateItem(idx, 'name', v)}
+                catalogProducts={catalogProducts}
+                itemType={item.type}
+                onSelect={(cp) => {
+                  setItems(prev => prev.map((it, i) => {
+                    if (i !== idx) return it;
+                    const u = { ...it, name: cp.name, description: cp.description || '', type: 'catalog', unit: cp.unit || it.unit || 'τεμ', unitPrice: cp.sellPrice || 0, catalogProductId: cp.id, elorusProductId: cp.elorusProductId || undefined };
+                    u.finalPrice = (u.qty || 1) * (u.unitPrice || 0);
+                    u.profit = u.finalPrice - (u.cost || 0);
+                    return u;
+                  }));
+                }}
+                inputStyle={{ ...inp, border: 'none', background: 'transparent', padding: '4px 6px', fontWeight: 600 }}
+              />
               <input value={item.description || ''} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Περιγραφή..." style={{ ...inp, border: 'none', background: 'transparent', padding: '2px 6px', fontSize: '0.78rem', color: 'var(--text-muted)' }} />
               {item.linkedFile && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px', marginTop: -2 }}>
@@ -1412,10 +1602,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           </div>
         ))}
 
-        {/* Add item button */}
-        <div style={{ padding: '6px 10px', borderTop: '1px solid var(--border)' }}>
+        {/* Add item buttons */}
+        <div style={{ padding: '6px 10px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6 }}>
           <button onClick={() => setItems(prev => [...prev, emptyItem()])} style={{
-            display: 'flex', alignItems: 'center', gap: 5, width: '100%',
+            display: 'flex', alignItems: 'center', gap: 5, flex: 1,
             padding: '6px 10px', borderRadius: 6, border: '1px dashed var(--border)',
             background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer',
             fontSize: '0.78rem', fontWeight: 500, fontFamily: 'inherit',
@@ -1425,6 +1615,27 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           >
             <i className="fas fa-plus" style={{ fontSize: '0.6rem' }} /> Προσθήκη προϊόντος
           </button>
+          {catalogProducts.length > 0 && (
+            <CatalogPickerButton catalogProducts={catalogProducts} onSelect={(cp) => {
+              const item = {
+                id: crypto.randomUUID(),
+                name: cp.name,
+                description: cp.description || '',
+                type: 'catalog' as const,
+                qty: 1,
+                unit: cp.unit || 'τεμ',
+                unitPrice: cp.sellPrice || 0,
+                finalPrice: cp.sellPrice || 0,
+                cost: 0,
+                profit: cp.sellPrice || 0,
+                notes: '',
+                status: 'pending',
+                catalogProductId: cp.id,
+                elorusProductId: cp.elorusProductId || undefined,
+              };
+              setItems(prev => [...prev, item]);
+            }} />
+          )}
         </div>
 
         {/* Totals row */}
