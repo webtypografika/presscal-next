@@ -9,6 +9,7 @@ export interface CourierProviderConfig {
 export interface CourierProviderMeta {
   id: string;
   name: string;
+  region: 'gr' | 'eu' | 'us' | 'global';
   defaultBaseUrl: string;
   trackingUrlTemplate: string;  // '{voucherId}' placeholder
   authType: 'bearer' | 'basic' | 'apikey';

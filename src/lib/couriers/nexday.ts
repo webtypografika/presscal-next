@@ -10,6 +10,7 @@ export const nexdayAdapter: CourierAdapter = {
   meta: {
     id: 'nexday',
     name: 'NexDay (Hermes)',
+    region: 'gr',
     defaultBaseUrl: DEFAULT_BASE,
     trackingUrlTemplate: 'https://tracking.nexday.gr/?voucher={voucherId}',
     authType: 'bearer',
