@@ -246,6 +246,12 @@ export function NewCompanyForm({ hasElorus, onSave, onCancel, toast, initialData
               type="button"
               onClick={async () => {
                 try {
+                  // Focus PressKit window via deep link before the folder dialog
+                  const fl = document.createElement('iframe');
+                  fl.style.display = 'none';
+                  fl.src = 'presscal-fh://focus';
+                  document.body.appendChild(fl);
+                  setTimeout(() => fl.remove(), 500);
                   const res = await fetch('http://localhost:17824/?pickFolder=1');
                   if (!res.ok) {
                     toast('PressKit δεν αποκρίθηκε. Βεβαιώσου ότι τρέχει.', 'error');

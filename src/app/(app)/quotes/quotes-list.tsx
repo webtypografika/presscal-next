@@ -505,6 +505,13 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Escape key closes the modal
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
   async function create() {
     setSaving(true);
     try {
@@ -556,13 +563,13 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
   }
 
   return createPortal(
-    <div onClick={onClose} style={{
+    <div style={{
       position: 'fixed', inset: 0, zIndex: 200,
       background: 'rgba(0,0,0,0.2)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 20,
     }}>
-      <div onClick={e => e.stopPropagation()} style={{
+      <div style={{
         width: showNewCust ? 620 : 520,
         minHeight: 380,
         maxHeight: 'calc(100vh - 40px)',
@@ -572,7 +579,13 @@ function QuickNewQuote({ customers, hasElorus, onClose, onCreated, onCustomerCre
         transition: 'width 0.2s',
         overflow: 'hidden',
       }}>
-        <h2 style={{ fontSize: '1.05rem', fontWeight: 600, padding: '22px 26px 14px', margin: 0, flexShrink: 0 }}>Νέα Προσφορά</h2>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '22px 26px 14px', flexShrink: 0 }}>
+          <h2 style={{ fontSize: '1.05rem', fontWeight: 600, margin: 0, flex: 1 }}>Νέα Προσφορά</h2>
+          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 6, border: 'none', background: 'transparent', color: '#64748b', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#64748b'; e.currentTarget.style.background = 'transparent'; }}
+          ><i className="fas fa-times" /></button>
+        </div>
         <div style={{ padding: '0 26px 22px', overflowY: 'auto', flex: 1 }}>
 
         <label style={{ ...lbl, fontSize: '0.72rem', marginBottom: 6 }}>Πελάτης</label>
