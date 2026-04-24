@@ -79,6 +79,8 @@ export async function POST(req: NextRequest) {
       if (match && match.company && !match.company.startsWith('ΑΦΜ ')) {
         // Found with real data — extract address from Elorus record
         const addr = Array.isArray(match.addresses) && match.addresses.length > 0 ? match.addresses[0] : null;
+        const contactName = [match.first_name, match.last_name].filter(Boolean).join(' ').trim();
+        const primaryEmail = Array.isArray(match.email) && match.email.length > 0 ? match.email[0].email : '';
         return NextResponse.json({
           source: 'elorus_existing',
           elorusContactId: match.id,
@@ -89,7 +91,10 @@ export async function POST(req: NextRequest) {
           postal_zip_code: addr?.zip || '',
           postal_area_description: addr?.city || '',
           firm_act_descr: match.profession || '',
-          email: Array.isArray(match.email) && match.email.length > 0 ? match.email[0].email : '',
+          email: primaryEmail,
+          contactName: contactName || '',
+          contactEmail: primaryEmail,
+          phone: match.phone || '',
         });
       }
       if (match) elorusContactId = match.id;

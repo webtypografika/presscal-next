@@ -76,9 +76,9 @@ export function NewCompanyForm({ hasElorus, onSave, onCancel, toast, initialData
         city: data.postal_area_description || '',
         zip: data.postal_zip_code || '',
         email: data.email || '',
-        phone: '',
-        contactName: '',
-        contactEmail: '',
+        phone: data.phone || '',
+        contactName: data.contactName || '',
+        contactEmail: data.contactEmail || '',
         elorusContactId: data.elorusContactId || undefined,
       });
     } catch (e) { setAfmError((e as Error).message); }
