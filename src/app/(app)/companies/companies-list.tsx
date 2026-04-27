@@ -263,11 +263,11 @@ export function CompaniesList({ initialCompanies, initialTotal, initialHasMore, 
                   <button onClick={async () => {
                     try {
                       const res = await fetch('http://localhost:17824/?pickFolder=1');
-                      if (!res.ok) return;
+                      if (!res.ok) { alert('PressKit δεν αποκρίθηκε'); return; }
                       const data = await res.json();
                       if (data.canceled || !data.path) return;
                       updateCompanyField(company.id, 'folderPath', data.path);
-                    } catch {}
+                    } catch { alert('Δεν βρέθηκε το PressKit. Βεβαιώσου ότι τρέχει.'); }
                   }} title="Επιλογή φακέλου"
                     style={{ padding: '6px 12px', borderRadius: 6, border: '1px dashed var(--glass-border)', background: 'transparent', color: '#64748b', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s', fontFamily: 'inherit' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}

@@ -148,11 +148,11 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, sa
           <button onClick={async () => {
             try {
               const res = await fetch('http://localhost:17824/?pickFolder=1');
-              if (!res.ok) return;
+              if (!res.ok) { alert('PressKit δεν αποκρίθηκε'); return; }
               const data = await res.json();
               if (data.canceled || !data.path) return;
               onUpdate(contact.id, { folderPath: data.path } as any);
-            } catch {}
+            } catch { alert('Δεν βρέθηκε το PressKit. Βεβαιώσου ότι τρέχει.'); }
           }} title="Επιλογή φακέλου"
             style={{ padding: '4px 10px', borderRadius: 12, border: '1px dashed var(--glass-border)', background: 'transparent', color: '#64748b', fontSize: '0.65rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, transition: 'all 0.15s', whiteSpace: 'nowrap', fontFamily: 'inherit' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}

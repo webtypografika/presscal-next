@@ -3322,14 +3322,8 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
     borderRadius: 6, padding: '7px 10px', color: 'var(--text)', fontSize: '0.85rem', outline: 'none',
   };
 
-  // Close on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [onClose]);
+  // No click-outside close — panel closes only via explicit Cancel/Save buttons
+  // (prevents accidental close when switching back from PressKit folder picker)
 
   // Extract sender info from first linked email for pre-fill
   useEffect(() => {
@@ -3878,14 +3872,8 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
     borderRadius: 6, padding: '7px 10px', color: 'var(--text)', fontSize: '0.85rem', outline: 'none',
   };
 
-  // Close on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [onClose]);
+  // No click-outside close — panel closes only via explicit Cancel/Save buttons
+  // (prevents accidental close when switching back from PressKit folder picker)
 
   // Extract sender info from first linked email
   useEffect(() => {
