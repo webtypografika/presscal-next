@@ -3698,8 +3698,9 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
             <NewCompanyForm
               hasElorus={hasElorus}
               initialData={{
-                name: emailSender?.name || '',
-                email: emailSender?.email || '',
+                name: preFill?.name || emailSender?.name || '',
+                email: preFill?.email || emailSender?.email || '',
+                phone: preFill?.phone || '',
               }}
               onSave={async (data: CompanyFormData) => {
                 let company: any;
