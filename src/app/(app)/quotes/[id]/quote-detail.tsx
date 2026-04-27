@@ -349,11 +349,15 @@ function CatalogPickerButton({ catalogProducts, onSelect }: {
       >
         <i className="fas fa-tags" style={{ fontSize: '0.6rem' }} /> Από Κατάλογο
       </button>
-      {open && (
+      {open && (() => {
+        const rect = ref.current?.getBoundingClientRect();
+        const top = rect ? Math.max(8, rect.top - 4) : 100;
+        const right = rect ? Math.max(8, window.innerWidth - rect.right) : 20;
+        return (
         <div style={{
-          position: 'absolute', bottom: '100%', right: 0, zIndex: 60, width: 340,
+          position: 'fixed', bottom: `${window.innerHeight - top}px`, right: `${right}px`, zIndex: 200, width: 340,
           background: 'rgb(20,30,55)', border: '1px solid var(--border)', borderRadius: 10,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)', marginBottom: 4,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
         }}>
           <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
             <input
@@ -398,7 +402,8 @@ function CatalogPickerButton({ catalogProducts, onSelect }: {
             ))}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
