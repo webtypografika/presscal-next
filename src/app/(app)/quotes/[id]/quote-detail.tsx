@@ -699,6 +699,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
   const [customerPickerMode, setCustomerPickerMode] = useState<'current' | 'list' | 'edit' | undefined>(undefined);
   const [showContactPicker, setShowContactPicker] = useState(false);
   const [contactPickerMode, setContactPickerMode] = useState<'current' | 'list' | 'edit' | undefined>(undefined);
+  const [companyPreFill, setCompanyPreFill] = useState<{ name: string; email: string; phone: string } | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [emailSender, setEmailSender] = useState<{ name: string; email: string } | null>(null);
 
@@ -1404,9 +1405,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       {showCustomerPicker && (
         <CustomerPicker customers={customers} currentId={customerId}
           linkedEmails={quote.linkedEmails as string[] || []} hasElorus={elorusConfigured}
-          initialMode={customerPickerMode}
-          onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); }}
-          onClose={() => setShowCustomerPicker(false)} toast={toast} />
+          initialMode={companyPreFill ? 'new' : customerPickerMode}
+          preFill={companyPreFill || undefined}
+          onSelect={(id) => { setCustomerId(id); setShowCustomerPicker(false); setCompanyPreFill(null); }}
+          onClose={() => { setShowCustomerPicker(false); setCompanyPreFill(null); }} toast={toast} />
       )}
       {showContactPicker && (
         <ContactPicker currentId={contactId} currentContact={selectedContact}
@@ -1414,7 +1416,13 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           hasElorus={elorusConfigured}
           initialMode={contactPickerMode}
           onSelect={(id, contact) => { setContactId(id); if (contact) setQuote(prev => ({ ...prev, contact } as any)); setShowContactPicker(false); }}
-          onClose={() => setShowContactPicker(false)} toast={toast} />
+          onClose={() => setShowContactPicker(false)} toast={toast}
+          onTransferToCompany={(data) => {
+            setShowContactPicker(false);
+            setCompanyPreFill(data);
+            setShowCustomerPicker(true);
+          }}
+        />
       )}
 
       {/* ═══ ACTIONS BAR (remaining) ═══ */}
@@ -3282,12 +3290,13 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
 // ═══════════════════════════════════════════════════════
 // CUSTOMER PICKER — dropdown to select/change customer
 // ═══════════════════════════════════════════════════════
-function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initialMode, onSelect, onClose, toast }: {
+function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initialMode, preFill, onSelect, onClose, toast }: {
   customers: any[];
   currentId: string;
   linkedEmails: string[];
   hasElorus?: boolean;
-  initialMode?: 'current' | 'list' | 'edit';
+  initialMode?: 'current' | 'list' | 'edit' | 'new';
+  preFill?: { name: string; email: string; phone: string };
   onSelect: (id: string) => void;
   onClose: () => void;
   toast: (msg: string, type?: ToastType) => void;
@@ -3297,10 +3306,10 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
   const [mode, setMode] = useState<'current' | 'list' | 'new' | 'edit'>(initialMode || (currentId ? 'current' : 'list'));
   const [editId, setEditId] = useState(initialMode === 'edit' && currentCustomer ? currentId : '');
   const _initEdit = initialMode === 'edit' && currentCustomer;
-  const [formName, setFormName] = useState(_initEdit ? (currentCustomer.name || '') : '');
+  const [formName, setFormName] = useState(preFill?.name || (_initEdit ? (currentCustomer.name || '') : ''));
   const [formCompany, setFormCompany] = useState(_initEdit ? (currentCustomer.company || '') : '');
-  const [formEmail, setFormEmail] = useState(_initEdit ? (currentCustomer.email || '') : '');
-  const [formPhone, setFormPhone] = useState(_initEdit ? (currentCustomer.phone || '') : '');
+  const [formEmail, setFormEmail] = useState(preFill?.email || (_initEdit ? (currentCustomer.email || '') : ''));
+  const [formPhone, setFormPhone] = useState(preFill?.phone || (_initEdit ? (currentCustomer.phone || '') : ''));
   const [formAfm, setFormAfm] = useState(_initEdit ? (currentCustomer.afm || '') : '');
   const [formDoy, setFormDoy] = useState(_initEdit ? ((currentCustomer as any).doy || '') : '');
   const [formAddress, setFormAddress] = useState(_initEdit ? ((currentCustomer as any).address || '') : '');
@@ -3831,7 +3840,7 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
 // ═══════════════════════════════════════════════════════
 // CONTACT PICKER — dropdown to select contact (who requested the quote)
 // ═══════════════════════════════════════════════════════
-function ContactPicker({ currentId, currentContact, companyId, linkedEmails, hasElorus, initialMode, onSelect, onClose, toast }: {
+function ContactPicker({ currentId, currentContact, companyId, linkedEmails, hasElorus, initialMode, onSelect, onClose, toast, onTransferToCompany }: {
   currentId: string;
   currentContact: any;
   companyId: string;
@@ -3841,6 +3850,7 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
   onSelect: (id: string, contact?: any) => void;
   onClose: () => void;
   toast: (msg: string, type?: ToastType) => void;
+  onTransferToCompany?: (data: { name: string; email: string; phone: string }) => void;
 }) {
   const [search, setSearch] = useState('');
   const [results, setResults] = useState<any[]>([]);
@@ -4212,8 +4222,22 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
                 Σύνδεση με τρέχουσα εταιρεία
               </label>
             )}
-            {/* Compact right-aligned action buttons */}
-            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+            {/* Action buttons */}
+            <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              {onTransferToCompany && (
+                <button
+                  onClick={() => onTransferToCompany({ name: formName.trim(), email: formEmail.trim(), phone: formPhone.trim() || formMobile.trim() })}
+                  title="Μεταφορά στοιχείων σε νέα εταιρεία"
+                  style={{
+                    padding: '6px 12px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--blue) 40%, transparent)',
+                    background: 'color-mix(in srgb, var(--blue) 8%, transparent)', color: 'var(--blue)',
+                    fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                  }}
+                >
+                  <i className="fas fa-building" style={{ fontSize: '0.6rem' }} />Σε Εταιρεία
+                </button>
+              )}
+              <div style={{ flex: 1 }} />
               <button onClick={() => setMode('list')} style={{
                 padding: '6px 16px', borderRadius: 6, border: '1px solid var(--border)',
                 background: 'transparent', color: 'var(--text-muted)', fontSize: '0.78rem', cursor: 'pointer',
