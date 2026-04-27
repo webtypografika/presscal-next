@@ -4234,7 +4234,7 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
                     fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
                   }}
                 >
-                  <i className="fas fa-building" style={{ fontSize: '0.6rem' }} />Σε Εταιρεία
+                  <i className="fas fa-building" style={{ fontSize: '0.6rem' }} />Μετατροπή σε Εταιρεία
                 </button>
               )}
               <div style={{ flex: 1 }} />
