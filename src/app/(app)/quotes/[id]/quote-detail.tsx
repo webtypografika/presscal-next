@@ -4045,6 +4045,24 @@ function ContactPicker({ currentId, currentContact, companyId, linkedEmails, has
               <i className="fas fa-times" />
             </button>
           </div>
+          {onTransferToCompany && (
+            <button
+              onClick={() => onTransferToCompany({
+                name: currentContact.name || '',
+                email: currentContact.email || '',
+                phone: currentContact.phone || currentContact.mobile || '',
+              })}
+              style={{
+                width: '100%', padding: '7px 0', borderRadius: 6,
+                border: '1px solid color-mix(in srgb, var(--blue) 40%, transparent)',
+                background: 'color-mix(in srgb, var(--blue) 8%, transparent)', color: 'var(--blue)',
+                fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <i className="fas fa-building" style={{ fontSize: '0.6rem' }} />Μετατροπή σε Εταιρεία
+            </button>
+          )}
         </div>
       ) : mode === 'list' ? (
         <>
