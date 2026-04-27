@@ -189,21 +189,8 @@ export async function updateQuoteStatus(id: string, status: string) {
     data.jobStageUpdatedAt = new Date();
     data.approvedAt = new Date();
 
-    // Compute job folder path
-    const quote = await prisma.quote.findUnique({
-      where: { id },
-      select: { number: true, title: true, company: { select: { name: true, folderPath: true } } },
-    });
-    if (quote) {
-      const { buildJobFolderPath } = await import('@/lib/job-folder');
-      data.jobFolderPath = buildJobFolderPath({
-        globalRoot: org?.jobFolderRoot || null,
-        companyFolderPath: quote.company?.folderPath || null,
-        companyName: quote.company?.name || 'Πελάτης',
-        quoteNumber: quote.number,
-        quoteTitle: quote.title,
-      });
-    }
+    // Job folder path is computed lazily — only when files are actually downloaded
+    // via ensureJobFolder() or the filehelper/files endpoint.
   }
 
   await prisma.quote.update({ where: { id }, data });

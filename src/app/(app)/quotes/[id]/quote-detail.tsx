@@ -1848,45 +1848,61 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 };
 
                 const jobFolder = (quote as any).jobFolderPath;
-                // Always use download-to-folder — FileHelper checks if folder exists on disk
-                // (web app can't know if local folder was deleted)
-                const globalHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${newCount > 0 && newCount < allFiles.length ? '&onlyNew=1' : ''}`;
+                const hasCompanyFolder = !!(selectedCompany as any)?.folderPath;
+                const onlyNewParam = newCount > 0 && newCount < allFiles.length ? '&onlyNew=1' : '';
+                const quoteHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${onlyNewParam}`;
+                const customerHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer${onlyNewParam}`;
 
+                // Button style helper
+                const btnStyle = (highlighted: boolean) => ({
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '9px', borderRadius: 8,
+                  border: `1px solid ${highlighted ? 'rgba(245,130,32,0.5)' : 'var(--border)'}`,
+                  background: highlighted ? 'rgba(245,130,32,0.1)' : 'transparent',
+                  color: highlighted ? '#f58220' : 'var(--text-muted)',
+                  fontSize: '0.75rem', fontWeight: 600,
+                  textDecoration: 'none', transition: 'all 0.15s',
+                } as const);
+
+                // If company has a folder, show both options side by side
+                // If no company folder, show only the quote folder button
                 return (
                   <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
-                    <a
-                      href={globalHref}
-                      onClick={() => { if (newCount > 0) setTimeout(markAsSaved, 2000); }}
-                      style={{
-                        flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                        padding: '9px', borderRadius: 8,
-                        border: `1px solid ${newCount > 0 ? 'rgba(245,130,32,0.5)' : 'var(--border)'}`,
-                        background: newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent',
-                        color: newCount > 0 ? '#f58220' : 'var(--text-muted)',
-                        fontSize: '0.75rem', fontWeight: 600,
-                        textDecoration: 'none', transition: 'all 0.15s',
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
-                    >
-                      <i className={`fas fa-${newCount > 0 ? 'download' : jobFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
-                      {newCount > 0 ? `Λήψη αρχείων (${newCount} νέα)` : jobFolder ? 'Άνοιγμα φακέλου' : 'Δημιουργία φακέλου'}
-                    </a>
-                    {(selectedCompany as any)?.folderPath && (
+                    {hasCompanyFolder ? (
+                      <>
+                        {/* Customer folder — files go directly into company.folderPath */}
+                        <a
+                          href={customerHref}
+                          onClick={() => { if (newCount > 0) setTimeout(markAsSaved, 2000); }}
+                          style={btnStyle(newCount > 0)}
+                          onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
+                        >
+                          <i className={`fas fa-${newCount > 0 ? 'download' : 'folder-open'}`} style={{ fontSize: '0.65rem' }} />
+                          {newCount > 0 ? `Φάκελος Πελάτη (${newCount} νέα)` : 'Φάκελος Πελάτη'}
+                        </a>
+                        {/* Quote subfolder — creates a dedicated folder inside company path */}
+                        <a
+                          href={quoteHref}
+                          onClick={() => { if (newCount > 0) setTimeout(markAsSaved, 2000); }}
+                          style={btnStyle(false)}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <i className={`fas fa-${jobFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
+                          Φάκελος Προσφοράς
+                        </a>
+                      </>
+                    ) : (
                       <a
-                        href={`presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer${newCount > 0 && newCount < allFiles.length ? '&onlyNew=1' : ''}`}
-                        onClick={() => { setTimeout(markAsSaved, 2000); }}
-                        style={{
-                          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          padding: '9px', borderRadius: 8,
-                          border: '1px solid var(--border)', background: 'transparent',
-                          color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600,
-                          textDecoration: 'none', transition: 'all 0.15s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                        href={quoteHref}
+                        onClick={() => { if (newCount > 0) setTimeout(markAsSaved, 2000); }}
+                        style={btnStyle(newCount > 0)}
+                        onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
                       >
-                        <i className="fas fa-user" style={{ fontSize: '0.65rem' }} /> Φάκελος Πελάτη
+                        <i className={`fas fa-${newCount > 0 ? 'download' : jobFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
+                        {newCount > 0 ? `Λήψη αρχείων (${newCount} νέα)` : jobFolder ? 'Άνοιγμα φακέλου' : 'Δημιουργία φακέλου'}
                       </a>
                     )}
                   </div>

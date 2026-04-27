@@ -483,35 +483,39 @@ export default function EmailClient() {
                     <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{email.snippet}</p>
                     {/* Actions row */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {linkedEmailMap[email.id] && (
-                        <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>
-                          {linkedEmailMap[email.id].number}
-                        </span>
-                      )}
-                      {officeLinkedEmails.has(email.id) && (
-                        <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--blue)', background: 'color-mix(in srgb, var(--blue) 12%, transparent)', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>
-                          Γραφείο
-                        </span>
-                      )}
-                      {isUnread && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--blue)', flexShrink: 0 }} />}
-                      {email.hasAttachments && <i className="fas fa-paperclip" style={{ color: 'var(--text-muted)', fontSize: '0.55rem' }} />}
+                      {/* Boxed action group: badges + indicators + link button */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, border: '1px solid var(--border)', borderRadius: 5, padding: '2px 6px', minHeight: 22 }}>
+                        {linkedEmailMap[email.id] && (
+                          <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>
+                            {linkedEmailMap[email.id].number}
+                          </span>
+                        )}
+                        {officeLinkedEmails.has(email.id) && (
+                          <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--blue)', background: 'color-mix(in srgb, var(--blue) 12%, transparent)', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>
+                            Γραφείο
+                          </span>
+                        )}
+                        {isUnread && <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--blue)', flexShrink: 0 }} />}
+                        {email.hasAttachments && <i className="fas fa-paperclip" style={{ color: 'var(--text-muted)', fontSize: '0.55rem' }} />}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const r = e.currentTarget.getBoundingClientRect();
+                            setRowLinkEmailId(prev => prev === email.id ? null : email.id);
+                            const popupH = 420;
+                            const fitsBelow = r.bottom + 4 + popupH < window.innerHeight;
+                            setRowLinkPos({ top: fitsBelow ? r.bottom + 4 : Math.max(8, r.top - popupH - 4), left: Math.min(r.left - 120, window.innerWidth - 440) });
+                          }}
+                          title="Σύνδεση email σε..."
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', fontSize: '0.6rem', color: linkedEmailMap[email.id] ? 'var(--accent)' : officeLinkedEmails.has(email.id) ? 'var(--blue)' : 'var(--text-muted)', opacity: (linkedEmailMap[email.id] || officeLinkedEmails.has(email.id)) ? 0.9 : 0.3, transition: 'all 0.15s', borderRadius: 4 }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.color = 'var(--blue)'; }}
+                          onMouseLeave={e => { if (!linkedEmailMap[email.id] && !officeLinkedEmails.has(email.id)) { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
+                        >
+                          <i className="fas fa-link" />
+                        </button>
+                      </div>
                       <div style={{ flex: 1 }} />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const r = e.currentTarget.getBoundingClientRect();
-                          setRowLinkEmailId(prev => prev === email.id ? null : email.id);
-                          const popupH = 420;
-                          const fitsBelow = r.bottom + 4 + popupH < window.innerHeight;
-                          setRowLinkPos({ top: fitsBelow ? r.bottom + 4 : Math.max(8, r.top - popupH - 4), left: Math.min(r.left - 120, window.innerWidth - 440) });
-                        }}
-                        title="Σύνδεση email σε..."
-                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', fontSize: '0.6rem', color: linkedEmailMap[email.id] ? 'var(--accent)' : officeLinkedEmails.has(email.id) ? 'var(--blue)' : 'var(--text-muted)', opacity: (linkedEmailMap[email.id] || officeLinkedEmails.has(email.id)) ? 0.9 : 0.3, transition: 'all 0.15s', borderRadius: 4 }}
-                        onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.color = 'var(--blue)'; }}
-                        onMouseLeave={e => { if (!linkedEmailMap[email.id] && !officeLinkedEmails.has(email.id)) { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
-                      >
-                        <i className="fas fa-link" />
-                      </button>
+                      {/* Delete stays outside the box */}
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDismiss(email.id); }}
                         title="Διαγραφή από την εφαρμογή (παραμένει στο Gmail)"

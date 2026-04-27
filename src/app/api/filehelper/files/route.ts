@@ -31,28 +31,19 @@ export async function GET(req: NextRequest) {
         select: { number: true, title: true, jobFolderPath: true, company: { select: { name: true, folderPath: true } } },
       })
       if (quote) {
-        const useCustomerFolder = target === 'customer' && quote.company?.folderPath
-
-        // For customer-target, always compute from company folder
-        // For global-target, reuse saved jobFolderPath if available
-        if (useCustomerFolder) {
-          const { buildJobFolderPath } = await import('@/lib/job-folder')
-          folderPath = buildJobFolderPath({
-            globalRoot: auth.org.jobFolderRoot || null,
-            companyFolderPath: quote.company!.folderPath,
-            companyName: quote.company?.name || 'Πελάτης',
-            quoteNumber: quote.number,
-            quoteTitle: quote.title,
-          })
+        if (target === 'customer' && quote.company?.folderPath) {
+          // Customer mode: download directly into the company folder — NO quote subfolder.
+          // Do NOT set jobFolderPath in DB — the user chose to work with the customer folder.
+          folderPath = quote.company.folderPath
         } else if (quote.jobFolderPath) {
-          // Reuse the already-saved path — prevents duplicate folders
+          // Reuse the already-saved quote folder path
           folderPath = quote.jobFolderPath
         } else {
-          // Compute and persist so subsequent calls use the same path
+          // Quote folder mode: compute a dedicated subfolder and persist it
           const { buildJobFolderPath } = await import('@/lib/job-folder')
           folderPath = buildJobFolderPath({
             globalRoot: auth.org.jobFolderRoot || null,
-            companyFolderPath: null,
+            companyFolderPath: quote.company?.folderPath || null,
             companyName: quote.company?.name || 'Πελάτης',
             quoteNumber: quote.number,
             quoteTitle: quote.title,
