@@ -443,8 +443,6 @@ export default function EmailClient() {
                 borderLeft: isSelected ? '3px solid var(--accent)' : isUnread ? '3px solid var(--blue)' : '3px solid transparent',
                 transition: 'background 0.15s',
               }}
-                onMouseEnter={e => e.currentTarget.querySelectorAll<HTMLElement>('.email-filter-btn').forEach(b => b.style.opacity = '0.6')}
-                onMouseLeave={e => e.currentTarget.querySelectorAll<HTMLElement>('.email-filter-btn').forEach(b => b.style.opacity = '0')}
               >
                 <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                   {/* Avatar */}
@@ -458,23 +456,9 @@ export default function EmailClient() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', minWidth: 0 }}>
                         <span style={{ fontSize: '0.82rem', fontWeight: isUnread ? 800 : 600, color: isUnread ? 'var(--text)' : 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sender.name}</span>
                         {sender.email && sender.email !== sender.name && <span style={{ fontSize: '0.68rem', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sender.email}</span>}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setSearch(`from:${sender.email}`); }}
-                          title={`Emails από ${sender.email}`}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '1px 3px', fontSize: '0.55rem', color: 'var(--text-muted)', opacity: 0, transition: 'opacity 0.15s', flexShrink: 0, borderRadius: 3 }}
-                          className="email-filter-btn"
-                        >
-                          <i className="fas fa-filter" />
-                        </button>
                       </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 8 }}>
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{timeAgo(email.date)}</span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleToggleStar(email.id); }}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, fontSize: '0.7rem', color: email.labelIds.includes('STARRED') ? '#facc15' : 'var(--text-muted)', opacity: email.labelIds.includes('STARRED') ? 1 : 0.4, transition: 'all 0.15s' }}
-                        >
-                          <i className={email.labelIds.includes('STARRED') ? 'fas fa-star' : 'far fa-star'} />
-                        </button>
                       </div>
                     </div>
                     <p style={{ fontSize: '0.78rem', fontWeight: isUnread ? 700 : 500, color: isUnread ? 'var(--text)' : 'var(--text-muted)', margin: '2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -483,8 +467,26 @@ export default function EmailClient() {
                     <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{email.snippet}</p>
                     {/* Actions row */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {/* Boxed action group: badges + indicators + link button */}
+                      {/* Boxed action group: badges + indicators + filter + star + link */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, border: '1px solid var(--border)', borderRadius: 5, padding: '2px 6px', minHeight: 22 }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSearch(`from:${sender.email}`); }}
+                          title={`Emails από ${sender.email}`}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', fontSize: '0.55rem', color: 'var(--text-muted)', opacity: 0.3, transition: 'all 0.15s', borderRadius: 4 }}
+                          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.color = 'var(--blue)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                        >
+                          <i className="fas fa-filter" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleToggleStar(email.id); }}
+                          title="Αγαπημένο"
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px 4px', fontSize: '0.6rem', color: email.labelIds.includes('STARRED') ? '#facc15' : 'var(--text-muted)', opacity: email.labelIds.includes('STARRED') ? 1 : 0.3, transition: 'all 0.15s', borderRadius: 4 }}
+                          onMouseEnter={e => { if (!email.labelIds.includes('STARRED')) { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.color = '#facc15'; } }}
+                          onMouseLeave={e => { if (!email.labelIds.includes('STARRED')) { e.currentTarget.style.opacity = '0.3'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
+                        >
+                          <i className={email.labelIds.includes('STARRED') ? 'fas fa-star' : 'far fa-star'} />
+                        </button>
                         {linkedEmailMap[email.id] && (
                           <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--accent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>
                             {linkedEmailMap[email.id].number}
