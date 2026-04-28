@@ -1482,12 +1482,12 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       }}>
         {/* Header */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '24px minmax(250px,1fr) 40px 40px 62px 62px 14px 62px 22px 22px 22px',
+          display: 'grid', gridTemplateColumns: '24px 1fr 44px 44px 68px 68px 22px',
           gap: 0, padding: '8px 10px',
           background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)',
         }}>
-          {['', 'Είδος', 'Ποσ.', 'Μονάδα', 'Τιμή/μον.', 'Σύνολο', '', 'Κόστος', '', '', ''].map((h, i) => (
-            <span key={i} style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--text-muted)', textAlign: i >= 2 && i <= 7 ? 'right' : undefined }}>{h}</span>
+          {['', 'Είδος', 'Ποσ.', 'Μον.', 'Τιμή', 'Σύνολο', ''].map((h, i) => (
+            <span key={i} style={{ fontSize: '0.78rem', fontWeight: 500, color: 'var(--text-muted)', textAlign: i >= 2 ? 'right' : undefined }}>{h}</span>
           ))}
         </div>
 
@@ -1498,12 +1498,12 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           </div>
         ) : items.map((item, idx) => (
           <div key={item.id} style={{
-            display: 'grid', gridTemplateColumns: '24px minmax(250px,1fr) 40px 40px 62px 62px 14px 62px 22px 22px 22px',
-            gap: 0, padding: '6px 10px', alignItems: 'center',
+            display: 'grid', gridTemplateColumns: '24px 1fr 44px 44px 68px 68px 22px',
+            gap: 0, padding: '6px 10px', alignItems: 'start',
             borderBottom: idx < items.length - 1 ? '1px solid var(--border)' : undefined,
           }}>
             {/* Type icon */}
-            <span style={{ fontSize: '1rem', color: item.type === 'calculator' ? 'var(--blue)' : 'var(--text-muted)' }}>
+            <span style={{ fontSize: '1rem', color: item.type === 'calculator' ? 'var(--blue)' : 'var(--text-muted)', paddingTop: 4 }}>
               <i className={`fas ${item.type === 'calculator' ? 'fa-calculator' : item.type === 'catalog' ? 'fa-book' : 'fa-pen'}`} />
             </span>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1604,9 +1604,35 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                     <span style={{ fontSize: '0.62rem' }}>Duplicate</span>
                   </button>
               </div>
+              {/* Inline: cost + lock + calc + link */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 6px', marginTop: 0 }}>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Κόστος</span>
+                <input type="number" value={item.cost || ''} onChange={e => updateItem(idx, 'cost', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '2px 4px', width: 52, fontSize: '0.72rem', color: 'var(--text-muted)' }} />
+                <button
+                  onClick={() => updateItem(idx, 'priceLocked', !item.priceLocked)}
+                  title={item.priceLocked ? 'Ξεκλείδωμα τιμής' : 'Κλείδωμα τιμής'}
+                  style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.6rem', color: item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)', padding: 0 }}
+                  onMouseEnter={e => { if (!item.priceLocked) e.currentTarget.style.color = '#f58220'; }}
+                  onMouseLeave={e => { if (!item.priceLocked) e.currentTarget.style.color = item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)'; }}
+                >
+                  <i className={`fas fa-${item.priceLocked ? 'lock' : 'lock-open'}`} />
+                </button>
+                <a href={calcUrl(item, quote.id, quote.number)} title="Κοστολόγηση" style={{ display: 'flex', alignItems: 'center', color: 'var(--blue)', opacity: 0.5, fontSize: '0.72rem', textDecoration: 'none' }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; }}
+                ><i className="fas fa-calculator" /></a>
+                <LinkFileMenu
+                  quoteId={quote.id}
+                  itemId={item.id as string}
+                  hasLinkedFile={!!item.linkedFile}
+                  linkedFileName={(item.linkedFile as any)?.name}
+                  customerFolder={(selectedCustomer as any)?.folderPath || (selectedContact as any)?.folderPath}
+                  jobFolderPath={(quote as any).jobFolderPath}
+                />
+              </div>
             </div>
             <input type="number" value={item.qty || ''} onChange={e => updateItem(idx, 'qty', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%' }} />
-            <select value={item.unit || 'τεμ'} onChange={e => updateItem(idx, 'unit', e.target.value)} style={{ ...inp, border: 'none', background: 'transparent', padding: '4px 2px', textAlign: 'center', width: '100%', fontSize: '0.78rem', cursor: 'pointer', appearance: 'none' }}>
+            <select value={item.unit || 'τεμ'} onChange={e => updateItem(idx, 'unit', e.target.value)} style={{ ...inp, border: 'none', background: 'transparent', padding: '4px 2px', textAlign: 'center', width: '100%', fontSize: '0.72rem', cursor: 'pointer', appearance: 'none' }}>
               <option value="τεμ">τεμ</option>
               <option value="m²">m²</option>
               <option value="φύλ">φύλ</option>
@@ -1614,33 +1640,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             </select>
             <input type="number" value={item.unitPrice || ''} onChange={e => updateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%' }} />
             <input type="number" value={item.finalPrice || ''} onChange={e => updateItem(idx, 'finalPrice', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: item.priceLocked ? 'rgba(245,130,32,0.08)' : 'transparent', padding: '4px 4px', width: '100%', fontWeight: 600, borderRadius: 4 }} />
-            <button
-              onClick={() => updateItem(idx, 'priceLocked', !item.priceLocked)}
-              title={item.priceLocked ? 'Ξεκλείδωμα τιμής' : 'Κλείδωμα τιμής — δεν αλλάζει από κοστολόγηση'}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.65rem', color: item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)', padding: 0, transition: 'color 0.15s' }}
-              onMouseEnter={e => { if (!item.priceLocked) e.currentTarget.style.color = '#f58220'; }}
-              onMouseLeave={e => { if (!item.priceLocked) e.currentTarget.style.color = item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)'; }}
-            >
-              <i className={`fas fa-${item.priceLocked ? 'lock' : 'lock-open'}`} />
-            </button>
-            <input type="number" value={item.cost || ''} onChange={e => updateItem(idx, 'cost', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%', color: 'var(--text-muted)' }} />
             <button onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', padding: 0, opacity: 0.4 }}
               onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = 'var(--danger)'; }}
               onMouseLeave={e => { e.currentTarget.style.opacity = '0.4'; e.currentTarget.style.color = 'var(--text-muted)'; }}
             ><i className="fas fa-times" /></button>
-            <a href={calcUrl(item, quote.id, quote.number)} title="Κοστολόγηση" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)', opacity: 0.5, fontSize: '0.85rem', textDecoration: 'none' }}
-              onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
-              onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; }}
-            ><i className="fas fa-calculator" /></a>
-            {/* Link file: customer folder / quote folder / native Windows dialog */}
-            <LinkFileMenu
-              quoteId={quote.id}
-              itemId={item.id as string}
-              hasLinkedFile={!!item.linkedFile}
-              linkedFileName={(item.linkedFile as any)?.name}
-              customerFolder={(selectedCustomer as any)?.folderPath || (selectedContact as any)?.folderPath}
-              jobFolderPath={(quote as any).jobFolderPath}
-            />
           </div>
         ))}
 
