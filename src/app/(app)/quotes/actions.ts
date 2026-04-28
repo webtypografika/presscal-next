@@ -169,8 +169,21 @@ export async function updateQuote(id: string, data: {
 // ─── DELETE ───
 
 export async function deleteQuote(id: string) {
+  // If quote has a job folder, archive it first so the folder moves to _01 Archive
+  const quote = await prisma.quote.findUnique({
+    where: { id },
+    select: { jobFolderPath: true },
+  });
+  if (quote?.jobFolderPath) {
+    try {
+      await archiveQuote(id, 'cancelled');
+    } catch {
+      // Archive may fail (no folder, permission, etc.) — proceed with delete anyway
+    }
+  }
   await prisma.quote.delete({ where: { id } });
   revalidatePath('/quotes');
+  revalidatePath('/jobs');
 }
 
 // ─── STATUS ───
