@@ -167,6 +167,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, elorusProductId: elorusId });
     }
 
+    // ─── DEBUG: check what's in DB ───
+    if (action === 'debug') {
+      const products = await prisma.product.findMany({
+        where: { orgId: ORG_ID, productType: 'catalog', deletedAt: null },
+        select: { id: true, name: true, sellPrice: true, unit: true, elorusProductId: true },
+        take: 5,
+        orderBy: { name: 'asc' },
+      });
+      return NextResponse.json({ products });
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
   } catch (e) {
     console.error('Elorus products API error:', e);

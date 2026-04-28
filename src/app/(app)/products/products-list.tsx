@@ -206,7 +206,8 @@ export default function ProductsList({ initialProducts, initialCatalog, elorusCo
       });
       const data = await res.json();
       if (!res.ok) { addToast(data.error || 'Σφάλμα import', 'error'); return; }
-      addToast(`Import: ${data.created} νέα, ${data.updated} ενημερωμένα, ${data.skipped} ανενεργά`);
+      const sampleInfo = data.sampleRaw?.length ? ` | Sample: ${JSON.stringify(data.sampleRaw[0])}` : '';
+      addToast(`Import: ${data.created} νέα, ${data.updated} ενημερωμένα, ${data.skipped} ανενεργά${sampleInfo}`);
       if (data.sampleRaw) console.log('[Elorus import samples]', JSON.stringify(data.sampleRaw, null, 2));
       // Refresh catalog list
       const freshRes = await fetch('/api/elorus/products', {
