@@ -1123,7 +1123,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
     transitions.push({ label: 'Επαναφορά', status: 'draft', icon: 'fa-undo', color: 'var(--accent)' });
   }
 
-  const inp = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: '0.92rem', outline: 'none' } as const;
+  const inp = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', color: 'var(--text)', fontSize: '0.92rem', width: '100%', outline: 'none' } as const;
   const numInp = { ...inp, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' as const };
 
   // Progress bar position
