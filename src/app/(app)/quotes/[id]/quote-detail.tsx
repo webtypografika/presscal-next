@@ -357,11 +357,12 @@ function CatalogPickerButton({ catalogProducts, onSelect }: {
       </button>
       {open && (() => {
         const rect = ref.current?.getBoundingClientRect();
-        const top = rect ? Math.max(8, rect.top - 4) : 100;
-        const right = rect ? Math.max(8, window.innerWidth - rect.right) : 20;
+        const dropW = 480;
+        const top = rect ? rect.bottom + 4 : 100;
+        const left = rect ? Math.max(8, rect.right - dropW) : 100;
         return (
         <div style={{
-          position: 'fixed', bottom: `${window.innerHeight - top}px`, right: `${right}px`, zIndex: 200, width: 340,
+          position: 'fixed', top, left, zIndex: 200, width: dropW,
           background: 'rgb(20,30,55)', border: '1px solid var(--border)', borderRadius: 10,
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
         }}>
