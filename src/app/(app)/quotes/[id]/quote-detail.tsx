@@ -3158,10 +3158,15 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
   const [to, setTo] = useState(customerEmail);
   const [cc, setCc] = useState('');
 
-  // Suggest CC from other company contacts (not the primary "to")
-  const ccSuggestions = (companyContacts || [])
+  // All contact emails for "To" suggestions
+  const allContacts = (companyContacts || [])
     .map((cc: any) => cc.contact)
-    .filter((c: any) => c?.email && c.email.toLowerCase() !== customerEmail.toLowerCase());
+    .filter((c: any) => c?.email);
+  const toSuggestions = allContacts.filter((c: any) => c.email.toLowerCase() !== to.toLowerCase());
+
+  // Suggest CC from other company contacts (not the current "to")
+  const ccSuggestions = allContacts
+    .filter((c: any) => c.email.toLowerCase() !== to.toLowerCase());
   const [lang, setLang] = useState<'el' | 'en'>('el');
   const [customMessage, setCustomMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -3236,7 +3241,34 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
 
         {/* To */}
         <label style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Προς</label>
-        <input value={to} onChange={e => setTo(e.target.value)} placeholder="email@example.com" style={{ ...inp, marginBottom: 10 }} />
+        <input value={to} onChange={e => setTo(e.target.value)} placeholder="email@example.com" style={{ ...inp, marginBottom: toSuggestions.length > 0 ? 6 : 10 }} />
+        {toSuggestions.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
+            {toSuggestions.map((contact: any) => (
+              <button
+                key={contact.id}
+                onClick={() => setTo(contact.email)}
+                style={{
+                  padding: '3px 10px', borderRadius: 12,
+                  border: '1px solid var(--glass-border)',
+                  background: 'transparent',
+                  color: '#94a3b8',
+                  fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--teal)'; e.currentTarget.style.color = 'var(--teal)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--glass-border)'; e.currentTarget.style.color = '#94a3b8'; }}
+              >
+                <span style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.5rem', color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                  {(contact.name || contact.email)[0]?.toUpperCase()}
+                </span>
+                {contact.name && <span>{contact.name}</span>}
+                <span style={{ opacity: 0.6 }}>{contact.email}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* CC */}
         <label style={{ fontSize: '0.92rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>CC (προαιρετικό)</label>
