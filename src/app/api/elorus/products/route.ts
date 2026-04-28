@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
       let created = 0;
       let updated = 0;
       let skipped = 0;
+      const sampleRaw: Record<string, unknown>[] = [];
 
       for (const ep of allProducts) {
         if (ep.active === false) { skipped++; continue; }
@@ -64,6 +65,11 @@ export async function POST(req: NextRequest) {
         const unitValue = parseFloat(String(ep.unit_value || '0'));
         const taxes = (ep.taxes as string[]) || [];
         const unitMeasure = (ep.unit_measure as string) || '';
+
+        // Keep first 3 raw samples for debugging
+        if (sampleRaw.length < 3) {
+          sampleRaw.push({ title, unit_value: ep.unit_value, unit_measure: ep.unit_measure, parsed: { unitValue, unitLabel: resolveUnitLabel(unitMeasure, org) } });
+        }
 
         const local = byElorusId.get(elorusId);
         if (local) {
@@ -104,7 +110,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return NextResponse.json({ ok: true, created, updated, skipped, total: allProducts.length });
+      return NextResponse.json({ ok: true, created, updated, skipped, total: allProducts.length, sampleRaw });
     }
 
     // ─── PUSH: Push existing local product to Elorus ───
