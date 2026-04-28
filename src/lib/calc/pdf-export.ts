@@ -764,7 +764,7 @@ async function exportNUp(
 
   const pdfPageCount = embeddedPages.length;
   const sheetsNeeded = pdfPageCount;
-  const maxSheets = 50;
+  const maxSheets = Infinity;
 
   const isDuplex = !!opts.isDuplex && pdfPageCount >= 2;
 
@@ -1479,7 +1479,7 @@ async function exportWorkTurn(
   const totalGridH = trimGridH + 2 * wtBleedPtGrid;
 
   const pdfPageCount = embeddedPages.length;
-  const maxSheets = 50;
+  const maxSheets = Infinity;
   const is2Sided = pdfPageCount >= 2;
   const sheetCount = is2Sided ? Math.ceil(pdfPageCount / 2) : pdfPageCount;
 
