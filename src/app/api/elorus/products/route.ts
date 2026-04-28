@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
         const title = (ep.title as string) || 'Χωρίς τίτλο';
         const description = (ep.description as string) || '';
         const code = (ep.code as string) || '';
-        const unitValue = parseFloat(String(ep.unit_value || '0'));
-        const taxes = (ep.taxes as string[]) || [];
+        const unitValue = parseFloat(String(ep.sale_value || ep.unit_value || '0'));
+        const taxes = (ep.sale_taxes as string[]) || (ep.taxes as string[]) || [];
         const unitMeasure = (ep.unit_measure as string) || '';
 
         // Keep first 3 raw samples for debugging — include ALL raw fields
@@ -127,10 +127,10 @@ export async function POST(req: NextRequest) {
         title: product.name,
         description: product.description || '',
         code: product.sku || '',
-        unit_value: String(product.sellPrice || 0),
+        sale_value: String(product.sellPrice || 0),
         active: true,
       };
-      if (product.elorusTaxId) payload.taxes = [product.elorusTaxId];
+      if (product.elorusTaxId) payload.sale_taxes = [product.elorusTaxId];
       else if (org.elorusDefaultTaxId) payload.taxes = [org.elorusDefaultTaxId];
       if (product.elorusUnitId) payload.unit_measure = product.elorusUnitId;
 
@@ -185,9 +185,17 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Map Elorus unit measure ID to Greek label
+// Map Elorus unit measure to Greek label
+const UNIT_MAP: Record<string, string> = {
+  item: 'τεμ', service: 'υπηρεσία', hour: 'ώρα', day: 'ημέρα',
+  kilogram: 'κιλό', meter: 'μέτρο', square_meter: 'm²', piece: 'τεμ',
+  pack: 'πακέτο', page: 'σελίδα', set: 'σετ',
+};
 function resolveUnitLabel(unitId: string, org: Record<string, unknown>): string {
   if (!unitId) return 'τεμ';
+  // Try direct string mapping first (Elorus v1.2 uses strings like "item")
+  if (UNIT_MAP[unitId]) return UNIT_MAP[unitId];
+  // Fallback: try org cached unit measures (older ID-based approach)
   const unitMeasures = (org.elorusUnitMeasures as { id: string; title: string }[]) || [];
   const match = unitMeasures.find(u => u.id === unitId);
   return match?.title || 'τεμ';
