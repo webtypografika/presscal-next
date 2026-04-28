@@ -275,12 +275,17 @@ function CatalogAutocomplete({ value, onChange, catalogProducts, itemType, onSel
         placeholder={canAutocomplete ? 'Τίτλος ή αναζήτηση καταλόγου...' : 'Τίτλος προϊόντος'}
         style={inputStyle}
       />
-      {open && filtered.length > 0 && (
+      {open && filtered.length > 0 && (() => {
+        const rect = ref.current?.getBoundingClientRect();
+        return (
         <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          position: 'fixed',
+          top: rect ? rect.bottom + 2 : 100,
+          left: rect ? rect.left : 100,
+          width: rect ? Math.max(rect.width, 400) : 400,
+          zIndex: 200,
           background: 'rgb(20,30,55)', border: '1px solid var(--border)', borderRadius: 8,
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)', maxHeight: 240, overflowY: 'auto',
-          marginTop: 2,
         }}>
           {filtered.map(p => (
             <button key={p.id} onClick={() => { onSelect(p); setOpen(false); }} style={{
@@ -309,7 +314,8 @@ function CatalogAutocomplete({ value, onChange, catalogProducts, itemType, onSel
             </button>
           ))}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
