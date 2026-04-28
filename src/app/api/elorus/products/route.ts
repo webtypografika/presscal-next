@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
               description,
               sku: code || null,
               sellPrice: unitValue || null,
+              unit: resolveUnitLabel(unitMeasure, org),
               elorusTaxId: taxes[0] || null,
               elorusUnitId: unitMeasure || null,
               elorusSyncedAt: new Date(),
