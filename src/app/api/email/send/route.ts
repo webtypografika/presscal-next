@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     if (!token) return NextResponse.json({ error: 'No Gmail token' }, { status: 401 });
 
     const body = await req.json();
-    const { to, cc, subject, body: htmlBody, inReplyTo, threadId } = body;
+    const { to, cc, subject, body: htmlBody, inReplyTo, threadId, attachments } = body;
 
     if (!to) return NextResponse.json({ error: 'No recipient' }, { status: 400 });
 
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
       cc: cc || undefined,
       inReplyTo: inReplyTo || undefined,
       threadId: threadId || undefined,
+      attachments: attachments || undefined,
     });
 
     return NextResponse.json(result);

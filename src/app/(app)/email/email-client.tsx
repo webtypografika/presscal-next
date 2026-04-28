@@ -320,7 +320,7 @@ export default function EmailClient() {
   }
 
   // ─── SEND ───
-  async function handleSend(data: ComposeData) {
+  async function handleSend(data: ComposeData & { attachments?: Array<{ filename: string; mimeType: string; data: string }> }) {
     try {
       const res = await fetch('/api/email/send', {
         method: 'POST',
@@ -839,7 +839,7 @@ async function downloadAttachment(messageId: string, attachmentId: string, filen
 }
 
 // ─── COMPOSE PANEL ───
-function ComposePanel({ data, onSend, onClose }: { data: ComposeData; onSend: (d: ComposeData) => Promise<void>; onClose: () => void }) {
+function ComposePanel({ data, onSend, onClose }: { data: ComposeData; onSend: (d: ComposeData & { attachments?: Array<{ filename: string; mimeType: string; data: string }> }) => Promise<void>; onClose: () => void }) {
   const [to, setTo] = useState(data.to);
   const [cc, setCc] = useState(data.cc);
   const [subject, setSubject] = useState(data.subject);
@@ -847,6 +847,20 @@ function ComposePanel({ data, onSend, onClose }: { data: ComposeData; onSend: (d
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const bodyRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<Array<{ filename: string; mimeType: string; data: string; size: number }>>([]);
+
+  function handleFiles(files: FileList | null) {
+    if (!files) return;
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = (reader.result as string).split(',')[1];
+        setAttachments(prev => [...prev, { filename: file.name, mimeType: file.type || 'application/octet-stream', data: base64, size: file.size }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
   const inputCls = "h-9 w-full rounded-lg border border-[var(--glass-border)] bg-[rgba(255,255,255,0.04)] px-3 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15";
 
@@ -856,7 +870,8 @@ function ComposePanel({ data, onSend, onClose }: { data: ComposeData; onSend: (d
     setError('');
     try {
       const htmlBody = (bodyRef.current?.innerHTML || '') + (data.body || '');
-      await onSend({ ...data, to, cc, subject, body: htmlBody });
+      const atts = attachments.length > 0 ? attachments.map(({ filename, mimeType, data: d }) => ({ filename, mimeType, data: d })) : undefined;
+      await onSend({ ...data, to, cc, subject, body: htmlBody, attachments: atts });
     } catch (e) {
       setError((e as Error).message);
     }
@@ -906,9 +921,38 @@ function ComposePanel({ data, onSend, onClose }: { data: ComposeData; onSend: (d
           )}
         </div>
 
+        {/* Attachments */}
+        {attachments.length > 0 && (
+          <div style={{ padding: '4px 16px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {attachments.map((att, i) => (
+              <span key={i} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '3px 8px', borderRadius: 6, fontSize: '0.72rem',
+                background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)',
+                border: '1px solid rgba(255,255,255,0.08)',
+              }}>
+                <i className={attIconClass(att.filename)} style={{ fontSize: '0.65rem' }} />
+                {att.filename}
+                <span style={{ opacity: 0.5 }}>({formatSize(att.size)})</span>
+                <button onClick={() => setAttachments(prev => prev.filter((_, j) => j !== i))} style={{
+                  border: 'none', background: 'transparent', color: 'var(--text-muted)',
+                  cursor: 'pointer', padding: '0 2px', fontSize: '0.8rem', lineHeight: 1,
+                }}>&times;</button>
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Footer */}
+        <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={e => { handleFiles(e.target.files); e.target.value = ''; }} />
         <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
           {error && <span style={{ fontSize: '0.72rem', color: 'var(--danger)', flex: 1 }}>{error}</span>}
+          <button onClick={() => fileInputRef.current?.click()} title="Επισυναψη αρχειου" style={{
+            border: 'none', background: 'transparent', color: 'var(--text-muted)',
+            cursor: 'pointer', fontSize: '1rem', padding: '4px 6px', borderRadius: 6,
+          }}>
+            <i className="fas fa-paperclip" />
+          </button>
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Ctrl+Enter</span>
           <button onClick={handleSubmit} disabled={sending || !to.trim()} style={{
