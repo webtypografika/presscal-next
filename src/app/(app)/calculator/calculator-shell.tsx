@@ -1471,6 +1471,7 @@ export default function CalculatorShell() {
           jobW: job.width,
           jobH: job.height,
           qty: effectiveQty * prodMultiplier,
+          originalQty: job.qty,
           sides: job.sides,
           colorMode: color.model === 'cmyk' ? 'color' : 'bw',
           bleed: effectiveBleed,

@@ -568,6 +568,7 @@ export async function POST(req: NextRequest) {
       paperGsm: paper.thickness || 80,
 
       qty: body.qty,
+      originalQty: body.originalQty || undefined,
       sides: body.sides,
       colorMode: body.colorMode,
       wasteFixed: body.wasteFixed ?? 0,

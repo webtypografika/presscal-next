@@ -32,6 +32,7 @@ export interface CostInput {
 
   // Job
   qty: number;
+  originalQty?: number;   // actual product pieces (e.g. 30 pads) vs qty which may be sheets (1500)
   sides: 1 | 2;
   colorMode: 'color' | 'bw';
   wasteFixed: number;       // extra machine sheets (φύλλα μοντάζ)
@@ -1225,7 +1226,8 @@ export function calculateCost(input: CostInput): CalculatorResult {
   const adjChargeFinishing = adjChargeGuillotine + adjChargeLamination + adjChargeBinding + adjChargeCrease + adjChargeFold + adjChargeGather + adjChargeCustom;
   const sellPrice = chargePaper + chargePrint + adjChargeFinishing + extraCharges;
   const profitAmount = sellPrice - totalCost;
-  const pricePerPiece = input.qty > 0 ? sellPrice / input.qty : 0;
+  const pieceQty = input.originalQty || input.qty;
+  const pricePerPiece = pieceQty > 0 ? sellPrice / pieceQty : 0;
 
 
   // Print model label

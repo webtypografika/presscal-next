@@ -20,6 +20,7 @@ export interface CalculatorInput {
   jobW: number;           // trim width mm
   jobH: number;           // trim height mm
   qty: number;
+  originalQty?: number;   // actual product pieces (e.g. 30 pads) when qty is sheets
   sides: 1 | 2;
   colorMode: 'color' | 'bw';
   bleed: number;          // mm
