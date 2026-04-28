@@ -1565,8 +1565,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                   )}
                 </div>
               )}
-              {/* Action buttons — always visible */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 6px', marginTop: -2, flexWrap: 'wrap' }}>
+              {/* Action row: duplicate, cost, lock, calc, link */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 6px', marginTop: 0, flexWrap: 'wrap' }}>
                   {item.calcData?.machineId && items.some(i => i.id !== item.id && !i.calcData?.machineId) && (
                     <button
                       onClick={() => applyCalcToOthers(item)}
@@ -1603,32 +1603,30 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                     <i className="fas fa-clone" />
                     <span style={{ fontSize: '0.62rem' }}>Duplicate</span>
                   </button>
-              </div>
-              {/* Inline: cost + lock + calc + link */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 6px', marginTop: 0 }}>
-                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>Κόστος</span>
-                <input type="number" value={item.cost || ''} onChange={e => updateItem(idx, 'cost', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '2px 4px', width: 52, fontSize: '0.72rem', color: 'var(--text-muted)' }} />
-                <button
-                  onClick={() => updateItem(idx, 'priceLocked', !item.priceLocked)}
-                  title={item.priceLocked ? 'Ξεκλείδωμα τιμής' : 'Κλείδωμα τιμής'}
-                  style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.6rem', color: item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)', padding: 0 }}
-                  onMouseEnter={e => { if (!item.priceLocked) e.currentTarget.style.color = '#f58220'; }}
-                  onMouseLeave={e => { if (!item.priceLocked) e.currentTarget.style.color = item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)'; }}
-                >
-                  <i className={`fas fa-${item.priceLocked ? 'lock' : 'lock-open'}`} />
-                </button>
-                <a href={calcUrl(item, quote.id, quote.number)} title="Κοστολόγηση" style={{ display: 'flex', alignItems: 'center', color: 'var(--blue)', opacity: 0.5, fontSize: '0.72rem', textDecoration: 'none' }}
-                  onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
-                  onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; }}
-                ><i className="fas fa-calculator" /></a>
-                <LinkFileMenu
-                  quoteId={quote.id}
-                  itemId={item.id as string}
-                  hasLinkedFile={!!item.linkedFile}
-                  linkedFileName={(item.linkedFile as any)?.name}
-                  customerFolder={(selectedCustomer as any)?.folderPath || (selectedContact as any)?.folderPath}
-                  jobFolderPath={(quote as any).jobFolderPath}
-                />
+                  <span style={{ width: 1, height: 10, background: 'var(--border)' }} />
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', opacity: 0.6 }}>Κόστος</span>
+                  <input type="number" value={item.cost || ''} onChange={e => updateItem(idx, 'cost', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '1px 3px', width: 48, fontSize: '0.68rem', color: 'var(--text-muted)' }} />
+                  <button
+                    onClick={() => updateItem(idx, 'priceLocked', !item.priceLocked)}
+                    title={item.priceLocked ? 'Ξεκλείδωμα τιμής' : 'Κλείδωμα τιμής'}
+                    style={{ display: 'flex', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.58rem', color: item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)', padding: 0 }}
+                    onMouseEnter={e => { if (!item.priceLocked) e.currentTarget.style.color = '#f58220'; }}
+                    onMouseLeave={e => { if (!item.priceLocked) e.currentTarget.style.color = item.priceLocked ? '#f58220' : 'rgba(100,116,139,0.3)'; }}
+                  >
+                    <i className={`fas fa-${item.priceLocked ? 'lock' : 'lock-open'}`} />
+                  </button>
+                  <a href={calcUrl(item, quote.id, quote.number)} title="Κοστολόγηση" style={{ display: 'flex', alignItems: 'center', color: 'var(--blue)', opacity: 0.5, fontSize: '0.68rem', textDecoration: 'none' }}
+                    onMouseEnter={e => { e.currentTarget.style.opacity = '1'; }}
+                    onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; }}
+                  ><i className="fas fa-calculator" /></a>
+                  <LinkFileMenu
+                    quoteId={quote.id}
+                    itemId={item.id as string}
+                    hasLinkedFile={!!item.linkedFile}
+                    linkedFileName={(item.linkedFile as any)?.name}
+                    customerFolder={(selectedCustomer as any)?.folderPath || (selectedContact as any)?.folderPath}
+                    jobFolderPath={(quote as any).jobFolderPath}
+                  />
               </div>
             </div>
             <input type="number" value={item.qty || ''} onChange={e => updateItem(idx, 'qty', parseFloat(e.target.value) || 0)} style={{ ...numInp, border: 'none', background: 'transparent', padding: '4px 4px', width: '100%' }} />
