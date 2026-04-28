@@ -241,6 +241,8 @@ function CatalogAutocomplete({ value, onChange, catalogProducts, itemType, onSel
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 400 });
 
   // Close on outside click
   useEffect(() => {
@@ -250,6 +252,19 @@ function CatalogAutocomplete({ value, onChange, catalogProducts, itemType, onSel
     }
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  // Update position when open
+  useEffect(() => {
+    if (!open || !inputRef.current) return;
+    function updatePos() {
+      const rect = inputRef.current!.getBoundingClientRect();
+      setPos({ top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 400) });
+    }
+    updatePos();
+    window.addEventListener('scroll', updatePos, true);
+    window.addEventListener('resize', updatePos);
+    return () => { window.removeEventListener('scroll', updatePos, true); window.removeEventListener('resize', updatePos); };
   }, [open]);
 
   // Only show autocomplete for non-calculator items when catalog exists
@@ -265,6 +280,7 @@ function CatalogAutocomplete({ value, onChange, catalogProducts, itemType, onSel
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <input
+        ref={inputRef}
         value={value}
         onChange={e => {
           onChange(e.target.value);
@@ -275,18 +291,14 @@ function CatalogAutocomplete({ value, onChange, catalogProducts, itemType, onSel
         placeholder={canAutocomplete ? 'Τίτλος ή αναζήτηση καταλόγου...' : 'Τίτλος προϊόντος'}
         style={inputStyle}
       />
-      {open && filtered.length > 0 && (() => {
-        const rect = ref.current?.getBoundingClientRect();
-        return (
+      {open && filtered.length > 0 && createPortal(
         <div style={{
-          position: 'fixed',
-          top: rect ? rect.bottom + 2 : 100,
-          left: rect ? rect.left : 100,
-          width: rect ? Math.max(rect.width, 400) : 400,
-          zIndex: 200,
+          position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999,
           background: 'rgb(20,30,55)', border: '1px solid var(--border)', borderRadius: 8,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)', maxHeight: 240, overflowY: 'auto',
-        }}>
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)', maxHeight: 340, overflowY: 'auto',
+        }}
+          onMouseDown={e => e.preventDefault()}
+        >
           {filtered.map(p => (
             <button key={p.id} onClick={() => { onSelect(p); setOpen(false); }} style={{
               display: 'flex', alignItems: 'center', gap: 8, width: '100%',
@@ -313,9 +325,9 @@ function CatalogAutocomplete({ value, onChange, catalogProducts, itemType, onSel
               )}
             </button>
           ))}
-        </div>
-        );
-      })()}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -328,6 +340,8 @@ function CatalogPickerButton({ catalogProducts, onSelect }: {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
 
   useEffect(() => {
     if (!open) return;
@@ -338,13 +352,26 @@ function CatalogPickerButton({ catalogProducts, onSelect }: {
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
+  // Update position when open
+  useEffect(() => {
+    if (!open || !btnRef.current) return;
+    function updatePos() {
+      const rect = btnRef.current!.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) });
+    }
+    updatePos();
+    window.addEventListener('scroll', updatePos, true);
+    window.addEventListener('resize', updatePos);
+    return () => { window.removeEventListener('scroll', updatePos, true); window.removeEventListener('resize', updatePos); };
+  }, [open]);
+
   const filtered = q
     ? catalogProducts.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || (p.sku || '').toLowerCase().includes(q.toLowerCase())).slice(0, 10)
     : catalogProducts.slice(0, 10);
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(!open)} style={{
+      <button ref={btnRef} onClick={() => setOpen(!open)} style={{
         display: 'flex', alignItems: 'center', gap: 5,
         padding: '6px 10px', borderRadius: 6, border: '1px dashed rgba(16,185,129,0.4)',
         background: 'transparent', color: '#10b981', cursor: 'pointer',
@@ -355,14 +382,9 @@ function CatalogPickerButton({ catalogProducts, onSelect }: {
       >
         <i className="fas fa-tags" style={{ fontSize: '0.6rem' }} /> Από Κατάλογο
       </button>
-      {open && (() => {
-        const rect = ref.current?.getBoundingClientRect();
-        const dropW = 480;
-        const top = rect ? rect.bottom + 4 : 100;
-        const left = rect ? Math.max(8, rect.right - dropW) : 100;
-        return (
-        <div style={{
-          position: 'fixed', top, left, zIndex: 200, width: dropW,
+      {open && createPortal(
+        <div ref={ref} style={{
+          position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999, width: 480,
           background: 'rgb(20,30,55)', border: '1px solid var(--border)', borderRadius: 10,
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
         }}>
@@ -378,7 +400,7 @@ function CatalogPickerButton({ catalogProducts, onSelect }: {
               }}
             />
           </div>
-          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 340, overflowY: 'auto' }}>
             {filtered.length === 0 ? (
               <div style={{ padding: 16, textAlign: 'center', fontSize: '0.78rem', color: '#64748b' }}>
                 Δεν βρέθηκαν είδη
@@ -408,9 +430,9 @@ function CatalogPickerButton({ catalogProducts, onSelect }: {
               </button>
             ))}
           </div>
-        </div>
-        );
-      })()}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
