@@ -39,6 +39,7 @@ export async function GET(
     companyFolderPath: quote.company?.folderPath || null,
     contactName: quote.contact?.name || null,
     contactFolderPath: quote.contact?.folderPath || null,
+    customerFolderPath: quote.company?.folderPath || quote.contact?.folderPath || null,
     grandTotal: quote.grandTotal,
     date: quote.date,
     items: items.map((it: any) => ({
