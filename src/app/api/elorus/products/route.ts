@@ -66,9 +66,9 @@ export async function POST(req: NextRequest) {
         const taxes = (ep.taxes as string[]) || [];
         const unitMeasure = (ep.unit_measure as string) || '';
 
-        // Keep first 3 raw samples for debugging
+        // Keep first 3 raw samples for debugging — include ALL raw fields
         if (sampleRaw.length < 3) {
-          sampleRaw.push({ title, unit_value: ep.unit_value, unit_measure: ep.unit_measure, parsed: { unitValue, unitLabel: resolveUnitLabel(unitMeasure, org) } });
+          sampleRaw.push({ rawKeys: Object.keys(ep), rawSample: JSON.parse(JSON.stringify(ep)) });
         }
 
         const local = byElorusId.get(elorusId);
