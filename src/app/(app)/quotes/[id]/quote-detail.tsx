@@ -1456,11 +1456,11 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
       {/* ═══ ITEMS TABLE ═══ */}
       <div style={{
         borderRadius: 10, border: '1px solid var(--border)',
-        overflow: 'hidden', marginBottom: 16,
+        overflow: 'auto', marginBottom: 16,
       }}>
         {/* Header */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '28px 1fr 48px 48px 70px 70px 16px 70px 24px 24px 24px',
+          display: 'grid', gridTemplateColumns: '28px minmax(200px,1fr) 48px 48px 70px 70px 16px 70px 24px 24px 24px',
           gap: 0, padding: '8px 10px',
           background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)',
         }}>
@@ -1476,7 +1476,7 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           </div>
         ) : items.map((item, idx) => (
           <div key={item.id} style={{
-            display: 'grid', gridTemplateColumns: '28px 1fr 48px 48px 70px 70px 16px 70px 24px 24px 24px',
+            display: 'grid', gridTemplateColumns: '28px minmax(200px,1fr) 48px 48px 70px 70px 16px 70px 24px 24px 24px',
             gap: 0, padding: '6px 10px', alignItems: 'center',
             borderBottom: idx < items.length - 1 ? '1px solid var(--border)' : undefined,
           }}>
