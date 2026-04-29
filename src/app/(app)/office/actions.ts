@@ -68,7 +68,7 @@ export async function createItem(projectId: string, title: string) {
 export async function updateItem(id: string, data: {
   title?: string; notes?: string; tags?: string[]; priority?: string;
   deadline?: Date | null; completed?: boolean; completedAt?: Date | null;
-  checklist?: unknown; companyId?: string | null; contactId?: string | null;
+  checklist?: unknown; tableData?: unknown; companyId?: string | null; contactId?: string | null;
   linkedEmails?: string[];
 }) {
   // Auto-set completedAt
@@ -85,6 +85,7 @@ export async function updateItem(id: string, data: {
   if (data.completed !== undefined) update.completed = data.completed;
   if (data.completedAt !== undefined) update.completedAt = data.completedAt;
   if (data.checklist !== undefined) update.checklist = data.checklist ?? undefined;
+  if (data.tableData !== undefined) update.tableData = data.tableData ?? undefined;
   if (data.linkedEmails !== undefined) update.linkedEmails = data.linkedEmails;
   if (data.companyId !== undefined) {
     update.company = data.companyId ? { connect: { id: data.companyId } } : { disconnect: true };

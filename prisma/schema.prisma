@@ -812,6 +812,7 @@ model OrgItem {
   completed   Boolean     @default(false)
   completedAt DateTime?
   checklist   Json?
+  tableData   Json?       // { cols: number, rows: string[][] }
 
   // Links
   companyId   String?
