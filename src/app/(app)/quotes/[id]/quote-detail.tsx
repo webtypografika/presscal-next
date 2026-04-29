@@ -3538,6 +3538,11 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
           city: formCity.trim() || null,
           zip: formZip.trim() || null,
           folderPath: formFolder.trim() || null,
+          // Sync fiscal fields from same data
+          legalName: formName.trim() || null,
+          fiscalAddress: formAddress.trim() || null,
+          fiscalCity: formCity.trim() || null,
+          fiscalZip: formZip.trim() || null,
         });
         toast('Πελάτης ενημερώθηκε');
         onSelect(editId);
