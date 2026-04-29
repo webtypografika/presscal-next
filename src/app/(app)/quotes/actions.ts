@@ -510,7 +510,7 @@ export async function createCompanyQuick(data: {
 export async function createCompanyFromElorus(data: {
   name: string; afm?: string; doy?: string; email?: string; phone?: string;
   address?: string; city?: string; zip?: string; folderPath?: string;
-  elorusContactId?: string;
+  elorusContactId?: string; activities?: string;
 }) {
   const mod = await import('../companies/actions');
   return mod.createCompanyFromElorus(data);

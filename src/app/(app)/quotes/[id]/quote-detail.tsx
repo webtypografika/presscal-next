@@ -3451,17 +3451,19 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
       let email = ec.email || '';
 
       // AADE lookup if we have AFM
+      let activities = '';
       if (ec.tin && ec.tin.length === 9) {
         const aadeRes = await fetch('/api/elorus/lookup-afm', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ afm: ec.tin }),
         }).then(r => r.json()).catch(() => ({}));
-        if (aadeRes?.company) companyName = aadeRes.company;
-        if (aadeRes?.doy) doy = aadeRes.doy;
-        if (aadeRes?.address) address = aadeRes.address;
-        if (aadeRes?.city) city = aadeRes.city;
-        if (aadeRes?.zip) zip = aadeRes.zip;
+        if (aadeRes?.onomasia) companyName = aadeRes.onomasia;
+        if (aadeRes?.doy_descr) doy = aadeRes.doy_descr;
+        if (aadeRes?.postal_address) address = aadeRes.postal_address;
+        if (aadeRes?.postal_area_description) city = aadeRes.postal_area_description;
+        if (aadeRes?.postal_zip_code) zip = aadeRes.postal_zip_code;
+        if (aadeRes?.firm_act_descr) activities = aadeRes.firm_act_descr;
         if (aadeRes?.email && !email) email = aadeRes.email;
       }
 
@@ -3476,6 +3478,7 @@ function CustomerPicker({ customers, currentId, linkedEmails, hasElorus, initial
         city: city || undefined,
         zip: zip || undefined,
         elorusContactId: ec.id,
+        activities: activities || undefined,
       });
       toast('Εισαγωγή από Elorus');
       onSelect(company.id);

@@ -383,6 +383,7 @@ export async function createCompanyFromElorus(data: {
   zip?: string;
   folderPath?: string;
   elorusContactId?: string;
+  activities?: string;
 }) {
   const company = await prisma.company.create({
     data: {
@@ -397,6 +398,12 @@ export async function createCompanyFromElorus(data: {
       zip: data.zip || null,
       folderPath: data.folderPath || null,
       elorusContactId: data.elorusContactId || null,
+      // Fiscal fields — same data from Elorus/AADE
+      legalName: data.name || null,
+      fiscalAddress: data.address || null,
+      fiscalCity: data.city || null,
+      fiscalZip: data.zip || null,
+      activities: data.activities || null,
     },
   });
   revalidatePath('/contacts');
