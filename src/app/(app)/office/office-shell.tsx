@@ -291,20 +291,42 @@ export default function OfficeShell({ initialProjects, companies, contacts }: {
 
         {/* New project input */}
         {showNewProject && (
-          <div style={{ padding: '0 10px 8px' }}>
+          <div style={{ padding: '0 10px 8px', display: 'flex', gap: 4 }}>
             <input
               ref={newProjectRef}
               value={newProjectTitle}
               onChange={e => setNewProjectTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(); if (e.key === 'Escape') setShowNewProject(false); }}
-              onBlur={() => { if (newProjectTitle.trim()) handleCreateProject(); else setShowNewProject(false); }}
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(); if (e.key === 'Escape') { setShowNewProject(false); setNewProjectTitle(''); } }}
               placeholder="Τίτλος project..."
               style={{
-                width: '100%', padding: '6px 10px', borderRadius: 6, fontSize: '0.75rem',
+                flex: 1, padding: '6px 10px', borderRadius: 6, fontSize: '0.75rem',
                 border: '1px solid var(--accent)', background: 'rgba(0,0,0,0.2)',
                 color: 'var(--text)', outline: 'none',
               }}
             />
+            <button
+              onClick={handleCreateProject}
+              disabled={!newProjectTitle.trim()}
+              style={{
+                padding: '0 10px', borderRadius: 6, border: 'none',
+                background: newProjectTitle.trim() ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
+                color: newProjectTitle.trim() ? '#fff' : '#475569',
+                fontSize: '0.7rem', fontWeight: 700, cursor: newProjectTitle.trim() ? 'pointer' : 'default',
+                transition: 'all 0.15s', whiteSpace: 'nowrap',
+              }}
+            >
+              <i className="fas fa-check" />
+            </button>
+            <button
+              onClick={() => { setShowNewProject(false); setNewProjectTitle(''); }}
+              style={{
+                padding: '0 8px', borderRadius: 6, border: 'none',
+                background: 'transparent', color: '#64748b',
+                fontSize: '0.7rem', cursor: 'pointer',
+              }}
+            >
+              <i className="fas fa-times" />
+            </button>
           </div>
         )}
 
