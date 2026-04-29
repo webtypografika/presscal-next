@@ -1914,13 +1914,19 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 const jobFolder = (quote as any).jobFolderPath;
                 const companyFolder = (selectedCompany as any)?.folderPath;
                 const hasCompanyFolder = !!companyFolder;
+                const workingFolder: string | null = (quote as any).workingFolderPath || null;
                 const onlyNewParam = newCount > 0 && newCount < allFiles.length ? '&onlyNew=1' : '';
+
+                // Determine which button is "active" (where files were actually saved)
+                const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+                const isCustomerActive = workingFolder && companyFolder && norm(workingFolder).startsWith(norm(companyFolder));
+                const isJobActive = workingFolder && !isCustomerActive;
 
                 // Download deep links (only used when newCount > 0)
                 const downloadGlobalHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${onlyNewParam}`;
                 const downloadCustomerHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer${onlyNewParam}`;
-                // Open folder deep links (when folder exists and nothing new)
-                const openJobHref = jobFolder ? `presscal-fh://open-folder?path=${encodeURIComponent(jobFolder)}` : null;
+                // Open folder deep links — prefer workingFolder if it matches
+                const openJobHref = (isJobActive ? workingFolder : jobFolder) ? `presscal-fh://open-folder?path=${encodeURIComponent(isJobActive ? workingFolder! : jobFolder)}` : null;
                 const openCustomerHref = companyFolder ? `presscal-fh://open-folder?path=${encodeURIComponent(companyFolder)}` : null;
 
                 const handleDownload = () => {
@@ -1976,23 +1982,25 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                     <a
                       href={hasCompanyFolder ? (newCount > 0 ? downloadCustomerHref : (openCustomerHref || '#')) : '#'}
                       onClick={hasCompanyFolder ? (newCount > 0 ? handleDownload : undefined) : handlePickCustomerFolder}
-                      style={btnStyle(newCount > 0)}
-                      onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
+                      style={btnStyle(newCount > 0 || !!isCustomerActive)}
+                      onMouseEnter={e => { e.currentTarget.style.background = (newCount > 0 || isCustomerActive) ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = (newCount > 0 || isCustomerActive) ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
                     >
                       <i className={`fas fa-${newCount > 0 ? 'download' : hasCompanyFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
                       {newCount > 0 ? `Φάκελος Πελάτη (${newCount} νέα)` : hasCompanyFolder ? 'Φάκελος Πελάτη' : 'Φάκελος Πελάτη...'}
+                      {isCustomerActive && newCount === 0 && <span style={{ fontSize: '0.55rem', background: 'var(--success)', color: '#fff', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>Ενεργός</span>}
                     </a>
                     {/* Job folder — always shown */}
                     <a
                       href={newCount > 0 ? downloadGlobalHref : (openJobHref || downloadGlobalHref)}
                       onClick={newCount > 0 ? handleDownload : undefined}
-                      style={btnStyle(false)}
-                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                      style={btnStyle(!!isJobActive)}
+                      onMouseEnter={e => { e.currentTarget.style.background = isJobActive ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = isJobActive ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
                     >
                       <i className={`fas fa-${jobFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
                       Φάκελος Προσφοράς
+                      {isJobActive && newCount === 0 && <span style={{ fontSize: '0.55rem', background: 'var(--success)', color: '#fff', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>Ενεργός</span>}
                     </a>
                   </div>
                 );

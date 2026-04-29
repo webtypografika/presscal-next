@@ -109,7 +109,7 @@ export async function PATCH(req: NextRequest) {
   const auth = await authenticateFilehelper(req)
   if ('error' in auth) return auth.error
 
-  const { quoteId, fileIds } = await req.json()
+  const { quoteId, fileIds, savedToPath } = await req.json()
   if (!quoteId && !fileIds?.length) {
     return NextResponse.json({ error: 'quoteId or fileIds required' }, { status: 400 })
   }
@@ -125,6 +125,14 @@ export async function PATCH(req: NextRequest) {
     where,
     data: { savedToFolder: new Date() },
   })
+
+  // Save the working folder path on the quote (where PressKit actually put the files)
+  if (quoteId && savedToPath && typeof savedToPath === 'string') {
+    await prisma.quote.update({
+      where: { id: quoteId },
+      data: { workingFolderPath: savedToPath },
+    }).catch(() => {}) // non-critical
+  }
 
   return NextResponse.json({ marked: result.count })
 }
