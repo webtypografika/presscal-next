@@ -60,6 +60,9 @@ function calcUrl(item: Record<string, unknown>, quoteId: string, quoteNumber?: s
   const p = new URLSearchParams();
   const cd = item.calcData as Record<string, unknown> | undefined;
 
+  // Pass existing item name so calculator doesn't overwrite it
+  if (item.name) p.set('itemName', String(item.name));
+
   // ─── If calcData exists (previously costed), pass all specs for full restore ───
   // NOTE: use != null (not truthy) so that 0 values are preserved
   if (cd?.machineId) {

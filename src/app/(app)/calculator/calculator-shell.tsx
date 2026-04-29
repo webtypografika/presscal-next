@@ -722,7 +722,7 @@ export default function CalculatorShell() {
 
   // Quote link (from URL params only — no sessionStorage fallback to avoid
   // saving to the wrong quote if the user navigates via sidebar)
-  const [quoteLink, setQuoteLink] = useState<{ quoteId: string; itemId: string; desc: string; quoteNumber: string } | null>(null);
+  const [quoteLink, setQuoteLink] = useState<{ quoteId: string; itemId: string; desc: string; quoteNumber: string; itemName?: string } | null>(null);
   const [linkedFile, setLinkedFile] = useState<{ path: string; name: string } | null>(null);
   const [linkPolling, setLinkPolling] = useState(false);
   const [savingToQuote, setSavingToQuote] = useState(false);
@@ -1101,8 +1101,9 @@ export default function CalculatorShell() {
     const itemId = searchParams.get('itemId');
     const desc = searchParams.get('desc');
     const quoteNumber = searchParams.get('quoteNumber');
+    const itemName = searchParams.get('itemName');
     if (quoteId) {
-      setQuoteLink({ quoteId, itemId: itemId || '', desc: desc || '', quoteNumber: quoteNumber || '' });
+      setQuoteLink({ quoteId, itemId: itemId || '', desc: desc || '', quoteNumber: quoteNumber || '', itemName: itemName || undefined });
     } else {
       setQuoteLink(null);
     }
@@ -1980,7 +1981,7 @@ export default function CalculatorShell() {
               const saveProfit = Math.round((saveFinalPrice - totalCost) * 100) / 100;
               const itemPayload = {
                 id: quoteLink?.itemId || crypto.randomUUID(),
-                name: `${job.width}×${job.height} ${job.archetype}`,
+                name: quoteLink?.itemName || `${job.width}×${job.height} ${job.archetype}`,
                 type: 'calculator' as const,
                 qty: job.qty,
                 unit: 'τεμ',
