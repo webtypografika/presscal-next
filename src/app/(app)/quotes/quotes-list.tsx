@@ -5,7 +5,7 @@ import { fuzzyMatch } from '@/lib/search';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer } from '@/generated/prisma/client';
-import { createQuote, updateQuote, updateQuoteStatus, deleteQuote, createCustomer, createCompanyQuick, createCompanyFromElorus, linkEmailToQuote, saveEmailAttachments, archiveQuote } from './actions';
+import { createQuote, updateQuote, updateQuoteStatus, deleteQuote, createCustomer, createCompanyQuick, createCompanyFromElorus, linkEmailToQuote, saveEmailAttachments, archiveQuote, duplicateQuote } from './actions';
 import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
 
 type QuoteWithCustomer = Quote & { customer: Customer | null };
@@ -291,6 +291,27 @@ export function QuotesList({ quotes: initialQuotes, customers: initialCustomers,
                           {new Date(q.date).toLocaleDateString('el-GR', { day: '2-digit', month: '2-digit' })}
                         </span>
                         <div className="card-actions" style={{ display: 'flex', gap: 2 }}>
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const dup = await duplicateQuote(q.id);
+                                toast('Αντιγραφή ' + q.number);
+                                router.push(`/quotes/${dup.id}`);
+                              } catch { toast('Σφάλμα', 'error'); }
+                            }}
+                            style={{
+                              width: 24, height: 20, borderRadius: 4,
+                              border: 'none', background: 'transparent',
+                              color: '#64748b', cursor: 'pointer',
+                              fontSize: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(100,116,139,0.2)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                            title="Αντιγραφή προσφοράς"
+                          >
+                            <i className="fas fa-copy" />
+                          </button>
                           <button
                             onClick={async (e) => {
                               e.stopPropagation();
