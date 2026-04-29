@@ -32,9 +32,16 @@ export async function GET(req: NextRequest) {
       })
       if (quote) {
         if (target === 'customer' && quote.company?.folderPath) {
-          // Customer mode: download directly into the company folder — NO quote subfolder.
-          // Do NOT set jobFolderPath in DB — the user chose to work with the customer folder.
-          folderPath = quote.company.folderPath
+          // Customer mode: quote subfolder inside the company folder.
+          // Same structure as job folder but rooted in customer path.
+          const { buildJobFolderPath } = await import('@/lib/job-folder')
+          folderPath = buildJobFolderPath({
+            globalRoot: null,
+            companyFolderPath: quote.company.folderPath,
+            companyName: quote.company.name || 'Πελάτης',
+            quoteNumber: quote.number,
+            quoteTitle: quote.title,
+          })
         } else if (quote.jobFolderPath) {
           // Reuse the already-saved quote folder path
           folderPath = quote.jobFolderPath
