@@ -93,18 +93,48 @@ export async function createQuote(data: {
   const number = await nextQuoteNumber();
   // Validate companyId exists in Company table
   let companyId: string | null = null;
+  let contactId: string | null = data.contactId || null;
   const candidateId = data.companyId || data.customerId || null;
   if (candidateId) {
     const exists = await prisma.company.findUnique({ where: { id: candidateId }, select: { id: true } });
     if (exists) companyId = candidateId;
   }
+
+  // Server-side fallback: if no company/contact linked, try to match from email description
+  if (!companyId && !contactId && data.description) {
+    const emailMatch = data.description.match(/^Email από:\s*(.+)/);
+    if (emailMatch) {
+      // Extract sender email from linked email or title
+      const senderHint = emailMatch[1].trim();
+      // Try matching by contact name or email
+      const matchedContact = await prisma.contact.findFirst({
+        where: {
+          orgId: ORG_ID,
+          deletedAt: null,
+          OR: [
+            { name: { equals: senderHint, mode: 'insensitive' } },
+            { email: { equals: senderHint, mode: 'insensitive' } },
+          ],
+        },
+        select: {
+          id: true,
+          companyContacts: { select: { companyId: true }, take: 1 },
+        },
+      });
+      if (matchedContact) {
+        contactId = matchedContact.id;
+        companyId = matchedContact.companyContacts[0]?.companyId || null;
+      }
+    }
+  }
+
   const quote = await prisma.quote.create({
     data: {
       orgId: ORG_ID,
       number,
       status: 'draft',
       companyId,
-      contactId: data.contactId || null,
+      contactId,
       title: data.title || null,
       description: data.description || null,
       notes: data.notes || null,
