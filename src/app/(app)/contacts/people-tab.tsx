@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { createContact, updateContact, deleteContact, linkContactToCompany, unlinkContactFromCompany } from '../companies/actions';
 import { createQuote } from '../quotes/actions';
@@ -45,6 +46,50 @@ const roleLabels: Record<string, string> = {
   employee: 'Υπάλληλος', designer: 'Γραφίστας', freelancer: 'Freelancer',
   broker: 'Μεσάζων', contact: 'Επαφή', owner: 'Ιδιοκτήτης',
 };
+
+function CompanyLinkDropdown({ linkSearch, setLinkSearch, filteredCompanies, onLink, onClose }: {
+  linkSearch: string; setLinkSearch: (v: string) => void;
+  filteredCompanies: { id: string; name: string }[];
+  onLink: (id: string) => void; onClose: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+  }, [linkSearch]);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input ref={inputRef} value={linkSearch} onChange={e => setLinkSearch(e.target.value)} autoFocus
+        placeholder="Εταιρεία..."
+        style={{ ...inp, width: 160, fontSize: '0.72rem', padding: '4px 8px' }}
+        onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
+      />
+      {linkSearch && filteredCompanies.length > 0 && pos && createPortal(
+        <div style={{
+          position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
+          width: 220, maxHeight: 180, overflow: 'auto',
+          background: 'rgb(20,28,50)', border: '1px solid var(--glass-border)',
+          borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        }}>
+          {filteredCompanies.slice(0, 10).map(c => (
+            <button key={c.id} onClick={() => onLink(c.id)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'transparent', color: '#cbd5e1', fontSize: '0.78rem', cursor: 'pointer' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+              {c.name}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
 
 function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, saved }: {
   contact: ContactData;
@@ -182,30 +227,13 @@ function ContactCard({ contact, allCompanies, onUpdate, onDelete, onNewQuote, sa
           </span>
         ))}
         {linking ? (
-          <div style={{ position: 'relative' }}>
-            <input value={linkSearch} onChange={e => setLinkSearch(e.target.value)} autoFocus
-              placeholder="Εταιρεία..."
-              style={{ ...inp, width: 160, fontSize: '0.72rem', padding: '4px 8px' }}
-              onKeyDown={e => { if (e.key === 'Escape') { setLinking(false); setLinkSearch(''); } }}
-            />
-            {linkSearch && filteredCompanies.length > 0 && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 50,
-                width: 220, maxHeight: 180, overflow: 'auto',
-                background: 'rgb(20,28,50)', border: '1px solid var(--glass-border)',
-                borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-              }}>
-                {filteredCompanies.slice(0, 10).map(c => (
-                  <button key={c.id} onClick={() => handleLink(c.id)}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'transparent', color: '#cbd5e1', fontSize: '0.78rem', cursor: 'pointer' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <CompanyLinkDropdown
+            linkSearch={linkSearch}
+            setLinkSearch={setLinkSearch}
+            filteredCompanies={filteredCompanies}
+            onLink={handleLink}
+            onClose={() => { setLinking(false); setLinkSearch(''); }}
+          />
         ) : (
           <button onClick={() => setLinking(true)}
             style={{ padding: '4px 10px', borderRadius: 12, border: '1px dashed color-mix(in srgb, var(--blue) 30%, transparent)', background: 'transparent', color: '#64748b', fontSize: '0.65rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit' }}>
