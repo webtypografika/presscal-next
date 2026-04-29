@@ -14,7 +14,6 @@ export async function GET(req: NextRequest) {
   const quotes = await prisma.quote.findMany({
     where: {
       orgId: auth.org.id,
-      deletedAt: null,
       pendingArchivePath: { not: null },
     },
     select: {

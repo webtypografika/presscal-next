@@ -635,6 +635,7 @@ model Quote {
   jobStageUpdatedAt DateTime?
   jobFolderPath     String?   // Resolved local path (set on approval)
   pendingArchivePath String?  // Set on completion; cleared by FileHelper after move
+  pendingDelete      Boolean  @default(false) // Hard-delete after folder archived
   deadline          DateTime?
   jobPriority       String?   // 'normal' | 'urgent' | 'rush'
   jobNotes          String?

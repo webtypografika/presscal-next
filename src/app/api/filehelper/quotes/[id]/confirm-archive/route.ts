@@ -35,12 +35,18 @@ export async function POST(
     )
   }
 
-  const quote = await prisma.quote.findFirst({
-    where: { id, orgId: auth.org.id, deletedAt: null },
-    select: { id: true },
+  const quote = await (prisma as any).quote.findFirst({
+    where: { id, orgId: auth.org.id },
+    select: { id: true, pendingDelete: true },
   })
   if (!quote) {
     return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
+  }
+
+  if (quote.pendingDelete) {
+    // Folder archived — now hard-delete the quote record
+    await prisma.quote.delete({ where: { id } })
+    return NextResponse.json({ ok: true, deleted: true, jobFolderPath: newFolderPath })
   }
 
   await prisma.quote.update({

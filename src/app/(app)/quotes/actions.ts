@@ -169,19 +169,27 @@ export async function updateQuote(id: string, data: {
 // ─── DELETE ───
 
 export async function deleteQuote(id: string) {
-  // If quote has a job folder, archive it first so the folder moves to _01 Archive
   const quote = await prisma.quote.findUnique({
     where: { id },
     select: { jobFolderPath: true },
   });
+
   if (quote?.jobFolderPath) {
-    try {
-      await archiveQuote(id, 'cancelled');
-    } catch {
-      // Archive may fail (no folder, permission, etc.) — proceed with delete anyway
-    }
+    // Soft-delete + set pendingArchivePath so PressKit moves the folder to archive.
+    // The confirm-archive endpoint will hard-delete the quote after the folder is moved.
+    await prisma.quote.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        status: 'cancelled',
+        pendingArchivePath: quote.jobFolderPath,
+        pendingDelete: true,
+      },
+    });
+  } else {
+    // No folder — just hard-delete immediately
+    await prisma.quote.delete({ where: { id } });
   }
-  await prisma.quote.delete({ where: { id } });
   revalidatePath('/quotes');
   revalidatePath('/jobs');
 }
