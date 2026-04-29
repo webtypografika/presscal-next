@@ -199,7 +199,7 @@ export default function OfficeShell({ initialProjects, companies, contacts }: {
               value={newProjectTitle}
               onChange={e => setNewProjectTitle(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCreateProject(); if (e.key === 'Escape') setShowNewProject(false); }}
-              onBlur={() => { if (!newProjectTitle.trim()) setShowNewProject(false); }}
+              onBlur={() => { if (newProjectTitle.trim()) handleCreateProject(); else setShowNewProject(false); }}
               placeholder="Τίτλος project..."
               style={{
                 width: '100%', padding: '6px 10px', borderRadius: 6, fontSize: '0.75rem',
