@@ -257,8 +257,15 @@ export default function EmailClient() {
       const senderName = parseAddress(detail.from).name || senderEmail;
       const emailBody = detail.textBody || detail.htmlBody || '';
 
-      // Match contact → company (fast, local DB lookup)
-      const matchRes = await fetch(`/api/email/match-customer?email=${encodeURIComponent(senderEmail)}`).then(r => r.json()).catch(() => ({}));
+      // Match contact → company (fast, local DB lookup) — retry once on failure
+      let matchRes: any = {};
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetch(`/api/email/match-customer?email=${encodeURIComponent(senderEmail)}`);
+          if (res.ok) { matchRes = await res.json(); break; }
+        } catch {}
+        if (attempt === 0) await new Promise(r => setTimeout(r, 1000)); // wait 1s before retry
+      }
       let companyId = matchRes?.companies?.[0]?.id || undefined;
       let contactId = matchRes?.contact?.id || undefined;
 
