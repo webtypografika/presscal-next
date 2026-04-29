@@ -1940,45 +1940,60 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                   textDecoration: 'none', transition: 'all 0.15s',
                 } as const);
 
+                // Pick customer folder via PressKit if not set yet
+                const handlePickCustomerFolder = async (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  try {
+                    // Focus PressKit
+                    const fl = document.createElement('iframe');
+                    fl.style.display = 'none';
+                    fl.src = 'presscal-fh://focus';
+                    document.body.appendChild(fl);
+                    setTimeout(() => fl.remove(), 500);
+                    const res = await fetch('http://localhost:17824/?pickFolder=1');
+                    if (!res.ok) { toast('PressKit δεν αποκρίθηκε', 'error'); return; }
+                    const data = await res.json();
+                    if (data.canceled || !data.path) return;
+                    // Save folder to company
+                    if (customerId) {
+                      await updateCustomer(customerId, { folderPath: data.path } as any);
+                      toast('Φάκελος πελάτη ορίστηκε');
+                      // Now trigger download to that customer folder
+                      setTimeout(() => {
+                        window.location.href = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer${onlyNewParam}`;
+                        if (newCount > 0) setTimeout(markAsSaved, 2000);
+                        setTimeout(() => router.refresh(), 3000);
+                      }, 300);
+                    }
+                  } catch {
+                    toast('Δεν βρέθηκε το PressKit', 'error');
+                  }
+                };
+
                 return (
                   <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
-                    {hasCompanyFolder ? (
-                      <>
-                        {/* Customer folder — quote subfolder inside company path */}
-                        <a
-                          href={newCount > 0 ? downloadCustomerHref : (openCustomerHref || '#')}
-                          onClick={newCount > 0 ? handleDownload : undefined}
-                          style={btnStyle(newCount > 0)}
-                          onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
-                        >
-                          <i className={`fas fa-${newCount > 0 ? 'download' : 'folder-open'}`} style={{ fontSize: '0.65rem' }} />
-                          {newCount > 0 ? `Φάκελος Πελάτη (${newCount} νέα)` : 'Φάκελος Πελάτη'}
-                        </a>
-                        {/* Job folder — global or inside company */}
-                        <a
-                          href={newCount > 0 ? downloadGlobalHref : (openJobHref || downloadGlobalHref)}
-                          onClick={newCount > 0 ? handleDownload : undefined}
-                          style={btnStyle(false)}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-                        >
-                          <i className={`fas fa-${jobFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
-                          Φάκελος Προσφοράς
-                        </a>
-                      </>
-                    ) : (
-                      <a
-                        href={newCount > 0 ? downloadGlobalHref : (openJobHref || downloadGlobalHref)}
-                        onClick={newCount > 0 ? handleDownload : undefined}
-                        style={btnStyle(newCount > 0)}
-                        onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
-                      >
-                        <i className={`fas fa-${newCount > 0 ? 'download' : jobFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
-                        {newCount > 0 ? `Λήψη αρχείων (${newCount} νέα)` : jobFolder ? 'Άνοιγμα φακέλου' : 'Δημιουργία φακέλου'}
-                      </a>
-                    )}
+                    {/* Customer folder — always shown */}
+                    <a
+                      href={hasCompanyFolder ? (newCount > 0 ? downloadCustomerHref : (openCustomerHref || '#')) : '#'}
+                      onClick={hasCompanyFolder ? (newCount > 0 ? handleDownload : undefined) : handlePickCustomerFolder}
+                      style={btnStyle(newCount > 0)}
+                      onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
+                    >
+                      <i className={`fas fa-${newCount > 0 ? 'download' : hasCompanyFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
+                      {newCount > 0 ? `Φάκελος Πελάτη (${newCount} νέα)` : hasCompanyFolder ? 'Φάκελος Πελάτη' : 'Φάκελος Πελάτη...'}
+                    </a>
+                    {/* Job folder — always shown */}
+                    <a
+                      href={newCount > 0 ? downloadGlobalHref : (openJobHref || downloadGlobalHref)}
+                      onClick={newCount > 0 ? handleDownload : undefined}
+                      style={btnStyle(false)}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      <i className={`fas fa-${jobFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
+                      Φάκελος Προσφοράς
+                    </a>
                   </div>
                 );
               })()}
