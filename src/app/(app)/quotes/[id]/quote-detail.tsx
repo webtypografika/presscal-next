@@ -2125,6 +2125,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
           customerName={customerName}
           grandTotal={grandTotal}
           companyContacts={selectedCompany?.companyContacts || []}
+          quoteContact={selectedContact}
+          companyEmail={selectedCompany?.email}
           linkedEmails={quote.linkedEmails as string[] || []}
           onClose={() => setShowSendModal(false)}
           onSent={() => {
@@ -3166,13 +3168,15 @@ function ReplyPanel({ customerEmail, threadId, quoteNumber, toast }: {
 // ═══════════════════════════════════════════════════════
 // SEND QUOTE MODAL
 // ═══════════════════════════════════════════════════════
-function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, grandTotal, companyContacts, linkedEmails, onClose, onSent, toast }: {
+function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, grandTotal, companyContacts, quoteContact, companyEmail, linkedEmails, onClose, onSent, toast }: {
   quoteId: string;
   quoteNumber: string;
   customerEmail: string;
   customerName: string;
   grandTotal: number;
   companyContacts?: any[];
+  quoteContact?: { id: string; name: string; email: string | null } | null;
+  companyEmail?: string | null;
   linkedEmails?: string[];
   onClose: () => void;
   onSent: () => void;
@@ -3181,11 +3185,28 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
   const [to, setTo] = useState(customerEmail);
   const [cc, setCc] = useState('');
 
-  // All contact emails for "To" suggestions
-  const allContacts = (companyContacts || [])
-    .map((cc: any) => cc.contact)
-    .filter((c: any) => c?.email);
-  const toSuggestions = allContacts.filter((c: any) => c.email.toLowerCase() !== to.toLowerCase());
+  // All available email choices: company contacts + quote contact + company email
+  const allContacts: { id: string; name: string; email: string; tag?: string }[] = [];
+  const seen = new Set<string>();
+  // Add quote-level contact first (if has email)
+  if (quoteContact?.email && !seen.has(quoteContact.email.toLowerCase())) {
+    seen.add(quoteContact.email.toLowerCase());
+    allContacts.push({ id: quoteContact.id, name: quoteContact.name, email: quoteContact.email, tag: 'Επαφή' });
+  }
+  // Add company contacts
+  for (const cc of (companyContacts || [])) {
+    const c = cc.contact;
+    if (c?.email && !seen.has(c.email.toLowerCase())) {
+      seen.add(c.email.toLowerCase());
+      allContacts.push({ id: c.id, name: c.name, email: c.email });
+    }
+  }
+  // Add company email if different
+  if (companyEmail && !seen.has(companyEmail.toLowerCase())) {
+    seen.add(companyEmail.toLowerCase());
+    allContacts.push({ id: 'company', name: customerName, email: companyEmail, tag: 'Εταιρεία' });
+  }
+  const toSuggestions = allContacts.filter(c => c.email.toLowerCase() !== to.toLowerCase());
 
   // Suggest CC from other company contacts (not the current "to")
   const ccSuggestions = allContacts
@@ -3283,10 +3304,11 @@ function SendQuoteModal({ quoteId, quoteNumber, customerEmail, customerName, gra
                 onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--teal)'; e.currentTarget.style.color = 'var(--teal)'; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--glass-border)'; e.currentTarget.style.color = '#94a3b8'; }}
               >
-                <span style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.5rem', color: '#fff', fontWeight: 700, flexShrink: 0 }}>
-                  {(contact.name || contact.email)[0]?.toUpperCase()}
+                <span style={{ width: 16, height: 16, borderRadius: '50%', background: contact.tag === 'Εταιρεία' ? 'var(--blue)' : 'var(--teal)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.5rem', color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                  <i className={`fas fa-${contact.tag === 'Εταιρεία' ? 'building' : 'user'}`} />
                 </span>
                 {contact.name && <span>{contact.name}</span>}
+                {contact.tag && <span style={{ fontSize: '0.6rem', opacity: 0.5 }}>({contact.tag})</span>}
                 <span style={{ opacity: 0.6 }}>{contact.email}</span>
               </button>
             ))}
