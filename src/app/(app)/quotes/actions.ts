@@ -130,6 +130,48 @@ export async function createQuote(data: {
   return quote;
 }
 
+// ─── DUPLICATE ───
+
+export async function duplicateQuote(quoteId: string) {
+  const orig = await prisma.quote.findUniqueOrThrow({
+    where: { id: quoteId },
+    include: { quoteRecipients: { select: { contactId: true, type: true } } },
+  });
+  const number = await nextQuoteNumber();
+  const items = ((orig.items as any[]) || []).map((it: any) => ({
+    ...it,
+    id: crypto.randomUUID(),
+    priceLocked: false,
+  }));
+  const quote = await prisma.quote.create({
+    data: {
+      orgId: ORG_ID,
+      number,
+      status: 'draft',
+      companyId: orig.companyId,
+      contactId: orig.contactId,
+      title: orig.title ? `${orig.title} (αντίγραφο)` : null,
+      description: orig.description,
+      notes: orig.notes,
+      items: items as any,
+      subtotal: orig.subtotal,
+      vatRate: orig.vatRate,
+      vatAmount: orig.vatAmount,
+      grandTotal: orig.grandTotal,
+      totalCost: orig.totalCost,
+      totalProfit: orig.totalProfit,
+    },
+  });
+  // Copy recipients
+  for (const r of orig.quoteRecipients) {
+    await prisma.quoteRecipient.create({
+      data: { quoteId: quote.id, contactId: r.contactId, type: r.type },
+    }).catch(() => {});
+  }
+  revalidatePath('/quotes');
+  return quote;
+}
+
 // ─── UPDATE ───
 
 export async function updateQuote(id: string, data: {

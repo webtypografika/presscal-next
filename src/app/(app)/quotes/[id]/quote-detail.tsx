@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import type { Quote, Customer, Company, Material, Org } from '@/generated/prisma/client';
-import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer, createCompanyQuick, createCompanyFromElorus, archiveQuote, restoreQuote } from '../actions';
+import { updateQuote, updateQuoteStatus, deleteQuote, linkEmailToQuote, createCustomer, updateCustomer, createCompanyQuick, createCompanyFromElorus, archiveQuote, restoreQuote, duplicateQuote } from '../actions';
 import { NewCompanyForm, type CompanyFormData } from '@/components/new-company-form';
 import { ElorusAfmLookup, type ElorusLookupResult } from '@/components/elorus-afm-lookup';
 
@@ -1198,6 +1198,26 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
             <i className="fas fa-paper-plane" style={{ fontSize: '0.55rem' }} /> Αποστολή
           </button>
         )}
+
+        {/* Duplicate */}
+        <button onClick={async () => {
+          try {
+            const dup = await duplicateQuote(quote.id);
+            toast('Δημιουργήθηκε αντίγραφο');
+            router.push(`/quotes/${dup.id}`);
+          } catch (e) { toast('Σφάλμα: ' + (e as Error).message, 'error'); }
+        }} style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          padding: '5px 10px', borderRadius: 6, fontSize: '0.72rem', fontWeight: 500,
+          background: 'transparent',
+          border: '1px solid var(--border)',
+          color: 'var(--text-muted)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+        }}
+          onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.borderColor = 'var(--text-muted)'; }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
+        >
+          <i className="fas fa-copy" style={{ fontSize: '0.55rem' }} /> Αντιγραφή
+        </button>
 
         {/* Print / PDF */}
         <button onClick={() => window.open(`/api/quote/print?id=${quote.id}`, '_blank')} style={{
