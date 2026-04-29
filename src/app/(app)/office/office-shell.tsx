@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   getItems, createProject, updateProject, deleteProject,
   createItem, updateItem, deleteItem, toggleItem,
@@ -35,6 +35,99 @@ type ItemData = {
 };
 
 type PickerOption = { id: string; name: string };
+
+// ─── MINI TABLE COMPONENT ───
+
+function MiniTable({ data, onChange }: { data: TableData | null; onChange: (td: TableData) => void }) {
+  const [td, setTd] = useState<TableData>(data || { cols: 3, rows: [] });
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Sync from parent when data changes externally (e.g. initial load)
+  useEffect(() => {
+    if (data) setTd(data);
+  }, [data?.cols, data?.rows?.length]); // only on structural changes
+
+  const save = useCallback((next: TableData) => {
+    setTd(next);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => onChange(next), 800);
+  }, [onChange]);
+
+  const addRow = () => save({ ...td, rows: [...td.rows, Array(td.cols).fill('')] });
+  const addCol = () => save({ cols: td.cols + 1, rows: td.rows.map(r => [...r, '']) });
+  const removeRow = (ri: number) => save({ ...td, rows: td.rows.filter((_, i) => i !== ri) });
+  const removeCol = (ci: number) => {
+    if (td.cols <= 1) return;
+    save({ cols: td.cols - 1, rows: td.rows.map(r => r.filter((_, i) => i !== ci)) });
+  };
+  const setCell = (ri: number, ci: number, val: string) => {
+    const rows = td.rows.map((r, i) => i === ri ? r.map((c, j) => j === ci ? val : c) : r);
+    save({ ...td, rows });
+  };
+
+  if (td.rows.length === 0) {
+    return (
+      <button onClick={addRow} style={{
+        padding: '4px 10px', borderRadius: 5, border: '1px dashed var(--border)',
+        background: 'transparent', color: 'var(--text-muted)', fontSize: '0.65rem',
+        cursor: 'pointer', fontWeight: 600, width: '100%',
+      }}><i className="fas fa-table" style={{ marginRight: 4, fontSize: '0.55rem' }} />Προσθήκη πίνακα</button>
+    );
+  }
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
+        <thead>
+          <tr>
+            {Array.from({ length: td.cols }).map((_, ci) => (
+              <th key={ci} style={{ padding: '3px 2px', borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <span style={{ color: '#64748b', fontSize: '0.6rem', fontWeight: 600 }}>{String.fromCharCode(65 + ci)}</span>
+                  {td.cols > 1 && (
+                    <button onClick={() => removeCol(ci)} style={{ border: 'none', background: 'transparent', color: '#475569', cursor: 'pointer', fontSize: '0.5rem', padding: '0 2px', opacity: 0.4 }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                      onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}>
+                      <i className="fas fa-times" />
+                    </button>
+                  )}
+                </div>
+              </th>
+            ))}
+            <th style={{ width: 20 }} />
+          </tr>
+        </thead>
+        <tbody>
+          {td.rows.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td key={ci} style={{ padding: 1, border: '1px solid var(--border)' }}>
+                  <input value={cell} onChange={e => setCell(ri, ci, e.target.value)}
+                    style={{ width: '100%', padding: '3px 5px', border: 'none', background: 'rgba(0,0,0,0.1)', color: 'var(--text)', fontSize: '0.72rem', outline: 'none' }} />
+                </td>
+              ))}
+              <td style={{ padding: 0, verticalAlign: 'middle' }}>
+                <button onClick={() => removeRow(ri)} style={{ border: 'none', background: 'transparent', color: '#475569', cursor: 'pointer', fontSize: '0.5rem', padding: '2px 3px', opacity: 0.4 }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}>
+                  <i className="fas fa-times" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+        <button onClick={addRow} style={{ padding: '3px 8px', borderRadius: 4, border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.6rem', cursor: 'pointer' }}>
+          <i className="fas fa-plus" style={{ marginRight: 3, fontSize: '0.5rem' }} />Γραμμή
+        </button>
+        <button onClick={addCol} style={{ padding: '3px 8px', borderRadius: 4, border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.6rem', cursor: 'pointer' }}>
+          <i className="fas fa-plus" style={{ marginRight: 3, fontSize: '0.5rem' }} />Στήλη
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ─── COLORS ───
 
@@ -460,82 +553,7 @@ export default function OfficeShell({ initialProjects, companies, contacts }: {
                       {/* Mini Table */}
                       <div style={{ gridColumn: '1 / -1' }}>
                         <label style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>ΠΙΝΑΚΑΣ</label>
-                        {(() => {
-                          const td: TableData = item.tableData || { cols: 3, rows: [] };
-                          const updateTable = (next: TableData) => handleUpdateItem(item.id, { tableData: next } as any);
-                          const addRow = () => updateTable({ ...td, rows: [...td.rows, Array(td.cols).fill('')] });
-                          const addCol = () => updateTable({ cols: td.cols + 1, rows: td.rows.map(r => [...r, '']) });
-                          const removeRow = (ri: number) => updateTable({ ...td, rows: td.rows.filter((_, i) => i !== ri) });
-                          const removeCol = (ci: number) => {
-                            if (td.cols <= 1) return;
-                            updateTable({ cols: td.cols - 1, rows: td.rows.map(r => r.filter((_, i) => i !== ci)) });
-                          };
-                          const setCell = (ri: number, ci: number, val: string) => {
-                            const rows = td.rows.map((r, i) => i === ri ? r.map((c, j) => j === ci ? val : c) : r);
-                            updateTable({ ...td, rows });
-                          };
-                          if (td.rows.length === 0) {
-                            return (
-                              <button onClick={addRow} style={{
-                                padding: '4px 10px', borderRadius: 5, border: '1px dashed var(--border)',
-                                background: 'transparent', color: 'var(--text-muted)', fontSize: '0.65rem',
-                                cursor: 'pointer', fontWeight: 600, width: '100%',
-                              }}><i className="fas fa-table" style={{ marginRight: 4, fontSize: '0.55rem' }} />Προσθήκη πίνακα</button>
-                            );
-                          }
-                          return (
-                            <div style={{ overflowX: 'auto' }}>
-                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.72rem' }}>
-                                <thead>
-                                  <tr>
-                                    {Array.from({ length: td.cols }).map((_, ci) => (
-                                      <th key={ci} style={{ padding: '3px 2px', borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                          <span style={{ color: '#64748b', fontSize: '0.6rem', fontWeight: 600 }}>{String.fromCharCode(65 + ci)}</span>
-                                          {td.cols > 1 && (
-                                            <button onClick={() => removeCol(ci)} style={{ border: 'none', background: 'transparent', color: '#475569', cursor: 'pointer', fontSize: '0.5rem', padding: '0 2px', opacity: 0.4 }}
-                                              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-                                              onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}>
-                                              <i className="fas fa-times" />
-                                            </button>
-                                          )}
-                                        </div>
-                                      </th>
-                                    ))}
-                                    <th style={{ width: 20 }} />
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {td.rows.map((row, ri) => (
-                                    <tr key={ri}>
-                                      {row.map((cell, ci) => (
-                                        <td key={ci} style={{ padding: 1, border: '1px solid var(--border)' }}>
-                                          <input value={cell} onChange={e => setCell(ri, ci, e.target.value)}
-                                            style={{ width: '100%', padding: '3px 5px', border: 'none', background: 'rgba(0,0,0,0.1)', color: 'var(--text)', fontSize: '0.72rem', outline: 'none' }} />
-                                        </td>
-                                      ))}
-                                      <td style={{ padding: 0, verticalAlign: 'middle' }}>
-                                        <button onClick={() => removeRow(ri)} style={{ border: 'none', background: 'transparent', color: '#475569', cursor: 'pointer', fontSize: '0.5rem', padding: '2px 3px', opacity: 0.4 }}
-                                          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-                                          onMouseLeave={e => (e.currentTarget.style.opacity = '0.4')}>
-                                          <i className="fas fa-times" />
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                              <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                                <button onClick={addRow} style={{ padding: '3px 8px', borderRadius: 4, border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.6rem', cursor: 'pointer' }}>
-                                  <i className="fas fa-plus" style={{ marginRight: 3, fontSize: '0.5rem' }} />Γραμμή
-                                </button>
-                                <button onClick={addCol} style={{ padding: '3px 8px', borderRadius: 4, border: '1px dashed var(--border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.6rem', cursor: 'pointer' }}>
-                                  <i className="fas fa-plus" style={{ marginRight: 3, fontSize: '0.5rem' }} />Στήλη
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        <MiniTable data={item.tableData} onChange={td => handleUpdateItem(item.id, { tableData: td } as any)} />
                       </div>
 
                       {/* Priority */}
