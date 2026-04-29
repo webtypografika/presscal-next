@@ -1978,19 +1978,22 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
 
                 return (
                   <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
-                    {/* Customer folder — always shown */}
+                    {/* Customer folder */}
                     <a
                       href={hasCompanyFolder ? (newCount > 0 ? downloadCustomerHref : (openCustomerHref || '#')) : '#'}
                       onClick={hasCompanyFolder ? (newCount > 0 ? handleDownload : undefined) : handlePickCustomerFolder}
-                      style={btnStyle(newCount > 0 || !!isCustomerActive)}
-                      onMouseEnter={e => { e.currentTarget.style.background = (newCount > 0 || isCustomerActive) ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = (newCount > 0 || isCustomerActive) ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
+                      style={btnStyle(!!isCustomerActive)}
+                      onMouseEnter={e => { e.currentTarget.style.background = isCustomerActive ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = isCustomerActive ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
                     >
-                      <i className={`fas fa-${newCount > 0 ? 'download' : hasCompanyFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
-                      {newCount > 0 ? `Φάκελος Πελάτη (${newCount} νέα)` : hasCompanyFolder ? 'Φάκελος Πελάτη' : 'Φάκελος Πελάτη...'}
-                      {isCustomerActive && newCount === 0 && <span style={{ fontSize: '0.55rem', background: 'var(--success)', color: '#fff', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>Ενεργός</span>}
+                      <i className={`fas fa-${isCustomerActive ? 'folder-open' : newCount > 0 ? 'download' : hasCompanyFolder ? 'folder' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
+                      {hasCompanyFolder ? 'Φάκελος Πελάτη' : 'Φάκελος Πελάτη...'}
+                      {newCount > 0 && !workingFolder && <span style={{ fontSize: '0.55rem', opacity: 0.7 }}>({newCount})</span>}
+                      {isCustomerActive && <span style={{ fontSize: '0.55rem', background: 'var(--success)', color: '#fff', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>Ενεργός</span>}
                     </a>
-                    {/* Job folder — always shown */}
+                    {/* Separator */}
+                    <span style={{ color: '#475569', fontSize: '0.7rem', fontWeight: 500, alignSelf: 'center', flexShrink: 0 }}>ή</span>
+                    {/* Job folder */}
                     <a
                       href={newCount > 0 ? downloadGlobalHref : (openJobHref || downloadGlobalHref)}
                       onClick={newCount > 0 ? handleDownload : undefined}
@@ -1998,9 +2001,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                       onMouseEnter={e => { e.currentTarget.style.background = isJobActive ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
                       onMouseLeave={e => { e.currentTarget.style.background = isJobActive ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
                     >
-                      <i className={`fas fa-${jobFolder ? 'folder-open' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
+                      <i className={`fas fa-${isJobActive ? 'folder-open' : jobFolder ? 'folder' : 'folder-plus'}`} style={{ fontSize: '0.65rem' }} />
                       Φάκελος Προσφοράς
-                      {isJobActive && newCount === 0 && <span style={{ fontSize: '0.55rem', background: 'var(--success)', color: '#fff', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>Ενεργός</span>}
+                      {newCount > 0 && !workingFolder && <span style={{ fontSize: '0.55rem', opacity: 0.7 }}>({newCount})</span>}
+                      {isJobActive && <span style={{ fontSize: '0.55rem', background: 'var(--success)', color: '#fff', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>Ενεργός</span>}
                     </a>
                   </div>
                 );
