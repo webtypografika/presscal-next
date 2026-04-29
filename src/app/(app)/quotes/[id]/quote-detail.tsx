@@ -1912,10 +1912,22 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                 };
 
                 const jobFolder = (quote as any).jobFolderPath;
-                const hasCompanyFolder = !!(selectedCompany as any)?.folderPath;
+                const companyFolder = (selectedCompany as any)?.folderPath;
+                const hasCompanyFolder = !!companyFolder;
                 const onlyNewParam = newCount > 0 && newCount < allFiles.length ? '&onlyNew=1' : '';
-                const quoteHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${onlyNewParam}`;
-                const customerHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer${onlyNewParam}`;
+
+                // Download deep links (only used when newCount > 0)
+                const downloadGlobalHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=global${onlyNewParam}`;
+                const downloadCustomerHref = `presscal-fh://download-to-folder?quoteId=${quote.id}&target=customer${onlyNewParam}`;
+                // Open folder deep links (when folder exists and nothing new)
+                const openJobHref = jobFolder ? `presscal-fh://open-folder?path=${encodeURIComponent(jobFolder)}` : null;
+                const openCustomerHref = companyFolder ? `presscal-fh://open-folder?path=${encodeURIComponent(companyFolder)}` : null;
+
+                const handleDownload = () => {
+                  if (newCount > 0) setTimeout(markAsSaved, 2000);
+                  // Refresh quote to pick up jobFolderPath after PressKit creates it
+                  setTimeout(() => router.refresh(), 3000);
+                };
 
                 // Button style helper
                 const btnStyle = (highlighted: boolean) => ({
@@ -1928,16 +1940,14 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                   textDecoration: 'none', transition: 'all 0.15s',
                 } as const);
 
-                // If company has a folder, show both options side by side
-                // If no company folder, show only the quote folder button
                 return (
                   <div style={{ display: 'flex', gap: 6, marginTop: 14 }}>
                     {hasCompanyFolder ? (
                       <>
-                        {/* Customer folder — files go directly into company.folderPath */}
+                        {/* Customer folder — quote subfolder inside company path */}
                         <a
-                          href={customerHref}
-                          onClick={() => { if (newCount > 0) setTimeout(markAsSaved, 2000); }}
+                          href={newCount > 0 ? downloadCustomerHref : (openCustomerHref || '#')}
+                          onClick={newCount > 0 ? handleDownload : undefined}
                           style={btnStyle(newCount > 0)}
                           onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
@@ -1945,10 +1955,10 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                           <i className={`fas fa-${newCount > 0 ? 'download' : 'folder-open'}`} style={{ fontSize: '0.65rem' }} />
                           {newCount > 0 ? `Φάκελος Πελάτη (${newCount} νέα)` : 'Φάκελος Πελάτη'}
                         </a>
-                        {/* Quote subfolder — creates a dedicated folder inside company path */}
+                        {/* Job folder — global or inside company */}
                         <a
-                          href={quoteHref}
-                          onClick={() => { if (newCount > 0) setTimeout(markAsSaved, 2000); }}
+                          href={newCount > 0 ? downloadGlobalHref : (openJobHref || downloadGlobalHref)}
+                          onClick={newCount > 0 ? handleDownload : undefined}
                           style={btnStyle(false)}
                           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
                           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
@@ -1959,8 +1969,8 @@ export function QuoteDetail({ quote: initial, customers, elorusConfigured, eloru
                       </>
                     ) : (
                       <a
-                        href={quoteHref}
-                        onClick={() => { if (newCount > 0) setTimeout(markAsSaved, 2000); }}
+                        href={newCount > 0 ? downloadGlobalHref : (openJobHref || downloadGlobalHref)}
+                        onClick={newCount > 0 ? handleDownload : undefined}
                         style={btnStyle(newCount > 0)}
                         onMouseEnter={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.18)' : 'rgba(255,255,255,0.04)'; }}
                         onMouseLeave={e => { e.currentTarget.style.background = newCount > 0 ? 'rgba(245,130,32,0.1)' : 'transparent'; }}
