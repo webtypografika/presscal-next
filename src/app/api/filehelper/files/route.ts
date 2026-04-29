@@ -109,7 +109,9 @@ export async function PATCH(req: NextRequest) {
   const auth = await authenticateFilehelper(req)
   if ('error' in auth) return auth.error
 
-  const { quoteId, fileIds, savedToPath } = await req.json()
+  const body = await req.json()
+  const { quoteId, fileIds, savedToPath } = body
+  console.log('[PATCH /files] body keys:', Object.keys(body), 'savedToPath:', savedToPath || '(missing)')
   if (!quoteId && !fileIds?.length) {
     return NextResponse.json({ error: 'quoteId or fileIds required' }, { status: 400 })
   }
@@ -134,7 +136,7 @@ export async function PATCH(req: NextRequest) {
     }).catch(() => {}) // non-critical
   }
 
-  return NextResponse.json({ marked: result.count })
+  return NextResponse.json({ marked: result.count, savedToPath: savedToPath || null, workingFolderSaved: !!(quoteId && savedToPath) })
 }
 
 // DELETE /api/filehelper/files — Delete a file link (by id in query)
