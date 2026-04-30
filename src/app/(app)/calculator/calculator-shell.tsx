@@ -3304,6 +3304,27 @@ export default function CalculatorShell() {
                           <ToggleBar value={String(finish.lamSides)} onChange={(v) => setFinish({ ...finish, lamSides: Number(v) as 1 | 2 })} options={[{ v: '1', l: '1 Όψη' }, { v: '2', l: '2 Όψεις' }]} />
                         </div>
                       )}
+                      {/* Pricing summary */}
+                      {selectedFilm && (() => {
+                        const filmCost = selectedFilm.costPerUnit || 0;
+                        const filmSell = (selectedFilm.specs as Record<string,unknown>)?.sellPerUnit as number || selectedFilm.costPerUnit || 0;
+                        const unit = isPouch ? '/τεμ' : '/m²';
+                        return (
+                          <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.68rem' }}>
+                              <span style={{ color: '#64748b' }}>Κόστος: <strong style={{ color: 'var(--teal)' }}>€{filmCost.toFixed(4)}{unit}</strong></span>
+                              <span style={{ color: '#64748b' }}>Πώληση: <strong style={{ color: '#4ade80' }}>€{filmSell.toFixed(4)}{unit}</strong></span>
+                            </div>
+                            {r && costLamination > 0 && (
+                              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.68rem', marginTop: 4 }}>
+                                <span style={{ color: '#64748b' }}>Κόστος σύνολο: <strong style={{ color: 'var(--teal)' }}>€{costLamination.toFixed(2)}</strong></span>
+                                <span style={{ color: '#64748b' }}>Χρέωση: <strong style={{ color: '#4ade80' }}>€{(r.chargeLamination ?? 0).toFixed(2)}</strong></span>
+                                <span style={{ color: '#64748b' }}>Κέρδος: <strong style={{ color: 'var(--success)' }}>€{((r.chargeLamination ?? 0) - costLamination).toFixed(2)}</strong></span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </FinishBody>
                   );
                 })()}
