@@ -627,7 +627,143 @@ export async function POST(req: NextRequest) {
       offHourlyEnabled: productPricing?.hourly_enabled ?? null,
       speedUsed: (machineSpecs as any).speed ?? null,
     };
-    return Response.json({ imposition, result, debug: { machineCat } });
+
+    // ─── COVER CALCULATION ───
+    let coverResult: Record<string, number> | null = null;
+    if (body.cover) {
+      try {
+        const cv = body.cover;
+        // Determine cover machine & paper
+        const coverMachine = cv.useBodyMachine ? machine : (cv.machineId
+          ? await prisma.machine.findFirst({ where: { id: cv.machineId, orgId: ORG_ID, deletedAt: null }, include: { consumables: true } })
+          : machine) || machine;
+        const coverPaper = cv.useBodyPaper ? paper : (cv.paperId
+          ? await prisma.material.findFirst({ where: { id: cv.paperId, orgId: ORG_ID, deletedAt: null } })
+          : paper) || paper;
+
+        // Cover dimensions
+        const bodyPages = body.pages || 64;
+        const paperThk = body.paperThickness || 0.1;
+        const spineWidth = body.impositionMode === 'perfect_bound'
+          ? (bodyPages / 2) * paperThk
+          : 0;
+        const coverTrimW = body.impositionMode === 'perfect_bound'
+          ? body.jobW * 2 + spineWidth
+          : body.jobW;
+        const coverTrimH = body.jobH;
+        const coverBleed = body.bleed || 3;
+
+        // Cover machine printable area
+        const cvRawSpecs = (coverMachine.specs as Record<string, unknown>) || {};
+        const cvCat = coverMachine.cat as 'digital' | 'offset';
+        const cvSpecs = cvCat === 'offset' ? mapOffsetSpecs(cvRawSpecs) : mapDigitalSpecs(cvRawSpecs);
+        const cvDimA = coverMachine.maxLS || 330;
+        const cvDimB = coverMachine.maxSS || 487;
+        const cvRawW = Math.max(cvDimA, cvDimB);
+        const cvRawH = Math.min(cvDimA, cvDimB);
+        const cvIsLEF = body.feedEdge === 'lef';
+        const cvFeedLength = cvIsLEF ? cvRawH : cvRawW;
+        const cvArea: PrintableArea = {
+          paperW: cvIsLEF ? cvRawH : cvRawW,
+          paperH: cvIsLEF ? cvRawW : cvRawH,
+          marginTop: cvCat === 'offset' ? (coverMachine.marginBottom || 0) : (coverMachine.marginTop || 0),
+          marginBottom: cvCat === 'offset' ? (coverMachine.marginTop || 0) : (coverMachine.marginBottom || 0),
+          marginLeft: coverMachine.marginLeft || 0,
+          marginRight: coverMachine.marginRight || 0,
+        };
+
+        // Cover imposition: always N-Up
+        const cvImpoInput: ImpositionInput = {
+          mode: 'nup',
+          trimW: coverTrimW,
+          trimH: coverTrimH,
+          bleed: coverBleed,
+          qty: body.qty,
+          sides: cv.sides || 2,
+          gutter: 0,
+          area: cvArea,
+        };
+        const cvImposition = calcImposition(cvImpoInput);
+
+        // Cover lamination
+        let cvLamData: CostInput['lamination'] | undefined;
+        if (cv.lamMachineId && cv.lamFilmId) {
+          const cvLamMachine = await prisma.postpressMachine.findFirst({ where: { id: cv.lamMachineId, orgId: ORG_ID, deletedAt: null } });
+          const cvLamFilm = await prisma.material.findFirst({ where: { id: cv.lamFilmId, orgId: ORG_ID, deletedAt: null } });
+          if (cvLamMachine && cvLamFilm) {
+            const lSpecs = (cvLamMachine.specs as Record<string, number>) || {};
+            let filmCostPerSqm = cvLamFilm.costPerUnit || 0;
+            if (cvLamFilm.cat === 'roll' && cvLamFilm.rollLength && cvLamFilm.width) {
+              const rollAreaSqm = (cvLamFilm.width / 1000) * cvLamFilm.rollLength;
+              filmCostPerSqm = ((cvLamFilm.specs as Record<string, number>)?.roll_price || cvLamFilm.costPerUnit || 0) / rollAreaSqm;
+            }
+            let filmSellPerSqm: number | undefined;
+            if (cvLamFilm.sellPerUnit && cvLamFilm.sellPerUnit > 0) filmSellPerSqm = cvLamFilm.sellPerUnit;
+            cvLamData = {
+              mode: 'roll',
+              filmCostPerSqm,
+              filmSellPerSqm,
+              machineSetupCost: cvLamMachine.setupCost || 0,
+              sides: cv.lamSides || 1,
+              dualRoll: !!(lSpecs.dual_roll),
+              maxW: lSpecs.max_w || 0,
+            };
+          }
+        }
+
+        // Cover cost
+        const cvCostInput: CostInput = {
+          machineCat: cvCat,
+          machineMaxW: cvArea.paperW,
+          machineMaxH: cvArea.paperH,
+          specs: cvSpecs,
+          tacLimit: ((cvRawSpecs.tac_limit as number) || 280) / 100,
+          feedEdge: cvIsLEF ? 'lef' : 'sef',
+          machineMaxDim: Math.max(coverMachine.maxLS || 0, coverMachine.maxSS || 0),
+          feedLength: cvFeedLength,
+          includeDepreciation: !!cvRawSpecs.include_depreciation,
+          machineCost: (cvRawSpecs.machine_cost as number) || undefined,
+          machineLifetimePasses: (cvRawSpecs.machine_lifetime_passes as number) || undefined,
+          paperW: coverPaper.width || 860,
+          paperH: coverPaper.height || 610,
+          paperCostPerUnit: coverPaper.costPerUnit || 0,
+          paperGsm: coverPaper.thickness || 80,
+          qty: body.qty,
+          sides: cv.sides || 2,
+          colorMode: cv.colorMode || 'color',
+          wasteFixed: 0,
+          coverageLevel: cv.coverageLevel || 'mid',
+          imposition: cvImposition,
+          lamination: cvLamData,
+          paperMarkup: 0,
+          printMarkup: 0,
+          guillotineMarkup: 0,
+          lamMarkup: 0,
+          bindingMarkup: 0,
+          offsetFrontCmyk: cv.platesFront,
+          offsetBackCmyk: cv.platesBack,
+          offsetFrontPms: cv.pmsFront,
+          offsetBackPms: cv.pmsBack,
+        };
+        const cvResult = calculateCost(cvCostInput);
+        coverResult = {
+          costPaper: cvResult.costPaper,
+          costPrint: cvResult.costPrint,
+          costLamination: cvResult.costLamination,
+          totalCost: cvResult.totalCost,
+          sellPrice: cvResult.sellPrice,
+          sheets: cvResult.totalStockSheets,
+          ups: cvImposition.ups,
+          coverWidth: coverTrimW,
+          coverHeight: coverTrimH,
+          spineWidth,
+        };
+      } catch (cvErr) {
+        console.error('Cover calculation error:', cvErr);
+      }
+    }
+
+    return Response.json({ imposition, result, coverResult, debug: { machineCat } });
   } catch (err) {
     console.error('Calculator API error:', err);
     return Response.json(

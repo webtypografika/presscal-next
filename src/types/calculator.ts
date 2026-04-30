@@ -81,6 +81,25 @@ export interface CalculatorInput {
   gatherSignatures?: number;    // signatures per book (per-signature charge mode)
   customMachineIds?: UUID[];    // multiple custom postpress machines selected
 
+  // Cover
+  cover?: {
+    useBodyPaper: boolean;
+    paperId?: UUID;
+    useBodyMachine: boolean;
+    machineId?: UUID;
+    colorMode: 'color' | 'bw';
+    sides: 1 | 2;
+    coverageLevel: CoverageLevel;
+    platesFront?: number;
+    platesBack?: number;
+    pmsFront?: number;
+    pmsBack?: number;
+    lamMachineId?: UUID;
+    lamFilmId?: UUID;
+    lamSides?: 1 | 2;
+    pages: number;
+  };
+
   // Per-job overrides
   overrides?: {
     paperPriceOverride?: number;
