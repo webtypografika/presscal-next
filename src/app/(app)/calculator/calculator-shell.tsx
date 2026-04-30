@@ -439,16 +439,28 @@ function FinishSelect({ value, onChange, options, color, active }: {
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
   const selected = options.find(o => o.id === value);
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node) && dropRef.current && !dropRef.current.contains(e.target as Node)) setOpen(false);
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
+  const handleOpen = () => {
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.right, width: Math.max(r.width, 200) });
+    }
+    setOpen(!open);
+  };
   return (
     <div ref={ref} style={{ position: 'relative', maxWidth: '60%' }}>
-      <button onClick={() => setOpen(!open)} style={{
+      <button ref={btnRef} onClick={handleOpen} style={{
         padding: '5px 24px 5px 12px', borderRadius: 14, fontSize: '0.72rem', fontWeight: 600,
         border: `1px solid ${active ? `color-mix(in srgb, ${color} 20%, transparent)` : 'rgba(255,255,255,0.08)'}`,
         background: active ? `color-mix(in srgb, ${color} 8%, transparent)` : 'rgba(255,255,255,0.04)',
@@ -459,11 +471,12 @@ function FinishSelect({ value, onChange, options, color, active }: {
       }}>
         {selected?.label || 'Χωρίς'}
       </button>
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', right: 0, minWidth: 200, width: 'max-content', maxWidth: '340px',
+      {open && createPortal(
+        <div ref={dropRef} style={{
+          position: 'fixed', top: pos.top, left: pos.left, transform: 'translateX(-100%)',
+          minWidth: pos.width, width: 'max-content', maxWidth: '340px',
           background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50, padding: '4px',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 9999, padding: '4px',
           maxHeight: 200, overflowY: 'auto' as const,
         }}>
           {options.map(o => {
@@ -489,7 +502,8 @@ function FinishSelect({ value, onChange, options, color, active }: {
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -3237,7 +3251,10 @@ export default function CalculatorShell() {
                       if (!id) return setFinish({ ...finish, lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς' });
                       const l = laminators.find(x => x.id === id);
                       const dualRoll = (l?.specs as Record<string, unknown>)?.dual_roll;
-                      setFinish({ ...finish, lamMachineId: id, lamName: l?.name || '', lamFilmId: films[0]?.id || '', lamSides: dualRoll === '1' || dualRoll === 1 ? 2 : 1 });
+                      // Pick first film that matches laminator type
+                      const filteredFilms = l?.subtype === 'lam_roll' ? films.filter(f => !f.height)
+                        : l?.subtype === 'lam_sheet' ? films.filter(f => f.width && f.height) : films;
+                      setFinish({ ...finish, lamMachineId: id, lamName: l?.name || '', lamFilmId: filteredFilms[0]?.id || '', lamSides: dualRoll === '1' || dualRoll === 1 ? 2 : 1 });
                     }}
                     options={[{ id: '', label: 'Χωρίς' }, ...laminators.map(l => ({ id: l.id, label: l.name }))]}
                     color="var(--teal)" active={!!finish.lamMachineId}
@@ -3245,7 +3262,14 @@ export default function CalculatorShell() {
                 } />
                 {finish.lamMachineId && (() => {
                   const selectedLam = laminators.find(x => x.id === finish.lamMachineId);
-                  const selectedFilm = films.find(f => f.id === finish.lamFilmId);
+                  const lamSubtype = selectedLam?.subtype;
+                  // Filter films by laminator type: roll laminators → roll films, sheet → pouch films
+                  const availableFilms = lamSubtype === 'lam_roll'
+                    ? films.filter(f => !f.height) // roll only
+                    : lamSubtype === 'lam_sheet'
+                    ? films.filter(f => f.width && f.height) // pouch only
+                    : films; // generic laminator: all
+                  const selectedFilm = availableFilms.find(f => f.id === finish.lamFilmId) || films.find(f => f.id === finish.lamFilmId);
                   const isPouch = !!(selectedFilm && selectedFilm.width && selectedFilm.height);
                   const sealMargin = Number((selectedLam?.specs as Record<string,unknown>)?.seal_margin) || 5;
                   const pouchFitError = isPouch && selectedFilm?.width && selectedFilm?.height
@@ -3265,13 +3289,13 @@ export default function CalculatorShell() {
                         <FinishSelect
                           value={finish.lamFilmId}
                           onChange={id => setFinish({ ...finish, lamFilmId: id })}
-                          options={films.map(f => {
+                          options={availableFilms.map(f => {
                             const hasSize = f.width && f.height;
                             return { id: f.id, label: `${f.name}${hasSize ? ` ${f.width}×${f.height} (Pouch)` : ''}` };
                           })}
                           color="var(--teal)" active
                         />
-                        {!films.length && <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Δεν βρέθηκαν υλικά</span>}
+                        {!availableFilms.length && <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Δεν βρέθηκαν υλικά</span>}
                       </div>
                       {pouchFitError && <FinishWarning msg={pouchFitError} />}
                       {!isPouch && (
