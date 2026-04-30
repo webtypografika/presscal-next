@@ -395,6 +395,7 @@ function FinishSelect({ value, onChange, options, color, active }: {
   value: string; onChange: (v: string) => void; options: { id: string; label: string }[]; color: string; active: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find(o => o.id === value);
   useEffect(() => {
@@ -418,22 +419,34 @@ function FinishSelect({ value, onChange, options, color, active }: {
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', right: 0, minWidth: '100%', maxWidth: '260px',
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, minWidth: 200, width: 'max-content', maxWidth: '340px',
           background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
           boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50, padding: '4px',
           maxHeight: 200, overflowY: 'auto' as const,
         }}>
-          {options.map(o => (
-            <button key={o.id} onClick={() => { onChange(o.id); setOpen(false); }} style={{
-              display: 'block', width: '100%', padding: '6px 10px', borderRadius: 6,
-              border: 'none', textAlign: 'left' as const, cursor: 'pointer',
-              fontSize: '0.72rem', fontWeight: o.id === value ? 600 : 400,
-              background: o.id === value ? `color-mix(in srgb, ${color} 12%, transparent)` : 'transparent',
-              color: o.id === value ? color : '#cbd5e1',
-            }}>
-              {o.label}
-            </button>
-          ))}
+          {options.map(o => {
+            const isSel = o.id === value;
+            const isHov = hovered === o.id;
+            return (
+              <button key={o.id}
+                onClick={() => { onChange(o.id); setOpen(false); }}
+                onMouseEnter={() => setHovered(o.id)}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: 'block', width: '100%', padding: '6px 10px', borderRadius: 6,
+                  border: 'none', textAlign: 'left' as const, cursor: 'pointer',
+                  fontSize: '0.72rem', fontWeight: isSel ? 600 : 400,
+                  background: isSel
+                    ? `color-mix(in srgb, ${color} 12%, transparent)`
+                    : isHov ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  color: isSel ? color : isHov ? '#f1f5f9' : '#cbd5e1',
+                  transition: 'background 0.1s, color 0.1s',
+                }}
+              >
+                {o.label}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
