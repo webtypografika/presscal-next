@@ -3336,23 +3336,18 @@ export default function CalculatorShell() {
 
               {/* ── ΒΙΒΛΙΟΔΕΣΙΑ ── */}
               {(() => {
-                const bindingTypes = [
-                  { id: 'none', label: 'Καμία' },
-                  { id: 'staple', label: 'Συρραφή' },
-                  { id: 'glue', label: 'Κόλλα' },
-                  { id: 'spiral', label: 'Σπιράλ' },
-                ];
-                const bindActive = finish.binding !== 'none';
-                const filteredBinders = binders
-                  .filter(b => b.subtype === (finish.binding === 'glue' ? 'glue_bind' : finish.binding))
-                  .filter(b => {
-                    if (b.subtype !== 'staple') return true;
-                    const sSpecs = (b.specs as Record<string, unknown>) || {};
-                    const sMode = String(sSpecs.staple_mode || 'both');
-                    if (sMode === 'both') return true;
-                    const isBooklet = impoMode === 'booklet';
-                    return (isBooklet && sMode === 'saddle') || (!isBooklet && sMode === 'flat');
-                  });
+                const subtypeLabel = (s: string) => s === 'staple' ? 'Συρραφή' : s === 'glue_bind' ? 'Κόλλα' : s === 'spiral' ? 'Σπιράλ' : s;
+                const subtypeToBinding = (s: string) => s === 'glue_bind' ? 'glue' : s;
+                // Filter binders by staple mode compatibility
+                const compatibleBinders = binders.filter(b => {
+                  if (b.subtype !== 'staple') return true;
+                  const sSpecs = (b.specs as Record<string, unknown>) || {};
+                  const sMode = String(sSpecs.staple_mode || 'both');
+                  if (sMode === 'both') return true;
+                  const isBooklet = impoMode === 'booklet';
+                  return (isBooklet && sMode === 'saddle') || (!isBooklet && sMode === 'flat');
+                });
+                const bindActive = !!finish.bindingMachineId;
                 const selectedBind = binders.find(b => b.id === finish.bindingMachineId);
                 const bSpecs = (selectedBind?.specs as Record<string, unknown>) || {};
                 const isBookletBind = impoMode === 'booklet';
@@ -3396,30 +3391,21 @@ export default function CalculatorShell() {
                   <FinishCard label="ΒΙΒΛΙΟΔΕΣΙΑ" icon="fas fa-book" color="var(--amber)" active={bindActive}>
                     <FinishHeader label="ΒΙΒΛΙΟΔΕΣΙΑ" icon="fas fa-book" color="var(--amber)" active={bindActive} right={
                       <FinishSelect
-                        value={finish.binding}
-                        onChange={v => {
-                          if (v === 'none') return setFinish({ ...finish, binding: 'none', bindingMachineId: '' });
-                          const subtype = v === 'glue' ? 'glue_bind' : v;
-                          const firstMatch = binders.find(b => b.subtype === subtype);
-                          setFinish({ ...finish, binding: v, bindingMachineId: firstMatch?.id || '' });
+                        value={finish.bindingMachineId}
+                        onChange={id => {
+                          if (!id) return setFinish({ ...finish, binding: 'none', bindingMachineId: '' });
+                          const machine = binders.find(b => b.id === id);
+                          setFinish({ ...finish, binding: subtypeToBinding(machine?.subtype || ''), bindingMachineId: id });
                         }}
-                        options={bindingTypes}
+                        options={[
+                          { id: '', label: 'Χωρίς' },
+                          ...compatibleBinders.map(b => ({ id: b.id, label: `${b.name} (${subtypeLabel(b.subtype)})` })),
+                        ]}
                         color="var(--amber)" active={bindActive}
                       />
                     } />
                     {bindActive && (
                       <FinishBody>
-                        {filteredBinders.length > 1 && (
-                          <div style={{ marginBottom: 6 }}>
-                            <span style={{ fontSize: '0.65rem', color: '#64748b', marginRight: 6 }}>Μηχάνημα:</span>
-                            <FinishSelect
-                              value={finish.bindingMachineId}
-                              onChange={id => setFinish({ ...finish, bindingMachineId: id })}
-                              options={filteredBinders.map(b => ({ id: b.id, label: b.name }))}
-                              color="var(--amber)" active
-                            />
-                          </div>
-                        )}
                         {bindWarn && <FinishWarning msg={bindWarn} />}
                         {dbBindPrice > 0 && (
                           <FinishPrice
