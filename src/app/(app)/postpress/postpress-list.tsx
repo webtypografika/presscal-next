@@ -1187,19 +1187,17 @@ export function PostpressList({ machines }: Props) {
                   ))}
                 </div>
 
-                {/* Common: max_w */}
-                <div style={{ display: 'grid', gridTemplateColumns: lamMode === 'roll' ? '1fr 1fr 1fr' : '1fr 1fr', gap: 14, marginBottom: 6 }}>
-                  <div>
-                    <label style={labelStyle}>ΑΝΟΙΓΜΑ ΜΠΟΥΚΑ (mm)</label>
-                    <input value={editing.specs.max_w ?? ''} onChange={e => setEditing({ ...editing, specs: { ...editing.specs, max_w: e.target.value } })} type="number" placeholder="330" style={{ ...inputStyle, padding: '10px 12px' }} />
-                  </div>
-                  {lamMode === 'roll' && (
+                {/* Mode-specific fields */}
+                {lamMode === 'roll' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 6 }}>
+                    <div>
+                      <label style={labelStyle}>ΑΝΟΙΓΜΑ ΜΠΟΥΚΑ (mm)</label>
+                      <input value={editing.specs.max_w ?? ''} onChange={e => setEditing({ ...editing, specs: { ...editing.specs, max_w: e.target.value } })} type="number" placeholder="330" style={{ ...inputStyle, padding: '10px 12px' }} />
+                    </div>
                     <div>
                       <label style={labelStyle}>ΤΑΧΥΤΗΤΑ (φ/ώρα)</label>
                       <input value={editing.specs.speed ?? ''} onChange={e => setEditing({ ...editing, specs: { ...editing.specs, speed: e.target.value } })} type="number" placeholder="500" style={{ ...inputStyle, padding: '10px 12px' }} />
                     </div>
-                  )}
-                  {lamMode === 'roll' ? (
                     <div>
                       <label style={labelStyle}>ΔΙΠΛΟ ΡΟΛΟ</label>
                       <button onClick={() => setEditing({ ...editing, specs: { ...editing.specs, dual_roll: editing.specs.dual_roll === '1' ? '0' : '1' } })}
@@ -1214,13 +1212,15 @@ export function PostpressList({ machines }: Props) {
                         {editing.specs.dual_roll === '1' ? '2 ρολά — 2 όψεις/πέρασμα' : '1 ρολό'}
                       </button>
                     </div>
-                  ) : (
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 6 }}>
                     <div>
                       <label style={labelStyle}>ΠΕΡΙΘΩΡΙΟ ΣΦΡΑΓΙΣΗΣ (mm)</label>
                       <input value={editing.specs.seal_margin ?? ''} onChange={e => setEditing({ ...editing, specs: { ...editing.specs, seal_margin: e.target.value } })} type="number" step="0.5" min="0" max="20" placeholder="5" style={{ ...inputStyle, padding: '10px 12px' }} />
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
                 </div>
               );
             })()}
