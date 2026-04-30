@@ -108,6 +108,7 @@ interface FinishData {
   gatherSignatures: number;
   customMachineIds: string[];
   // Price overrides (undefined = use DB price)
+  lamSellOverride?: number;
   creaseOverride?: number;
   foldOverride?: number;
   gatherOverride?: number;
@@ -142,6 +143,8 @@ interface DbFilm {
   groupName: string | null;
   cat: string;
   costPerUnit: number | null;
+  sellPerUnit: number | null;
+  markup: number | null;
   unit: string;
   width: number | null;
   height: number | null;
@@ -1712,6 +1715,7 @@ export default function CalculatorShell() {
           lamMachineId: finish.lamMachineId || undefined,
           lamFilmId: finish.lamFilmId || undefined,
           lamSides: finish.lamSides,
+          lamSellOverride: finish.lamSellOverride,
           bindingType: finish.binding !== 'none' ? finish.binding : '',
           bindingMachineId: finish.bindingMachineId || undefined,
           creaseMachineId: finish.creaseMachineId || undefined,
@@ -3248,13 +3252,13 @@ export default function CalculatorShell() {
                   <FinishSelect
                     value={finish.lamMachineId}
                     onChange={id => {
-                      if (!id) return setFinish({ ...finish, lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς' });
+                      if (!id) return setFinish({ ...finish, lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς', lamSellOverride: undefined });
                       const l = laminators.find(x => x.id === id);
                       const dualRoll = (l?.specs as Record<string, unknown>)?.dual_roll;
                       // Pick first film that matches laminator type
                       const filteredFilms = l?.subtype === 'lam_roll' ? films.filter(f => !f.height)
                         : l?.subtype === 'lam_sheet' ? films.filter(f => f.width && f.height) : films;
-                      setFinish({ ...finish, lamMachineId: id, lamName: l?.name || '', lamFilmId: filteredFilms[0]?.id || '', lamSides: dualRoll === '1' || dualRoll === 1 ? 2 : 1 });
+                      setFinish({ ...finish, lamMachineId: id, lamName: l?.name || '', lamFilmId: filteredFilms[0]?.id || '', lamSides: dualRoll === '1' || dualRoll === 1 ? 2 : 1, lamSellOverride: undefined });
                     }}
                     options={[{ id: '', label: 'Χωρίς' }, ...laminators.map(l => ({ id: l.id, label: l.name }))]}
                     color="var(--teal)" active={!!finish.lamMachineId}
@@ -3288,7 +3292,7 @@ export default function CalculatorShell() {
                         <span style={{ fontSize: '0.65rem', color: '#64748b', marginRight: 6 }}>Υλικό:</span>
                         <FinishSelect
                           value={finish.lamFilmId}
-                          onChange={id => setFinish({ ...finish, lamFilmId: id })}
+                          onChange={id => setFinish({ ...finish, lamFilmId: id, lamSellOverride: undefined })}
                           options={availableFilms.map(f => {
                             const hasSize = f.width && f.height;
                             return { id: f.id, label: `${f.name}${hasSize ? ` ${f.width}×${f.height} (Pouch)` : ''}` };
@@ -3304,25 +3308,27 @@ export default function CalculatorShell() {
                           <ToggleBar value={String(finish.lamSides)} onChange={(v) => setFinish({ ...finish, lamSides: Number(v) as 1 | 2 })} options={[{ v: '1', l: '1 Όψη' }, { v: '2', l: '2 Όψεις' }]} />
                         </div>
                       )}
-                      {/* Pricing summary */}
+                      {/* Pricing */}
                       {selectedFilm && (() => {
-                        const filmCost = selectedFilm.costPerUnit || 0;
-                        const filmSell = (selectedFilm.specs as Record<string,unknown>)?.sellPerUnit as number || selectedFilm.costPerUnit || 0;
-                        const unit = isPouch ? '/τεμ' : '/m²';
+                        const filmSellDb = selectedFilm.sellPerUnit || selectedFilm.costPerUnit || 0;
+                        const unit = isPouch ? 'Ανά τεμάχιο:' : 'Ανά m²:';
                         return (
-                          <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.68rem' }}>
-                              <span style={{ color: '#64748b' }}>Κόστος: <strong style={{ color: 'var(--teal)' }}>€{filmCost.toFixed(4)}{unit}</strong></span>
-                              <span style={{ color: '#64748b' }}>Πώληση: <strong style={{ color: '#4ade80' }}>€{filmSell.toFixed(4)}{unit}</strong></span>
-                            </div>
+                          <>
+                            <FinishPrice
+                              label={unit}
+                              dbPrice={filmSellDb}
+                              value={finish.lamSellOverride}
+                              onChange={v => setFinish({ ...finish, lamSellOverride: v })}
+                              color="var(--teal)"
+                            />
                             {r && costLamination > 0 && (
-                              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.68rem', marginTop: 4 }}>
-                                <span style={{ color: '#64748b' }}>Κόστος σύνολο: <strong style={{ color: 'var(--teal)' }}>€{costLamination.toFixed(2)}</strong></span>
+                              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.68rem', marginTop: 6 }}>
+                                <span style={{ color: '#64748b' }}>Κόστος: <strong style={{ color: 'var(--teal)' }}>€{costLamination.toFixed(2)}</strong></span>
                                 <span style={{ color: '#64748b' }}>Χρέωση: <strong style={{ color: '#4ade80' }}>€{(r.chargeLamination ?? 0).toFixed(2)}</strong></span>
                                 <span style={{ color: '#64748b' }}>Κέρδος: <strong style={{ color: 'var(--success)' }}>€{((r.chargeLamination ?? 0) - costLamination).toFixed(2)}</strong></span>
                               </div>
                             )}
-                          </div>
+                          </>
                         );
                       })()}
                     </FinishBody>

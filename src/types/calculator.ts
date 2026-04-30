@@ -71,6 +71,7 @@ export interface CalculatorInput {
   lamMachineId?: UUID;
   lamFilmId?: UUID;
   lamSides?: 1 | 2;
+  lamSellOverride?: number;     // override sell price per unit (€/m² or €/piece)
   bindingType?: '' | 'staple' | 'glue' | 'spiral';
   bindingMachineId?: UUID;
   creaseMachineId?: UUID;

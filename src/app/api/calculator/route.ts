@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
             machineSetupCost: lamMachine.setupCost || 0,
             sides: 1,
             pouchCostPerPiece,
-            pouchSellPerPiece: lamFilm.sellPerUnit || undefined,
+            pouchSellPerPiece: body.lamSellOverride ?? lamFilm.sellPerUnit ?? undefined,
             pouchW,
             pouchH,
             sealMargin,
@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
           lamData = {
             mode: 'roll',
             filmCostPerSqm,
-            filmSellPerSqm,
+            filmSellPerSqm: body.lamSellOverride ?? filmSellPerSqm,
             machineSetupCost: lamMachine.setupCost || 0,
             sides: body.lamSides || 1,
             dualRoll,
@@ -819,7 +819,7 @@ export async function GET() {
       where: { orgId: ORG_ID, deletedAt: null, cat: { in: ['film', 'roll'] } },
       select: {
         id: true, name: true, groupName: true, cat: true,
-        costPerUnit: true, unit: true,
+        costPerUnit: true, sellPerUnit: true, markup: true, unit: true,
         width: true, height: true, rollLength: true,
         specs: true,
       },
