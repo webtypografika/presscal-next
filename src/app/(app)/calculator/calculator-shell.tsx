@@ -400,6 +400,7 @@ function FinishSelect({ value, onChange, options, color, active }: {
       border: `1px solid ${active ? `color-mix(in srgb, ${color} 40%, transparent)` : 'rgba(255,255,255,0.1)'}`,
       background: 'rgba(0,0,0,0.2)', color: active ? color : '#94a3b8',
       cursor: 'pointer', outline: 'none', appearance: 'none' as const,
+      maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
       backgroundImage: FINISH_ARROW, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center',
     }}>
       {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
