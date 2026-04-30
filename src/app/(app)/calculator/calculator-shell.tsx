@@ -2339,7 +2339,7 @@ export default function CalculatorShell() {
           {machine.cat === 'offset' && (color.platesFront + color.platesBack) > 0 && (
             <button onClick={() => setShowPlateOrder(true)} style={{
               padding: '7px 10px', borderRadius: 7,
-              background: 'rgba(255,255,255,0.06)', color: 'var(--amber)', border: '1px solid color-mix(in srgb, var(--amber) 25%, transparent)',
+              background: 'rgba(255,255,255,0.06)', color: '#f59e0b', border: '1px solid color-mix(in srgb, #f59e0b 25%, transparent)',
               fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 5,
               transition: 'all 0.2s', flexShrink: 0,
@@ -3388,8 +3388,8 @@ export default function CalculatorShell() {
                   }
                 }
                 return (
-                  <FinishCard label="ΒΙΒΛΙΟΔΕΣΙΑ" icon="fas fa-book" color="var(--amber)" active={bindActive}>
-                    <FinishHeader label="ΒΙΒΛΙΟΔΕΣΙΑ" icon="fas fa-book" color="var(--amber)" active={bindActive} right={
+                  <FinishCard label="ΒΙΒΛΙΟΔΕΣΙΑ" icon="fas fa-book" color="#f59e0b" active={bindActive}>
+                    <FinishHeader label="ΒΙΒΛΙΟΔΕΣΙΑ" icon="fas fa-book" color="#f59e0b" active={bindActive} right={
                       <FinishSelect
                         value={finish.bindingMachineId}
                         onChange={id => {
@@ -3401,7 +3401,7 @@ export default function CalculatorShell() {
                           { id: '', label: 'Χωρίς' },
                           ...compatibleBinders.map(b => ({ id: b.id, label: `${b.name} (${subtypeLabel(b.subtype)})` })),
                         ]}
-                        color="var(--amber)" active={bindActive}
+                        color="#f59e0b" active={bindActive}
                       />
                     } />
                     {bindActive && (
@@ -3413,7 +3413,7 @@ export default function CalculatorShell() {
                             dbPrice={dbBindPrice}
                             value={finish.bindingOverride}
                             onChange={v => setFinish({ ...finish, bindingOverride: v })}
-                            color="var(--amber)"
+                            color="#f59e0b"
                           />
                         )}
                       </FinishBody>
