@@ -196,7 +196,7 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
 
   return createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 560, maxHeight: '85vh', overflow: 'auto', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--glass-border)', padding: 28, boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }} className="custom-scrollbar">
+      <div onClick={e => e.stopPropagation()} style={{ width: 720, maxHeight: '85vh', overflow: 'auto', background: 'var(--bg-surface)', borderRadius: 16, border: '1px solid var(--glass-border)', padding: 28, boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }} className="custom-scrollbar">
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--accent)' }}>{job.number}</span>
@@ -279,72 +279,108 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
                     <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--accent)' }}>×{item.qty}</span>
                   </div>
 
-                  {cd && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      {/* Εκτύπωση */}
-                      <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.1)' }}>
-                        <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--blue)', letterSpacing: '0.05em', marginBottom: 6 }}>ΕΚΤΥΠΩΣΗ</div>
-                        {cd.machineName && (
-                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
-                            <i className="fas fa-print" style={{ fontSize: '0.55rem', color: 'var(--accent)', marginRight: 4 }} />{cd.machineName}
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
-                          {cd.sides && (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{cd.sides === 2 ? '2 όψεις' : '1 όψη'}</span>
-                          )}
-                          {(cd.offsetFrontCmyk != null || cd.colorMode) && (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--blue)', fontWeight: 600 }}>
-                              {cd.colorMode === 'bw' ? 'B/W' : cd.colorMode || `${cd.offsetFrontCmyk || 0}+${cd.offsetFrontPms || 0}/${cd.offsetBackCmyk || 0}+${cd.offsetBackPms || 0}`}
-                            </span>
-                          )}
-                          {cd.offsetOilVarnish && (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Βερνίκι</span>
-                          )}
-                        </div>
-                        {(cd.machineSheets > 0 || cd.sheets > 0) && (
-                          <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--blue)', marginTop: 6 }}>
-                            {cd.machineSheets > 0 ? `${cd.machineSheets} τυπ. φύλλα` : `${cd.sheets} φύλλα`}
-                          </div>
-                        )}
-                      </div>
+                  {cd && (() => {
+                    // Compute paper cutting guide
+                    const stockW = cd.paperStockW;
+                    const stockH = cd.paperStockH;
+                    const mW = cd.machineSheetW;
+                    const mH = cd.machineSheetH;
+                    let cutGuide: string | null = null;
+                    if (stockW && stockH && mW && mH) {
+                      // Try both orientations
+                      const a1 = Math.floor(stockW / mW);
+                      const b1 = Math.floor(stockH / mH);
+                      const a2 = Math.floor(stockW / mH);
+                      const b2 = Math.floor(stockH / mW);
+                      const fit1 = a1 * b1;
+                      const fit2 = a2 * b2;
+                      if (fit1 >= fit2 && fit1 > 0) {
+                        cutGuide = `${stockW}→${a1}×${mW}mm · ${stockH}→${b1}×${mH}mm (${fit1} κοψ.)`;
+                      } else if (fit2 > 0) {
+                        cutGuide = `${stockW}→${a2}×${mH}mm · ${stockH}→${b2}×${mW}mm (${fit2} κοψ.)`;
+                      }
+                    }
+                    // Imposition mode labels
+                    const modeLabels: Record<string, string> = {
+                      nup: 'N-Up', cutstack: 'Cut & Stack', booklet: 'Booklet',
+                      perfectbind: 'Perfect Bind', workturn: 'Work & Turn',
+                      gangrun: 'Gang Run', stepmulti: 'Step & Repeat',
+                    };
+                    const printMethodLabels: Record<string, string> = {
+                      sheetwise: 'Sheetwise', turn: 'Work & Turn', tumble: 'Work & Tumble',
+                    };
+                    // Total plates
+                    const frontPlates = (cd.offsetFrontCmyk || 0) + (cd.offsetFrontPms || 0);
+                    const backPlates = cd.sides === 2 ? (cd.offsetBackCmyk || 0) + (cd.offsetBackPms || 0) : 0;
+                    const totalPlates = frontPlates + backPlates;
 
-                      {/* Χαρτί & Μοντάζ */}
-                      <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(20,184,166,0.06)', border: '1px solid rgba(20,184,166,0.1)' }}>
-                        <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--teal)', letterSpacing: '0.05em', marginBottom: 6 }}>ΧΑΡΤΙ & ΜΟΝΤΑΖ</div>
-                        {cd.paperName && (
-                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>
-                            <i className="fas fa-scroll" style={{ fontSize: '0.55rem', color: 'var(--teal)', marginRight: 4 }} />{cd.paperName}
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px' }}>
-                          {cd.width && cd.height && (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>τελικό {cd.width}×{cd.height}mm</span>
+                    const InfoRow = ({ label, value, color: c }: { label: string; value: React.ReactNode; color?: string }) => (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 600, color: c || 'var(--text)' }}>{value}</span>
+                      </div>
+                    );
+
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        {/* Εκτύπωση */}
+                        <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.12)' }}>
+                          <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--blue)', letterSpacing: '0.06em', marginBottom: 8, textTransform: 'uppercase' }}>Εκτύπωση</div>
+                          {cd.machineName && <InfoRow label="Μηχανή" value={cd.machineName} color="var(--accent)" />}
+                          <InfoRow label="Όψεις" value={cd.sides === 2 ? '2 (Δύο όψεις)' : '1 (Μονή όψη)'} />
+                          {(cd.offsetFrontCmyk != null || cd.colorMode) && (
+                            <InfoRow
+                              label="Χρώματα"
+                              value={cd.colorMode === 'bw' ? 'B/W' : cd.colorMode === 'color' && cd.offsetFrontCmyk != null
+                                ? `${cd.offsetFrontCmyk}+${cd.offsetFrontPms || 0} / ${cd.offsetBackCmyk || 0}+${cd.offsetBackPms || 0}`
+                                : cd.colorMode || 'color'
+                              }
+                              color="var(--blue)"
+                            />
                           )}
-                          {cd.machineSheetW && cd.machineSheetH && (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>φύλλο {cd.machineSheetW}×{cd.machineSheetH}mm</span>
-                          )}
+                          {totalPlates > 0 && <InfoRow label="Τσίγκοι" value={`${totalPlates} (${frontPlates}F${backPlates > 0 ? ` + ${backPlates}B` : ''})`} />}
+                          {cd.printMethod && <InfoRow label="Μέθοδος" value={printMethodLabels[cd.printMethod] || cd.printMethod} />}
+                          {cd.perfecting && <InfoRow label="Perfecting" value="Ναι" color="var(--blue)" />}
+                          {cd.offsetOilVarnish && <InfoRow label="Βερνίκι" value="Oil Varnish" />}
                           {cd.impositionMode && (
-                            <span style={{ fontSize: '0.72rem', color: 'var(--violet)', fontWeight: 600 }}>
-                              {cd.impositionMode}{cd.ups ? ` ${cd.ups}-up` : ''}{cd.cols && cd.rows ? ` (${cd.cols}×${cd.rows})` : ''}
-                            </span>
+                            <InfoRow label="Τρόπος" value={modeLabels[cd.impositionMode] || cd.impositionMode} color="var(--violet)" />
+                          )}
+                          {cd.machineSheets > 0 && (
+                            <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(59,130,246,0.1)' }}>
+                              <InfoRow label="Τυπ. φύλλα" value={cd.machineSheets} color="var(--blue)" />
+                            </div>
                           )}
                         </div>
-                        {cd.sheets > 0 && (
-                          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--teal)' }}>
-                              {cd.sheets} φύλλα αποθ.
-                            </span>
-                            {cd.paperCutsPerStock > 1 && (
-                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <i className="fas fa-cut" style={{ fontSize: '0.5rem' }} /> {cd.paperCutsPerStock} κοπές/φύλλο
-                              </span>
-                            )}
-                          </div>
-                        )}
+
+                        {/* Χαρτί & Μοντάζ */}
+                        <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(20,184,166,0.06)', border: '1px solid rgba(20,184,166,0.12)' }}>
+                          <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--teal)', letterSpacing: '0.06em', marginBottom: 8, textTransform: 'uppercase' }}>Χαρτί & Μοντάζ</div>
+                          {cd.paperName && (
+                            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <i className="fas fa-scroll" style={{ fontSize: '0.5rem', color: 'var(--teal)' }} />{cd.paperName}
+                            </div>
+                          )}
+                          {cd.width && cd.height && <InfoRow label="Τελικό" value={`${cd.width}×${cd.height}mm`} />}
+                          {mW && mH && <InfoRow label="Φύλλο μοντάζ" value={`${mW}×${mH}mm`} />}
+                          {cd.ups && <InfoRow label="Ups" value={`${cd.ups}-up${cd.cols && cd.rows ? ` (${cd.cols}×${cd.rows})` : ''}`} color="var(--violet)" />}
+                          {stockW && stockH && <InfoRow label="Χαρτί αποθήκης" value={`${stockW}×${stockH}mm`} />}
+                          {cd.sheets > 0 && (
+                            <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(20,184,166,0.1)' }}>
+                              <InfoRow label="Φύλλα αποθήκης" value={cd.sheets} color="var(--teal)" />
+                            </div>
+                          )}
+                          {cutGuide && (
+                            <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 6, background: 'rgba(250,204,21,0.08)', border: '1px solid rgba(250,204,21,0.15)' }}>
+                              <div style={{ fontSize: '0.58rem', fontWeight: 700, color: '#facc15', letterSpacing: '0.04em', marginBottom: 3 }}>
+                                <i className="fas fa-cut" style={{ fontSize: '0.5rem', marginRight: 3 }} />ΟΔΗΓΟΣ ΚΟΠΗΣ
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text)', fontWeight: 500 }}>{cutGuide}</div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {item.linkedFile && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 8, padding: '5px 8px', borderRadius: 6, background: 'rgba(245,130,32,0.06)' }}>

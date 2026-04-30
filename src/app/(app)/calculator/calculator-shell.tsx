@@ -2087,6 +2087,11 @@ export default function CalculatorShell() {
                 feedEdge,
                 machineSheetW: sheetW,
                 machineSheetH: sheetH,
+                paperStockW: paper?.width || undefined,
+                paperStockH: paper?.height || undefined,
+                cols: impo.cols,
+                rows: impo.rows,
+                machineSheets: calcResult?.totalMachineSheets,
                 colorMode: color.model === 'cmyk' ? 'color' : 'bw',
                 bleed: effectiveBleed,
                 impositionMode: impoMode,
@@ -2164,7 +2169,7 @@ export default function CalculatorShell() {
                 // Color settings
                 varnishTiming: color.varnishTiming !== 'inline' ? color.varnishTiming : undefined,
                 perfecting: color.perfecting || undefined,
-                printMethod: color.printMethod !== 'sheetwise' ? color.printMethod : undefined,
+                printMethod: color.printMethod || 'sheetwise',
               };
               // Build an enriched linkedFile from current state + parsed PDF metadata.
               // We save this so when the user reopens the quote (e.g. via recalculate),
