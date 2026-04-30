@@ -309,7 +309,8 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
                     const printMethodLabels: Record<string, string> = {
                       sheetwise: 'Sheetwise', turn: 'Work & Turn', tumble: 'Work & Tumble',
                     };
-                    // Total plates
+                    // Total plates (offset only)
+                    const isOffset = cd.machineCat === 'offset';
                     const frontPlates = (cd.offsetFrontCmyk || 0) + (cd.offsetFrontPms || 0);
                     const backPlates = cd.sides === 2 ? (cd.offsetBackCmyk || 0) + (cd.offsetBackPms || 0) : 0;
                     const totalPlates = frontPlates + backPlates;
@@ -328,20 +329,20 @@ function JobDetailModal({ job, stages: STAGES, onClose, onUpdate }: { job: JobQu
                           <div style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--blue)', letterSpacing: '0.06em', marginBottom: 8, textTransform: 'uppercase' }}>Εκτύπωση</div>
                           {cd.machineName && <InfoRow label="Μηχανή" value={cd.machineName} color="var(--accent)" />}
                           <InfoRow label="Όψεις" value={cd.sides === 2 ? '2 (Δύο όψεις)' : '1 (Μονή όψη)'} />
-                          {(cd.offsetFrontCmyk != null || cd.colorMode) && (
+                          {cd.colorMode && (
                             <InfoRow
                               label="Χρώματα"
-                              value={cd.colorMode === 'bw' ? 'B/W' : cd.colorMode === 'color' && cd.offsetFrontCmyk != null
+                              value={cd.colorMode === 'bw' ? 'B/W' : isOffset && cd.offsetFrontCmyk != null
                                 ? `${cd.offsetFrontCmyk}+${cd.offsetFrontPms || 0} / ${cd.offsetBackCmyk || 0}+${cd.offsetBackPms || 0}`
-                                : cd.colorMode || 'color'
+                                : cd.colorMode === 'color' ? 'Color' : cd.colorMode
                               }
                               color="var(--blue)"
                             />
                           )}
-                          {totalPlates > 0 && <InfoRow label="Τσίγκοι" value={`${totalPlates} (${frontPlates}F${backPlates > 0 ? ` + ${backPlates}B` : ''})`} />}
-                          {cd.printMethod && <InfoRow label="Μέθοδος" value={printMethodLabels[cd.printMethod] || cd.printMethod} />}
-                          {cd.perfecting && <InfoRow label="Perfecting" value="Ναι" color="var(--blue)" />}
-                          {cd.offsetOilVarnish && <InfoRow label="Βερνίκι" value="Oil Varnish" />}
+                          {isOffset && totalPlates > 0 && <InfoRow label="Τσίγκοι" value={`${totalPlates} (${frontPlates}F${backPlates > 0 ? ` + ${backPlates}B` : ''})`} />}
+                          {isOffset && cd.printMethod && <InfoRow label="Μέθοδος" value={printMethodLabels[cd.printMethod] || cd.printMethod} />}
+                          {isOffset && cd.perfecting && <InfoRow label="Perfecting" value="Ναι" color="var(--blue)" />}
+                          {isOffset && cd.offsetOilVarnish && <InfoRow label="Βερνίκι" value="Oil Varnish" />}
                           {cd.impositionMode && (
                             <InfoRow label="Τρόπος" value={modeLabels[cd.impositionMode] || cd.impositionMode} color="var(--violet)" />
                           )}

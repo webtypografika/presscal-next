@@ -2080,6 +2080,7 @@ export default function CalculatorShell() {
                 ups,
                 prodMultiplier: prodMultiplier > 1 ? prodMultiplier : undefined,
                 machineName: machine?.name,
+                machineCat: machine?.cat,
                 paperName: paper?.name,
                 machineId: machine?.id,
                 paperId: activePaperId,
