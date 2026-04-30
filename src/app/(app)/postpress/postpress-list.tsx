@@ -479,6 +479,7 @@ export function PostpressList({ machines }: Props) {
   // Lamination materials
   const [lamMaterials, setLamMaterials] = useState<Material[]>([]);
   const [matForm, setMatForm] = useState<MatFormState | null>(null);
+  const [matPricingMode, setMatPricingMode] = useState<'markup' | 'sell'>('markup');
   const [savingMat, setSavingMat] = useState(false);
 
   // Fetch materials when editing a lamination machine
@@ -2499,10 +2500,10 @@ export function PostpressList({ machines }: Props) {
                   {/* Add new material */}
                   {!matForm ? (
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => setMatForm(emptyMatForm('roll'))} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1px dashed var(--teal)', background: 'transparent', color: 'var(--teal)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
+                      <button onClick={() => { setMatForm(emptyMatForm('roll')); setMatPricingMode('markup'); }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1px dashed var(--teal)', background: 'transparent', color: 'var(--teal)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
                         <i className="fas fa-plus" style={{ fontSize: '0.65rem' }} /> Νέο Ρολό Φιλμ
                       </button>
-                      <button onClick={() => setMatForm(emptyMatForm('pouch'))} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1px dashed var(--teal)', background: 'transparent', color: 'var(--teal)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
+                      <button onClick={() => { setMatForm(emptyMatForm('pouch')); setMatPricingMode('markup'); }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1px dashed var(--teal)', background: 'transparent', color: 'var(--teal)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>
                         <i className="fas fa-plus" style={{ fontSize: '0.65rem' }} /> Νέο Pouch
                       </button>
                     </div>
@@ -2549,16 +2550,16 @@ export function PostpressList({ machines }: Props) {
                       {/* ── PRICING: dropdown method ── */}
                       {(() => {
                         const costLabel = matTab === 'roll' ? '€/m²' : '€/τεμ';
-                        const pricingMode = matForm.sellPrice && !matForm.markup ? 'sell' : 'markup';
+                        const pricingMode = matPricingMode;
                         return (<>
                           <label style={labelStyle}>ΤΙΜΟΛΟΓΗΣΗ</label>
                           <div style={{ display: 'flex', gap: 2, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 2, marginBottom: 10, width: 'fit-content' }}>
-                            <button onClick={() => setMatForm({ ...matForm, sellPrice: '', markup: matForm.markup })}
+                            <button onClick={() => { setMatPricingMode('markup'); setMatForm({ ...matForm, sellPrice: '' }); }}
                               style={{ padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
                                 color: pricingMode === 'markup' ? 'var(--accent)' : 'var(--text-muted)', background: pricingMode === 'markup' ? 'rgba(245,130,32,0.12)' : 'transparent' }}>
                               Markup %
                             </button>
-                            <button onClick={() => setMatForm({ ...matForm, markup: '', sellPrice: matForm.sellPrice })}
+                            <button onClick={() => { setMatPricingMode('sell'); setMatForm({ ...matForm, markup: '' }); }}
                               style={{ padding: '5px 14px', borderRadius: 6, border: 'none', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
                                 color: pricingMode === 'sell' ? 'var(--accent)' : 'var(--text-muted)', background: pricingMode === 'sell' ? 'rgba(245,130,32,0.12)' : 'transparent' }}>
                               Τιμή Πώλησης
