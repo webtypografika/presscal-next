@@ -51,29 +51,31 @@ interface ColorData {
 }
 interface CoverData {
   enabled: boolean;
-  // Paper: true = same as body
-  useBodyPaper: boolean;
-  paperId: string;
-  // Machine: true = same as body
-  useBodyMachine: boolean;
-  machineIdx: number;
-  sheetW: number | null;
-  sheetH: number | null;
-  // Color: true = same as body
-  useBodyColor: boolean;
-  colorModel: 'cmyk' | 'bw';
+  initialized: boolean;  // true after first copy from body
+  // Job (independent)
+  width: number;
+  height: number;
+  bleed: number;
   sides: 1 | 2;
+  pages: number;
+  // Machine
+  machineIdx: number;
+  // Paper
+  paperId: string;
+  // Color
+  colorModel: 'cmyk' | 'bw';
   coverage: 'low' | 'mid' | 'high';
   platesFront: number;
   platesBack: number;
   pmsFront: number;
   pmsBack: number;
-  // Finish (always independent from body)
+  // Finish
   lamMachineId: string;
   lamFilmId: string;
   lamSides: 1 | 2;
-  // Info
-  pages: number;
+  guillotineId: string;
+  // Extra
+  wasteFixed: number;
 }
 
 interface CoverResult {
@@ -684,7 +686,7 @@ export default function CalculatorShell() {
     varnish: 'none', varnishTiming: 'inline', perfecting: false, printMethod: 'sheetwise',
   });
   const [finish, setFinish] = useState<FinishData>({ guillotineId: '', guillotineName: 'Χωρίς', lamMachineId: '', lamFilmId: '', lamName: 'Χωρίς', lamSides: 1, binding: 'none', bindingMachineId: '', creaseMachineId: '', creaseCount: 1, foldMachineId: '', foldType: '', gatherMachineId: '', gatherSignatures: 1, customMachineIds: [] });
-  const [cover, setCover] = useState<CoverData>({ enabled: false, useBodyPaper: true, paperId: '', useBodyMachine: true, machineIdx: 0, sheetW: null, sheetH: null, useBodyColor: true, colorModel: 'cmyk', sides: 2, coverage: 'mid', platesFront: 4, platesBack: 0, pmsFront: 0, pmsBack: 0, lamMachineId: '', lamFilmId: '', lamSides: 1, pages: 4 });
+  const [cover, setCover] = useState<CoverData>({ enabled: false, initialized: false, width: 210, height: 297, bleed: 3, sides: 2, pages: 4, machineIdx: 0, paperId: '', colorModel: 'cmyk', coverage: 'mid', platesFront: 4, platesBack: 0, pmsFront: 0, pmsBack: 0, lamMachineId: '', lamFilmId: '', lamSides: 1, guillotineId: '', wasteFixed: 0 });
   const [activeSection, setActiveSection] = useState<'body' | 'cover'>('body');
   const [coverResult, setCoverResult] = useState<CoverResult | null>(null);
   const [devPanelHidden, setDevPanelHidden] = useState<boolean>(() => {
@@ -1709,21 +1711,25 @@ export default function CalculatorShell() {
           overrides: hasOverrides ? overrides : undefined,
           // Cover
           cover: cover.enabled ? {
-            useBodyPaper: cover.useBodyPaper,
-            paperId: cover.useBodyPaper ? undefined : cover.paperId,
-            useBodyMachine: cover.useBodyMachine,
-            machineId: cover.useBodyMachine ? undefined : machines[cover.machineIdx]?.id,
-            colorMode: cover.useBodyColor ? (color.model === 'cmyk' ? 'color' : 'bw') : cover.colorModel === 'cmyk' ? 'color' : 'bw',
+            // Independent cover job
+            coverWidth: cover.width,
+            coverHeight: cover.height,
+            coverBleed: cover.bleed,
+            machineId: machines[cover.machineIdx]?.id,
+            paperId: cover.paperId,
+            colorMode: cover.colorModel === 'cmyk' ? 'color' : 'bw',
             sides: cover.sides,
-            coverageLevel: cover.useBodyColor ? (color.coverage || 'mid') : cover.coverage,
-            platesFront: cover.useBodyColor ? color.platesFront : cover.platesFront,
-            platesBack: cover.useBodyColor ? color.platesBack : cover.platesBack,
-            pmsFront: cover.useBodyColor ? color.pmsFront : cover.pmsFront,
-            pmsBack: cover.useBodyColor ? color.pmsBack : cover.pmsBack,
+            coverageLevel: cover.coverage,
+            platesFront: cover.platesFront,
+            platesBack: cover.platesBack,
+            pmsFront: cover.pmsFront,
+            pmsBack: cover.pmsBack,
             lamMachineId: cover.lamMachineId || undefined,
             lamFilmId: cover.lamFilmId || undefined,
             lamSides: cover.lamSides,
+            guillotineId: cover.guillotineId || undefined,
             pages: cover.pages,
+            wasteFixed: cover.wasteFixed,
           } : undefined,
         }),
       })
@@ -2549,31 +2555,52 @@ export default function CalculatorShell() {
           {/* Section tabs (Body / Cover) — only for modes that support covers */}
           {(impoMode === 'perfect_bound' || impoMode === 'booklet' || impoMode === 'nup' || impoMode === 'workturn') && (
             <div style={{ display: 'flex', flexShrink: 0, borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.15)' }}>
-              {([
-                { key: 'body' as const, label: 'Σώμα', icon: 'fas fa-file-lines' },
-                { key: 'cover' as const, label: 'Εξώφυλλο', icon: 'fas fa-book-open' },
-              ]).map(s => {
-                const active = activeSection === s.key;
-                const hasCoverOverrides = s.key === 'cover' && cover.enabled;
-                return (
-                  <button key={s.key} onClick={() => {
-                    setActiveSection(s.key);
-                    if (s.key === 'cover' && !cover.enabled) setCover({ ...cover, enabled: true });
-                  }} style={{
-                    flex: 1, padding: '7px 0', border: 'none', cursor: 'pointer',
-                    background: active ? (s.key === 'cover' ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.04)') : 'transparent',
-                    borderBottom: `2px solid ${active ? (s.key === 'cover' ? '#f59e0b' : 'var(--accent)') : 'transparent'}`,
-                    color: active ? (s.key === 'cover' ? '#f59e0b' : 'var(--accent)') : '#475569',
-                    fontSize: '0.68rem', fontWeight: 600, fontFamily: 'inherit',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                    transition: 'all 0.2s',
-                  }}>
-                    <i className={s.icon} style={{ fontSize: '0.72rem' }} />
-                    {s.label}
-                    {hasCoverOverrides && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
-                  </button>
-                );
-              })}
+              <button onClick={() => setActiveSection('body')} style={{
+                flex: 1, padding: '7px 0', border: 'none', cursor: 'pointer',
+                background: activeSection === 'body' ? 'rgba(255,255,255,0.04)' : 'transparent',
+                borderBottom: `2px solid ${activeSection === 'body' ? 'var(--accent)' : 'transparent'}`,
+                color: activeSection === 'body' ? 'var(--accent)' : '#475569',
+                fontSize: '0.68rem', fontWeight: 600, fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              }}>
+                <i className="fas fa-file-lines" style={{ fontSize: '0.72rem' }} />
+                Σώμα{cover.enabled ? ` (${(impoMode === 'perfect_bound' ? (Number(job.bodyPages) || 64) : (Number(job.pages) || 8)) - cover.pages} σελ.)` : ''}
+              </button>
+              <button onClick={() => {
+                if (!cover.enabled) {
+                  // First activation: clone body settings
+                  setCover({
+                    enabled: true, initialized: true,
+                    width: job.width, height: job.height, bleed: job.bleed, sides: job.sides,
+                    pages: 4, machineIdx: activeMachine, paperId: activePaperId,
+                    colorModel: color.model, coverage: (color.coverage === 'pdf' ? 'mid' : color.coverage) || 'mid',
+                    platesFront: color.platesFront, platesBack: color.platesBack,
+                    pmsFront: color.pmsFront, pmsBack: color.pmsBack,
+                    lamMachineId: '', lamFilmId: '', lamSides: 1,
+                    guillotineId: finish.guillotineId, wasteFixed: 0,
+                  });
+                }
+                setActiveSection('cover');
+              }} style={{
+                flex: 1, padding: '7px 0', border: 'none', cursor: 'pointer',
+                background: activeSection === 'cover' ? 'rgba(245,158,11,0.08)' : 'transparent',
+                borderBottom: `2px solid ${activeSection === 'cover' ? '#f59e0b' : 'transparent'}`,
+                color: activeSection === 'cover' ? '#f59e0b' : cover.enabled ? '#b45309' : '#475569',
+                fontSize: '0.68rem', fontWeight: 600, fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              }}>
+                <i className="fas fa-book-open" style={{ fontSize: '0.72rem' }} />
+                Εξώφυλλο{cover.enabled ? ` (${cover.pages} σελ.)` : ''}
+                {cover.enabled && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
+              </button>
+              {/* Disable cover button */}
+              {cover.enabled && (
+                <button onClick={(e) => { e.stopPropagation(); setCover({ ...cover, enabled: false }); setActiveSection('body'); setCoverResult(null); }}
+                  title="Απενεργοποίηση εξωφύλλου"
+                  style={{ padding: '0 8px', border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', fontSize: '0.65rem' }}>
+                  <i className="fas fa-xmark" />
+                </button>
+              )}
             </div>
           )}
 
@@ -3590,43 +3617,56 @@ export default function CalculatorShell() {
               )}
             </>)}
 
-            {/* ── COVER: JOB INFO ── */}
+            {/* ── COVER: JOB ── */}
             {activeSection === 'cover' && activePanel === 'job' && (<>
-              {/* Cover dimensions info */}
-              {(() => {
-                const spineW = impoMode === 'perfect_bound' ? ((Number(job.bodyPages) || 64) / 2) * (pbPaperThickness || 0.1) : 0;
-                const coverW = impoMode === 'perfect_bound' ? job.width * 2 + spineW : job.width;
-                return (
-                  <div style={{ padding: '10px 12px', borderRadius: 8, marginBottom: 14, background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)', fontSize: '0.72rem', color: '#fbbf24' }}>
-                    <i className="fas fa-info-circle" style={{ marginRight: 6 }} />
-                    {impoMode === 'perfect_bound'
-                      ? `Wrap-around: ${coverW.toFixed(1)} × ${job.height}mm (ράχη ${spineW.toFixed(1)}mm)`
-                      : `Εξώφυλλο: ${job.width} × ${job.height}mm · ${cover.pages} σελίδες`}
-                  </div>
-                );
-              })()}
+              <MfLabel>ΔΙΑΣΤΑΣΕΙΣ ΕΞΩΦΥΛΛΟΥ (mm)</MfLabel>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.6rem', color: '#64748b' }}>Πλάτος</label>
+                  <input type="number" value={cover.width} onChange={e => setCover({ ...cover, width: Number(e.target.value) || 0 })}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'var(--text)', fontSize: '0.82rem', fontWeight: 600 }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.6rem', color: '#64748b' }}>Ύψος</label>
+                  <input type="number" value={cover.height} onChange={e => setCover({ ...cover, height: Number(e.target.value) || 0 })}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'var(--text)', fontSize: '0.82rem', fontWeight: 600 }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.6rem', color: '#64748b' }}>Bleed</label>
+                  <input type="number" value={cover.bleed} onChange={e => setCover({ ...cover, bleed: Number(e.target.value) || 0 })}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'var(--text)', fontSize: '0.82rem', fontWeight: 600 }} />
+                </div>
+              </div>
+
               <MfLabel>ΟΨΕΙΣ ΕΚΤΥΠΩΣΗΣ</MfLabel>
               <ToggleBar value={String(cover.sides)} onChange={v => setCover({ ...cover, sides: Number(v) as 1 | 2 })}
                 options={[{ v: '1', l: '1 Όψη (4/0)' }, { v: '2', l: '2 Όψεις (4/4)' }]} color="#f59e0b" />
-              <div style={{ height: 14 }} />
+              <div style={{ height: 10 }} />
+
+              <MfLabel>ΣΕΛΙΔΕΣ ΕΞΩΦΥΛΛΟΥ</MfLabel>
+              <input type="number" value={cover.pages} min={2} max={8} onChange={e => setCover({ ...cover, pages: Number(e.target.value) || 4 })}
+                style={{ width: 60, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'var(--text)', fontSize: '0.82rem', fontWeight: 600, marginBottom: 14 }} />
+
+              <MfLabel>ΦΥΛΛΑ ΜΟΝΤΑΖ (WASTE)</MfLabel>
+              <input type="number" value={cover.wasteFixed} min={0} onChange={e => setCover({ ...cover, wasteFixed: Number(e.target.value) || 0 })}
+                style={{ width: 60, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.04)', color: 'var(--text)', fontSize: '0.82rem', fontWeight: 600, marginBottom: 14 }} />
+
               {/* Cover result preview */}
               {coverResult && (
                 <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}>
                   <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#f59e0b', marginBottom: 6 }}>ΚΟΣΤΟΣ ΕΞΩΦΥΛΛΟΥ</div>
-                  {[
-                    ['Χαρτί', coverResult.costPaper],
-                    ['Εκτύπωση', coverResult.costPrint],
-                    ...(coverResult.costLamination > 0 ? [['Πλαστικοποίηση', coverResult.costLamination] as const] : []),
+                  {[['Χαρτί', coverResult.costPaper], ['Εκτύπωση', coverResult.costPrint],
+                    ...(coverResult.costLamination > 0 ? [['Πλαστικοποίηση', coverResult.costLamination]] : []),
                   ].map(([l, v]) => (
-                    <div key={l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 }}>
-                      <span>{l}</span><span>€{(v as number).toFixed(2)}</span>
+                    <div key={String(l)} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: '#94a3b8', marginBottom: 2 }}>
+                      <span>{String(l)}</span><span>€{Number(v).toFixed(2)}</span>
                     </div>
                   ))}
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, color: '#f59e0b', borderTop: '1px solid rgba(245,158,11,0.15)', paddingTop: 4, marginTop: 4 }}>
                     <span>Σύνολο</span><span>€{coverResult.totalCost.toFixed(2)}</span>
                   </div>
                   <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: 2 }}>
-                    {coverResult.ups} up · {coverResult.sheets} φύλλα · {coverResult.coverWidth.toFixed(1)}×{coverResult.coverHeight.toFixed(1)}mm
+                    {coverResult.ups} up · {coverResult.sheets} φύλλα
                   </div>
                 </div>
               )}
@@ -3634,97 +3674,73 @@ export default function CalculatorShell() {
 
             {/* ── COVER: MACHINE ── */}
             {activeSection === 'cover' && activePanel === 'machine' && (<>
-              <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-                <Pill active={cover.useBodyMachine} onClick={() => setCover({ ...cover, useBodyMachine: true })} color="#f59e0b">Ίδια με σώμα</Pill>
-                <Pill active={!cover.useBodyMachine} onClick={() => setCover({ ...cover, useBodyMachine: false, machineIdx: activeMachine })} color="#f59e0b">Διαφορετική</Pill>
-              </div>
-              {cover.useBodyMachine ? (
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8', padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
-                  <i className="fas fa-link" style={{ marginRight: 6, color: '#475569' }} />
-                  Χρησιμοποιεί: <b style={{ color: 'var(--text)' }}>{machine?.name}</b>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {machines.map((m, i) => {
-                    const isActive = cover.machineIdx === i;
-                    return (
-                      <div key={m.id} onClick={() => setCover({ ...cover, machineIdx: i, sheetW: null, sheetH: null })}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
-                          cursor: 'pointer', border: `1px solid ${isActive ? 'color-mix(in srgb, #f59e0b 50%, transparent)' : 'var(--border)'}`,
-                          background: isActive ? 'rgba(245,158,11,0.08)' : 'transparent',
-                        }}>
-                        <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          background: isActive ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.04)', color: isActive ? '#f59e0b' : '#64748b', fontSize: '0.72rem' }}>
-                          <i className={m.cat === 'offset' ? 'fas fa-industry' : 'fas fa-print'} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: isActive ? '#f59e0b' : 'var(--text)' }}>{m.name}</div>
-                          <div style={{ fontSize: '0.6rem', color: '#64748b' }}>{m.maxLS}×{m.maxSS}mm · {m.cat}</div>
-                        </div>
+              <MfLabel>ΜΗΧΑΝΗ ΕΞΩΦΥΛΛΟΥ</MfLabel>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {machines.map((m, i) => {
+                  const isActive = cover.machineIdx === i;
+                  return (
+                    <div key={m.id} onClick={() => setCover({ ...cover, machineIdx: i })}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8,
+                        cursor: 'pointer', border: `1px solid ${isActive ? 'color-mix(in srgb, #f59e0b 50%, transparent)' : 'var(--border)'}`,
+                        background: isActive ? 'rgba(245,158,11,0.08)' : 'transparent',
+                      }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: isActive ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.04)', color: isActive ? '#f59e0b' : '#64748b', fontSize: '0.72rem' }}>
+                        <i className={m.cat === 'offset' ? 'fas fa-industry' : 'fas fa-print'} />
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      <div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: isActive ? '#f59e0b' : 'var(--text)' }}>{m.name}</div>
+                        <div style={{ fontSize: '0.6rem', color: '#64748b' }}>{m.maxLS}×{m.maxSS}mm · {m.cat}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </>)}
 
             {/* ── COVER: PAPER ── */}
             {activeSection === 'cover' && activePanel === 'paper' && (<>
-              <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-                <Pill active={cover.useBodyPaper} onClick={() => setCover({ ...cover, useBodyPaper: true, paperId: '' })} color="#f59e0b">Ίδιο με σώμα</Pill>
-                <Pill active={!cover.useBodyPaper} onClick={() => setCover({ ...cover, useBodyPaper: false, paperId: papers[0]?.id || '' })} color="#f59e0b">Διαφορετικό</Pill>
+              <MfLabel>ΧΑΡΤΙ ΕΞΩΦΥΛΛΟΥ</MfLabel>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {papers.map(p => {
+                  const isActive = cover.paperId === p.id;
+                  return (
+                    <div key={p.id} onClick={() => setCover({ ...cover, paperId: p.id })}
+                      style={{
+                        padding: '6px 10px', borderRadius: 6, cursor: 'pointer', fontSize: '0.72rem',
+                        border: `1px solid ${isActive ? 'color-mix(in srgb, #f59e0b 50%, transparent)' : 'var(--border)'}`,
+                        background: isActive ? 'rgba(245,158,11,0.08)' : 'transparent',
+                        color: isActive ? '#f59e0b' : 'var(--text)',
+                      }}>
+                      {p.name} <span style={{ color: '#64748b' }}>{p.thickness || ''}gsm · {p.width}×{p.height}</span>
+                    </div>
+                  );
+                })}
               </div>
-              {cover.useBodyPaper ? (
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8', padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
-                  <i className="fas fa-link" style={{ marginRight: 6, color: '#475569' }} />
-                  Χρησιμοποιεί: <b style={{ color: 'var(--text)' }}>{paper?.name} {paper?.thickness || ''}gsm</b>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {papers.map(p => {
-                    const isActive = cover.paperId === p.id;
-                    return (
-                      <div key={p.id} onClick={() => setCover({ ...cover, paperId: p.id })}
-                        style={{
-                          padding: '6px 10px', borderRadius: 6, cursor: 'pointer', fontSize: '0.72rem',
-                          border: `1px solid ${isActive ? 'color-mix(in srgb, #f59e0b 50%, transparent)' : 'var(--border)'}`,
-                          background: isActive ? 'rgba(245,158,11,0.08)' : 'transparent',
-                          color: isActive ? '#f59e0b' : 'var(--text)',
-                        }}>
-                        {p.name} <span style={{ color: '#64748b' }}>{p.thickness || ''}gsm · {p.width}×{p.height}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </>)}
 
             {/* ── COVER: COLOR ── */}
             {activeSection === 'cover' && activePanel === 'color' && (<>
-              <div style={{ display: 'flex', gap: 4, marginBottom: 14 }}>
-                <Pill active={cover.useBodyColor} onClick={() => setCover({ ...cover, useBodyColor: true })} color="#f59e0b">Ίδια με σώμα</Pill>
-                <Pill active={!cover.useBodyColor} onClick={() => setCover({ ...cover, useBodyColor: false })} color="#f59e0b">Διαφορετικά</Pill>
-              </div>
-              {cover.useBodyColor ? (
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8', padding: '8px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.02)' }}>
-                  <i className="fas fa-link" style={{ marginRight: 6, color: '#475569' }} />
-                  Χρησιμοποιεί τα χρώματα του σώματος
-                </div>
-              ) : (<>
-                <MfLabel>ΜΟΝΤΕΛΟ</MfLabel>
-                <ToggleBar value={cover.colorModel} onChange={v => setCover({ ...cover, colorModel: v as 'cmyk' | 'bw' })}
-                  options={[{ v: 'cmyk', l: 'Έγχρωμο' }, { v: 'bw', l: 'Ασπρόμαυρο' }]} color="#f59e0b" />
-                <div style={{ height: 10 }} />
-                <MfLabel>ΕΠΙΚΑΛΥΨΗ</MfLabel>
-                <ToggleBar value={cover.coverage} onChange={v => setCover({ ...cover, coverage: v as 'low' | 'mid' | 'high' })}
-                  options={[{ v: 'low', l: '20%' }, { v: 'mid', l: '100%' }, { v: 'high', l: '200%' }]} color="#f59e0b" />
-              </>)}
+              <MfLabel>ΜΟΝΤΕΛΟ ΧΡΩΜΑΤΟΣ</MfLabel>
+              <ToggleBar value={cover.colorModel} onChange={v => setCover({ ...cover, colorModel: v as 'cmyk' | 'bw' })}
+                options={[{ v: 'cmyk', l: 'Έγχρωμο' }, { v: 'bw', l: 'Ασπρόμαυρο' }]} color="#f59e0b" />
+              <div style={{ height: 10 }} />
+              <MfLabel>ΕΠΙΚΑΛΥΨΗ</MfLabel>
+              <ToggleBar value={cover.coverage} onChange={v => setCover({ ...cover, coverage: v as 'low' | 'mid' | 'high' })}
+                options={[{ v: 'low', l: '20%' }, { v: 'mid', l: '100%' }, { v: 'high', l: '200%' }]} color="#f59e0b" />
             </>)}
 
             {/* ── COVER: FINISH ── */}
             {activeSection === 'cover' && activePanel === 'finish' && (<>
-              <MfLabel>ΠΛΑΣΤΙΚΟΠΟΙΗΣΗ ΕΞΩΦΥΛΛΟΥ</MfLabel>
+              <FinishCard label="ΓΚΙΛΟΤΙΝΑ" icon="fas fa-cut" color="#f59e0b" active={!!cover.guillotineId}>
+                <FinishHeader label="ΓΚΙΛΟΤΙΝΑ" icon="fas fa-cut" color="#f59e0b" active={!!cover.guillotineId} right={
+                  <FinishSelect value={cover.guillotineId}
+                    onChange={id => setCover({ ...cover, guillotineId: id })}
+                    options={[{ id: '', label: 'Χωρίς' }, ...guillotines.map(g => ({ id: g.id, label: g.name }))]}
+                    color="#f59e0b" active={!!cover.guillotineId} />
+                } />
+              </FinishCard>
               <FinishCard label="ΠΛΑΣΤΙΚΟΠΟΙΗΣΗ" icon="fas fa-layer-group" color="#f59e0b" active={!!cover.lamMachineId}>
                 <FinishHeader label="ΠΛΑΣΤΙΚΟΠΟΙΗΣΗ" icon="fas fa-layer-group" color="#f59e0b" active={!!cover.lamMachineId} right={
                   <FinishSelect value={cover.lamMachineId}
@@ -3735,8 +3751,7 @@ export default function CalculatorShell() {
                       setCover({ ...cover, lamMachineId: id, lamFilmId: films[0]?.id || '', lamSides: dualRoll === '1' || dualRoll === 1 ? 2 : 1 });
                     }}
                     options={[{ id: '', label: 'Χωρίς' }, ...laminators.map(l => ({ id: l.id, label: l.name }))]}
-                    color="#f59e0b" active={!!cover.lamMachineId}
-                  />
+                    color="#f59e0b" active={!!cover.lamMachineId} />
                 } />
                 {cover.lamMachineId && (
                   <FinishBody>
@@ -3753,10 +3768,6 @@ export default function CalculatorShell() {
                   </FinishBody>
                 )}
               </FinishCard>
-              <div style={{ fontSize: '0.65rem', color: '#475569', marginTop: 8 }}>
-                <i className="fas fa-info-circle" style={{ marginRight: 4 }} />
-                Τα υπόλοιπα φινιρίσματα (γκιλοτίνα, βιβλιοδεσία κλπ) εφαρμόζονται στο σώμα.
-              </div>
             </>)}
 
             {/* ── MODE SETTINGS PANEL ── */}

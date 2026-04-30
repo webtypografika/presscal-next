@@ -81,12 +81,13 @@ export interface CalculatorInput {
   gatherSignatures?: number;    // signatures per book (per-signature charge mode)
   customMachineIds?: UUID[];    // multiple custom postpress machines selected
 
-  // Cover
+  // Cover (independent calculator)
   cover?: {
-    useBodyPaper: boolean;
-    paperId?: UUID;
-    useBodyMachine: boolean;
+    coverWidth: number;
+    coverHeight: number;
+    coverBleed?: number;
     machineId?: UUID;
+    paperId?: UUID;
     colorMode: 'color' | 'bw';
     sides: 1 | 2;
     coverageLevel: CoverageLevel;
@@ -97,7 +98,9 @@ export interface CalculatorInput {
     lamMachineId?: UUID;
     lamFilmId?: UUID;
     lamSides?: 1 | 2;
+    guillotineId?: UUID;
     pages: number;
+    wasteFixed?: number;
   };
 
   // Per-job overrides

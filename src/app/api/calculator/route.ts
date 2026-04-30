@@ -633,25 +633,19 @@ export async function POST(req: NextRequest) {
     if (body.cover) {
       try {
         const cv = body.cover;
-        // Determine cover machine & paper
-        const coverMachine = cv.useBodyMachine ? machine : (cv.machineId
-          ? await prisma.machine.findFirst({ where: { id: cv.machineId, orgId: ORG_ID, deletedAt: null }, include: { consumables: true } })
-          : machine) || machine;
-        const coverPaper = cv.useBodyPaper ? paper : (cv.paperId
-          ? await prisma.material.findFirst({ where: { id: cv.paperId, orgId: ORG_ID, deletedAt: null } })
-          : paper) || paper;
+        // Cover uses its own machine & paper (fully independent)
+        const coverMachine = cv.machineId
+          ? (await prisma.machine.findFirst({ where: { id: cv.machineId, orgId: ORG_ID, deletedAt: null }, include: { consumables: true } })) || machine
+          : machine;
+        const coverPaper = cv.paperId
+          ? (await prisma.material.findFirst({ where: { id: cv.paperId, orgId: ORG_ID, deletedAt: null } })) || paper
+          : paper;
 
-        // Cover dimensions
-        const bodyPages = body.pages || 64;
-        const paperThk = body.paperThickness || 0.1;
-        const spineWidth = body.impositionMode === 'perfect_bound'
-          ? (bodyPages / 2) * paperThk
-          : 0;
-        const coverTrimW = body.impositionMode === 'perfect_bound'
-          ? body.jobW * 2 + spineWidth
-          : body.jobW;
-        const coverTrimH = body.jobH;
-        const coverBleed = body.bleed || 3;
+        // Cover dimensions: fully independent from body
+        const coverTrimW = cv.coverWidth || body.jobW;
+        const coverTrimH = cv.coverHeight || body.jobH;
+        const coverBleed = cv.coverBleed ?? body.bleed ?? 3;
+        const spineWidth = 0; // Not auto-calculated anymore — user controls dimensions directly
 
         // Cover machine printable area
         const cvRawSpecs = (coverMachine.specs as Record<string, unknown>) || {};
@@ -731,7 +725,7 @@ export async function POST(req: NextRequest) {
           qty: body.qty,
           sides: cv.sides || 2,
           colorMode: cv.colorMode || 'color',
-          wasteFixed: 0,
+          wasteFixed: cv.wasteFixed ?? 0,
           coverageLevel: cv.coverageLevel || 'mid',
           imposition: cvImposition,
           lamination: cvLamData,
