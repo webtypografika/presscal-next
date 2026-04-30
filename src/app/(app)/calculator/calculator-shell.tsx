@@ -394,18 +394,49 @@ const FINISH_ARROW = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 function FinishSelect({ value, onChange, options, color, active }: {
   value: string; onChange: (v: string) => void; options: { id: string; label: string }[]; color: string; active: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find(o => o.id === value);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
   return (
-    <select value={value} onChange={e => onChange(e.target.value)} style={{
-      padding: '5px 24px 5px 12px', borderRadius: 14, fontSize: '0.72rem', fontWeight: 600,
-      border: `1px solid ${active ? `color-mix(in srgb, ${color} 20%, transparent)` : 'rgba(255,255,255,0.08)'}`,
-      background: active ? `color-mix(in srgb, ${color} 8%, transparent)` : 'rgba(255,255,255,0.04)',
-      color: active ? color : '#94a3b8',
-      cursor: 'pointer', outline: 'none', appearance: 'none' as const,
-      maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
-      backgroundImage: FINISH_ARROW, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
-    }}>
-      {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-    </select>
+    <div ref={ref} style={{ position: 'relative', maxWidth: '60%' }}>
+      <button onClick={() => setOpen(!open)} style={{
+        padding: '5px 24px 5px 12px', borderRadius: 14, fontSize: '0.72rem', fontWeight: 600,
+        border: `1px solid ${active ? `color-mix(in srgb, ${color} 20%, transparent)` : 'rgba(255,255,255,0.08)'}`,
+        background: active ? `color-mix(in srgb, ${color} 8%, transparent)` : 'rgba(255,255,255,0.04)',
+        color: active ? color : '#94a3b8',
+        cursor: 'pointer', outline: 'none', width: '100%', textAlign: 'left' as const,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+        backgroundImage: FINISH_ARROW, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
+      }}>
+        {selected?.label || 'Χωρίς'}
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, minWidth: '100%', maxWidth: '260px',
+          background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 50, padding: '4px',
+          maxHeight: 200, overflowY: 'auto' as const,
+        }}>
+          {options.map(o => (
+            <button key={o.id} onClick={() => { onChange(o.id); setOpen(false); }} style={{
+              display: 'block', width: '100%', padding: '6px 10px', borderRadius: 6,
+              border: 'none', textAlign: 'left' as const, cursor: 'pointer',
+              fontSize: '0.72rem', fontWeight: o.id === value ? 600 : 400,
+              background: o.id === value ? `color-mix(in srgb, ${color} 12%, transparent)` : 'transparent',
+              color: o.id === value ? color : '#cbd5e1',
+            }}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 function FinishCard({ label, icon, color, active, children }: {
